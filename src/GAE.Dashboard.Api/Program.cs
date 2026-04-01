@@ -302,3 +302,6 @@ internal class LoreRoom
 }
 internal class LoreNpc { public string? Id { get; set; } public string? Name { get; set; } public string? Personality { get; set; } public string? Faction { get; set; } }
 internal class LoreFaction { public string? Id { get; set; } public string? Name { get; set; } public string? Description { get; set; } }
+
+// Enables WebApplicationFactory<Program> in integration tests
+public partial class Program { }

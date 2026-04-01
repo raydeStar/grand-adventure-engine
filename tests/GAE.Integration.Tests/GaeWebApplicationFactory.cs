@@ -1,0 +1,142 @@
+using GAE.Core.Interfaces;
+using GAE.Core.Models;
+using GAE.Engine.State;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
+
+namespace GAE.Integration.Tests;
+
+/// <summary>
+/// Spins up the real ASP.NET host in-process but replaces external services
+/// (Discord, Wiki.js, LM Studio narrator) with safe test stubs.
+/// Each factory instance gets its own isolated data directory to avoid file contention.
+/// </summary>
+public class GaeWebApplicationFactory : WebApplicationFactory<Program>
+{
+    private readonly string _dataDir = Path.Combine(Path.GetTempPath(), "gae-tests", Guid.NewGuid().ToString("N"));
+
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        builder.UseEnvironment("Development");
+
+        builder.ConfigureServices(services =>
+        {
+            // Replace narrator with a stub that always succeeds (no LM Studio needed)
+            services.RemoveAll<INarratorService>();
+            services.AddSingleton<INarratorService, StubNarratorService>();
+
+            // Replace wiki with a stub (no Wiki.js container needed)
+            services.RemoveAll<IWikiService>();
+            services.AddSingleton<IWikiService, StubWikiService>();
+
+            // Replace event broadcaster with no-op (no SignalR clients in tests)
+            services.RemoveAll<IGameEventBroadcaster>();
+            services.AddSingleton<IGameEventBroadcaster, StubGameEventBroadcaster>();
+
+            // Replace file-based journal/checkpoint with isolated temp directory
+            Directory.CreateDirectory(_dataDir);
+
+            services.RemoveAll<IStateJournal>();
+            services.AddSingleton<IStateJournal>(sp =>
+                new FileStateJournal(
+                    Path.Combine(_dataDir, "journal.jsonl"),
+                    sp.GetRequiredService<ILogger<FileStateJournal>>()));
+
+            services.RemoveAll<IStateCheckpointStore>();
+            services.AddSingleton<IStateCheckpointStore>(sp =>
+                new FileStateCheckpointStore(
+                    Path.Combine(_dataDir, "checkpoints"),
+                    sp.GetRequiredService<ILogger<FileStateCheckpointStore>>()));
+        });
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+        if (disposing)
+        {
+            try { Directory.Delete(_dataDir, true); } catch { /* best effort */ }
+        }
+    }
+}
+
+/// <summary>Narrator stub — returns deterministic text without calling LM Studio.</summary>
+public class StubNarratorService : INarratorService
+{
+    public Task<string> NarrateActionAsync(NarratorContext context, CancellationToken ct = default)
+        => Task.FromResult($"[Narration] {context.MechanicalResult.MechanicalSummary}");
+
+    public Task<Room> GenerateRoomAsync(string roomId, string direction, Room sourceRoom, CancellationToken ct = default)
+        => Task.FromResult(new Room
+        {
+            Id = roomId,
+            Name = $"Generated Room ({roomId})",
+            Description = $"A room generated to the {direction} of {sourceRoom.Name}.",
+            Exits = new Dictionary<string, string> { [OppositeDir(direction)] = sourceRoom.Id }
+        });
+
+    public Task<Npc> GenerateNpcAsync(Room room, string? hint = null, CancellationToken ct = default)
+        => Task.FromResult(new Npc { Id = Guid.NewGuid().ToString(), Name = "Test NPC", Personality = "Friendly" });
+
+    public Task<string> GenerateAsciiArtAsync(string subject, CancellationToken ct = default)
+        => Task.FromResult("[ASCII ART]");
+
+    public Task<string> GenerateBackstoryAsync(CharacterConcept concept, CancellationToken ct = default)
+        => Task.FromResult($"{concept.Name} grew up in a test environment.");
+
+    private static string OppositeDir(string dir) => dir switch
+    {
+        "north" => "south", "south" => "north",
+        "east" => "west", "west" => "east",
+        "up" => "down", "down" => "up",
+        _ => "back"
+    };
+}
+
+/// <summary>Wiki stub — records calls without hitting Wiki.js.</summary>
+public class StubWikiService : IWikiService
+{
+    public List<(string Path, string Title, string Content)> CreatedPages { get; } = [];
+
+    public Task<bool> CreateOrUpdatePageAsync(string path, string title, string content, CancellationToken ct = default)
+    {
+        CreatedPages.Add((path, title, content));
+        return Task.FromResult(true);
+    }
+
+    public Task<string?> GetPageContentAsync(string path, CancellationToken ct = default)
+        => Task.FromResult<string?>(null);
+
+    public Task<bool> PageExistsAsync(string path, CancellationToken ct = default)
+        => Task.FromResult(false);
+
+    public Task SyncPlayerPageAsync(PlayerCharacter player, CancellationToken ct = default)
+        => Task.CompletedTask;
+
+    public Task SyncRoomPageAsync(Room room, CancellationToken ct = default)
+        => Task.CompletedTask;
+
+    public Task SyncStoryEntryAsync(StoryEntry entry, CancellationToken ct = default)
+        => Task.CompletedTask;
+
+    public Task<bool> IsHealthyAsync(CancellationToken ct = default)
+        => Task.FromResult(true);
+}
+
+/// <summary>Event broadcaster stub — no-op for tests.</summary>
+public class StubGameEventBroadcaster : IGameEventBroadcaster
+{
+    public List<GameEvent> BroadcastedEvents { get; } = [];
+
+    public Task BroadcastEventAsync(GameEvent gameEvent, CancellationToken ct = default)
+    {
+        BroadcastedEvents.Add(gameEvent);
+        return Task.CompletedTask;
+    }
+
+    public Task BroadcastActionResultAsync(ActionResult result, string playerId, CancellationToken ct = default)
+        => Task.CompletedTask;
+}
