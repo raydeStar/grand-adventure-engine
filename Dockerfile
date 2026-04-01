@@ -2,8 +2,7 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-# Copy solution and project files first for layer caching
-COPY GrandAdventureEngine.slnx .
+# Copy project files first for layer caching
 COPY Directory.Build.props .
 COPY src/GAE.Core/GAE.Core.csproj src/GAE.Core/
 COPY src/GAE.Engine/GAE.Engine.csproj src/GAE.Engine/
@@ -12,7 +11,7 @@ COPY src/GAE.WikiSync/GAE.WikiSync.csproj src/GAE.WikiSync/
 COPY src/GAE.Discord/GAE.Discord.csproj src/GAE.Discord/
 COPY src/GAE.Dashboard.Api/GAE.Dashboard.Api.csproj src/GAE.Dashboard.Api/
 
-RUN dotnet restore GrandAdventureEngine.slnx
+RUN dotnet restore src/GAE.Dashboard.Api/GAE.Dashboard.Api.csproj
 
 # Copy source and publish
 COPY src/ src/
