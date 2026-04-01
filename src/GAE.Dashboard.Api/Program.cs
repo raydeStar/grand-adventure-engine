@@ -15,13 +15,28 @@ using YamlDotNet.Serialization.NamingConventions;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Load external config
-builder.Configuration.AddJsonFile(
-    Path.Combine(builder.Environment.ContentRootPath, "..", "..", "config", "appsettings.json"),
-    optional: true);
+// Structured JSON logging in Production
+if (builder.Environment.IsProduction())
+{
+    builder.Logging.AddJsonConsole(options =>
+    {
+        options.TimestampFormat = "yyyy-MM-ddTHH:mm:ss.fffZ";
+        options.UseUtcTimestamp = true;
+    });
+}
+
+// Load external config (with environment-specific overrides)
+var configDir = Path.Combine(builder.Environment.ContentRootPath, "..", "..", "config");
+if (builder.Environment.IsProduction() && Directory.Exists("/app/config"))
+    configDir = "/app/config";
+
+builder.Configuration
+    .AddJsonFile(Path.Combine(configDir, "appsettings.json"), optional: true, reloadOnChange: true)
+    .AddJsonFile(Path.Combine(configDir, $"appsettings.{builder.Environment.EnvironmentName}.json"), optional: true, reloadOnChange: true)
+    .AddEnvironmentVariables();
 
 // Load game rules from YAML
-var rulesPath = Path.Combine(builder.Environment.ContentRootPath, "..", "..", "config", "game-rules.yaml");
+var rulesPath = Path.Combine(configDir, "game-rules.yaml");
 var rulesYaml = File.Exists(rulesPath) ? await File.ReadAllTextAsync(rulesPath) : "";
 var yamlDeserializer = new DeserializerBuilder()
     .WithNamingConvention(UnderscoredNamingConvention.Instance)
@@ -33,7 +48,9 @@ var gameRules = !string.IsNullOrEmpty(rulesYaml)
 builder.Services.AddSingleton(gameRules);
 
 // State management — single-writer model
-var dataDir = Path.Combine(builder.Environment.ContentRootPath, "..", "..", "data");
+var dataDir = builder.Environment.IsProduction() && Directory.Exists("/app/data")
+    ? "/app/data"
+    : Path.Combine(builder.Environment.ContentRootPath, "..", "..", "data");
 Directory.CreateDirectory(dataDir);
 
 builder.Services.AddSingleton<InMemoryStateManager>();
@@ -122,14 +139,46 @@ var app = builder.Build();
 
 // State recovery: replay from checkpoint + journal
 var replayService = app.Services.GetRequiredService<StateReplayService>();
-await replayService.ReplayAsync();
+try
+{
+    await replayService.ReplayAsync();
+    app.Logger.LogInformation("State recovery complete");
+}
+catch (Exception ex)
+{
+    app.Logger.LogWarning(ex, "State recovery encountered issues — starting with fresh state");
+}
+
+// Probe external services and log degraded mode warnings
+try
+{
+    using var probeClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+    var lmResponse = await probeClient.GetAsync(lmStudioEndpoint + "/v1/models");
+    if (!lmResponse.IsSuccessStatusCode)
+        app.Logger.LogWarning("LM Studio not responding at {Endpoint} — narration will use fallback text", lmStudioEndpoint);
+}
+catch
+{
+    app.Logger.LogWarning("LM Studio unreachable at {Endpoint} — narration will use fallback text", lmStudioEndpoint);
+}
+
+try
+{
+    var wiki = app.Services.GetRequiredService<IWikiService>();
+    if (!await wiki.IsHealthyAsync())
+        app.Logger.LogWarning("Wiki.js not healthy at {Url} — wiki sync disabled", wikiUrl);
+}
+catch
+{
+    app.Logger.LogWarning("Wiki.js unreachable at {Url} — wiki sync disabled", wikiUrl);
+}
 
 // Seed starting room if not already present
 var stateManager = app.Services.GetRequiredService<IStateManager>();
 var startRoom = await stateManager.GetRoomAsync("spawn");
 if (startRoom is null)
 {
-    var lorePath = Path.Combine(app.Environment.ContentRootPath, "..", "..", "config", "lore-seed.yaml");
+    var lorePath = Path.Combine(configDir, "lore-seed.yaml");
     if (File.Exists(lorePath))
     {
         var loreYaml = await File.ReadAllTextAsync(lorePath);
@@ -173,6 +222,24 @@ app.MapControllers();
 app.MapHub<GameHub>("/hubs/game");
 app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTimeOffset.UtcNow }));
 
+// Liveness: is the process alive? (for orchestrator restarts)
+app.MapGet("/health/live", () => Results.Ok(new { status = "alive" }));
+
+// Readiness: can the service handle requests? (state recovered, core subsystems available)
+app.MapGet("/health/ready", async (IStateManager sm) =>
+{
+    try
+    {
+        // Verify state manager is responsive
+        await sm.GetRoomAsync("spawn");
+        return Results.Ok(new { status = "ready", timestamp = DateTimeOffset.UtcNow });
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { status = "not-ready", error = ex.Message }, statusCode: 503);
+    }
+});
+
 app.MapGet("/health/wiki", async (IWikiService wiki) =>
 {
     try
@@ -180,11 +247,11 @@ app.MapGet("/health/wiki", async (IWikiService wiki) =>
         var healthy = await wiki.IsHealthyAsync();
         return healthy
             ? Results.Ok(new { status = "healthy", service = "wiki.js" })
-            : Results.Json(new { status = "unhealthy", service = "wiki.js" }, statusCode: 503);
+            : Results.Json(new { status = "degraded", service = "wiki.js", note = "Wiki sync unavailable — game continues without wiki" }, statusCode: 503);
     }
     catch (Exception ex)
     {
-        return Results.Json(new { status = "unhealthy", service = "wiki.js", error = ex.Message }, statusCode: 503);
+        return Results.Json(new { status = "degraded", service = "wiki.js", error = ex.Message, note = "Wiki sync unavailable — game continues without wiki" }, statusCode: 503);
     }
 });
 
@@ -195,11 +262,11 @@ app.MapGet("/health/narrator", async (HttpClient httpClient) =>
         var response = await httpClient.GetAsync(lmStudioEndpoint + "/v1/models");
         return response.IsSuccessStatusCode
             ? Results.Ok(new { status = "healthy", service = "lm-studio" })
-            : Results.Json(new { status = "unhealthy", service = "lm-studio" }, statusCode: 503);
+            : Results.Json(new { status = "degraded", service = "lm-studio", note = "Narration will use fallback text" }, statusCode: 503);
     }
     catch (Exception ex)
     {
-        return Results.Json(new { status = "unhealthy", service = "lm-studio", error = ex.Message }, statusCode: 503);
+        return Results.Json(new { status = "degraded", service = "lm-studio", error = ex.Message, note = "Narration will use fallback text" }, statusCode: 503);
     }
 });
 

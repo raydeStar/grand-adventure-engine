@@ -1,0 +1,9 @@
+**/bin/
+**/obj/
+**/node_modules/
+**/.git/
+**/data/
+**/*.user
+**/*.sln.docstates
+**/[Tt]est[Rr]esult*/
+**/.vs/
