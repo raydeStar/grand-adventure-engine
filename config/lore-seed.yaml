@@ -1,0 +1,48 @@
+# LORE SEED — Initial world bootstrapping content
+# "Every world begins with a whisper of history." — Sir Thaddeus
+
+world:
+  name: "The Shattered Reaches"
+  description: "A fractured land where ancient magic bleeds through reality's cracks."
+
+regions:
+  - id: "thornveil"
+    name: "The Thornveil"
+    description: "A dark forest where the canopy blocks all but the most persistent light."
+    tags: ["forest", "dark", "magical"]
+
+  - id: "ironhold"
+    name: "Ironhold"
+    description: "A fortified trade city built around a massive iron deposit."
+    tags: ["city", "trade", "fortified"]
+
+starting_room:
+  id: "spawn"
+  name: "The Crossroads Inn"
+  description: >-
+    A weathered inn at the junction of three ancient roads. The hearth crackles
+    with warmth, and the smell of roasting meat fills the air. A grizzled
+    innkeeper polishes a mug behind the bar.
+  exits:
+    north: "thornveil_edge"
+    east: "ironhold_gate"
+    south: "dusty_trail"
+  npcs:
+    - id: "innkeeper_mara"
+      name: "Mara the Innkeeper"
+      personality: "Gruff but kind. Knows every rumor in the region. Respects strength and honesty."
+      faction: "neutral"
+  environment_tags: ["indoor", "safe", "lit"]
+
+factions:
+  - id: "iron_guard"
+    name: "The Iron Guard"
+    description: "Ironhold's military and peacekeeping force."
+
+  - id: "thornweavers"
+    name: "The Thornweavers"
+    description: "Druids and rangers who protect the Thornveil from exploitation."
+
+  - id: "shadow_market"
+    name: "The Shadow Market"
+    description: "A loose network of smugglers, thieves, and information brokers."

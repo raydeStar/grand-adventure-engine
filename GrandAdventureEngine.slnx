@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/GAE.Core/GAE.Core.csproj" />
+    <Project Path="src/GAE.Dashboard.Api/GAE.Dashboard.Api.csproj" />
+    <Project Path="src/GAE.Discord/GAE.Discord.csproj" />
+    <Project Path="src/GAE.Engine/GAE.Engine.csproj" />
+    <Project Path="src/GAE.Narrator/GAE.Narrator.csproj" />
+    <Project Path="src/GAE.WikiSync/GAE.WikiSync.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/GAE.Engine.Tests/GAE.Engine.Tests.csproj" />
+    <Project Path="tests/GAE.Narrator.Tests/GAE.Narrator.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,116 @@
+# THE GRAND RULEBOOK
+# "Rules are the skeleton upon which the flesh of adventure hangs." — Sir Thaddeus
+
+character_creation:
+  stat_method: "4d6_drop_lowest"
+  standard_array: [15, 14, 13, 12, 10, 8]
+  flat_value: 10
+  starting_hp_formula: "base + con_mod"
+  starting_mp_formula: "base + int_mod"
+  starting_gold: 50
+
+stats:
+  hp:
+    base: 20
+    min: 0
+    max: 999
+    display: "HP"
+    category: "resource"
+  mp:
+    base: 10
+    min: 0
+    max: 999
+    display: "MP"
+    category: "resource"
+  str:
+    base: 10
+    min: 1
+    max: 20
+    display: "STR"
+    category: "attribute"
+  dex:
+    base: 10
+    min: 1
+    max: 20
+    display: "DEX"
+    category: "attribute"
+  con:
+    base: 10
+    min: 1
+    max: 20
+    display: "CON"
+    category: "attribute"
+  int:
+    base: 10
+    min: 1
+    max: 20
+    display: "INT"
+    category: "attribute"
+  wis:
+    base: 10
+    min: 1
+    max: 20
+    display: "WIS"
+    category: "attribute"
+  cha:
+    base: 10
+    min: 1
+    max: 20
+    display: "CHA"
+    category: "attribute"
+  luck:
+    base: 10
+    min: 1
+    max: 20
+    display: "LCK"
+    category: "attribute"
+
+combat:
+  attack_roll: "d20 + {stat_mod}"
+  melee_stat: "str"
+  ranged_stat: "dex"
+  magic_stat: "int"
+  damage_formula: "{weapon_dice} + {stat_mod}"
+  critical_threshold: 20
+  critical_multiplier: 2
+  fumble_threshold: 1
+  base_defense: 10
+  defense_formula: "base_defense + dex_mod + {armor_value}"
+  initiative_formula: "d20 + dex_mod"
+
+skill_checks:
+  formula: "d20 + {stat_mod}"
+  difficulty_classes:
+    trivial: 5
+    easy: 8
+    medium: 12
+    hard: 16
+    very_hard: 20
+    legendary: 25
+  stat_mapping:
+    athletics: "str"
+    acrobatics: "dex"
+    stealth: "dex"
+    perception: "wis"
+    persuasion: "cha"
+    intimidation: "cha"
+    arcana: "int"
+    survival: "wis"
+    lockpicking: "dex"
+    lore_knowledge: "int"
+
+rest:
+  short_rest_hp_recovery: "d8 + con_mod"
+  long_rest_hp_recovery: "max"
+  long_rest_mp_recovery: "max"
+  short_rest_mp_recovery: "d4 + int_mod"
+
+death:
+  at_zero_hp: "unconscious"
+  death_save_threshold: 10
+  death_save_failures_to_die: 3
+  death_save_successes_to_stabilize: 3
+
+loot:
+  enemy_drop_chance: 0.6
+  gold_drop_range: "1d20 + {enemy_level * 2}"

@@ -1,0 +1,5 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Pure domain library — zero external dependencies -->
+
+</Project>

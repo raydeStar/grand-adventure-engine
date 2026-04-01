@@ -1,0 +1,29 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+*.vs/
+.vs/
+*.DotSettings.user
+TestResults/
+publish/
+
+## Node
+node_modules/
+dist/
+.vite/
+
+## IDE
+.idea/
+*.swp
+*.swo
+
+## OS
+Thumbs.db
+.DS_Store
+
+## Config secrets (never commit real tokens)
+config/appsettings.Development.json
+config/appsettings.Production.json
+.env

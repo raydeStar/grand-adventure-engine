@@ -1,0 +1,15 @@
+# Grand Adventure Engine — Local Development Stack
+
+services:
+  wikijs:
+    image: requarks/wiki:2
+    ports:
+      - "3000:3000"
+    environment:
+      DB_TYPE: sqlite
+      DB_FILEPATH: /wiki/data/wiki.sqlite
+    volumes:
+      - wikijs_data:/wiki/data
+
+volumes:
+  wikijs_data:
