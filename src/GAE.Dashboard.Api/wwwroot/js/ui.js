@@ -19,11 +19,15 @@ const RESERVED_PLAYER_KEYS = new Set([
   'xp',
   'level',
   'defense',
+  'stats',
+  'interaction',
   'equipment',
   'inventory',
   'statusEffects',
   'createdAt',
-  'lastActiveAt'
+  'lastActiveAt',
+  'isAlive',
+  'isConscious'
 ]);
 
 const PLAYER_SELECT_IDS = [
