@@ -245,6 +245,14 @@ public class GameEngine : IGameEngine
             }
         }
 
+        // Decay NPC dispositions in the destination room
+        foreach (var npc in targetRoom.Npcs)
+        {
+            var elapsed = DateTimeOffset.UtcNow - npc.DispositionState.LastUpdated;
+            npc.DispositionState.DecayTowardBaseline(elapsed);
+            npc.Disposition = npc.DispositionState.ToFlatDisposition();
+        }
+
         var oldRoomId = player.CurrentRoomId;
         player.CurrentRoomId = targetRoomId;
 
@@ -390,6 +398,11 @@ public class GameEngine : IGameEngine
         var target = FindNamedEntity(room.Npcs, npc => npc.Name, action.Target);
         if (target is null)
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"Conversation target '{action.Target}' was not found in the current room." };
+
+        // Decay disposition toward baseline before starting conversation
+        var elapsed = DateTimeOffset.UtcNow - target.DispositionState.LastUpdated;
+        target.DispositionState.DecayTowardBaseline(elapsed);
+        target.Disposition = target.DispositionState.ToFlatDisposition();
 
         // Enter conversation mode
         player.Interaction = new InteractionState
@@ -1295,8 +1308,17 @@ public class GameEngine : IGameEngine
         var update = freeForm.InteractionUpdate;
         if (update is null) return;
 
-        if (update.NpcDisposition is not null)
+        // Rich disposition takes priority — sync flat string from it
+        if (update.DispositionState is not null)
+        {
+            npc.DispositionState = update.DispositionState;
+            npc.DispositionState.LastUpdated = DateTimeOffset.UtcNow;
+            npc.Disposition = npc.DispositionState.ToFlatDisposition();
+        }
+        else if (update.NpcDisposition is not null)
+        {
             npc.Disposition = update.NpcDisposition;
+        }
 
         foreach (var contextEntry in update.Context)
             player.Interaction.AppendContext(contextEntry);
