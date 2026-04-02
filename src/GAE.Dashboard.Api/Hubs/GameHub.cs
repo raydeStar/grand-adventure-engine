@@ -1,8 +1,11 @@
 using GAE.Core.Models;
+using GAE.Dashboard.Api.Security;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 
 namespace GAE.Dashboard.Api.Hubs;
 
+[Authorize(Policy = DashboardPolicies.UserAccess)]
 public class GameHub : Hub
 {
     public override async Task OnConnectedAsync()

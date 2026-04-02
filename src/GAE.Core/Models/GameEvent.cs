@@ -40,6 +40,7 @@ public enum GameEventType
     RoomUpdated,
     NpcSpawned,
     NpcDied,
+    PlayerDeleted,
     StoryAdvanced,
     SystemMessage
 }

@@ -9,6 +9,7 @@ public interface IStateManager
     Task<PlayerCharacter?> GetPlayerByDiscordIdAsync(string discordId, CancellationToken ct = default);
     Task<IReadOnlyList<PlayerCharacter>> GetAllPlayersAsync(CancellationToken ct = default);
     Task SavePlayerAsync(PlayerCharacter player, CancellationToken ct = default);
+    Task<bool> RemovePlayerAsync(string playerId, CancellationToken ct = default);
 
     // Room operations
     Task<Room?> GetRoomAsync(string roomId, CancellationToken ct = default);

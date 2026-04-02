@@ -10,17 +10,19 @@ namespace GAE.Integration.Tests;
 /// </summary>
 public class HealthAndBootstrapTests : IClassFixture<GaeWebApplicationFactory>
 {
-    private readonly HttpClient _client;
+    private readonly HttpClient _anonymousClient;
+    private readonly HttpClient _dashboardClient;
 
     public HealthAndBootstrapTests(GaeWebApplicationFactory factory)
     {
-        _client = factory.CreateClient();
+        _anonymousClient = factory.CreateClient();
+        _dashboardClient = factory.CreateUserClient();
     }
 
     [Fact]
     public async Task Health_ReturnsOk()
     {
-        var response = await _client.GetAsync("/health");
+        var response = await _anonymousClient.GetAsync("/health");
         response.EnsureSuccessStatusCode();
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -30,7 +32,7 @@ public class HealthAndBootstrapTests : IClassFixture<GaeWebApplicationFactory>
     [Fact]
     public async Task HealthLive_ReturnsAlive()
     {
-        var response = await _client.GetAsync("/health/live");
+        var response = await _anonymousClient.GetAsync("/health/live");
         response.EnsureSuccessStatusCode();
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -40,7 +42,7 @@ public class HealthAndBootstrapTests : IClassFixture<GaeWebApplicationFactory>
     [Fact]
     public async Task HealthReady_ReturnsReady()
     {
-        var response = await _client.GetAsync("/health/ready");
+        var response = await _anonymousClient.GetAsync("/health/ready");
         response.EnsureSuccessStatusCode();
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -50,7 +52,7 @@ public class HealthAndBootstrapTests : IClassFixture<GaeWebApplicationFactory>
     [Fact]
     public async Task GetRooms_ReturnsAtLeastSpawnRoom()
     {
-        var response = await _client.GetAsync("/api/dashboard/rooms");
+        var response = await _dashboardClient.GetAsync("/api/dashboard/rooms");
         response.EnsureSuccessStatusCode();
 
         var rooms = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -64,7 +66,7 @@ public class HealthAndBootstrapTests : IClassFixture<GaeWebApplicationFactory>
     [Fact]
     public async Task GetRoom_Spawn_ReturnsRoom()
     {
-        var response = await _client.GetAsync("/api/dashboard/rooms/spawn");
+        var response = await _dashboardClient.GetAsync("/api/dashboard/rooms/spawn");
         response.EnsureSuccessStatusCode();
 
         var room = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -75,14 +77,21 @@ public class HealthAndBootstrapTests : IClassFixture<GaeWebApplicationFactory>
     [Fact]
     public async Task GetRoom_NonExistent_Returns404()
     {
-        var response = await _client.GetAsync("/api/dashboard/rooms/doesnotexist");
+        var response = await _dashboardClient.GetAsync("/api/dashboard/rooms/doesnotexist");
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DashboardEndpoints_RequireAuthentication()
+    {
+        var response = await _anonymousClient.GetAsync("/api/dashboard/players");
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Fact]
     public async Task GetPlayers_InitiallyEmpty()
     {
-        var response = await _client.GetAsync("/api/dashboard/players");
+        var response = await _dashboardClient.GetAsync("/api/dashboard/players");
         response.EnsureSuccessStatusCode();
 
         var players = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -92,14 +101,14 @@ public class HealthAndBootstrapTests : IClassFixture<GaeWebApplicationFactory>
     [Fact]
     public async Task GetPlayer_NonExistent_Returns404()
     {
-        var response = await _client.GetAsync("/api/dashboard/players/nobody");
+        var response = await _dashboardClient.GetAsync("/api/dashboard/players/nobody");
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]
     public async Task GetStory_InitiallyEmpty()
     {
-        var response = await _client.GetAsync("/api/dashboard/story");
+        var response = await _dashboardClient.GetAsync("/api/dashboard/story");
         response.EnsureSuccessStatusCode();
 
         var story = await response.Content.ReadFromJsonAsync<JsonElement>();

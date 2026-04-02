@@ -18,7 +18,7 @@ public class GameFlowTests : IClassFixture<GaeWebApplicationFactory>
     public GameFlowTests(GaeWebApplicationFactory factory)
     {
         _factory = factory;
-        _client = factory.CreateClient();
+        _client = factory.CreateUserClient();
     }
 
     private async Task<PlayerCharacter> CreateTestCharacterAsync(string playerId = "test-player-1")

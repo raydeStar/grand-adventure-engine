@@ -66,6 +66,22 @@ public class JournaledStateManager : IStateManager
         }, ct);
     }
 
+    public async Task<bool> RemovePlayerAsync(string playerId, CancellationToken ct = default)
+    {
+        var player = await _inner.GetPlayerAsync(playerId, ct);
+        var removed = await _inner.RemovePlayerAsync(playerId, ct);
+        if (removed)
+        {
+            await _journal.AppendAsync(new GameEvent
+            {
+                Type = GameEventType.PlayerDeleted,
+                PlayerId = playerId,
+                Summary = $"Player {player?.Name ?? playerId} deleted"
+            }, ct);
+        }
+        return removed;
+    }
+
     public async Task SaveRoomAsync(Room room, CancellationToken ct = default)
     {
         var existing = await _inner.GetRoomAsync(room.Id, ct);

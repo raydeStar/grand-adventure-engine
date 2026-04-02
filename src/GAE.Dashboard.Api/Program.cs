@@ -1,6 +1,7 @@
 using Discord.WebSocket;
 using GAE.Core.Interfaces;
 using GAE.Dashboard.Api.Hubs;
+using GAE.Dashboard.Api.Security;
 using GAE.Dashboard.Api.Services;
 using GAE.Discord;
 using GAE.Engine;
@@ -10,6 +11,7 @@ using GAE.Narrator;
 using GAE.WikiSync;
 using GraphQL.Client.Http;
 using GraphQL.Client.Serializer.SystemTextJson;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
@@ -80,12 +82,6 @@ builder.Services.AddHttpClient<INarratorService, NarratorService>(client =>
     client.BaseAddress = new Uri(lmStudioEndpoint + "/");
     client.Timeout = TimeSpan.FromSeconds(30);
 }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler());
-builder.Services.AddSingleton(sp =>
-{
-    var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(NarratorService));
-    httpClient.BaseAddress = new Uri(lmStudioEndpoint + "/");
-    return new NarratorService(httpClient, sp.GetRequiredService<ILogger<NarratorService>>(), lmStudioModel);
-});
 
 // Wiki.js — GraphQL client
 var wikiUrl = builder.Configuration["WikiJs:Url"] ?? "http://localhost:3000";
@@ -120,13 +116,33 @@ if (!string.IsNullOrEmpty(discordToken) && discordToken != "YOUR_DISCORD_BOT_TOK
 builder.Services.AddSignalR();
 builder.Services.AddControllers();
 builder.Services.AddSingleton<IGameEventBroadcaster, SignalRGameEventBroadcaster>();
+builder.Services.Configure<DashboardAuthOptions>(builder.Configuration.GetSection(DashboardAuthOptions.SectionName));
+builder.Services.AddSingleton<IDashboardAuthService, DashboardAuthService>();
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.Cookie.Name = "gae.dashboard.auth";
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SameSite = SameSiteMode.Strict;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+        options.SlidingExpiration = true;
+        options.Events = DashboardSecurityExtensions.CreateCookieEvents();
+    });
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy(DashboardPolicies.UserAccess, policy =>
+        policy.RequireAuthenticatedUser().RequireRole(DashboardRoles.User, DashboardRoles.Admin));
+
+    options.AddPolicy(DashboardPolicies.AdminAccess, policy =>
+        policy.RequireAuthenticatedUser().RequireRole(DashboardRoles.Admin));
+});
 
 // CORS for dashboard client
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        policy.WithOrigins("http://localhost:5173", "http://localhost:3001")
+        policy.WithOrigins("http://localhost:5173", "http://localhost:3001", "http://localhost:8080")
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -136,6 +152,12 @@ builder.Services.AddCors(options =>
 builder.Services.AddHttpClient();
 
 var app = builder.Build();
+
+var authService = app.Services.GetRequiredService<IDashboardAuthService>();
+foreach (var warning in authService.GetStartupWarnings())
+{
+    app.Logger.LogWarning("{Warning}", warning);
+}
 
 // State recovery: replay from checkpoint + journal
 var replayService = app.Services.GetRequiredService<StateReplayService>();
@@ -217,7 +239,11 @@ if (startRoom is null)
     }
 }
 
+app.UseDefaultFiles();
+app.UseStaticFiles();
 app.UseCors();
+app.UseAuthentication();
+app.UseAuthorization();
 app.MapControllers();
 app.MapHub<GameHub>("/hubs/game");
 app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTimeOffset.UtcNow }));

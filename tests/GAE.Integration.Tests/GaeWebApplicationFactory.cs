@@ -1,3 +1,4 @@
+using System.Net.Http.Json;
 using GAE.Core.Interfaces;
 using GAE.Core.Models;
 using GAE.Engine.State;
@@ -16,7 +17,16 @@ namespace GAE.Integration.Tests;
 /// </summary>
 public class GaeWebApplicationFactory : WebApplicationFactory<Program>
 {
+    public const string DefaultUserUsername = "user";
+    public const string DefaultUserPassword = "GAE-User-Local!123";
+    public const string DefaultAdminUsername = "admin";
+    public const string DefaultAdminPassword = "GAE-Admin-Local!123";
+
     private readonly string _dataDir = Path.Combine(Path.GetTempPath(), "gae-tests", Guid.NewGuid().ToString("N"));
+
+    public HttpClient CreateUserClient() => CreateAuthenticatedClient(DefaultUserUsername, DefaultUserPassword);
+
+    public HttpClient CreateAdminClient() => CreateAuthenticatedClient(DefaultAdminUsername, DefaultAdminPassword);
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -61,6 +71,24 @@ public class GaeWebApplicationFactory : WebApplicationFactory<Program>
             try { Directory.Delete(_dataDir, true); } catch { /* best effort */ }
         }
     }
+
+    private HttpClient CreateAuthenticatedClient(string username, string password)
+    {
+        var client = CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            HandleCookies = true
+        });
+
+        var response = client.PostAsJsonAsync("/api/dashboard/auth/login", new
+        {
+            username,
+            password
+        }).GetAwaiter().GetResult();
+
+        response.EnsureSuccessStatusCode();
+        return client;
+    }
 }
 
 /// <summary>Narrator stub — returns deterministic text without calling LM Studio.</summary>
@@ -86,6 +114,16 @@ public class StubNarratorService : INarratorService
 
     public Task<string> GenerateBackstoryAsync(CharacterConcept concept, CancellationToken ct = default)
         => Task.FromResult($"{concept.Name} grew up in a test environment.");
+
+    public Task<string?> ParseIntentAsync(string rawInput, CancellationToken ct = default)
+        => Task.FromResult<string?>(null);
+
+    public Task<FreeFormResponse> ProcessFreeFormAsync(PlayerCharacter player, Room room, string rawInput, IReadOnlyList<StoryEntry> recentStory, CancellationToken ct = default)
+        => Task.FromResult(new FreeFormResponse
+        {
+            Success = true,
+            Narration = $"[FreeForm] {rawInput}"
+        });
 
     private static string OppositeDir(string dir) => dir switch
     {

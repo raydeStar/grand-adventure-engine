@@ -16,10 +16,7 @@ public class SignalRGameEventBroadcaster : IGameEventBroadcaster
 
     public async Task BroadcastEventAsync(GameEvent gameEvent, CancellationToken ct = default)
     {
-        // Broadcast to all connected clients
-        await _hubContext.Clients.All.SendAsync("GameEvent", gameEvent, ct);
-
-        // Also send to specific player and room groups
+        // Send to targeted groups only — never broadcast to All to avoid duplicates
         if (!string.IsNullOrEmpty(gameEvent.PlayerId))
             await _hubContext.Clients.Group($"player-{gameEvent.PlayerId}").SendAsync("PlayerEvent", gameEvent, ct);
 
@@ -29,7 +26,7 @@ public class SignalRGameEventBroadcaster : IGameEventBroadcaster
 
     public async Task BroadcastActionResultAsync(ActionResult result, string playerId, CancellationToken ct = default)
     {
+        // Send only to the specific player group — not All
         await _hubContext.Clients.Group($"player-{playerId}").SendAsync("ActionResult", result, ct);
-        await _hubContext.Clients.All.SendAsync("ActionResult", result, ct);
     }
 }
