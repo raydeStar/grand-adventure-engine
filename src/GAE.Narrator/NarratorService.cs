@@ -760,7 +760,7 @@ public class NarratorService : INarratorService
                 new LmStudioMessage { Role = "user", Content = userPrompt }
             ],
             Temperature = 0.8,
-            MaxTokens = 500
+            MaxTokens = 2048
         };
 
         if (logPayload)
@@ -1265,7 +1265,7 @@ public class NarratorService : INarratorService
         public List<LmStudioMessage> Messages { get; set; } = [];
         public double Temperature { get; set; } = 0.8;
         [JsonPropertyName("max_tokens")]
-        public int MaxTokens { get; set; } = 500;
+        public int MaxTokens { get; set; } = 2048;
     }
 
     private class LmStudioMessage

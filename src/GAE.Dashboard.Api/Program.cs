@@ -80,7 +80,7 @@ var lmStudioModel = builder.Configuration["LmStudio:Model"] ?? "default";
 builder.Services.AddHttpClient("LmStudio", client =>
 {
     client.BaseAddress = new Uri(lmStudioEndpoint + "/");
-    client.Timeout = TimeSpan.FromSeconds(30);
+    client.Timeout = TimeSpan.FromSeconds(120);
 });
 builder.Services.AddSingleton<INarratorService>(sp =>
 {

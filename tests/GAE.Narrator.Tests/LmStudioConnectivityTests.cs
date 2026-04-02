@@ -23,7 +23,7 @@ public class LmStudioConnectivityTests : IAsyncLifetime
         _httpClient = new HttpClient
         {
             BaseAddress = new Uri(LmStudioEndpoint + "/"),
-            Timeout = TimeSpan.FromSeconds(30)
+            Timeout = TimeSpan.FromSeconds(120)
         };
 
         try
