@@ -76,7 +76,7 @@ public class LmStudioConnectivityTests : IAsyncLifetime
                 new { role = "user", content = "Say hello." }
             },
             temperature = 0.1,
-            max_tokens = 50
+            max_tokens = 200
         };
 
         var response = await _httpClient.PostAsJsonAsync("v1/chat/completions", request);
