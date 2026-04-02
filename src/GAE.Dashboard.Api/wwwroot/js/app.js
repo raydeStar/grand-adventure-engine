@@ -377,9 +377,9 @@
     state.currentPlayerId = playerId;
     state.currentRoomId = '';
     localStorage.setItem('gae.active.player', playerId);
+    setMode(mode);
     UI.showDashboard(true);
     UI.showPortal(false);
-    setMode(mode);
     await GameHub.joinPlayerFeed(playerId);
     await refreshCurrentPlayer();
     await refreshStory();
