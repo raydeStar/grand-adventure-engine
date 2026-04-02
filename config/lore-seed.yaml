@@ -32,6 +32,7 @@ starting_room:
       name: "Mara the Innkeeper"
       personality: "Gruff but kind. Knows every rumor in the region. Respects strength and honesty."
       faction: "neutral"
+      knowledge_scopes: ["rumors", "inn", "crossroads", "thornveil", "ironhold"]
   environment_tags: ["indoor", "safe", "lit"]
 
 factions:

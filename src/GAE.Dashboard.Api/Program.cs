@@ -82,6 +82,7 @@ builder.Services.AddHttpClient<INarratorService, NarratorService>(client =>
     client.BaseAddress = new Uri(lmStudioEndpoint + "/");
     client.Timeout = TimeSpan.FromSeconds(30);
 }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler());
+builder.Services.AddSingleton<WorldKnowledgeBuilder>();
 
 // Wiki.js — GraphQL client
 var wikiUrl = builder.Configuration["WikiJs:Url"] ?? "http://localhost:3000";
@@ -222,12 +223,18 @@ if (startRoom is null)
                     room.Exits[exit.Key] = exit.Value;
 
             if (lore.StartingRoom.Npcs is not null)
-                room.Npcs.AddRange(lore.StartingRoom.Npcs.Select(n => new GAE.Core.Models.Npc
+                room.Npcs.AddRange(lore.StartingRoom.Npcs.Select(n =>
                 {
-                    Id = n.Id ?? Guid.NewGuid().ToString(),
-                    Name = n.Name ?? "Unknown",
-                    Personality = n.Personality ?? "",
-                    Faction = n.Faction ?? "neutral"
+                    var npc = new GAE.Core.Models.Npc
+                    {
+                        Id = n.Id ?? Guid.NewGuid().ToString(),
+                        Name = n.Name ?? "Unknown",
+                        Personality = n.Personality ?? "",
+                        Faction = n.Faction ?? "neutral"
+                    };
+                    if (n.KnowledgeScopes is not null)
+                        npc.KnowledgeScopes.AddRange(n.KnowledgeScopes);
+                    return npc;
                 }));
 
             if (lore.StartingRoom.EnvironmentTags is not null)
@@ -341,7 +348,7 @@ internal class LoreRoom
     public List<LoreNpc>? Npcs { get; set; }
     public List<string>? EnvironmentTags { get; set; }
 }
-internal class LoreNpc { public string? Id { get; set; } public string? Name { get; set; } public string? Personality { get; set; } public string? Faction { get; set; } }
+internal class LoreNpc { public string? Id { get; set; } public string? Name { get; set; } public string? Personality { get; set; } public string? Faction { get; set; } public List<string>? KnowledgeScopes { get; set; } }
 internal class LoreFaction { public string? Id { get; set; } public string? Name { get; set; } public string? Description { get; set; } }
 
 // Enables WebApplicationFactory<Program> in integration tests

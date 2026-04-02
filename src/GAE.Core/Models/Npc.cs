@@ -8,6 +8,7 @@ public class Npc
     public string Faction { get; set; } = "neutral";
     public string Disposition { get; set; } = "neutral";
     public NpcDispositionState DispositionState { get; set; } = new();
+    public List<string> KnowledgeScopes { get; set; } = [];
     public bool IsHostile { get; set; }
     public int? Hp { get; set; }
     public int? MaxHp { get; set; }

@@ -12,4 +12,9 @@ public interface IWikiService
     Task SyncNpcPageAsync(Npc npc, CancellationToken ct = default);
     Task SyncStoryEntryAsync(StoryEntry entry, CancellationToken ct = default);
     Task<bool> IsHealthyAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<WikiSearchResult>> SearchAsync(string query, CancellationToken ct = default);
+    Task<IReadOnlyList<WikiPageSummary>> GetPagesAsync(string pathPrefix = "", CancellationToken ct = default);
 }
+
+public record WikiSearchResult(int Id, string Path, string Title, string Description);
+public record WikiPageSummary(int Id, string Path, string Title);

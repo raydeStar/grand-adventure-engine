@@ -160,6 +160,73 @@ public class WikiService : IWikiService
         }
     }
 
+    public async Task<IReadOnlyList<WikiSearchResult>> SearchAsync(string query, CancellationToken ct = default)
+    {
+        try
+        {
+            var request = new GraphQLRequest
+            {
+                Query = """
+                    query SearchPages($query: String!) {
+                        pages {
+                            search(query: $query) {
+                                results { id, path, title, description }
+                            }
+                        }
+                    }
+                    """,
+                Variables = new { query }
+            };
+
+            var response = await _graphQLClient.SendQueryAsync<SearchPagesResponse>(request, ct);
+            var results = response.Data?.Pages?.Search?.Results;
+            if (results is null) return [];
+
+            return results
+                .Select(r => new WikiSearchResult(r.Id, r.Path, r.Title, r.Description ?? ""))
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Wiki search failed for query '{Query}'", query);
+            return [];
+        }
+    }
+
+    public async Task<IReadOnlyList<WikiPageSummary>> GetPagesAsync(string pathPrefix = "", CancellationToken ct = default)
+    {
+        try
+        {
+            var request = new GraphQLRequest
+            {
+                Query = """
+                    {
+                        pages {
+                            list(orderBy: TITLE) { id, path, title }
+                        }
+                    }
+                    """
+            };
+
+            var response = await _graphQLClient.SendQueryAsync<ListPagesResponse>(request, ct);
+            var pages = response.Data?.Pages?.List;
+            if (pages is null) return [];
+
+            IEnumerable<PageListEntry> filtered = pages;
+            if (!string.IsNullOrEmpty(pathPrefix))
+                filtered = filtered.Where(p => p.Path.StartsWith(pathPrefix, StringComparison.OrdinalIgnoreCase));
+
+            return filtered
+                .Select(p => new WikiPageSummary(p.Id, p.Path, p.Title))
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Wiki page listing failed");
+            return [];
+        }
+    }
+
     private async Task<int?> GetPageIdAsync(string path, CancellationToken ct)
     {
         var request = new GraphQLRequest
@@ -191,4 +258,14 @@ public class WikiService : IWikiService
     private class PagesQuery<T> { public T? SingleByPath { get; set; } }
     private class PageContent { public string? Content { get; set; } }
     private class PageId { public int Id { get; set; } }
+
+    // Search/list response DTOs
+    private class SearchPagesResponse { public SearchPagesQuery? Pages { get; set; } }
+    private class SearchPagesQuery { public SearchResultSet? Search { get; set; } }
+    private class SearchResultSet { public List<SearchResultEntry>? Results { get; set; } }
+    private class SearchResultEntry { public int Id { get; set; } public string Path { get; set; } = ""; public string Title { get; set; } = ""; public string? Description { get; set; } }
+
+    private class ListPagesResponse { public ListPagesQuery? Pages { get; set; } }
+    private class ListPagesQuery { public List<PageListEntry>? List { get; set; } }
+    private class PageListEntry { public int Id { get; set; } public string Path { get; set; } = ""; public string Title { get; set; } = ""; }
 }

@@ -185,6 +185,12 @@ public class StubWikiService : IWikiService
 
     public Task<bool> IsHealthyAsync(CancellationToken ct = default)
         => Task.FromResult(true);
+
+    public Task<IReadOnlyList<WikiSearchResult>> SearchAsync(string query, CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyList<WikiSearchResult>>([]);
+
+    public Task<IReadOnlyList<WikiPageSummary>> GetPagesAsync(string pathPrefix = "", CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyList<WikiPageSummary>>([]);
 }
 
 /// <summary>Event broadcaster stub — no-op for tests.</summary>

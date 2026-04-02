@@ -11,13 +11,15 @@ public class NarratorService : INarratorService
 {
     private readonly HttpClient _httpClient;
     private readonly ILogger<NarratorService> _logger;
+    private readonly WorldKnowledgeBuilder? _knowledge;
     private string _model;
     private bool _modelResolved;
 
-    public NarratorService(HttpClient httpClient, ILogger<NarratorService> logger, string model = "default")
+    public NarratorService(HttpClient httpClient, ILogger<NarratorService> logger, string model = "default", WorldKnowledgeBuilder? knowledge = null)
     {
         _httpClient = httpClient;
         _logger = logger;
+        _knowledge = knowledge;
         _model = model;
         _modelResolved = !string.Equals(model, "default", StringComparison.OrdinalIgnoreCase);
     }
@@ -57,6 +59,8 @@ public class NarratorService : INarratorService
             ? string.Join(", ", context.CurrentRoom.Exits.Keys)
             : "None";
 
+        var loreContext = await GetRoomKnowledgeAsync(context.CurrentRoom, ct);
+
         var userPrompt = $"""
             Player: {context.Player.Name} ({context.Player.Race} {context.Player.Class}, Level {context.Player.Level})
             Location: {context.CurrentRoom.Name} — {context.CurrentRoom.Description}
@@ -66,6 +70,7 @@ public class NarratorService : INarratorService
             Action: {context.Action.RawInput}
             Action Outcome: {(context.MechanicalResult.Success ? "success" : "failure")}
             Resolved Outcome: {resolvedOutcome}
+            {loreContext}
             """;
 
         try
@@ -149,7 +154,7 @@ public class NarratorService : INarratorService
             var generated = JsonSerializer.Deserialize<GeneratedNpc>(json, _jsonOptions);
             if (generated is not null)
             {
-                return new Npc
+                var npc = new Npc
                 {
                     Id = Guid.NewGuid().ToString(),
                     Name = generated.Name ?? "Stranger",
@@ -158,6 +163,9 @@ public class NarratorService : INarratorService
                     IsHostile = generated.IsHostile,
                     Level = generated.Level
                 };
+                // Auto-infer knowledge scopes from faction + environment
+                npc.KnowledgeScopes = InferKnowledgeScopes(npc.Faction, room.EnvironmentTags);
+                return npc;
             }
         }
         catch (Exception ex)
@@ -307,6 +315,8 @@ public class NarratorService : INarratorService
             ? SummarizeEntities(room.Items, item => item.Name, item => item.Quantity)
             : "None";
 
+        var loreContext = await GetRoomKnowledgeAsync(room, ct);
+
         var userPrompt = $"""
             Character Definition Card
             Resources:
@@ -332,6 +342,7 @@ public class NarratorService : INarratorService
             Exits: {string.Join(", ", room.Exits.Keys)}
             Recent history:
             {recentLines}
+            {loreContext}
 
             Player action: "{rawInput}"
             """;
@@ -402,11 +413,14 @@ public class NarratorService : INarratorService
             }
             """;
 
+        var npcKnowledge = await GetNpcKnowledgeAsync(npc, room, ct);
+
         var userPrompt = $$"""
             Player: {{player.Name}} (Lv.{{player.Level}} {{player.Race}} {{player.Class}})
             Location: {{room.Name}} — {{room.Description}}
             Turn {{interaction.TurnCount + 1}} of conversation with {{npc.Name}}.
             Player says/does: "{{rawInput}}"
+            {{npcKnowledge}}
             """;
 
         string? rawCompletion = null;
@@ -476,6 +490,8 @@ public class NarratorService : INarratorService
             statChanges.hp should be a negative delta (damage dealt to player by enemy).
             """;
 
+        var loreContext = await GetRoomKnowledgeAsync(room, ct);
+
         var userPrompt = $$"""
             Player: {{player.Name}} (Lv.{{player.Level}} {{player.Race}} {{player.Class}})
             HP: {{player.Hp}}/{{player.MaxHp}} | MP: {{player.Mp}}/{{player.MaxMp}}
@@ -484,6 +500,7 @@ public class NarratorService : INarratorService
             Location: {{room.Name}}
             Combat turn {{interaction.TurnCount + 1}} vs {{enemy.Name}} (HP: {{enemy.Hp ?? 0}}/{{enemy.MaxHp ?? 0}}, Defense: {{enemy.Defense ?? 10}})
             Player action: "{{rawInput}}"
+            {{loreContext}}
             """;
 
         string? rawCompletion = null;
@@ -768,8 +785,45 @@ public class NarratorService : INarratorService
             : throw new InvalidOperationException($"LM Studio {operation} response did not contain a message body.");
     }
 
+    private static List<string> InferKnowledgeScopes(string faction, List<string> environmentTags)
+    {
+        var scopes = new List<string>();
+        if (!string.IsNullOrWhiteSpace(faction) && faction != "neutral")
+            scopes.Add(faction.ToLowerInvariant());
+        scopes.AddRange(environmentTags.Take(3).Select(t => t.ToLowerInvariant()));
+        return scopes;
+    }
+
     private static string FallbackNarration() =>
         "The scene settles into a plain, unadorned stillness for a moment, yielding only the bare facts.";
+
+    private async Task<string> GetRoomKnowledgeAsync(Room room, CancellationToken ct)
+    {
+        if (_knowledge is null) return "";
+        try
+        {
+            return await _knowledge.BuildContextAsync(room, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Knowledge context build failed for room {RoomId}", room.Id);
+            return "";
+        }
+    }
+
+    private async Task<string> GetNpcKnowledgeAsync(Npc npc, Room room, CancellationToken ct)
+    {
+        if (_knowledge is null) return "";
+        try
+        {
+            return await _knowledge.BuildScopedContextAsync(npc, room, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "NPC knowledge context build failed for {NpcId}", npc.Id);
+            return "";
+        }
+    }
 
     private static bool TryBuildDeterministicLookNarration(NarratorContext context, out string narration)
     {
