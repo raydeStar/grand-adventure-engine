@@ -39,6 +39,24 @@ public class GameEngine : IGameEngine
         if (player is null)
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "Player not found." };
 
+        // NLP fallback: when regex parsing fails, ask the narrator to interpret natural language
+        if (action.Type == ActionType.Unknown)
+        {
+            _logger.LogInformation("Unrecognized command for {PlayerId}: {RawInput}. Attempting intent translation before free-form handling.", playerId, action.RawInput);
+            var translated = await _narrator.ParseIntentAsync(action.RawInput, ct);
+            if (translated is not null)
+            {
+                var reparsed = _parser.Parse(playerId, translated);
+                if (reparsed.Type != ActionType.Unknown)
+                {
+                    _logger.LogInformation("Intent translation mapped \"{RawInput}\" to canonical command \"{Translated}\".", action.RawInput, translated);
+                    action.Type = reparsed.Type;
+                    action.Target = reparsed.Target;
+                    action.Direction = reparsed.Direction;
+                }
+            }
+        }
+
         var result = action.Type switch
         {
             ActionType.Move => await ProcessMoveAsync(player, action, ct),
@@ -54,7 +72,7 @@ public class GameEngine : IGameEngine
             ActionType.Inventory => ProcessInventory(player, action),
             ActionType.Stats => ProcessStats(player, action),
             ActionType.Help => ProcessHelp(action),
-            _ => new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "I don't understand that command." }
+            _ => await ProcessFreeFormActionAsync(player, action, ct)
         };
 
         // Save player state after any mutation
@@ -64,8 +82,8 @@ public class GameEngine : IGameEngine
             await _stateManager.SavePlayerAsync(player, ct);
         }
 
-        // Narrate the result
-        if (result.Success && action.Type != ActionType.Help && action.Type != ActionType.Stats && action.Type != ActionType.Inventory)
+        // Narrate the result (free-form actions handle their own narration and story)
+        if (result.Success && action.Type != ActionType.Help && action.Type != ActionType.Stats && action.Type != ActionType.Inventory && action.Type != ActionType.Unknown)
         {
             try
             {
@@ -224,13 +242,7 @@ public class GameEngine : IGameEngine
         if (room is null)
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "You can't see anything." };
 
-        var exits = string.Join(", ", room.Exits.Keys);
-        var npcs = room.Npcs.Count > 0 ? string.Join(", ", room.Npcs.Select(n => n.Name)) : "nobody";
-        var items = room.Items.Count > 0 ? string.Join(", ", room.Items.Select(i => i.Name)) : "nothing of interest";
-
-        var summary = $"**{room.Name}**\n{room.Description}\nExits: {exits}\nYou see: {npcs}\nItems: {items}";
-
-        return new ActionResult { ActionId = action.Id, Success = true, MechanicalSummary = summary };
+        return new ActionResult { ActionId = action.Id, Success = true, MechanicalSummary = string.Empty };
     }
 
     private async Task<ActionResult> ProcessAttackAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
@@ -370,15 +382,23 @@ public class GameEngine : IGameEngine
         switch (item.Type)
         {
             case ItemType.Weapon:
+                if (player.Equipment.Weapon is not null)
+                    player.Inventory.Add(player.Equipment.Weapon);
                 player.Equipment.Weapon = item;
                 break;
             case ItemType.Armor:
+                if (player.Equipment.Armor is not null)
+                    player.Inventory.Add(player.Equipment.Armor);
                 player.Equipment.Armor = item;
                 break;
             case ItemType.Shield:
+                if (player.Equipment.Shield is not null)
+                    player.Inventory.Add(player.Equipment.Shield);
                 player.Equipment.Shield = item;
                 break;
             case ItemType.Helmet:
+                if (player.Equipment.Helmet is not null)
+                    player.Inventory.Add(player.Equipment.Helmet);
                 player.Equipment.Helmet = item;
                 break;
             default:
@@ -516,6 +536,161 @@ public class GameEngine : IGameEngine
                 LCK: {player.Luck} ({player.GetModifier("luck"):+0;-0}) | Defense: {player.Defense}
                 """
         };
+    }
+
+    private async Task<ActionResult> ProcessFreeFormActionAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
+    {
+        _logger.LogInformation("Routing free-form action for {PlayerId} in room {RoomId}: {RawInput}", player.Id, player.CurrentRoomId, action.RawInput);
+
+        var room = await _stateManager.GetRoomAsync(player.CurrentRoomId, ct);
+        room ??= new Room { Id = player.CurrentRoomId, Name = "Unknown" };
+
+        var recentStory = await _stateManager.GetRecentStoryForRoomAsync(player.CurrentRoomId, 5, ct);
+        var freeForm = await _narrator.ProcessFreeFormAsync(player, room, action.RawInput, recentStory, ct);
+
+        var result = new ActionResult
+        {
+            ActionId = action.Id,
+            Success = freeForm.Success,
+            MechanicalSummary = freeForm.Success ? $"[Free action: {action.RawInput}]" : $"[Failed: {action.RawInput}]",
+            Narration = freeForm.Narration
+        };
+
+        // Apply stat changes
+        foreach (var (stat, delta) in freeForm.StatChanges)
+        {
+            switch (stat.ToLowerInvariant())
+            {
+                case "hp":
+                    var oldHp = player.Hp;
+                    player.Hp = Math.Clamp(player.Hp + delta, 0, player.MaxHp);
+                    result.StateChanges.Add(new StateChange { EntityType = "player", EntityId = player.Id, Property = "hp", OldValue = oldHp.ToString(), NewValue = player.Hp.ToString() });
+                    break;
+                case "mp":
+                    var oldMp = player.Mp;
+                    player.Mp = Math.Clamp(player.Mp + delta, 0, player.MaxMp);
+                    result.StateChanges.Add(new StateChange { EntityType = "player", EntityId = player.Id, Property = "mp", OldValue = oldMp.ToString(), NewValue = player.Mp.ToString() });
+                    break;
+                case "gold":
+                    var oldGold = player.Gold;
+                    player.Gold = Math.Max(0, player.Gold + delta);
+                    result.GoldChange += delta;
+                    result.StateChanges.Add(new StateChange { EntityType = "player", EntityId = player.Id, Property = "gold", OldValue = oldGold.ToString(), NewValue = player.Gold.ToString() });
+                    break;
+                case "xp":
+                    var oldXp = player.Xp;
+                    player.Xp = Math.Max(0, player.Xp + delta);
+                    result.XpGained += Math.Max(0, delta);
+                    result.StateChanges.Add(new StateChange { EntityType = "player", EntityId = player.Id, Property = "xp", OldValue = oldXp.ToString(), NewValue = player.Xp.ToString() });
+                    break;
+            }
+        }
+
+        // Apply inventory changes
+        foreach (var change in freeForm.InventoryChanges)
+        {
+            if (string.Equals(change.Action, "add", StringComparison.OrdinalIgnoreCase))
+            {
+                var item = new InventoryItem
+                {
+                    Id = Guid.NewGuid().ToString("N"),
+                    Name = change.ItemName,
+                    Quantity = Math.Max(1, change.Quantity),
+                    Type = ItemType.Misc
+                };
+                player.Inventory.Add(item);
+                result.ItemsGained.Add(item);
+            }
+            else if (string.Equals(change.Action, "remove", StringComparison.OrdinalIgnoreCase))
+            {
+                var existing = player.Inventory.FirstOrDefault(i => i.Name.Equals(change.ItemName, StringComparison.OrdinalIgnoreCase));
+                if (existing is not null)
+                {
+                    player.Inventory.Remove(existing);
+                    result.ItemsLost.Add(existing);
+                }
+            }
+        }
+
+        // Apply entity changes to room
+        foreach (var change in freeForm.EntityChanges)
+        {
+            if (string.Equals(change.EntityType, "npc", StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.Equals(change.Action, "remove", StringComparison.OrdinalIgnoreCase))
+                {
+                    room.Npcs.RemoveAll(n => n.Name.Equals(change.Name, StringComparison.OrdinalIgnoreCase));
+                }
+                else if (string.Equals(change.Action, "add", StringComparison.OrdinalIgnoreCase))
+                {
+                    room.Npcs.Add(new Npc { Id = Guid.NewGuid().ToString("N"), Name = change.Name });
+                }
+            }
+            else if (string.Equals(change.EntityType, "item", StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.Equals(change.Action, "remove", StringComparison.OrdinalIgnoreCase))
+                {
+                    room.Items.RemoveAll(i => i.Name.Equals(change.Name, StringComparison.OrdinalIgnoreCase));
+                }
+                else if (string.Equals(change.Action, "add", StringComparison.OrdinalIgnoreCase))
+                {
+                    room.Items.Add(new InventoryItem { Id = Guid.NewGuid().ToString("N"), Name = change.Name, Type = ItemType.Misc });
+                }
+            }
+        }
+
+        // Apply room description/exit changes
+        if (freeForm.RoomChanges is not null)
+        {
+            if (freeForm.RoomChanges.NewDescription is not null)
+                room.Description = freeForm.RoomChanges.NewDescription;
+
+            if (freeForm.RoomChanges.NewExits is not null)
+            {
+                foreach (var (dir, target) in freeForm.RoomChanges.NewExits)
+                    room.Exits[dir] = target;
+            }
+        }
+
+        // Persist mutations
+        player.LastActiveAt = DateTimeOffset.UtcNow;
+        await _stateManager.SavePlayerAsync(player, ct);
+        await _stateManager.SaveRoomAsync(room, ct);
+
+        // Record story entry
+        await _stateManager.AddStoryEntryAsync(new StoryEntry
+        {
+            ActionId = action.Id,
+            PlayerId = player.Id,
+            RoomId = player.CurrentRoomId,
+            MechanicalSummary = result.MechanicalSummary,
+            Narration = result.Narration ?? result.MechanicalSummary
+        }, ct);
+
+        return result;
+    }
+
+    private static string SummarizeEntities<T>(IEnumerable<T> entities, Func<T, string?> getName, Func<T, int>? getQuantity = null)
+    {
+        var counts = new Dictionary<string, (string DisplayName, int Count)>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var entity in entities)
+        {
+            var name = getName(entity)?.Trim();
+            if (string.IsNullOrWhiteSpace(name))
+                continue;
+
+            var quantity = Math.Max(1, getQuantity?.Invoke(entity) ?? 1);
+            if (counts.TryGetValue(name, out var existing))
+            {
+                counts[name] = (existing.DisplayName, existing.Count + quantity);
+                continue;
+            }
+
+            counts[name] = (name, quantity);
+        }
+
+        return string.Join(", ", counts.Values.Select(entry => entry.Count > 1 ? $"{entry.DisplayName} (x{entry.Count})" : entry.DisplayName));
     }
 
     private static ActionResult ProcessHelp(GameAction action)

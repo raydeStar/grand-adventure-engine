@@ -56,7 +56,7 @@ public class GameFlowTests : IClassFixture<GaeWebApplicationFactory>
     }
 
     [Fact]
-    public async Task PostAction_Look_ReturnsRoomDescription()
+    public async Task PostAction_Look_DoesNotReturnRoomMetadataBlock()
     {
         await CreateTestCharacterAsync("flow-player-look");
 
@@ -71,8 +71,9 @@ public class GameFlowTests : IClassFixture<GaeWebApplicationFactory>
         Assert.True(result.GetProperty("success").GetBoolean());
 
         var summary = result.GetProperty("mechanicalSummary").GetString()!;
-        Assert.Contains("The Crossroads Inn", summary);
-        Assert.Contains("Exits:", summary);
+        Assert.Equal(string.Empty, summary);
+        Assert.DoesNotContain("The Crossroads Inn", summary);
+        Assert.DoesNotContain("Exits:", summary);
     }
 
     [Fact]

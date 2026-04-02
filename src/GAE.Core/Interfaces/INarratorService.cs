@@ -9,4 +9,6 @@ public interface INarratorService
     Task<Npc> GenerateNpcAsync(Room room, string? faction = null, CancellationToken ct = default);
     Task<string> GenerateAsciiArtAsync(string subject, CancellationToken ct = default);
     Task<string> GenerateBackstoryAsync(CharacterConcept concept, CancellationToken ct = default);
+    Task<string?> ParseIntentAsync(string rawInput, CancellationToken ct = default);
+    Task<FreeFormResponse> ProcessFreeFormAsync(PlayerCharacter player, Room room, string rawInput, IReadOnlyList<StoryEntry> recentStory, CancellationToken ct = default);
 }
