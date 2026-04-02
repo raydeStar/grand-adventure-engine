@@ -131,6 +131,12 @@ public class WikiService : IWikiService
         return CreateOrUpdatePageAsync($"rooms/{room.Id}", room.Name, content, ct);
     }
 
+    public Task SyncNpcPageAsync(Npc npc, CancellationToken ct = default)
+    {
+        var content = WikiTemplates.NpcPage(npc);
+        return CreateOrUpdatePageAsync($"npcs/{npc.Id}", npc.Name, content, ct);
+    }
+
     public Task SyncStoryEntryAsync(StoryEntry entry, CancellationToken ct = default)
     {
         var content = WikiTemplates.StoryEntryPage(entry);

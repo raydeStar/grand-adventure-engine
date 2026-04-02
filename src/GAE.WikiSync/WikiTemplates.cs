@@ -108,6 +108,44 @@ public static class WikiTemplates
             """;
     }
 
+    public static string NpcPage(Npc npc)
+    {
+        var stats = new List<string>();
+        if (npc.Hp.HasValue) stats.Add($"- **HP:** {npc.Hp}/{npc.MaxHp}");
+        if (npc.AttackBonus.HasValue) stats.Add($"- **Attack Bonus:** {npc.AttackBonus:+0;-0}");
+        if (npc.DamageDice is not null) stats.Add($"- **Damage:** {npc.DamageDice}");
+        if (npc.Defense.HasValue) stats.Add($"- **Defense:** {npc.Defense}");
+        var statsStr = stats.Count > 0 ? string.Join("\n", stats) : "- Not yet determined";
+
+        var loot = npc.LootTable.Count > 0
+            ? string.Join("\n", npc.LootTable.Select(i => $"- {i.Name} (x{i.Quantity})"))
+            : "- None";
+
+        return $"""
+            ---
+            title: {npc.Name}
+            description: {npc.Personality}
+            tags: [npc, {npc.Faction.ToLowerInvariant()}]
+            ---
+
+            # {npc.Name}
+
+            **Faction:** {npc.Faction} | **Level:** {npc.Level} | **Disposition:** {npc.Disposition}
+
+            ## Personality
+            {npc.Personality}
+
+            ## Combat Stats
+            {statsStr}
+
+            ## Loot Table
+            {loot}
+
+            ---
+            *Hostile: {(npc.IsHostile ? "Yes" : "No")}*
+            """;
+    }
+
     public static string StoryEntryPage(StoryEntry entry)
     {
         return $"""

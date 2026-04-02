@@ -9,6 +9,7 @@ public interface IWikiService
     Task<bool> PageExistsAsync(string path, CancellationToken ct = default);
     Task SyncPlayerPageAsync(PlayerCharacter player, CancellationToken ct = default);
     Task SyncRoomPageAsync(Room room, CancellationToken ct = default);
+    Task SyncNpcPageAsync(Npc npc, CancellationToken ct = default);
     Task SyncStoryEntryAsync(StoryEntry entry, CancellationToken ct = default);
     Task<bool> IsHealthyAsync(CancellationToken ct = default);
 }

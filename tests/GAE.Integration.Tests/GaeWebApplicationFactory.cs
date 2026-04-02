@@ -177,6 +177,9 @@ public class StubWikiService : IWikiService
     public Task SyncRoomPageAsync(Room room, CancellationToken ct = default)
         => Task.CompletedTask;
 
+    public Task SyncNpcPageAsync(Npc npc, CancellationToken ct = default)
+        => Task.CompletedTask;
+
     public Task SyncStoryEntryAsync(StoryEntry entry, CancellationToken ct = default)
         => Task.CompletedTask;
 

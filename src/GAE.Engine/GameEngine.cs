@@ -13,6 +13,7 @@ public class GameEngine : IGameEngine
     private readonly CommandParser _parser;
     private readonly GameRulesConfig _rules;
     private readonly ILogger<GameEngine> _logger;
+    private readonly IWikiService? _wiki;
 
     public GameEngine(
         IStateManager stateManager,
@@ -20,7 +21,8 @@ public class GameEngine : IGameEngine
         INarratorService narrator,
         CommandParser parser,
         GameRulesConfig rules,
-        ILogger<GameEngine> logger)
+        ILogger<GameEngine> logger,
+        IWikiService? wiki = null)
     {
         _stateManager = stateManager;
         _dice = dice;
@@ -28,6 +30,7 @@ public class GameEngine : IGameEngine
         _parser = parser;
         _rules = rules;
         _logger = logger;
+        _wiki = wiki;
     }
 
     public GameAction ParseCommand(string playerId, string rawInput)
@@ -224,6 +227,7 @@ public class GameEngine : IGameEngine
                 targetRoom.IsDiscovered = true;
                 targetRoom.DiscoveredAt = DateTimeOffset.UtcNow;
                 await _stateManager.SaveRoomAsync(targetRoom, ct);
+                PublishToWikiInBackground(targetRoom);
             }
             catch (Exception ex)
             {
@@ -1379,6 +1383,25 @@ public class GameEngine : IGameEngine
         "d" => "down",
         _ => dir.ToLowerInvariant()
     };
+
+    private void PublishToWikiInBackground(Room room)
+    {
+        if (_wiki is null) return;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _wiki.SyncRoomPageAsync(room);
+                foreach (var npc in room.Npcs)
+                    await _wiki.SyncNpcPageAsync(npc);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Background wiki publish failed for room {RoomId}", room.Id);
+            }
+        });
+    }
 
     private static string OppositeDirection(string dir) => dir switch
     {
