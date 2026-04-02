@@ -1,5 +1,5 @@
 {
-  "name": "projectbonk",
+  "name": "grand-adventure-engine",
   "private": true,
   "scripts": {
     "test:e2e": "playwright test",
