@@ -11,13 +11,15 @@ public class NarratorService : INarratorService
 {
     private readonly HttpClient _httpClient;
     private readonly ILogger<NarratorService> _logger;
-    private readonly string _model;
+    private string _model;
+    private bool _modelResolved;
 
     public NarratorService(HttpClient httpClient, ILogger<NarratorService> logger, string model = "default")
     {
         _httpClient = httpClient;
         _logger = logger;
         _model = model;
+        _modelResolved = !string.Equals(model, "default", StringComparison.OrdinalIgnoreCase);
     }
 
     public async Task<string> NarrateActionAsync(NarratorContext context, CancellationToken ct = default)
@@ -712,8 +714,32 @@ public class NarratorService : INarratorService
         }
     }
 
+    private async Task ResolveModelAsync(CancellationToken ct)
+    {
+        if (_modelResolved) return;
+
+        try
+        {
+            var response = await _httpClient.GetFromJsonAsync<JsonElement>("v1/models", ct);
+            var firstModel = response.GetProperty("data").EnumerateArray().FirstOrDefault();
+            if (firstModel.ValueKind != JsonValueKind.Undefined)
+            {
+                _model = firstModel.GetProperty("id").GetString() ?? _model;
+                _logger.LogInformation("Auto-resolved LM Studio model to {Model}", _model);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not auto-resolve LM Studio model, keeping \"{Model}\"", _model);
+        }
+
+        _modelResolved = true;
+    }
+
     private async Task<string> CompletionOrThrowAsync(string systemPrompt, string userPrompt, CancellationToken ct, string operation = "completion", bool logPayload = false)
     {
+        await ResolveModelAsync(ct);
+
         var request = new LmStudioRequest
         {
             Model = _model,

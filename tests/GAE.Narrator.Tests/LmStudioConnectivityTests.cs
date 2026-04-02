@@ -63,9 +63,13 @@ public class LmStudioConnectivityTests : IAsyncLifetime
     {
         Skip.IfNot(_lmStudioAvailable, "LM Studio not running at " + LmStudioEndpoint);
 
+        // Query the first available model instead of hardcoding "default"
+        var modelsResponse = await _httpClient.GetFromJsonAsync<ModelsResponse>("v1/models");
+        var modelId = modelsResponse?.Data?.FirstOrDefault()?.Id ?? "default";
+
         var request = new
         {
-            model = "default",
+            model = modelId,
             messages = new[]
             {
                 new { role = "system", content = "Respond with exactly one word." },
