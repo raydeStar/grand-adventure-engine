@@ -4,7 +4,7 @@ services:
   gae:
     build: .
     ports:
-      - "8080:8080"
+      - "8181:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       Discord__Token: "${DISCORD_TOKEN:-}"
@@ -12,6 +12,10 @@ services:
       WikiJs__ApiKey: "${WIKI_API_KEY:-}"
       LmStudio__Endpoint: "http://host.docker.internal:1234"
       LmStudio__Model: "${LM_STUDIO_MODEL:-default}"
+      DashboardAuth__User__Username: "${GAE_DASHBOARD_USER_USERNAME:-user}"
+      DashboardAuth__User__Password: "${GAE_DASHBOARD_USER_PASSWORD:-GAE-User-Local!123}"
+      DashboardAuth__Admin__Username: "${GAE_DASHBOARD_ADMIN_USERNAME:-admin}"
+      DashboardAuth__Admin__Password: "${GAE_DASHBOARD_ADMIN_PASSWORD:-GAE-Admin-Local!123}"
     volumes:
       - gae_data:/app/data
       - ./config:/app/config:ro

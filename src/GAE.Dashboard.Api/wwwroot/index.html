@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Grand Adventure Engine</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.7/signalr.min.js"
+          crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdn.jsdelivr.net/npm/rot-js@2/dist/rot.min.js"
+          crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+</head>
+<body data-theme="green">
+  <div id="portal-overlay" class="overlay">
+    <div class="overlay-shell">
+      <section class="hero-card panel">
+        <p class="eyebrow">Terminal Interface</p>
+        <h1 class="logo">Grand Adventure Engine</h1>
+        <p class="subtitle">Text adventure dashboard. Play the same commands Discord users send, or switch to admin mode to inspect state and run smoke tests.</p>
+
+        <div class="hero-auth panel-subsection">
+          <div class="panel-heading compact-heading">
+            <h3>Protected Access</h3>
+            <span class="session-pill" id="session-summary">Sign in to unlock gameplay, manual test controls, and the protected API.</span>
+          </div>
+
+          <div id="login-hints" class="login-hints"></div>
+
+          <form id="auth-form" class="auth-form">
+            <div class="auth-grid">
+              <div class="form-group">
+                <label for="auth-username">Username</label>
+                <input type="text" id="auth-username" placeholder="user or admin" autocomplete="username" required />
+              </div>
+              <div class="form-group">
+                <label for="auth-password">Password</label>
+                <input type="password" id="auth-password" placeholder="Configured dashboard password" autocomplete="current-password" required />
+              </div>
+            </div>
+
+            <div class="auth-actions-row">
+              <label class="remember-toggle" for="auth-remember">
+                <input type="checkbox" id="auth-remember" />
+                <span>Keep me signed in</span>
+              </label>
+              <button class="btn btn-primary" id="auth-submit" type="submit">Sign In</button>
+            </div>
+          </form>
+
+          <div class="hero-actions auth-helpers">
+            <button class="btn btn-secondary btn-sm" id="btn-fill-user" type="button">Use User Username</button>
+            <button class="btn btn-secondary btn-sm" id="btn-fill-admin" type="button">Use Admin Username</button>
+            <button class="btn btn-secondary hidden" id="btn-logout-portal" type="button">Sign Out</button>
+          </div>
+
+          <p id="auth-message" class="inline-message hidden"></p>
+        </div>
+
+        <div class="role-selector">
+          <button class="role-chip" data-role-choice="user" type="button">User Workspace</button>
+          <button class="role-chip" data-role-choice="admin" type="button">Admin Console</button>
+        </div>
+
+        <div class="hero-actions">
+          <button class="btn btn-secondary" id="btn-open-admin" type="button">Open Admin Console</button>
+          <button class="btn btn-secondary" id="btn-seed-demo" type="button">Seed Demo User + Admin</button>
+        </div>
+
+        <p id="portal-message" class="inline-message hidden"></p>
+      </section>
+
+      <section class="portal-grid">
+        <div class="panel">
+          <div class="panel-heading">
+            <h3>Characters</h3>
+            <button class="btn btn-primary" id="btn-new-char" type="button">Create New Character</button>
+          </div>
+          <div id="existing-players" class="portal-player-list"></div>
+        </div>
+
+        <form id="create-form" class="panel hidden">
+          <div class="panel-heading">
+            <h3>Character Workshop</h3>
+          </div>
+
+          <div class="form-group">
+            <label for="char-name">Name</label>
+            <input type="text" id="char-name" placeholder="Enter character name" required maxlength="50" />
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="char-race">Race</label>
+              <select id="char-race">
+                <option value="Human">Human</option>
+                <option value="Elf">Elf</option>
+                <option value="Dwarf">Dwarf</option>
+                <option value="Halfling">Halfling</option>
+                <option value="Orc">Orc</option>
+                <option value="Tiefling">Tiefling</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="char-class">Class</label>
+              <select id="char-class">
+                <option value="Warrior">Warrior</option>
+                <option value="Mage">Mage</option>
+                <option value="Rogue">Rogue</option>
+                <option value="Cleric">Cleric</option>
+                <option value="Ranger">Ranger</option>
+                <option value="Bard">Bard</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="char-player-id">Player Id <span class="optional">(optional)</span></label>
+              <input type="text" id="char-player-id" placeholder="Useful for repeatable tests" maxlength="64" />
+            </div>
+            <div class="form-group">
+              <label for="char-stats">Stat Method</label>
+              <select id="char-stats">
+                <option value="StandardArray">Standard Array</option>
+                <option value="Roll4d6DropLowest">Roll 4d6 Drop Lowest</option>
+                <option value="FlatValue">Flat 10s</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="char-backstory">Backstory <span class="optional">(optional)</span></label>
+            <textarea id="char-backstory" rows="4" placeholder="A short origin, rumor, or test persona note." maxlength="500"></textarea>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn btn-secondary" id="btn-cancel-create">Cancel</button>
+            <button type="submit" class="btn btn-primary" id="create-submit">Create Character</button>
+          </div>
+        </form>
+
+        <div class="panel">
+          <h3>Workflow Reference</h3>
+          <div class="workflow-reference">
+            <div class="reference-step">
+              <strong>User flow</strong>
+              <span>Create a character, explore rooms, fight NPCs, and manage inventory.</span>
+            </div>
+            <div class="reference-step">
+              <strong>Admin flow</strong>
+              <span>Seed demo personas, run smoke tests, inspect state, and execute commands as any character.</span>
+            </div>
+            <div class="reference-step">
+              <strong>Testing</strong>
+              <span>Use explicit player ids to create repeatable test actors and rerun the same walkthroughs safely.</span>
+            </div>
+          </div>
+
+          <div class="command-reference compact">
+            <span>look</span>
+            <span>go north</span>
+            <span>talk to npc</span>
+            <span>attack target</span>
+            <span>take item</span>
+            <span>equip item</span>
+            <span>rest</span>
+            <span>inventory</span>
+            <span>stats</span>
+            <span>help</span>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div id="dashboard" class="hidden">
+    <header class="app-header">
+      <div class="header-brand">
+        <div class="brand-title">Grand Adventure Engine</div>
+        <div class="brand-subtitle" id="mode-description"></div>
+      </div>
+
+      <div class="mode-switch">
+        <button class="mode-btn" data-mode-button="user" type="button">User Flow</button>
+        <button class="mode-btn" data-mode-button="admin" type="button">Admin Console</button>
+      </div>
+
+      <div class="header-actions">
+        <span class="player-badge" id="header-player">No active character</span>
+        <span class="session-badge" id="session-badge">Signed out</span>
+        <span class="status-cluster">
+          <span class="status-dot" id="connection-dot"></span>
+          <span id="connection-status">Booting...</span>
+        </span>
+        <button class="btn btn-secondary" id="btn-refresh" type="button">Refresh</button>
+        <button class="btn btn-secondary hidden" id="btn-logout-header" type="button">Sign Out</button>
+        <button class="btn btn-secondary" id="btn-open-portal" type="button">Portal</button>
+      </div>
+    </header>
+
+    <main class="dashboard-shell">
+      <section id="workspace-user" class="workspace">
+        <div class="workspace-grid">
+          <section class="terminal-col">
+            <div class="terminal-titlebar">
+              <span class="terminal-room" id="room-name">No active character</span>
+              <span class="terminal-spacer"></span>
+              <button class="terminal-btn" id="btn-theme-toggle" type="button" title="Toggle green/amber theme">&#9672; Theme</button>
+            </div>
+
+            <div class="terminal-output">
+              <div class="room-panel">
+                <div class="room-panel-shell">
+                  <div id="room-map-container" class="room-map-container hidden"></div>
+                  <div class="room-panel-copy">
+                    <p id="room-desc" class="room-description">Choose a character from the portal or open the admin console to seed test personas.</p>
+                    <div id="room-ascii" class="ascii-art hidden"></div>
+                    <div id="room-summary" class="room-summary"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div id="story-log" class="narrative-log"></div>
+            </div>
+
+            <div id="stat-bar" class="stat-bar">
+              <span class="stat-label">HP</span> <span class="stat-hp stat-empty">░░░░░░░░░░</span> <span class="stat-hp">0/0</span>
+              <span class="stat-sep"> │ </span>
+              <span class="stat-label">MP</span> <span class="stat-mp stat-empty">░░░░░░░░░░</span> <span class="stat-mp">0/0</span>
+              <span class="stat-sep"> │ </span>
+              <span class="stat-label">XP</span> <span class="stat-xp stat-empty">░░░░░░░░░░</span> <span class="stat-xp">0/100</span>
+              <span class="stat-sep"> │ </span>
+              <span class="stat-gold">Gold:0</span>
+            </div>
+
+            <div class="command-bar">
+              <form id="command-form">
+                <span class="prompt" id="command-prompt">&gt;</span>
+                <input type="text" id="command-input" placeholder="Choose a character to start playing" autocomplete="off" disabled />
+                <button type="submit" class="btn btn-primary" id="command-submit" disabled>Send</button>
+              </form>
+              <div id="exit-chips" class="exit-chips"></div>
+              <div class="quick-commands">
+                <button class="btn btn-secondary btn-sm qcmd" data-cmd="look" type="button">look</button>
+                <button class="btn btn-secondary btn-sm qcmd" data-cmd="inventory" type="button">inventory</button>
+                <button class="btn btn-secondary btn-sm qcmd" data-cmd="stats" type="button">stats</button>
+                <button class="btn btn-secondary btn-sm qcmd" data-cmd="help" type="button">help</button>
+              </div>
+            </div>
+          </section>
+
+          <aside id="info-drawer" class="info-drawer">
+            <div class="sidebar-section char-panel">
+              <h3 id="char-title">Character</h3>
+              <div class="char-info">
+                <div class="char-meta" id="char-meta">No active character selected.</div>
+                <div class="resource-bars">
+                  <div class="bar-group">
+                    <label>HP</label>
+                    <div class="bar bar-hp"><div class="bar-fill" id="hp-bar"></div><span class="bar-text" id="hp-text">0 / 0</span></div>
+                  </div>
+                  <div class="bar-group">
+                    <label>MP</label>
+                    <div class="bar bar-mp"><div class="bar-fill" id="mp-bar"></div><span class="bar-text" id="mp-text">0 / 0</span></div>
+                  </div>
+                  <div class="bar-group">
+                    <label>XP</label>
+                    <div class="bar bar-xp"><div class="bar-fill" id="xp-bar"></div><span class="bar-text" id="xp-text">0 / 100</span></div>
+                  </div>
+                </div>
+                <div class="stats-grid" id="stats-grid"></div>
+                <div id="character-details" class="detail-grid"></div>
+                <div class="char-resources">
+                  <span id="char-gold">Gold 0</span>
+                  <span id="char-level">Level 1</span>
+                  <span id="char-defense">Defense 10</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="sidebar-section equip-panel">
+              <h3>Equipment</h3>
+              <div id="equipment-slots" class="equipment-slots"></div>
+            </div>
+
+            <div class="sidebar-section inv-panel">
+              <h3>Inventory</h3>
+              <div id="inventory-list" class="inventory-list"></div>
+            </div>
+
+            <div class="sidebar-section status-panel">
+              <h3>Status Effects</h3>
+              <div id="status-effects" class="status-effects"></div>
+            </div>
+
+            <div class="sidebar-section players-panel">
+              <h3>Adventurers</h3>
+              <div id="players-list" class="players-list"></div>
+            </div>
+
+            <div class="sidebar-section health-panel">
+              <h3>System Health</h3>
+              <div id="system-health" class="system-health"></div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section id="workspace-admin" class="workspace hidden">
+        <div class="admin-grid">
+          <div id="admin-overview-panel" class="panel span-2">
+            <div class="panel-heading">
+              <h3>Admin Snapshot</h3>
+              <button class="btn btn-secondary" id="btn-seed-demo-admin" type="button">Seed Demo User + Admin</button>
+            </div>
+            <div id="summary-cards" class="summary-cards"></div>
+            <div id="admin-health" class="system-health"></div>
+          </div>
+
+          <div id="admin-workflow-panel" class="panel">
+            <h3>Workflow Runner</h3>
+            <label class="field-label" for="workflow-player-select">Target player</label>
+            <select id="workflow-player-select"></select>
+            <div class="stack-buttons">
+              <button class="btn btn-primary" data-scenario="smoke-user" type="button">Run User Smoke</button>
+              <button class="btn btn-secondary" data-scenario="exploration" type="button">Run Exploration Flow</button>
+              <button class="btn btn-secondary" data-scenario="ops-check" type="button">Run Ops Check</button>
+            </div>
+            <div id="workflow-log" class="activity-log"></div>
+          </div>
+
+          <div id="admin-command-panel" class="panel">
+            <h3>Question / Command Harness</h3>
+            <form id="admin-command-form" class="admin-command-form">
+              <select id="admin-player-select"></select>
+              <input type="text" id="admin-command-input" placeholder="Ask or run a command as any character" autocomplete="off" />
+              <button type="submit" class="btn btn-primary">Ask / Execute</button>
+            </form>
+            <div id="admin-command-log" class="activity-log"></div>
+          </div>
+
+          <div id="admin-mutation-panel" class="panel span-2">
+            <div class="panel-heading compact-heading">
+              <h3>Mutation Studio</h3>
+              <span class="field-label">Teleport actors, adjust state, seed fixtures, and create manual repro cases without leaving the browser.</span>
+            </div>
+
+            <div class="mutation-grid">
+              <form id="mutation-resource-form" class="mutation-form">
+                <h4>Resources</h4>
+                <div class="form-group">
+                  <label for="resource-player-select">Target player</label>
+                  <select id="resource-player-select"></select>
+                </div>
+                <div class="mutation-row">
+                  <div class="form-group">
+                    <label for="resource-hp-delta">HP delta</label>
+                    <input type="number" id="resource-hp-delta" value="0" />
+                  </div>
+                  <div class="form-group">
+                    <label for="resource-mp-delta">MP delta</label>
+                    <input type="number" id="resource-mp-delta" value="0" />
+                  </div>
+                  <div class="form-group">
+                    <label for="resource-gold-delta">Gold delta</label>
+                    <input type="number" id="resource-gold-delta" value="0" />
+                  </div>
+                  <div class="form-group">
+                    <label for="resource-xp-delta">XP delta</label>
+                    <input type="number" id="resource-xp-delta" value="0" />
+                  </div>
+                  <div class="form-group">
+                    <label for="resource-level-delta">Level delta</label>
+                    <input type="number" id="resource-level-delta" value="0" />
+                  </div>
+                </div>
+                <div class="mutation-row">
+                  <div class="form-group">
+                    <label for="resource-set-hp">Set HP <span class="optional">(optional)</span></label>
+                    <input type="number" id="resource-set-hp" placeholder="Leave blank to use delta" />
+                  </div>
+                  <div class="form-group">
+                    <label for="resource-set-mp">Set MP <span class="optional">(optional)</span></label>
+                    <input type="number" id="resource-set-mp" placeholder="Leave blank to use delta" />
+                  </div>
+                  <div class="form-group">
+                    <label for="resource-set-gold">Set Gold <span class="optional">(optional)</span></label>
+                    <input type="number" id="resource-set-gold" placeholder="Leave blank to use delta" />
+                  </div>
+                  <div class="form-group">
+                    <label for="resource-set-xp">Set XP <span class="optional">(optional)</span></label>
+                    <input type="number" id="resource-set-xp" placeholder="Leave blank to use delta" />
+                  </div>
+                  <div class="form-group">
+                    <label for="resource-set-level">Set Level <span class="optional">(optional)</span></label>
+                    <input type="number" id="resource-set-level" placeholder="Leave blank to use delta" />
+                  </div>
+                </div>
+                <button class="btn btn-primary" type="submit">Apply Resource Delta</button>
+              </form>
+
+              <form id="mutation-teleport-form" class="mutation-form">
+                <h4>Teleport</h4>
+                <div class="form-group">
+                  <label for="teleport-player-select">Target player</label>
+                  <select id="teleport-player-select"></select>
+                </div>
+                <div class="mutation-row">
+                  <div class="form-group">
+                    <label for="teleport-room-id">Room id</label>
+                    <input type="text" id="teleport-room-id" placeholder="debug-arena" required />
+                  </div>
+                  <div class="form-group">
+                    <label for="teleport-room-name">Room name <span class="optional">(optional)</span></label>
+                    <input type="text" id="teleport-room-name" placeholder="Debug Arena" />
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label for="teleport-room-description">Room description <span class="optional">(optional)</span></label>
+                  <textarea id="teleport-room-description" rows="3" placeholder="Short fixture description for a manual test room."></textarea>
+                </div>
+                <div class="mutation-row">
+                  <div class="form-group">
+                    <label for="teleport-direction">Back-link direction</label>
+                    <select id="teleport-direction">
+                      <option value="north">north</option>
+                      <option value="south">south</option>
+                      <option value="east">east</option>
+                      <option value="west">west</option>
+                      <option value="up">up</option>
+                      <option value="down">down</option>
+                      <option value="debug">debug</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label for="teleport-tags">Tags <span class="optional">(comma separated)</span></label>
+                    <input type="text" id="teleport-tags" placeholder="test, staging" />
+                  </div>
+                </div>
+                <label class="remember-toggle" for="teleport-connect">
+                  <input type="checkbox" id="teleport-connect" checked />
+                  <span>Create a return path from the current room</span>
+                </label>
+                <button class="btn btn-primary" type="submit">Teleport Player</button>
+              </form>
+
+              <form id="mutation-item-form" class="mutation-form">
+                <h4>Grant Item</h4>
+                <div class="form-group">
+                  <label for="item-player-select">Target player</label>
+                  <select id="item-player-select"></select>
+                </div>
+                <div class="mutation-row">
+                  <div class="form-group">
+                    <label for="item-name">Item name</label>
+                    <input type="text" id="item-name" placeholder="Prototype Keycard" required />
+                  </div>
+                  <div class="form-group">
+                    <label for="item-type">Type</label>
+                    <select id="item-type">
+                      <option value="Weapon">Weapon</option>
+                      <option value="Armor">Armor</option>
+                      <option value="Shield">Shield</option>
+                      <option value="Helmet">Helmet</option>
+                      <option value="Potion">Potion</option>
+                      <option value="Scroll">Scroll</option>
+                      <option value="Key">Key</option>
+                      <option value="QuestItem">Quest Item</option>
+                      <option value="Misc" selected>Misc</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label for="item-quantity">Quantity</label>
+                    <input type="number" id="item-quantity" min="1" value="1" />
+                  </div>
+                </div>
+                <div class="mutation-row">
+                  <div class="form-group">
+                    <label for="item-description">Description <span class="optional">(optional)</span></label>
+                    <input type="text" id="item-description" placeholder="Operator-seeded manual test item" />
+                  </div>
+                  <div class="form-group">
+                    <label for="item-effect">Effect <span class="optional">(optional)</span></label>
+                    <input type="text" id="item-effect" placeholder="Access debug door" />
+                  </div>
+                </div>
+                <label class="remember-toggle" for="item-auto-equip">
+                  <input type="checkbox" id="item-auto-equip" />
+                  <span>Auto-equip if the item has a matching slot</span>
+                </label>
+                <button class="btn btn-primary" type="submit">Grant Item</button>
+              </form>
+
+              <form id="mutation-status-form" class="mutation-form">
+                <h4>Apply Status</h4>
+                <div class="form-group">
+                  <label for="status-player-select">Target player</label>
+                  <select id="status-player-select"></select>
+                </div>
+                <div class="mutation-row">
+                  <div class="form-group">
+                    <label for="status-name">Status name</label>
+                    <input type="text" id="status-name" placeholder="Inspired" required />
+                  </div>
+                  <div class="form-group">
+                    <label for="status-type">Type</label>
+                    <select id="status-type">
+                      <option value="Buff">Buff</option>
+                      <option value="Debuff">Debuff</option>
+                      <option value="Poison">Poison</option>
+                      <option value="Regen">Regen</option>
+                      <option value="Stun">Stun</option>
+                      <option value="Blind">Blind</option>
+                      <option value="Charm">Charm</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label for="status-turns">Turns</label>
+                    <input type="number" id="status-turns" min="1" value="3" />
+                  </div>
+                </div>
+                <div class="mutation-row">
+                  <div class="form-group">
+                    <label for="status-modifiers">Stat modifiers <span class="optional">(str:2,dex:-1)</span></label>
+                    <input type="text" id="status-modifiers" placeholder="str:2,wis:1" />
+                  </div>
+                  <div class="form-group">
+                    <label for="status-description">Description <span class="optional">(optional)</span></label>
+                    <input type="text" id="status-description" placeholder="Temporary QA buff" />
+                  </div>
+                </div>
+                <button class="btn btn-primary" type="submit">Apply Status</button>
+              </form>
+
+              <form id="room-fixture-form" class="mutation-form mutation-form-wide">
+                <h4>Room Fixture</h4>
+                <div class="mutation-row">
+                  <div class="form-group">
+                    <label for="fixture-room-id">Room id</label>
+                    <input type="text" id="fixture-room-id" placeholder="qa-lab" required />
+                  </div>
+                  <div class="form-group">
+                    <label for="fixture-room-name">Room name <span class="optional">(optional)</span></label>
+                    <input type="text" id="fixture-room-name" placeholder="QA Laboratory" />
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label for="fixture-room-description">Description <span class="optional">(optional)</span></label>
+                  <textarea id="fixture-room-description" rows="3" placeholder="Describe the manual test fixture or special encounter room."></textarea>
+                </div>
+                <div class="mutation-row mutation-row-4">
+                  <div class="form-group">
+                    <label for="fixture-tags">Tags <span class="optional">(comma separated)</span></label>
+                    <input type="text" id="fixture-tags" placeholder="qa, boss, loot" />
+                  </div>
+                  <div class="form-group">
+                    <label for="fixture-exit-direction">Exit direction <span class="optional">(optional)</span></label>
+                    <input type="text" id="fixture-exit-direction" placeholder="south" />
+                  </div>
+                  <div class="form-group">
+                    <label for="fixture-exit-target">Exit target <span class="optional">(optional)</span></label>
+                    <input type="text" id="fixture-exit-target" placeholder="spawn" />
+                  </div>
+                  <div class="form-group">
+                    <label for="fixture-item-name">Seed item <span class="optional">(optional)</span></label>
+                    <input type="text" id="fixture-item-name" placeholder="Emergency Ration" />
+                  </div>
+                </div>
+                <div class="mutation-row">
+                  <div class="form-group">
+                    <label for="fixture-npc-name">Seed NPC <span class="optional">(optional)</span></label>
+                    <input type="text" id="fixture-npc-name" placeholder="Inspector Vale" />
+                  </div>
+                  <label class="remember-toggle" for="fixture-npc-hostile">
+                    <input type="checkbox" id="fixture-npc-hostile" />
+                    <span>Mark seeded NPC as hostile</span>
+                  </label>
+                </div>
+                <button class="btn btn-primary" type="submit">Upsert Room Fixture</button>
+              </form>
+            </div>
+
+            <div id="mutation-log" class="activity-log"></div>
+          </div>
+
+          <div id="admin-registry-panel" class="panel span-2">
+            <h3>Player Registry</h3>
+            <div id="admin-players-table" class="registry-table"></div>
+          </div>
+
+          <div id="admin-room-catalogue-panel" class="panel span-2">
+            <h3>Room Catalogue</h3>
+            <div id="admin-rooms-list" class="room-catalogue"></div>
+          </div>
+
+          <div id="admin-payload-panel" class="panel span-2">
+            <h3>Payload Inspector</h3>
+            <div class="payload-grid">
+              <div class="payload-block">
+                <div class="payload-title">Current player payload</div>
+                <pre id="player-payload" class="payload-view">Select a character to inspect live payloads.</pre>
+              </div>
+              <div class="payload-block">
+                <div class="payload-title">Current room payload</div>
+                <pre id="room-payload" class="payload-view">Select a character to inspect the current room payload.</pre>
+              </div>
+            </div>
+          </div>
+
+          <div id="admin-notes-panel" class="panel">
+            <h3>Operator Notes</h3>
+            <div class="workflow-reference compact">
+              <div class="reference-step">
+                <strong>Smoke flow</strong>
+                <span>Create or seed a player, run look, stats, inventory, help, then confirm the room and story state update together.</span>
+              </div>
+              <div class="reference-step">
+                <strong>Exploration flow</strong>
+                <span>Move north to force room generation, then inspect the new room and verify the world map expands.</span>
+              </div>
+              <div class="reference-step">
+                <strong>Repeatability</strong>
+                <span>Use explicit player ids in the portal workshop so automation and manual admin checks hit the same actors every time.</span>
+              </div>
+              <div class="reference-step">
+                <strong>Protected API</strong>
+                <span>Use the same admin login in the browser, Playwright, or PowerShell to run mutations and direct command probes through the secured endpoints.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/signalr-client.js"></script>
+  <script src="js/room-map.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

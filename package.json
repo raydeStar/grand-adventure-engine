@@ -1,0 +1,18 @@
+{
+  "name": "projectbonk",
+  "private": true,
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:visual": "playwright test --grep @visual",
+    "test:e2e:visual:safe": "node scripts/run-playwright-safe.mjs --grep @visual",
+    "test:e2e:update-snapshots": "playwright test --grep @visual --update-snapshots",
+    "test:e2e:update-snapshots:safe": "node scripts/run-playwright-safe.mjs --grep @visual --update-snapshots",
+    "test:e2e:install": "playwright install chromium",
+    "test:e2e:docker": "node scripts/run-e2e.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.54.2"
+  }
+}

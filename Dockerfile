@@ -24,6 +24,9 @@ RUN dotnet publish src/GAE.Dashboard.Api/GAE.Dashboard.Api.csproj \
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
+# Install curl for healthcheck
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
 # Create non-root user
 RUN groupadd -r gae && useradd -r -g gae -s /bin/false gae
 
