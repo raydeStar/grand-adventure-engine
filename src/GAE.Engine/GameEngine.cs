@@ -372,6 +372,8 @@ public class GameEngine : IGameEngine
             player.Interaction.Reset();
             result.InteractionUpdate = new InteractionUpdate { Mode = InteractionMode.Explore, CombatStatus = "victory" };
             await _stateManager.SaveRoomAsync(room, ct);
+            PublishEventToWikiInBackground(target.Id, "npc", $"{target.Name} Defeated",
+                $"{player.Name} defeated {target.Name} (Level {target.Level}, {target.Faction}) in combat.", room.Id);
         }
         else if (target.Hp.HasValue && target.Hp.Value > 0)
         {
@@ -1276,6 +1278,8 @@ public class GameEngine : IGameEngine
             room.Npcs.Remove(enemy);
             player.Interaction.Reset();
             combatResult.InteractionUpdate = new InteractionUpdate { Mode = InteractionMode.Explore, CombatStatus = "victory" };
+            PublishEventToWikiInBackground(enemy.Id, "npc", $"{enemy.Name} Defeated",
+                $"{player.Name} defeated {enemy.Name} (Level {enemy.Level}, {enemy.Faction}) in combat. Gained {xpGain} XP.", room.Id);
         }
         else if (combatStatus == "defeat" || player.Hp <= 0)
         {
@@ -1283,6 +1287,8 @@ public class GameEngine : IGameEngine
             player.Interaction.Reset();
             combatResult.MechanicalSummary = $"You have been defeated by {enemy.Name}!";
             combatResult.InteractionUpdate = new InteractionUpdate { Mode = InteractionMode.Explore, CombatStatus = "defeat" };
+            PublishEventToWikiInBackground(player.Id, "player", $"{player.Name} Defeated",
+                $"{player.Name} was defeated by {enemy.Name} (Level {enemy.Level}, {enemy.Faction}).", room.Id);
         }
 
         await _stateManager.SavePlayerAsync(player, ct);
@@ -1421,6 +1427,39 @@ public class GameEngine : IGameEngine
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Background wiki publish failed for room {RoomId}", room.Id);
+            }
+        });
+    }
+
+    private void PublishEventToWikiInBackground(string entityId, string entityType, string title, string description, string roomId)
+    {
+        if (_wiki is null) return;
+
+        var timestamp = DateTimeOffset.UtcNow;
+        var path = $"events/{entityType}/{entityId}/{timestamp:yyyyMMdd-HHmmss}";
+        var content = $"""
+            ---
+            title: {title}
+            tags: [event, {entityType}]
+            ---
+
+            # {title}
+
+            **Time:** {timestamp:u}
+            **Location:** {roomId}
+
+            {description}
+            """;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _wiki.CreateOrUpdatePageAsync(path, title, content);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Background wiki event publish failed for {Path}", path);
             }
         });
     }
