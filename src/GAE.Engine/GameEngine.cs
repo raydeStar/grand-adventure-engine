@@ -37,7 +37,18 @@ public class GameEngine : IGameEngine
     {
         var player = await _stateManager.GetPlayerAsync(playerId, ct);
         if (player is null)
-            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "Player not found." };
+            return new ActionResult { ActionId = action.Id, RawInput = action.RawInput, Success = false, MechanicalSummary = "Player not found." };
+
+        // --- Interaction mode routing ---
+        // When the player is in a non-explore mode, route through the interaction handler first.
+        if (player.Interaction.Mode != InteractionMode.Explore)
+        {
+            var interactionResult = await ProcessInteractionTurnAsync(player, action, ct);
+            if (interactionResult is not null)
+                return interactionResult;
+            // If null, the interaction handler decided to fall through to normal processing
+            // (e.g., the interaction ended and the action should be handled normally)
+        }
 
         // NLP fallback: when regex parsing fails, ask the narrator to interpret natural language
         if (action.Type == ActionType.Unknown)
@@ -64,7 +75,7 @@ public class GameEngine : IGameEngine
             ActionType.Attack => await ProcessAttackAsync(player, action, ct),
             ActionType.Talk => await ProcessTalkAsync(player, action, ct),
             ActionType.Take => ProcessTake(player, action),
-            ActionType.Drop => ProcessDrop(player, action),
+            ActionType.Drop => await ProcessDropAsync(player, action, ct),
             ActionType.Equip => ProcessEquip(player, action),
             ActionType.Unequip => ProcessUnequip(player, action),
             ActionType.Rest or ActionType.ShortRest => ProcessShortRest(player, action),
@@ -75,6 +86,8 @@ public class GameEngine : IGameEngine
             _ => await ProcessFreeFormActionAsync(player, action, ct)
         };
 
+        result.RawInput = action.RawInput;
+
         // Save player state after any mutation
         if (result.Success && result.StateChanges.Count > 0)
         {
@@ -83,7 +96,12 @@ public class GameEngine : IGameEngine
         }
 
         // Narrate the result (free-form actions handle their own narration and story)
-        if (result.Success && action.Type != ActionType.Help && action.Type != ActionType.Stats && action.Type != ActionType.Inventory && action.Type != ActionType.Unknown)
+        var shouldNarrate = action.Type != ActionType.Help
+            && action.Type != ActionType.Stats
+            && action.Type != ActionType.Inventory
+            && action.Type != ActionType.Unknown;
+
+        if (shouldNarrate)
         {
             try
             {
@@ -102,17 +120,21 @@ public class GameEngine : IGameEngine
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Narration failed, using mechanical summary as fallback");
-                result.Narration = result.MechanicalSummary;
+                result.Narration = result.Narration ?? result.MechanicalSummary;
             }
 
-            // Record story entry
+        }
+
+        if (action.Type != ActionType.Unknown)
+        {
             await _stateManager.AddStoryEntryAsync(new StoryEntry
             {
                 ActionId = action.Id,
+                RawInput = action.RawInput,
                 PlayerId = playerId,
                 RoomId = player.CurrentRoomId,
                 MechanicalSummary = result.MechanicalSummary,
-                Narration = result.Narration ?? result.MechanicalSummary
+                Narration = result.Narration ?? string.Empty
             }, ct);
         }
 
@@ -242,7 +264,18 @@ public class GameEngine : IGameEngine
         if (room is null)
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "You can't see anything." };
 
-        return new ActionResult { ActionId = action.Id, Success = true, MechanicalSummary = string.Empty };
+        if (string.IsNullOrWhiteSpace(action.Target) || TargetReferencesRoom(room, action.Target))
+            return new ActionResult { ActionId = action.Id, Success = true, MechanicalSummary = string.Empty };
+
+        var npc = FindNamedEntity(room.Npcs, candidate => candidate.Name, action.Target);
+        if (npc is not null)
+            return new ActionResult { ActionId = action.Id, Success = true, MechanicalSummary = string.Empty };
+
+        var item = FindNamedEntity(room.Items, candidate => candidate.Name, action.Target);
+        if (item is not null)
+            return new ActionResult { ActionId = action.Id, Success = true, MechanicalSummary = string.Empty };
+
+        return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"Look target '{action.Target}' was not found in the current room." };
     }
 
     private async Task<ActionResult> ProcessAttackAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
@@ -251,11 +284,10 @@ public class GameEngine : IGameEngine
         if (room is null)
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "You can't attack here." };
 
-        var target = room.Npcs.FirstOrDefault(n =>
-            n.Name.Contains(action.Target ?? "", StringComparison.OrdinalIgnoreCase));
+        var target = FindNamedEntity(room.Npcs, npc => npc.Name, action.Target);
 
         if (target is null)
-            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"There is no '{action.Target}' here to attack." };
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"Attack target '{action.Target}' was not found in the current room." };
 
         // Determine attack stat
         var weapon = player.Equipment.Weapon;
@@ -325,7 +357,16 @@ public class GameEngine : IGameEngine
             }
 
             room.Npcs.Remove(target);
+            player.Interaction.Reset();
+            result.InteractionUpdate = new InteractionUpdate { Mode = InteractionMode.Explore, CombatStatus = "victory" };
             await _stateManager.SaveRoomAsync(room, ct);
+        }
+        else if (target.Hp.HasValue && target.Hp.Value > 0)
+        {
+            // NPC survived — enter combat mode
+            EnterCombat(player, target);
+            result.InteractionUpdate = new InteractionUpdate { Mode = InteractionMode.Combat, CombatStatus = "ongoing" };
+            await _stateManager.SavePlayerAsync(player, ct);
         }
 
         return result;
@@ -333,13 +374,49 @@ public class GameEngine : IGameEngine
 
     private Task<ActionResult> ProcessTalkAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
     {
-        // Talk is primarily narration-driven; the engine just validates the target exists
-        return Task.FromResult(new ActionResult
+        return ProcessTalkInternalAsync(player, action, ct);
+    }
+
+    private async Task<ActionResult> ProcessTalkInternalAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
+    {
+        var room = await _stateManager.GetRoomAsync(player.CurrentRoomId, ct);
+        if (room is null)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "You find no one here to answer you." };
+
+        var target = FindNamedEntity(room.Npcs, npc => npc.Name, action.Target);
+        if (target is null)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"Conversation target '{action.Target}' was not found in the current room." };
+
+        // Enter conversation mode
+        player.Interaction = new InteractionState
+        {
+            Mode = InteractionMode.Conversation,
+            Target = target.Name,
+            NpcDisposition = target.Disposition,
+            CanLeave = true,
+            LeaveConsequence = "normal"
+        };
+        player.Interaction.AppendContext($"Player initiated conversation with {target.Name}.");
+
+        // Get AI narration for the greeting
+        var freeForm = await _narrator.ProcessConversationTurnAsync(player, room, target, player.Interaction, action.RawInput, ct);
+
+        // Apply interaction update from AI
+        ApplyInteractionUpdate(player, room, target, freeForm);
+
+        await _stateManager.SavePlayerAsync(player, ct);
+
+        var result = new ActionResult
         {
             ActionId = action.Id,
             Success = true,
-            MechanicalSummary = $"You attempt to speak with {action.Target}."
-        });
+            MechanicalSummary = $"You begin speaking with {target.Name}.",
+            Narration = freeForm.Narration,
+            InteractionUpdate = freeForm.InteractionUpdate
+        };
+
+        await PersistInteractionStoryEntry(player, action, result, ct);
+        return result;
     }
 
     private ActionResult ProcessTake(PlayerCharacter player, GameAction action)
@@ -352,32 +429,65 @@ public class GameEngine : IGameEngine
         };
     }
 
-    private ActionResult ProcessDrop(PlayerCharacter player, GameAction action)
+    private async Task<ActionResult> ProcessDropAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
     {
-        var item = player.Inventory.FirstOrDefault(i =>
-            i.Name.Contains(action.Target ?? "", StringComparison.OrdinalIgnoreCase));
+        var room = await _stateManager.GetRoomAsync(player.CurrentRoomId, ct);
+        if (room is null)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "You have nowhere to drop that." };
+
+        var (requestedQuantity, rawTarget) = ParseQuantityTarget(action.Target);
+        if (TryResolveGoldDrop(player, room, requestedQuantity, rawTarget, out var goldDropResult))
+        {
+            goldDropResult.ActionId = action.Id;
+            await _stateManager.SaveRoomAsync(room, ct);
+            return goldDropResult;
+        }
+
+        var item = FindNamedEntity(player.Inventory, inventoryItem => inventoryItem.Name, rawTarget);
 
         if (item is null)
-            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"You don't have '{action.Target}'." };
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"Drop target '{action.Target}' was not found in your inventory." };
 
-        player.Inventory.Remove(item);
+        var quantityToDrop = requestedQuantity ?? Math.Max(1, item.Quantity);
+        if (quantityToDrop <= 0)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "You need to drop at least one item." };
+
+        if (item.Quantity < quantityToDrop)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"You only have {item.Quantity} {item.Name} to drop." };
+
+        var droppedItem = CloneInventoryItem(item, quantityToDrop);
+        if (item.Quantity == quantityToDrop)
+        {
+            player.Inventory.Remove(item);
+        }
+        else
+        {
+            item.Quantity -= quantityToDrop;
+        }
+
+        AddRoomItem(room, droppedItem);
+        await _stateManager.SaveRoomAsync(room, ct);
+
         return new ActionResult
         {
             ActionId = action.Id,
             Success = true,
-            MechanicalSummary = $"You drop {item.Name}.",
-            ItemsLost = [item],
-            StateChanges = [new StateChange { EntityType = "Player", EntityId = player.Id, Property = "Inventory", NewValue = "removed " + item.Name }]
+            MechanicalSummary = $"You drop {FormatDroppedItemLabel(droppedItem.Name, droppedItem.Quantity)}.",
+            ItemsLost = [droppedItem],
+            StateChanges =
+            [
+                new StateChange { EntityType = "Player", EntityId = player.Id, Property = "Inventory", NewValue = $"removed {FormatDroppedItemLabel(droppedItem.Name, droppedItem.Quantity)}" },
+                new StateChange { EntityType = "Room", EntityId = room.Id, Property = "Items", NewValue = $"added {FormatDroppedItemLabel(droppedItem.Name, droppedItem.Quantity)}" }
+            ]
         };
     }
 
     private ActionResult ProcessEquip(PlayerCharacter player, GameAction action)
     {
-        var item = player.Inventory.FirstOrDefault(i =>
-            i.Name.Contains(action.Target ?? "", StringComparison.OrdinalIgnoreCase) && i.IsEquippable);
+        var item = FindNamedEntity(player.Inventory.Where(i => i.IsEquippable), inventoryItem => inventoryItem.Name, action.Target);
 
         if (item is null)
-            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"You can't equip '{action.Target}'." };
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"Equip target '{action.Target}' was not found among your equippable gear." };
 
         switch (item.Type)
         {
@@ -416,32 +526,27 @@ public class GameEngine : IGameEngine
 
     private ActionResult ProcessUnequip(PlayerCharacter player, GameAction action)
     {
-        var target = action.Target?.ToLowerInvariant() ?? "";
-        InventoryItem? item = null;
+        var equippedItems = new[]
+        {
+            player.Equipment.Weapon,
+            player.Equipment.Armor,
+            player.Equipment.Shield,
+            player.Equipment.Helmet
+        }.Where(item => item is not null).Cast<InventoryItem>();
 
-        if (player.Equipment.Weapon?.Name.Contains(target, StringComparison.OrdinalIgnoreCase) == true)
-        {
-            item = player.Equipment.Weapon;
+        var item = FindNamedEntity(equippedItems, inventoryItem => inventoryItem.Name, action.Target);
+
+        if (ReferenceEquals(item, player.Equipment.Weapon))
             player.Equipment.Weapon = null;
-        }
-        else if (player.Equipment.Armor?.Name.Contains(target, StringComparison.OrdinalIgnoreCase) == true)
-        {
-            item = player.Equipment.Armor;
+        else if (ReferenceEquals(item, player.Equipment.Armor))
             player.Equipment.Armor = null;
-        }
-        else if (player.Equipment.Shield?.Name.Contains(target, StringComparison.OrdinalIgnoreCase) == true)
-        {
-            item = player.Equipment.Shield;
+        else if (ReferenceEquals(item, player.Equipment.Shield))
             player.Equipment.Shield = null;
-        }
-        else if (player.Equipment.Helmet?.Name.Contains(target, StringComparison.OrdinalIgnoreCase) == true)
-        {
-            item = player.Equipment.Helmet;
+        else if (ReferenceEquals(item, player.Equipment.Helmet))
             player.Equipment.Helmet = null;
-        }
 
         if (item is null)
-            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"You don't have '{action.Target}' equipped." };
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"Unequip target '{action.Target}' was not found among your equipped items." };
 
         return new ActionResult
         {
@@ -661,6 +766,7 @@ public class GameEngine : IGameEngine
         await _stateManager.AddStoryEntryAsync(new StoryEntry
         {
             ActionId = action.Id,
+            RawInput = action.RawInput,
             PlayerId = player.Id,
             RoomId = player.CurrentRoomId,
             MechanicalSummary = result.MechanicalSummary,
@@ -691,6 +797,551 @@ public class GameEngine : IGameEngine
         }
 
         return string.Join(", ", counts.Values.Select(entry => entry.Count > 1 ? $"{entry.DisplayName} (x{entry.Count})" : entry.DisplayName));
+    }
+
+    private static (int? Quantity, string Target) ParseQuantityTarget(string? rawTarget)
+    {
+        var target = rawTarget?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(target))
+            return (null, string.Empty);
+
+        var parts = target.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 2 && int.TryParse(parts[0], out var quantity) && quantity > 0)
+            return (quantity, parts[1].Trim());
+
+        return (null, target);
+    }
+
+    private static bool TryResolveGoldDrop(PlayerCharacter player, Room room, int? requestedQuantity, string rawTarget, out ActionResult result)
+    {
+        result = null!;
+        var normalizedTarget = NormalizeLookupText(rawTarget);
+        if (normalizedTarget is not "gold" and not "coin" and not "coins" and not "gold coin" and not "gold coins")
+            return false;
+
+        var quantityToDrop = requestedQuantity ?? 1;
+        if (quantityToDrop <= 0)
+        {
+            result = new ActionResult { Success = false, MechanicalSummary = "You need to drop at least one gold coin." };
+            return true;
+        }
+
+        if (player.Gold < quantityToDrop)
+        {
+            result = new ActionResult { Success = false, MechanicalSummary = $"You only have {player.Gold} gold to drop." };
+            return true;
+        }
+
+        var oldGold = player.Gold;
+        player.Gold -= quantityToDrop;
+
+        var droppedGold = new InventoryItem
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Name = "Gold Coin",
+            Description = "A stamped coin of common gold.",
+            Type = ItemType.Misc,
+            Quantity = quantityToDrop,
+            Value = 1
+        };
+
+        AddRoomItem(room, droppedGold);
+        result = new ActionResult
+        {
+            Success = true,
+            MechanicalSummary = $"You drop {FormatDroppedItemLabel(droppedGold.Name, droppedGold.Quantity)}.",
+            GoldChange = -quantityToDrop,
+            ItemsLost = [CloneInventoryItem(droppedGold, droppedGold.Quantity)],
+            StateChanges =
+            [
+                new StateChange { EntityType = "Player", EntityId = player.Id, Property = "Gold", OldValue = oldGold.ToString(), NewValue = player.Gold.ToString() },
+                new StateChange { EntityType = "Room", EntityId = room.Id, Property = "Items", NewValue = $"added {FormatDroppedItemLabel(droppedGold.Name, droppedGold.Quantity)}" }
+            ]
+        };
+        return true;
+    }
+
+    private static InventoryItem CloneInventoryItem(InventoryItem item, int quantity)
+        => new()
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Name = item.Name,
+            Description = item.Description,
+            Type = item.Type,
+            Quantity = quantity,
+            Value = item.Value,
+            DamageDice = item.DamageDice,
+            DamageStat = item.DamageStat,
+            ArmorValue = item.ArmorValue,
+            IsEquippable = item.IsEquippable,
+            IsConsumable = item.IsConsumable,
+            Effect = item.Effect
+        };
+
+    private static void AddRoomItem(Room room, InventoryItem item)
+    {
+        var existing = room.Items.FirstOrDefault(candidate => string.Equals(candidate.Name, item.Name, StringComparison.OrdinalIgnoreCase));
+        if (existing is null)
+        {
+            room.Items.Add(item);
+            return;
+        }
+
+        existing.Quantity += Math.Max(1, item.Quantity);
+    }
+
+    private static string FormatDroppedItemLabel(string itemName, int quantity)
+    {
+        var normalizedName = itemName.Trim();
+        if (quantity <= 1)
+            return quantity == 1 && NormalizeLookupText(normalizedName) == "gold coin"
+                ? "1 gold coin"
+                : normalizedName;
+
+        if (NormalizeLookupText(normalizedName) == "gold coin")
+            return $"{quantity} gold coins";
+
+        return $"{normalizedName} (x{quantity})";
+    }
+
+    private static T? FindNamedEntity<T>(IEnumerable<T> entities, Func<T, string?> getName, string? rawQuery) where T : class
+    {
+        var query = NormalizeLookupText(rawQuery);
+        if (string.IsNullOrWhiteSpace(query))
+            return null;
+
+        return entities
+            .Select(entity => new { Entity = entity, Candidate = NormalizeLookupText(getName(entity)) })
+            .Where(entry => !string.IsNullOrWhiteSpace(entry.Candidate))
+            .Select(entry => new { entry.Entity, Score = GetNameMatchScore(query, entry.Candidate) })
+            .Where(entry => entry.Score > 0)
+            .OrderByDescending(entry => entry.Score)
+            .Select(entry => entry.Entity)
+            .FirstOrDefault();
+    }
+
+    private static bool TargetReferencesRoom(Room room, string? rawTarget)
+    {
+        var target = NormalizeLookupText(rawTarget);
+        if (string.IsNullOrWhiteSpace(target))
+            return false;
+
+        if (target is "room" or "around" or "here" or "surroundings")
+            return true;
+
+        var roomName = NormalizeLookupText(room.Name);
+        return target == roomName || Singularize(target) == Singularize(roomName);
+    }
+
+    private static int GetNameMatchScore(string query, string candidate)
+    {
+        if (string.IsNullOrWhiteSpace(candidate))
+            return 0;
+
+        var normalizedQuery = Singularize(query);
+        var normalizedCandidate = Singularize(candidate);
+
+        if (candidate == query || normalizedCandidate == normalizedQuery)
+            return 100;
+
+        if (candidate.StartsWith(query, StringComparison.Ordinal) || candidate.StartsWith(normalizedQuery, StringComparison.Ordinal))
+            return 90;
+
+        if (candidate.Contains(query, StringComparison.Ordinal) || candidate.Contains(normalizedQuery, StringComparison.Ordinal))
+            return 75;
+
+        if (query.StartsWith(candidate, StringComparison.Ordinal) || normalizedQuery.StartsWith(normalizedCandidate, StringComparison.Ordinal))
+            return 65;
+
+        if (query.Contains(candidate, StringComparison.Ordinal) || normalizedQuery.Contains(normalizedCandidate, StringComparison.Ordinal))
+            return 55;
+
+        return 0;
+    }
+
+    private static string NormalizeLookupText(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return string.Empty;
+
+        var normalizedCharacters = value
+            .Trim()
+            .ToLowerInvariant()
+            .Select(character => char.IsLetterOrDigit(character)
+                ? character
+                : character is '-' or '_' || char.IsWhiteSpace(character)
+                    ? ' '
+                    : '\0')
+            .Where(character => character != '\0')
+            .ToArray();
+
+        var normalized = new string(normalizedCharacters);
+        return string.Join(' ', normalized
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Where(word => word is not "the" and not "a" and not "an"));
+    }
+
+    private static string Singularize(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Length <= 3)
+            return value;
+
+        if (value.EndsWith("ies", StringComparison.Ordinal))
+            return value[..^3] + "y";
+
+        if (value.EndsWith('s') && !value.EndsWith("ss", StringComparison.Ordinal))
+            return value[..^1];
+
+        return value;
+    }
+
+    // --- Interaction state machine ---
+
+    private static readonly HashSet<string> ConversationExitPhrases = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "goodbye", "bye", "farewell", "leave", "walk away", "end conversation", "nevermind", "never mind"
+    };
+
+    /// <summary>
+    /// Routes a player turn through the active interaction mode (conversation, combat, etc.).
+    /// Returns null if the interaction ended and normal processing should continue.
+    /// </summary>
+    private async Task<ActionResult?> ProcessInteractionTurnAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
+    {
+        return player.Interaction.Mode switch
+        {
+            InteractionMode.Conversation => await ProcessConversationTurnAsync(player, action, ct),
+            InteractionMode.Combat => await ProcessCombatTurnAsync(player, action, ct),
+            _ => null
+        };
+    }
+
+    private async Task<ActionResult?> ProcessConversationTurnAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
+    {
+        var room = await _stateManager.GetRoomAsync(player.CurrentRoomId, ct);
+        if (room is null)
+        {
+            player.Interaction.Reset();
+            return null;
+        }
+
+        var npc = FindNamedEntity(room.Npcs, n => n.Name, player.Interaction.Target);
+        if (npc is null)
+        {
+            var missingTarget = player.Interaction.Target;
+            player.Interaction.Reset();
+            await _stateManager.SavePlayerAsync(player, ct);
+            return new ActionResult
+            {
+                ActionId = action.Id,
+                RawInput = action.RawInput,
+                Success = true,
+                MechanicalSummary = $"{missingTarget} is no longer here.",
+                InteractionUpdate = new InteractionUpdate { Mode = InteractionMode.Explore }
+            };
+        }
+
+        // Movement mid-conversation: exit with disposition penalty
+        if (action.Type == ActionType.Move)
+        {
+            var dispositionPenalty = ShiftDisposition(npc.Disposition, -1);
+            npc.Disposition = dispositionPenalty;
+            player.Interaction.AppendContext($"Player walked away mid-conversation. {npc.Name}'s disposition shifted to {dispositionPenalty}.");
+
+            var freeForm = await _narrator.ProcessConversationTurnAsync(player, room, npc, player.Interaction, "[Player walks away mid-sentence]", ct);
+            ApplyInteractionUpdate(player, room, npc, freeForm);
+
+            player.Interaction.Reset();
+            await _stateManager.SavePlayerAsync(player, ct);
+            await _stateManager.SaveRoomAsync(room, ct);
+
+            var exitResult = new ActionResult
+            {
+                ActionId = action.Id,
+                RawInput = action.RawInput,
+                Success = true,
+                MechanicalSummary = $"You walk away from {npc.Name}. Their disposition shifts to {dispositionPenalty}.",
+                Narration = freeForm.Narration,
+                InteractionUpdate = new InteractionUpdate { Mode = InteractionMode.Explore, NpcDisposition = dispositionPenalty }
+            };
+
+            await PersistInteractionStoryEntry(player, action, exitResult, ct);
+            return null; // Let the movement continue through normal processing
+        }
+
+        // Attack mid-conversation: transition to combat
+        if (action.Type == ActionType.Attack)
+        {
+            player.Interaction.AppendContext($"Player attacked {npc.Name} mid-conversation!");
+            player.Interaction.Reset();
+
+            if (npc.Hp.HasValue && npc.Hp > 0)
+            {
+                EnterCombat(player, npc);
+                await _stateManager.SavePlayerAsync(player, ct);
+                return await ProcessCombatTurnAsync(player, action, ct);
+            }
+
+            return null; // Fall through to normal attack processing
+        }
+
+        // Explicit goodbye / leave
+        if (ConversationExitPhrases.Contains(action.RawInput.Trim()))
+        {
+            var freeForm = await _narrator.ProcessConversationTurnAsync(player, room, npc, player.Interaction, action.RawInput, ct);
+            ApplyInteractionUpdate(player, room, npc, freeForm);
+
+            player.Interaction.Reset();
+            await _stateManager.SavePlayerAsync(player, ct);
+            await _stateManager.SaveRoomAsync(room, ct);
+
+            var result = new ActionResult
+            {
+                ActionId = action.Id,
+                RawInput = action.RawInput,
+                Success = true,
+                MechanicalSummary = $"You end your conversation with {npc.Name}.",
+                Narration = freeForm.Narration,
+                InteractionUpdate = new InteractionUpdate { Mode = InteractionMode.Explore, NpcDisposition = npc.Disposition }
+            };
+
+            await PersistInteractionStoryEntry(player, action, result, ct);
+            return result;
+        }
+
+        // Normal conversation turn — everything the player says goes to the AI as dialogue
+        {
+            var freeForm = await _narrator.ProcessConversationTurnAsync(player, room, npc, player.Interaction, action.RawInput, ct);
+            ApplyInteractionUpdate(player, room, npc, freeForm);
+
+            if (freeForm.InteractionUpdate?.Mode == InteractionMode.Explore)
+                player.Interaction.Reset();
+
+            if (freeForm.CombatInitiated && npc.Hp.HasValue && npc.Hp > 0)
+            {
+                player.Interaction.Reset();
+                EnterCombat(player, npc);
+            }
+
+            await _stateManager.SavePlayerAsync(player, ct);
+            await _stateManager.SaveRoomAsync(room, ct);
+
+            var result = new ActionResult
+            {
+                ActionId = action.Id,
+                RawInput = action.RawInput,
+                Success = freeForm.Success,
+                MechanicalSummary = $"[Conversation with {npc.Name}, turn {player.Interaction.TurnCount}]",
+                Narration = freeForm.Narration,
+                InteractionUpdate = freeForm.InteractionUpdate ?? new InteractionUpdate
+                {
+                    Mode = player.Interaction.Mode,
+                    NpcDisposition = npc.Disposition
+                }
+            };
+
+            ApplyFreeFormStatChanges(player, freeForm, result);
+            await PersistInteractionStoryEntry(player, action, result, ct);
+            return result;
+        }
+    }
+
+    private async Task<ActionResult?> ProcessCombatTurnAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
+    {
+        var room = await _stateManager.GetRoomAsync(player.CurrentRoomId, ct);
+        if (room is null)
+        {
+            player.Interaction.Reset();
+            return null;
+        }
+
+        var enemy = FindNamedEntity(room.Npcs, n => n.Name, player.Interaction.Target);
+        if (enemy is null)
+        {
+            player.Interaction.Reset();
+            await _stateManager.SavePlayerAsync(player, ct);
+            return new ActionResult
+            {
+                ActionId = action.Id,
+                RawInput = action.RawInput,
+                Success = true,
+                MechanicalSummary = "Your opponent is no longer here. Combat ends.",
+                InteractionUpdate = new InteractionUpdate { Mode = InteractionMode.Explore }
+            };
+        }
+
+        // Flee attempt
+        var rawLower = action.RawInput.Trim().ToLowerInvariant();
+        if (rawLower is "flee" or "run" or "escape" or "run away")
+        {
+            int oppDamage = 0;
+            var diceRolls = new List<DiceRoll>();
+            if (enemy.DamageDice is not null)
+            {
+                var oppRoll = _dice.Roll(enemy.DamageDice, $"{enemy.Name} opportunity attack");
+                oppDamage = Math.Max(1, oppRoll.Total);
+                diceRolls.Add(oppRoll);
+                player.Hp = Math.Max(0, player.Hp - oppDamage);
+            }
+
+            player.Interaction.Reset();
+
+            string? escapeDirection = room.Exits.Keys.FirstOrDefault();
+            if (escapeDirection is not null)
+                player.CurrentRoomId = room.Exits[escapeDirection];
+
+            await _stateManager.SavePlayerAsync(player, ct);
+
+            var fleeResult = new ActionResult
+            {
+                ActionId = action.Id,
+                RawInput = action.RawInput,
+                Success = true,
+                MechanicalSummary = oppDamage > 0
+                    ? $"You flee from {enemy.Name}! They strike you for {oppDamage} damage as you escape."
+                    : $"You flee from {enemy.Name}!",
+                DiceRolls = diceRolls,
+                InteractionUpdate = new InteractionUpdate { Mode = InteractionMode.Explore, CombatStatus = "fled" },
+                StateChanges = [new StateChange { EntityType = "Player", EntityId = player.Id, Property = "Hp", NewValue = player.Hp.ToString() }]
+            };
+
+            await PersistInteractionStoryEntry(player, action, fleeResult, ct);
+            return fleeResult;
+        }
+
+        // Normal combat turn — route through AI
+        var freeForm = await _narrator.ProcessCombatTurnAsync(player, room, enemy, player.Interaction, action.RawInput, ct);
+        ApplyFreeFormStatChanges(player, freeForm, null);
+
+        if (freeForm.InteractionUpdate?.EnemyUpdate.TryGetValue("hp", out var enemyHpDelta) == true && enemy.Hp.HasValue)
+            enemy.Hp = Math.Max(0, enemy.Hp.Value + enemyHpDelta);
+
+        ApplyInteractionUpdate(player, room, enemy, freeForm);
+
+        var combatStatus = freeForm.InteractionUpdate?.CombatStatus ?? "ongoing";
+
+        var combatResult = new ActionResult
+        {
+            ActionId = action.Id,
+            RawInput = action.RawInput,
+            Success = freeForm.Success,
+            MechanicalSummary = $"[Combat with {enemy.Name}: {combatStatus}]",
+            Narration = freeForm.Narration,
+            InteractionUpdate = freeForm.InteractionUpdate ?? new InteractionUpdate
+            {
+                Mode = InteractionMode.Combat,
+                CombatStatus = "ongoing"
+            }
+        };
+
+        if (combatStatus == "victory" || (enemy.Hp.HasValue && enemy.Hp.Value <= 0))
+        {
+            int xpGain = enemy.Level * 10;
+            player.Xp += xpGain;
+            combatResult.XpGained = xpGain;
+            combatResult.MechanicalSummary = $"{enemy.Name} has been defeated! You gain {xpGain} XP.";
+
+            if (_dice.Roll("1d100", "Loot check").Total <= (int)(_rules.Loot.EnemyDropChance * 100))
+            {
+                var goldRoll = _dice.Roll("1d20", "Gold drop");
+                int goldAmount = goldRoll.Total + (enemy.Level * 2);
+                player.Gold += goldAmount;
+                combatResult.GoldChange = goldAmount;
+                combatResult.MechanicalSummary += $" You find {goldAmount} gold!";
+            }
+
+            foreach (var lootItem in freeForm.InteractionUpdate?.Loot ?? [])
+            {
+                player.Inventory.Add(lootItem);
+                combatResult.ItemsGained.Add(lootItem);
+            }
+
+            room.Npcs.Remove(enemy);
+            player.Interaction.Reset();
+            combatResult.InteractionUpdate = new InteractionUpdate { Mode = InteractionMode.Explore, CombatStatus = "victory" };
+        }
+        else if (combatStatus == "defeat" || player.Hp <= 0)
+        {
+            player.Hp = 0;
+            player.Interaction.Reset();
+            combatResult.MechanicalSummary = $"You have been defeated by {enemy.Name}!";
+            combatResult.InteractionUpdate = new InteractionUpdate { Mode = InteractionMode.Explore, CombatStatus = "defeat" };
+        }
+
+        await _stateManager.SavePlayerAsync(player, ct);
+        await _stateManager.SaveRoomAsync(room, ct);
+        await PersistInteractionStoryEntry(player, action, combatResult, ct);
+        return combatResult;
+    }
+
+    private void EnterCombat(PlayerCharacter player, Npc enemy)
+    {
+        player.Interaction = new InteractionState
+        {
+            Mode = InteractionMode.Combat,
+            Target = enemy.Name,
+            CanLeave = false,
+            LeaveConsequence = "flee_penalty"
+        };
+        player.Interaction.AppendContext($"Combat initiated with {enemy.Name}.");
+    }
+
+    private static void ApplyInteractionUpdate(PlayerCharacter player, Room room, Npc npc, FreeFormResponse freeForm)
+    {
+        var update = freeForm.InteractionUpdate;
+        if (update is null) return;
+
+        if (update.NpcDisposition is not null)
+            npc.Disposition = update.NpcDisposition;
+
+        foreach (var contextEntry in update.Context)
+            player.Interaction.AppendContext(contextEntry);
+    }
+
+    private static void ApplyFreeFormStatChanges(PlayerCharacter player, FreeFormResponse freeForm, ActionResult? result)
+    {
+        foreach (var (stat, delta) in freeForm.StatChanges)
+        {
+            switch (stat.ToLowerInvariant())
+            {
+                case "hp":
+                    player.Hp = Math.Clamp(player.Hp + delta, 0, player.MaxHp);
+                    break;
+                case "mp":
+                    player.Mp = Math.Clamp(player.Mp + delta, 0, player.MaxMp);
+                    break;
+                case "gold":
+                    player.Gold = Math.Max(0, player.Gold + delta);
+                    if (result is not null) result.GoldChange += delta;
+                    break;
+                case "xp":
+                    player.Xp = Math.Max(0, player.Xp + delta);
+                    if (result is not null) result.XpGained += Math.Max(0, delta);
+                    break;
+            }
+        }
+    }
+
+    private async Task PersistInteractionStoryEntry(PlayerCharacter player, GameAction action, ActionResult result, CancellationToken ct)
+    {
+        await _stateManager.AddStoryEntryAsync(new StoryEntry
+        {
+            ActionId = action.Id,
+            RawInput = action.RawInput,
+            PlayerId = player.Id,
+            RoomId = player.CurrentRoomId,
+            MechanicalSummary = result.MechanicalSummary,
+            Narration = result.Narration ?? result.MechanicalSummary
+        }, ct);
+    }
+
+    private static string ShiftDisposition(string current, int direction)
+    {
+        string[] scale = ["hostile", "angry", "annoyed", "suspicious", "neutral", "amused", "friendly", "flirtatious"];
+        var index = Array.FindIndex(scale, d => d.Equals(current, StringComparison.OrdinalIgnoreCase));
+        if (index < 0) index = 4; // default to neutral
+        var newIndex = Math.Clamp(index + direction, 0, scale.Length - 1);
+        return scale[newIndex];
     }
 
     private static ActionResult ProcessHelp(GameAction action)

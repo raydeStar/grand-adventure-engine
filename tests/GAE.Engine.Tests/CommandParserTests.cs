@@ -44,6 +44,35 @@ public class CommandParserTests
     }
 
     [Theory]
+    [InlineData("look around")]
+    [InlineData("look at room")]
+    [InlineData("search")]
+    [InlineData("search room")]
+    [InlineData("examine room")]
+    public void Parse_RoomLookAliases_ReturnLookWithoutTarget(string input)
+    {
+        var action = _parser.Parse("player1", input);
+        Assert.Equal(ActionType.Look, action.Type);
+        Assert.Null(action.Target);
+    }
+
+    [Fact]
+    public void Parse_SearchTarget_SetsTarget()
+    {
+        var action = _parser.Parse("player1", "search for sentinel");
+        Assert.Equal(ActionType.Look, action.Type);
+        Assert.Equal("sentinel", action.Target);
+    }
+
+    [Fact]
+    public void Parse_ThrowOnGround_ReturnsDropWithTarget()
+    {
+        var action = _parser.Parse("player1", "throw 1 gold on the ground");
+        Assert.Equal(ActionType.Drop, action.Type);
+        Assert.Equal("1 gold", action.Target);
+    }
+
+    [Theory]
     [InlineData("attack goblin", ActionType.Attack, "goblin")]
     [InlineData("hit dragon", ActionType.Attack, "dragon")]
     [InlineData("strike orc", ActionType.Attack, "orc")]

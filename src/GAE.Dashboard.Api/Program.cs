@@ -240,7 +240,13 @@ if (startRoom is null)
 }
 
 app.UseDefaultFiles();
-app.UseStaticFiles();
+app.UseStaticFiles(new StaticFileOptions
+{
+    OnPrepareResponse = ctx =>
+    {
+        ctx.Context.Response.Headers.CacheControl = "no-cache, no-store";
+    }
+});
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
@@ -281,19 +287,28 @@ app.MapGet("/health/wiki", async (IWikiService wiki) =>
     }
 });
 
+IResult? narratorHealthCache = null;
+DateTimeOffset narratorHealthCacheExpiry = default;
+
 app.MapGet("/health/narrator", async (HttpClient httpClient) =>
 {
+    if (narratorHealthCache is not null && DateTimeOffset.UtcNow < narratorHealthCacheExpiry)
+        return narratorHealthCache;
+
     try
     {
         var response = await httpClient.GetAsync(lmStudioEndpoint + "/v1/models");
-        return response.IsSuccessStatusCode
+        narratorHealthCache = response.IsSuccessStatusCode
             ? Results.Ok(new { status = "healthy", service = "lm-studio" })
             : Results.Json(new { status = "degraded", service = "lm-studio", note = "Narration will use fallback text" }, statusCode: 503);
     }
     catch (Exception ex)
     {
-        return Results.Json(new { status = "degraded", service = "lm-studio", error = ex.Message, note = "Narration will use fallback text" }, statusCode: 503);
+        narratorHealthCache = Results.Json(new { status = "degraded", service = "lm-studio", error = ex.Message, note = "Narration will use fallback text" }, statusCode: 503);
     }
+
+    narratorHealthCacheExpiry = DateTimeOffset.UtcNow.AddSeconds(60);
+    return narratorHealthCache;
 });
 
 // Flush checkpoint on shutdown

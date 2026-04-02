@@ -18,6 +18,10 @@ public class DashboardController : ControllerBase
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _configuration;
 
+    private static readonly TimeSpan NarratorCacheDuration = TimeSpan.FromSeconds(60);
+    private static object? _narratorCachedResult;
+    private static DateTimeOffset _narratorCacheExpiry;
+
     public DashboardController(
         IStateManager stateManager,
         IGameEngine engine,
@@ -102,20 +106,30 @@ public class DashboardController : ControllerBase
             checks["health/wiki"] = new { ok = false, status = "degraded", service = "wiki.js", error = ex.Message, note = "Wiki sync unavailable — game continues without wiki" };
         }
 
-        var narratorEndpoint = (_configuration["LmStudio:Endpoint"] ?? "http://localhost:1234").TrimEnd('/');
-
-        try
+        if (_narratorCachedResult is not null && DateTimeOffset.UtcNow < _narratorCacheExpiry)
         {
-            var httpClient = _httpClientFactory.CreateClient();
-            httpClient.Timeout = TimeSpan.FromSeconds(5);
-            using var response = await httpClient.GetAsync($"{narratorEndpoint}/v1/models", ct);
-            checks["health/narrator"] = response.IsSuccessStatusCode
-                ? new { ok = true, status = "healthy", service = "lm-studio" }
-                : new { ok = false, status = "degraded", service = "lm-studio", note = "Narration will use fallback text" };
+            checks["health/narrator"] = _narratorCachedResult;
         }
-        catch (Exception ex)
+        else
         {
-            checks["health/narrator"] = new { ok = false, status = "degraded", service = "lm-studio", error = ex.Message, note = "Narration will use fallback text" };
+            var narratorEndpoint = (_configuration["LmStudio:Endpoint"] ?? "http://localhost:1234").TrimEnd('/');
+
+            try
+            {
+                var httpClient = _httpClientFactory.CreateClient();
+                httpClient.Timeout = TimeSpan.FromSeconds(5);
+                using var response = await httpClient.GetAsync($"{narratorEndpoint}/v1/models", ct);
+                _narratorCachedResult = response.IsSuccessStatusCode
+                    ? new { ok = true, status = "healthy", service = "lm-studio" }
+                    : new { ok = false, status = "degraded", service = "lm-studio", note = "Narration will use fallback text" };
+            }
+            catch (Exception ex)
+            {
+                _narratorCachedResult = new { ok = false, status = "degraded", service = "lm-studio", error = ex.Message, note = "Narration will use fallback text" };
+            }
+
+            _narratorCacheExpiry = DateTimeOffset.UtcNow + NarratorCacheDuration;
+            checks["health/narrator"] = _narratorCachedResult;
         }
 
         return Ok(checks);

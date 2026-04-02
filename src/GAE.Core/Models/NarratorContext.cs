@@ -9,4 +9,5 @@ public class NarratorContext
     public List<StoryEntry> RecentStory { get; set; } = [];
     public List<PlayerCharacter> NearbyPlayers { get; set; } = [];
     public string? CombatSummary { get; set; }
+    public InteractionState? InteractionState { get; set; }
 }

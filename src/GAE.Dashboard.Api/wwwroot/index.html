@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/style.css?v=2" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.7/signalr.min.js"
           crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="https://cdn.jsdelivr.net/npm/rot-js@2/dist/rot.min.js"
@@ -252,61 +252,6 @@
               </div>
             </div>
           </section>
-
-          <aside id="info-drawer" class="info-drawer">
-            <div class="sidebar-section char-panel">
-              <h3 id="char-title">Character</h3>
-              <div class="char-info">
-                <div class="char-meta" id="char-meta">No active character selected.</div>
-                <div class="resource-bars">
-                  <div class="bar-group">
-                    <label>HP</label>
-                    <div class="bar bar-hp"><div class="bar-fill" id="hp-bar"></div><span class="bar-text" id="hp-text">0 / 0</span></div>
-                  </div>
-                  <div class="bar-group">
-                    <label>MP</label>
-                    <div class="bar bar-mp"><div class="bar-fill" id="mp-bar"></div><span class="bar-text" id="mp-text">0 / 0</span></div>
-                  </div>
-                  <div class="bar-group">
-                    <label>XP</label>
-                    <div class="bar bar-xp"><div class="bar-fill" id="xp-bar"></div><span class="bar-text" id="xp-text">0 / 100</span></div>
-                  </div>
-                </div>
-                <div class="stats-grid" id="stats-grid"></div>
-                <div id="character-details" class="detail-grid"></div>
-                <div class="char-resources">
-                  <span id="char-gold">Gold 0</span>
-                  <span id="char-level">Level 1</span>
-                  <span id="char-defense">Defense 10</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="sidebar-section equip-panel">
-              <h3>Equipment</h3>
-              <div id="equipment-slots" class="equipment-slots"></div>
-            </div>
-
-            <div class="sidebar-section inv-panel">
-              <h3>Inventory</h3>
-              <div id="inventory-list" class="inventory-list"></div>
-            </div>
-
-            <div class="sidebar-section status-panel">
-              <h3>Status Effects</h3>
-              <div id="status-effects" class="status-effects"></div>
-            </div>
-
-            <div class="sidebar-section players-panel">
-              <h3>Adventurers</h3>
-              <div id="players-list" class="players-list"></div>
-            </div>
-
-            <div class="sidebar-section health-panel">
-              <h3>System Health</h3>
-              <div id="system-health" class="system-health"></div>
-            </div>
-          </aside>
         </div>
       </section>
 
@@ -611,6 +556,57 @@
             </div>
           </div>
 
+          <div id="admin-character-panel" class="panel span-2 admin-character-panel">
+            <div class="panel-heading compact-heading">
+              <h3>Live Character Snapshot</h3>
+              <span class="field-label">Admin-only character details for the active actor while User Flow stays full-width.</span>
+            </div>
+            <div class="admin-character-panel-grid">
+              <div class="sidebar-section char-panel">
+                <h3 id="char-title">Character</h3>
+                <div class="char-info">
+                  <div class="char-meta" id="char-meta">No active character selected.</div>
+                  <div class="resource-bars">
+                    <div class="bar-group">
+                      <label>HP</label>
+                      <div class="bar bar-hp"><div class="bar-fill" id="hp-bar"></div><span class="bar-text" id="hp-text">0 / 0</span></div>
+                    </div>
+                    <div class="bar-group">
+                      <label>MP</label>
+                      <div class="bar bar-mp"><div class="bar-fill" id="mp-bar"></div><span class="bar-text" id="mp-text">0 / 0</span></div>
+                    </div>
+                    <div class="bar-group">
+                      <label>XP</label>
+                      <div class="bar bar-xp"><div class="bar-fill" id="xp-bar"></div><span class="bar-text" id="xp-text">0 / 100</span></div>
+                    </div>
+                  </div>
+                  <div class="stats-grid" id="stats-grid"></div>
+                  <div id="character-details" class="detail-grid"></div>
+                  <div class="char-resources">
+                    <span id="char-gold">Gold 0</span>
+                    <span id="char-level">Level 1</span>
+                    <span id="char-defense">Defense 10</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="sidebar-section equip-panel">
+                <h3>Equipment</h3>
+                <div id="equipment-slots" class="equipment-slots"></div>
+              </div>
+
+              <div class="sidebar-section inv-panel">
+                <h3>Inventory</h3>
+                <div id="inventory-list" class="inventory-list"></div>
+              </div>
+
+              <div class="sidebar-section status-panel">
+                <h3>Status Effects</h3>
+                <div id="status-effects" class="status-effects"></div>
+              </div>
+            </div>
+          </div>
+
           <div id="admin-notes-panel" class="panel">
             <h3>Operator Notes</h3>
             <div class="workflow-reference compact">
@@ -637,10 +633,10 @@
     </main>
   </div>
 
-  <script src="js/api.js"></script>
-  <script src="js/signalr-client.js"></script>
-  <script src="js/room-map.js"></script>
-  <script src="js/ui.js"></script>
-  <script src="js/app.js"></script>
+  <script src="js/api.js?v=2"></script>
+  <script src="js/signalr-client.js?v=2"></script>
+  <script src="js/room-map.js?v=2"></script>
+  <script src="js/ui.js?v=2"></script>
+  <script src="js/app.js?v=2"></script>
 </body>
 </html>

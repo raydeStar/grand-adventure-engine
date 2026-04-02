@@ -27,6 +27,9 @@ public class PlayerCharacter
     public int Cha { get; set; } = 10;
     public int Luck { get; set; } = 10;
 
+    // Interaction state
+    public InteractionState Interaction { get; set; } = new();
+
     // Equipment and inventory
     public EquipmentLoadout Equipment { get; set; } = new();
     public List<InventoryItem> Inventory { get; set; } = [];

@@ -9,6 +9,7 @@ public class FreeFormResponse
     public List<EntityChange> EntityChanges { get; set; } = [];
     public bool CombatInitiated { get; set; }
     public RoomChange? RoomChanges { get; set; }
+    public InteractionUpdate? InteractionUpdate { get; set; }
 }
 
 public class InventoryChange

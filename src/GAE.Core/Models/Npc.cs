@@ -6,6 +6,7 @@ public class Npc
     public string Name { get; set; } = string.Empty;
     public string Personality { get; set; } = string.Empty;
     public string Faction { get; set; } = "neutral";
+    public string Disposition { get; set; } = "neutral";
     public bool IsHostile { get; set; }
     public int? Hp { get; set; }
     public int? MaxHp { get; set; }

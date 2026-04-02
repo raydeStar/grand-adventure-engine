@@ -1,3 +1,4 @@
+using System.Net;
 using GAE.Core.Interfaces;
 using GAE.Core.Models;
 using GAE.Narrator;
@@ -27,9 +28,10 @@ public class NarratorServiceTests
         // Act
         var result = await narrator.NarrateActionAsync(context);
 
-        // Assert: should get fallback narration, not throw
+        // Assert: should get contextual fallback narration, not throw
         Assert.NotNull(result);
-        Assert.Contains("narrator", result, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Test", result, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("clears his throat", result, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -63,7 +65,7 @@ public class NarratorServiceTests
     }
 
     [Fact]
-    public async Task ProcessFreeFormAsync_WhenHttpFails_ReturnsExplicitFailureInsteadOfGenericSuccessFallback()
+    public async Task ProcessFreeFormAsync_WhenHttpFailsOnConsequentialAction_ReturnsInWorldFailureFallback()
     {
         var handler = new FakeHttpMessageHandler(new HttpRequestException("Connection refused"));
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") };
@@ -77,7 +79,57 @@ public class NarratorServiceTests
 
         Assert.False(response.Success);
         Assert.DoesNotContain("nothing dramatic happens", response.Narration, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("narrator", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("narrator", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("hard logic", response.Narration, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ProcessFreeFormAsync_WhenHttpFailsOnHarmlessAction_ReturnsPlayableLocalFallback()
+    {
+        var handler = new FakeHttpMessageHandler(new HttpRequestException("Connection refused"));
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") };
+        var narrator = new NarratorService(httpClient, NullLogger<NarratorService>.Instance);
+
+        var response = await narrator.ProcessFreeFormAsync(
+            new PlayerCharacter { Name = "Thorin", Race = "Dwarf", Class = "Fighter" },
+            new Room { Id = "gate", Name = "Ironhold Gate", Description = "A rusted war gate with iron plates.", Npcs = [new Npc { Id = "guard", Name = "Gate Warden" }] },
+            "I want to shine the rusted gate",
+            []);
+
+        Assert.True(response.Success);
+        Assert.Empty(response.StatChanges);
+        Assert.Empty(response.InventoryChanges);
+        Assert.Empty(response.EntityChanges);
+        Assert.Contains("rusted gate", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("try again", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("narrator", response.Narration, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ProcessFreeFormAsync_WhenModelWrapsJsonInPreamble_StillParsesResponse()
+    {
+        var handler = new ResponseHttpMessageHandler("""
+            {
+              "choices": [
+                {
+                  "message": {
+                    "content": "Here is your result:\n{\"narration\":\"Thorin rubs at the gate until a muted shine peers through the rust.\",\"success\":true,\"statChanges\":{},\"inventoryChanges\":[],\"entityChanges\":[],\"combatInitiated\":false,\"roomChanges\":null}"
+                  }
+                }
+              ]
+            }
+            """);
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") };
+        var narrator = new NarratorService(httpClient, NullLogger<NarratorService>.Instance);
+
+        var response = await narrator.ProcessFreeFormAsync(
+            new PlayerCharacter { Name = "Thorin", Race = "Dwarf", Class = "Fighter" },
+            new Room { Id = "gate", Name = "Ironhold Gate", Description = "A rusted war gate with iron plates." },
+            "shine the rusted gate",
+            []);
+
+        Assert.True(response.Success);
+        Assert.Contains("muted shine", response.Narration, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -105,8 +157,34 @@ public class NarratorServiceTests
 
         Assert.Contains("QA Lab", narration);
         Assert.Contains("Sentinel", narration);
+        Assert.Contains("Inspection Token", narration);
         Assert.Contains("south", narration, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("mechanical", narration, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task NarrateActionAsync_ForMissingLookTarget_AvoidsTemplateFailureText()
+    {
+        var handler = new FakeHttpMessageHandler(new HttpRequestException("HTTP should not be called for deterministic look narration."));
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") };
+        var narrator = new NarratorService(httpClient, NullLogger<NarratorService>.Instance);
+
+        var narration = await narrator.NarrateActionAsync(new NarratorContext
+        {
+            Player = new PlayerCharacter { Name = "Test", Race = "Human", Class = "Warrior" },
+            CurrentRoom = new Room
+            {
+                Id = "lab",
+                Name = "QA Lab",
+                Description = "A repeatable manual test fixture room.",
+                Items = [new InventoryItem { Id = "token", Name = "Inspection Token", Quantity = 2 }]
+            },
+            Action = new GameAction { PlayerId = "p1", RawInput = "look at sentinel", Type = ActionType.Look, Target = "sentinel" },
+            MechanicalResult = new ActionResult { Success = false, MechanicalSummary = "Look target 'sentinel' was not found in the current room." }
+        });
+
+        Assert.Contains("sentinel", narration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("nothing here answers that description", narration, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -142,6 +220,26 @@ public class NarratorServiceTests
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             throw _exception;
+        }
+    }
+
+    private class ResponseHttpMessageHandler : HttpMessageHandler
+    {
+        private readonly string _responseBody;
+        private readonly HttpStatusCode _statusCode;
+
+        public ResponseHttpMessageHandler(string responseBody, HttpStatusCode statusCode = HttpStatusCode.OK)
+        {
+            _responseBody = responseBody;
+            _statusCode = statusCode;
+        }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new HttpResponseMessage(_statusCode)
+            {
+                Content = new StringContent(_responseBody)
+            });
         }
     }
 }

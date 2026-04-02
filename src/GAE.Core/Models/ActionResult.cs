@@ -3,6 +3,7 @@ namespace GAE.Core.Models;
 public class ActionResult
 {
     public string ActionId { get; set; } = string.Empty;
+    public string RawInput { get; set; } = string.Empty;
     public string CorrelationId { get; set; } = Guid.NewGuid().ToString();
     public bool Success { get; set; }
     public string MechanicalSummary { get; set; } = string.Empty;
@@ -15,6 +16,7 @@ public class ActionResult
     public List<InventoryItem> ItemsLost { get; set; } = [];
     public int GoldChange { get; set; }
     public int XpGained { get; set; }
+    public InteractionUpdate? InteractionUpdate { get; set; }
     public DateTimeOffset Timestamp { get; set; } = DateTimeOffset.UtcNow;
 }
 

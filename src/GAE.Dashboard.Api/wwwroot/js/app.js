@@ -17,7 +17,9 @@
     transportLabel: 'Offline',
     recentActionIds: new Set(),
     commandHistory: [],
-    commandHistoryIndex: -1
+    commandHistoryIndex: -1,
+    interactionMode: 'explore',
+    interactionTarget: ''
   };
 
   const workflowScenarios = {
@@ -28,7 +30,6 @@
 
   async function init() {
     UI.restoreTheme();
-    UI.restoreInfoDrawer();
     bindEvents();
     state.mode = UI.setMode(state.mode, null);
     UI.showPortal(true);
@@ -65,11 +66,9 @@
     UI.$('btn-logout-header').addEventListener('click', () => void handleLogout());
     UI.$('btn-logout-portal').addEventListener('click', () => void handleLogout());
 
-    // Theme and info drawer toggles
+    // Theme toggle
     const themeBtn = UI.$('btn-theme-toggle');
     if (themeBtn) themeBtn.addEventListener('click', () => UI.toggleTheme());
-    const infoBtn = UI.$('btn-toggle-info');
-    if (infoBtn) infoBtn.addEventListener('click', () => UI.toggleInfoDrawer());
 
     UI.$('btn-new-char').addEventListener('click', () => {
       if (!ensureAuthenticated()) return;
@@ -127,6 +126,11 @@
       const exit = event.target.closest('[data-room-exit]');
       if (exit && state.currentPlayerId) {
         UI.$('command-input').value = `go ${exit.dataset.roomExit}`;
+        void executeUserCommand();
+      }
+      const interactionChip = event.target.closest('[data-interaction-cmd]');
+      if (interactionChip && state.currentPlayerId) {
+        UI.$('command-input').value = interactionChip.dataset.interactionCmd;
         void executeUserCommand();
       }
     });
@@ -332,6 +336,16 @@
     state.currentPlayer = player;
     UI.renderPlayer(player);
 
+    // Sync interaction state from player
+    if (player.interaction) {
+      state.interactionMode = player.interaction.mode || 'explore';
+      state.interactionTarget = player.interaction.target || '';
+    } else {
+      state.interactionMode = 'explore';
+      state.interactionTarget = '';
+    }
+    UI.updateInteractionMode(state.interactionMode, state.interactionTarget);
+
     if (player.currentRoomId !== state.currentRoomId) {
       if (state.currentRoomId) {
         await GameHub.leaveRoomFeed(state.currentRoomId);
@@ -476,6 +490,9 @@
     const command = input.value.trim();
     if (!command || !state.currentPlayerId) return;
 
+    // If text is still streaming, skip it before sending the next command
+    UI._cancelStreaming();
+
     state.commandHistory.unshift(command);
     if (state.commandHistory.length > 20) state.commandHistory.pop();
     state.commandHistoryIndex = -1;
@@ -483,7 +500,6 @@
     input.value = '';
     input.disabled = true;
     UI.$('command-submit').disabled = true;
-    UI.appendStoryEntry({ mechanicalSummary: `> ${command}` }, 'info');
 
     try {
       const result = await API.sendCommand(state.currentPlayerId, command);
@@ -516,7 +532,6 @@
       if (result.actionId) state.recentActionIds.add(result.actionId);
       UI.appendActivity('admin-command-log', result.mechanicalSummary || 'No response summary.', result.success ? 'success' : 'failure');
       if (playerId === state.currentPlayerId) {
-        UI.appendStoryEntry({ mechanicalSummary: `> ${command}` }, 'info');
         UI.appendStoryEntry(result, result.success ? 'success' : 'failure');
       }
       await afterCommand(playerId, result);
@@ -545,7 +560,6 @@
         UI.appendActivity('workflow-log', result.mechanicalSummary || 'No response summary.', result.success ? 'success' : 'failure');
 
         if (playerId === state.currentPlayerId) {
-          UI.appendStoryEntry({ mechanicalSummary: `> ${command}` }, 'info');
           UI.appendStoryEntry(result, result.success ? 'success' : 'failure');
         }
 
@@ -698,6 +712,12 @@
   }
 
   async function afterCommand(playerId, result) {
+    // Track interaction mode from result
+    if (result.interactionUpdate) {
+      state.interactionMode = result.interactionUpdate.mode || 'explore';
+      state.interactionTarget = result.interactionUpdate.target || state.interactionTarget;
+    }
+
     await Promise.all([
       refreshPlayers(),
       refreshRooms(),
@@ -711,6 +731,7 @@
         UI.renderRoom(result.newRoom);
       }
       await refreshCurrentPlayer();
+      UI.updateInteractionMode(state.interactionMode, state.interactionTarget);
     }
   }
 

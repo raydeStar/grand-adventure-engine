@@ -29,7 +29,8 @@ public class NarratorService : INarratorService
             You are Sir Thaddeus, the Grand Narrator of the Shattered Reaches.
             You speak in a dramatic, literary style with touches of dry wit.
             You narrate what the engine has already decided — never contradict the mechanical result.
-            Keep responses to 2-3 sentences. Use vivid sensory detail.
+            Write 2-4 vivid sentences with concrete sensory detail and at least one specific visual focal point.
+            If the action failed, narrate the failed attempt in-world and honor the exact failure reason without repeating blunt system text verbatim.
             If combat occurred, describe the action dramatically.
             Always address the player's character by name.
             Never ask the player questions.
@@ -61,10 +62,19 @@ public class NarratorService : INarratorService
             Visible Items: {visibleItems}
             Exits: {exits}
             Action: {context.Action.RawInput}
+            Action Outcome: {(context.MechanicalResult.Success ? "success" : "failure")}
             Resolved Outcome: {resolvedOutcome}
             """;
 
-        return await CompletionAsync(systemPrompt, userPrompt, ct);
+        try
+        {
+            return await CompletionOrThrowAsync(systemPrompt, userPrompt, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "LM Studio request failed, using contextual narration fallback");
+            return BuildContextualFallbackNarration(context);
+        }
     }
 
     public async Task<Room> GenerateRoomAsync(string roomId, string direction, Room sourceRoom, CancellationToken ct = default)
@@ -337,36 +347,357 @@ public class NarratorService : INarratorService
             _logger.LogInformation("Dispatching free-form narrator request for {PlayerId} in room {RoomId}: {RawInput}", player.Id, room.Id, rawInput);
             rawCompletion = await CompletionOrThrowAsync(systemPrompt, userPrompt, ct, operation: "free-form", logPayload: true);
 
-            // Strip markdown code fences if present
-            rawCompletion = rawCompletion.Trim();
-            if (rawCompletion.StartsWith("```", StringComparison.Ordinal))
-            {
-                var firstNewline = rawCompletion.IndexOf('\n');
-                if (firstNewline > 0) rawCompletion = rawCompletion[(firstNewline + 1)..];
-                if (rawCompletion.EndsWith("```", StringComparison.Ordinal)) rawCompletion = rawCompletion[..^3];
-                rawCompletion = rawCompletion.Trim();
-            }
-
-            var response = JsonSerializer.Deserialize<FreeFormResponse>(rawCompletion, _jsonOptions);
-            if (response is not null)
+            if (TryParseFreeFormResponse(rawCompletion, out var response))
             {
                 _logger.LogInformation("Free-form action processed: \"{RawInput}\" -> success={Success}", rawInput, response.Success);
                 return response;
             }
 
-            throw new JsonException("LM Studio returned an empty free-form response payload.");
+            throw new JsonException("LM Studio returned a free-form payload that could not be parsed.");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Free-form narration failed for \"{RawInput}\". Raw response: {RawResponse}", rawInput, rawCompletion ?? "<no response>");
         }
 
+        return BuildLocalFreeFormFallbackResponse(player, room, rawInput);
+    }
+
+    public async Task<FreeFormResponse> ProcessConversationTurnAsync(PlayerCharacter player, Room room, Npc npc, InteractionState interaction, string rawInput, CancellationToken ct = default)
+    {
+        var systemPrompt = $$"""
+            You are now voicing {{npc.Name}} in direct conversation with the player.
+            You MUST:
+
+            1. Write the NPC's actual dialogue in quotes.
+            2. Include the NPC's physical reactions and body language.
+            3. Track the NPC's emotional state. Start at their current disposition ({{interaction.NpcDisposition ?? npc.Disposition}}) and shift it based on what the player says.
+            4. Return an updated disposition in your response from: "friendly", "neutral", "annoyed", "angry", "hostile", "amused", "flirtatious", "scared", "sad", "suspicious".
+            5. If the conversation reaches a natural end (NPC dismisses the player, player says goodbye, NPC storms off), return mode: "explore" to exit conversation mode.
+            6. If the player tries to LEAVE mid-conversation, narrate the NPC's reaction to being cut off.
+            7. NPCs can reveal information, offer quests, give items, refuse service, call guards, or attack — based on their disposition and what the player says.
+
+            NPC Background:
+            - Name: {{npc.Name}}
+            - Personality: {{(string.IsNullOrWhiteSpace(npc.Personality) ? "A typical denizen of this world." : npc.Personality)}}
+            - Faction: {{npc.Faction}}
+            - Current Disposition: {{interaction.NpcDisposition ?? npc.Disposition}}
+
+            Conversation history:
+            {{string.Join("\n", interaction.Context.TakeLast(15))}}
+
+            Respond with ONLY valid JSON (no markdown, no code fences):
+            {
+              "narration": "\"dialogue here,\" NPC says, doing something...",
+              "success": true,
+              "statChanges": {},
+              "inventoryChanges": [],
+              "entityChanges": [],
+              "combatInitiated": false,
+              "roomChanges": null,
+              "interactionUpdate": {
+                "mode": "conversation",
+                "npcDisposition": "neutral",
+                "context": ["brief summary of what happened this turn"],
+                "combatStatus": null,
+                "loot": [],
+                "enemyUpdate": {}
+              }
+            }
+            """;
+
+        var userPrompt = $$"""
+            Player: {{player.Name}} (Lv.{{player.Level}} {{player.Race}} {{player.Class}})
+            Location: {{room.Name}} — {{room.Description}}
+            Turn {{interaction.TurnCount + 1}} of conversation with {{npc.Name}}.
+            Player says/does: "{{rawInput}}"
+            """;
+
+        string? rawCompletion = null;
+        try
+        {
+            rawCompletion = await CompletionOrThrowAsync(systemPrompt, userPrompt, ct, operation: "conversation", logPayload: true);
+            if (TryParseFreeFormResponse(rawCompletion, out var response))
+                return response;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Conversation narration failed for \"{RawInput}\"", rawInput);
+        }
+
+        // Deterministic fallback — NPC responds generically
         return new FreeFormResponse
         {
-            Narration = "The narrator's link falters before your action can be resolved. Try again in a moment.",
-            Success = false
+            Success = true,
+            Narration = $"{npc.Name} regards {player.Name} thoughtfully for a moment, then offers a noncommittal response that neither invites nor discourages further conversation.",
+            InteractionUpdate = new InteractionUpdate
+            {
+                Mode = InteractionMode.Conversation,
+                NpcDisposition = interaction.NpcDisposition ?? npc.Disposition,
+                Context = [$"Player said: {rawInput}. {npc.Name} gave a guarded response."]
+            }
         };
     }
+
+    public async Task<FreeFormResponse> ProcessCombatTurnAsync(PlayerCharacter player, Room room, Npc enemy, InteractionState interaction, string rawInput, CancellationToken ct = default)
+    {
+        var systemPrompt = $$"""
+            Combat is active against {{enemy.Name}}.
+            Enemy HP: {{enemy.Hp ?? 0}}/{{enemy.MaxHp ?? 0}}
+            Player HP: {{player.Hp}}/{{player.MaxHp}}
+
+            1. Resolve the player's action. Calculate hit/miss using relevant stat + random factor vs enemy defense.
+            2. Narrate the player's action dramatically.
+            3. Then resolve the enemy's turn. The enemy acts tactically based on its type.
+            4. Narrate the enemy's action.
+            5. Return all stat changes for BOTH sides.
+            6. If either side reaches 0 HP, end combat. Award XP and loot for victory. Narrate death for defeat.
+
+            Combat history:
+            {{string.Join("\n", interaction.Context.TakeLast(10))}}
+
+            Respond with ONLY valid JSON (no markdown, no code fences):
+            {
+              "narration": "Your dramatic combat narration here...",
+              "success": true,
+              "statChanges": { "hp": -3 },
+              "inventoryChanges": [],
+              "entityChanges": [],
+              "combatInitiated": false,
+              "roomChanges": null,
+              "interactionUpdate": {
+                "mode": "combat",
+                "npcDisposition": null,
+                "context": ["brief summary of combat actions this turn"],
+                "combatStatus": "ongoing",
+                "loot": [],
+                "enemyUpdate": { "hp": -8 }
+              }
+            }
+
+            combatStatus must be one of: "ongoing", "victory", "defeat", "fled"
+            enemyUpdate.hp should be a negative delta (damage dealt to enemy).
+            statChanges.hp should be a negative delta (damage dealt to player by enemy).
+            """;
+
+        var userPrompt = $$"""
+            Player: {{player.Name}} (Lv.{{player.Level}} {{player.Race}} {{player.Class}})
+            HP: {{player.Hp}}/{{player.MaxHp}} | MP: {{player.Mp}}/{{player.MaxMp}}
+            STR:{{player.Str}} DEX:{{player.Dex}} CON:{{player.Con}} INT:{{player.Int}} WIS:{{player.Wis}} CHA:{{player.Cha}}
+            Weapon: {{player.Equipment.Weapon?.Name ?? "Fists"}} ({{player.Equipment.Weapon?.DamageDice ?? "1d4"}})
+            Location: {{room.Name}}
+            Combat turn {{interaction.TurnCount + 1}} vs {{enemy.Name}} (HP: {{enemy.Hp ?? 0}}/{{enemy.MaxHp ?? 0}}, Defense: {{enemy.Defense ?? 10}})
+            Player action: "{{rawInput}}"
+            """;
+
+        string? rawCompletion = null;
+        try
+        {
+            rawCompletion = await CompletionOrThrowAsync(systemPrompt, userPrompt, ct, operation: "combat", logPayload: true);
+            if (TryParseFreeFormResponse(rawCompletion, out var response))
+                return response;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Combat narration failed for \"{RawInput}\"", rawInput);
+        }
+
+        // Deterministic fallback — simple exchange
+        return new FreeFormResponse
+        {
+            Success = true,
+            Narration = $"{player.Name} presses the attack against {enemy.Name}. Steel clashes and the air thickens with tension. The exchange leaves both combatants wary.",
+            StatChanges = new Dictionary<string, int> { ["hp"] = -2 },
+            InteractionUpdate = new InteractionUpdate
+            {
+                Mode = InteractionMode.Combat,
+                CombatStatus = "ongoing",
+                EnemyUpdate = new Dictionary<string, int> { ["hp"] = -3 },
+                Context = [$"Turn {interaction.TurnCount + 1}: {player.Name} acted ({rawInput}). Both sides exchanged blows."]
+            }
+        };
+    }
+
+    private static bool TryParseFreeFormResponse(string rawCompletion, out FreeFormResponse response)
+    {
+        response = null!;
+
+        var sanitized = SanitizeLmCompletion(rawCompletion);
+        if (TryDeserializeFreeFormResponse(sanitized, out response))
+            return true;
+
+        var jsonStart = sanitized.IndexOf('{');
+        var jsonEnd = sanitized.LastIndexOf('}');
+        if (jsonStart >= 0 && jsonEnd > jsonStart)
+        {
+            var embeddedJson = sanitized[jsonStart..(jsonEnd + 1)];
+            if (TryDeserializeFreeFormResponse(embeddedJson, out response))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static string SanitizeLmCompletion(string? rawCompletion)
+    {
+        if (string.IsNullOrWhiteSpace(rawCompletion))
+            return string.Empty;
+
+        var sanitized = rawCompletion.Trim();
+        if (sanitized.StartsWith("```", StringComparison.Ordinal))
+        {
+            var firstNewline = sanitized.IndexOf('\n');
+            if (firstNewline > 0)
+                sanitized = sanitized[(firstNewline + 1)..];
+
+            if (sanitized.EndsWith("```", StringComparison.Ordinal))
+                sanitized = sanitized[..^3];
+        }
+
+        return sanitized.Trim();
+    }
+
+    private static bool TryDeserializeFreeFormResponse(string rawCompletion, out FreeFormResponse response)
+    {
+        response = null!;
+        if (string.IsNullOrWhiteSpace(rawCompletion))
+            return false;
+
+        try
+        {
+            var parsed = JsonSerializer.Deserialize<FreeFormResponse>(rawCompletion, _jsonOptions);
+            if (parsed is null || string.IsNullOrWhiteSpace(parsed.Narration))
+                return false;
+
+            parsed.Narration = parsed.Narration.Trim();
+            parsed.StatChanges ??= new();
+            parsed.InventoryChanges ??= [];
+            parsed.EntityChanges ??= [];
+            response = parsed;
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static FreeFormResponse BuildLocalFreeFormFallbackResponse(PlayerCharacter player, Room room, string rawInput)
+    {
+        var actionPhrase = ExtractFreeFormActionPhrase(rawInput);
+        var success = ShouldResolveFreeFormFallbackAsSuccess(actionPhrase);
+
+        return new FreeFormResponse
+        {
+            Success = success,
+            Narration = BuildLocalFreeFormFallbackNarration(player, room, actionPhrase, success)
+        };
+    }
+
+    private static string BuildLocalFreeFormFallbackNarration(PlayerCharacter player, Room room, string actionPhrase, bool success)
+    {
+        var roomName = string.IsNullOrWhiteSpace(room.Name) ? "the room" : room.Name;
+        var witnessReaction = BuildFreeFormWitnessReaction(room);
+
+        if (TryBuildMaintenanceFreeFormNarration(player, roomName, actionPhrase, witnessReaction, out var maintenanceNarration))
+            return maintenanceNarration;
+
+        return success
+            ? $"{player.Name} follows through on the impulse to {actionPhrase}, letting the effort play out against {roomName}. Nothing larger changes hands, but the moment resolves cleanly enough to belong here. {witnessReaction}"
+            : $"{player.Name} starts to {actionPhrase}, but the attempt asks more of {roomName} than the moment is willing to yield. {witnessReaction} The room settles back into its own hard logic without any lasting change.";
+    }
+
+    private static bool TryBuildMaintenanceFreeFormNarration(PlayerCharacter player, string roomName, string actionPhrase, string witnessReaction, out string narration)
+    {
+        narration = string.Empty;
+
+        foreach (var verb in new[] { "shine", "polish", "clean", "scrub", "wipe" })
+        {
+            if (!actionPhrase.StartsWith(verb + " ", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var subject = actionPhrase[(verb.Length + 1)..].Trim();
+            if (string.IsNullOrWhiteSpace(subject))
+                subject = "the nearest surface";
+
+            narration = $"{player.Name} sets to work on {subject}, rubbing at age and grime until the effort teases out a brief hint of order from the wear. In {roomName}, it changes no fortunes, but it leaves the scene feeling tended rather than ignored. {witnessReaction}";
+            return true;
+        }
+
+        return false;
+    }
+
+    private static string BuildFreeFormWitnessReaction(Room room)
+    {
+        var witness = room.Npcs.FirstOrDefault()?.Name;
+        if (!string.IsNullOrWhiteSpace(witness))
+            return $"{witness} clocks the gesture, then returns their attention to the wider room.";
+
+        return "The sound of it fades back into the room almost at once.";
+    }
+
+    private static string ExtractFreeFormActionPhrase(string rawInput)
+    {
+        var trimmed = rawInput.Trim().TrimEnd('.', '!', '?');
+        if (string.IsNullOrWhiteSpace(trimmed))
+            return "do something unplanned";
+
+        foreach (var prefix in new[]
+                 {
+                     "i want to ",
+                     "i wanna ",
+                     "i would like to ",
+                     "i'd like to ",
+                     "i try to ",
+                     "i attempt to ",
+                     "i am trying to ",
+                     "i'm trying to ",
+                     "im trying to ",
+                     "try to ",
+                     "attempt to ",
+                     "can i "
+                 })
+        {
+            if (trimmed.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                return trimmed[prefix.Length..].Trim();
+        }
+
+        return trimmed;
+    }
+
+    private static bool ShouldResolveFreeFormFallbackAsSuccess(string actionPhrase)
+        => !new[]
+            {
+                "attack",
+                "stab",
+                "slash",
+                "strike",
+                "fight",
+                "kill",
+                "murder",
+                "steal",
+                "pick up",
+                "grab",
+                "take",
+                "loot",
+                "drink",
+                "eat",
+                "cast",
+                "summon",
+                "open",
+                "unlock",
+                "break",
+                "smash",
+                "destroy",
+                "burn",
+                "set fire",
+                "throw",
+                "drag",
+                "pull",
+                "push",
+                "move"
+            }
+            .Any(prefix => actionPhrase.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
 
     private async Task<string> CompletionAsync(string systemPrompt, string userPrompt, CancellationToken ct)
     {
@@ -418,7 +749,7 @@ public class NarratorService : INarratorService
     }
 
     private static string FallbackNarration() =>
-        "The narrator clears his throat but no words come forth. Perhaps the tale will continue another time...";
+        "The scene settles into a plain, unadorned stillness for a moment, yielding only the bare facts.";
 
     private static bool TryBuildDeterministicLookNarration(NarratorContext context, out string narration)
     {
@@ -430,45 +761,152 @@ public class NarratorService : INarratorService
         if (!string.IsNullOrWhiteSpace(context.Action.Target))
         {
             var target = context.Action.Target.Trim();
-            var npc = room.Npcs.FirstOrDefault(candidate => candidate.Name.Contains(target, StringComparison.OrdinalIgnoreCase));
+            if (TargetReferencesRoom(room, target))
+            {
+                target = string.Empty;
+            }
+
+            var npc = FindNamedEntity(room.Npcs, candidate => candidate.Name, target);
             if (npc is not null)
             {
-                narration = string.IsNullOrWhiteSpace(npc.Personality)
-                    ? $"{context.Player.Name} studies {npc.Name} for a lingering moment, memorizing every small tell and guarded motion."
-                    : $"{context.Player.Name} studies {npc.Name} for a lingering moment and catches the shape of their bearing: {npc.Personality.TrimEnd('.')}.";
+                var matchingCount = room.Npcs.Count(candidate => NormalizeLookupText(candidate.Name) == NormalizeLookupText(npc.Name));
+                var representativeLead = matchingCount > 1
+                    ? $"Though {matchingCount} figures answer to that same silhouette, {context.Player.Name} fixes on one representative {npc.Name.ToLowerInvariant()} at the edge of the room."
+                    : $"{context.Player.Name} fixes their attention on {npc.Name}.";
+                var personalityDetail = HasUsefulPersonality(npc.Personality)
+                    ? $"Their bearing suggests {TrimToSentence(npc.Personality).TrimEnd('.').ToLowerInvariant()}, a detail that sharpens rather than softens on closer inspection."
+                    : $"Even standing still, {npc.Name} carries the kind of presence that makes the room feel more heavily watched.";
+                narration = $"{representativeLead} {personalityDetail} Up close, the smallest details feel sharper than they did at a glance.";
                 return true;
             }
 
-            var item = room.Items.FirstOrDefault(candidate => candidate.Name.Contains(target, StringComparison.OrdinalIgnoreCase));
+            var item = FindNamedEntity(room.Items, candidate => candidate.Name, target);
             if (item is not null)
             {
+                var totalQuantity = room.Items
+                    .Where(candidate => NormalizeLookupText(candidate.Name) == NormalizeLookupText(item.Name))
+                    .Sum(candidate => Math.Max(1, candidate.Quantity));
+                var lead = totalQuantity > 1
+                    ? $"Among the {item.Name} scattered through the room, {context.Player.Name} picks one out for closer study."
+                    : $"{context.Player.Name} gives {item.Name} a closer look.";
                 var detail = !string.IsNullOrWhiteSpace(item.Description)
                     ? item.Description.TrimEnd('.')
-                    : "it looks intact, ordinary, and ready to be used if needed";
-                narration = $"{context.Player.Name} gives {item.Name} a careful once-over and notes that {detail}.";
+                    : "its shape suggests use before beauty, the kind of tool made to matter more in the hand than on display";
+                narration = $"{lead} {char.ToUpperInvariant(detail[0])}{detail[1..]}. In a place like {room.Name}, even a small object feels chosen rather than forgotten.";
                 return true;
             }
 
-            narration = $"{context.Player.Name} searches the room for {target}, but nothing here answers that description.";
-            return true;
+            if (!string.IsNullOrWhiteSpace(target))
+            {
+                narration = $"{context.Player.Name} searches for {target}, but the name never quite lands on anything solid in {room.Name}. {BuildAmbientMissSentence(room)}";
+                return true;
+            }
         }
 
-        var observations = new List<string>();
+        var roomAtmosphere = BuildRoomAtmosphere(room);
+        var focalDetail = BuildRoomFocalDetail(room);
+        var exitDetail = BuildExitDetail(room);
 
-        if (room.Exits.Count > 0)
-            observations.Add($"The clearest way onward lies {HumanizeDirections(room.Exits.Keys)}.");
-
-        if (room.Npcs.Count > 0)
-            observations.Add($"{SummarizeEntities(room.Npcs, npc => npc.Name)} stand out immediately.");
-
-        if (room.Items.Count > 0)
-            observations.Add($"{SummarizeEntities(room.Items, item => item.Name, item => item.Quantity)} catches the eye.");
-
-        narration = $"{context.Player.Name} pauses and lets {room.Name} come into focus. {TrimToSentence(room.Description)}";
-        if (observations.Count > 0)
-            narration += " " + string.Join(" ", observations.Take(2));
+        narration = $"{context.Player.Name} slows and lets {room.Name} resolve around them. {roomAtmosphere}";
+        if (!string.IsNullOrWhiteSpace(focalDetail))
+            narration += $" {focalDetail}";
+        if (!string.IsNullOrWhiteSpace(exitDetail))
+            narration += $" {exitDetail}";
 
         return true;
+    }
+
+    private static string BuildContextualFallbackNarration(NarratorContext context)
+    {
+        if (TryBuildDeterministicLookNarration(context, out var lookNarration))
+            return lookNarration;
+
+        var roomName = string.IsNullOrWhiteSpace(context.CurrentRoom.Name) ? "the room" : context.CurrentRoom.Name;
+        if (!context.MechanicalResult.Success)
+        {
+            var failureReason = TrimToSentence(context.MechanicalResult.MechanicalSummary);
+            return $"{context.Player.Name} commits to the motion, but {roomName} gives nothing back except the hard truth of the attempt. {failureReason}";
+        }
+
+        var resolvedOutcome = TrimToSentence(context.MechanicalResult.MechanicalSummary);
+        return string.IsNullOrWhiteSpace(resolvedOutcome)
+            ? $"{context.Player.Name} shifts the scene in {roomName}, and the moment settles into a new shape without further ceremony."
+            : $"{context.Player.Name} acts, and {roomName} answers in kind. {resolvedOutcome}";
+    }
+
+    private static string BuildRoomAtmosphere(Room room)
+    {
+        var description = TrimToSentence(room.Description);
+        var roomText = $"{room.Name} {room.Description}".ToLowerInvariant();
+
+        if (roomText.Contains("qa") || roomText.Contains("lab") || roomText.Contains("sterile") || roomText.Contains("fixture") || roomText.Contains("test"))
+        {
+            return "It feels less like a chamber built for comfort and more like a proving ground left humming between trials, all cold light, hard edges, and patient machinery.";
+        }
+
+        if (roomText.Contains("inn") || roomText.Contains("tavern"))
+        {
+            return "Warmth clings to the place in stubborn pockets, softening the rougher smells and sounds that travel in from the road.";
+        }
+
+        if (string.IsNullOrWhiteSpace(description))
+        {
+            return "The place keeps its details close, revealing itself through echo, shadow, and the pressure of the air more than any easy explanation.";
+        }
+
+        return $"The place carries the character of {description.TrimEnd('.').ToLowerInvariant()}, with every sound lingering just long enough to make the stillness feel deliberate.";
+    }
+
+    private static string BuildRoomFocalDetail(Room room)
+    {
+        var details = new List<string>();
+
+        if (room.Npcs.Count > 0)
+            details.Add($"The eye keeps returning to {SummarizeEntities(room.Npcs, npc => npc.Name)}, whose presence gives the room its weight");
+
+        if (room.Items.Count > 0)
+            details.Add($"{SummarizeEntities(room.Items, item => item.Name, item => item.Quantity)} glints with the promise of use or trouble");
+
+        return details.Count switch
+        {
+            0 => string.Empty,
+            1 => details[0] + ".",
+            _ => details[0] + ", while " + details[1] + "."
+        };
+    }
+
+    private static string BuildExitDetail(Room room)
+        => room.Exits.Count > 0
+            ? $"Only {HumanizeDirections(room.Exits.Keys)} offers a clean way onward."
+            : "No obvious road onward presents itself at first glance.";
+
+    private static string BuildAmbientMissSentence(Room room)
+    {
+        if (room.Npcs.Count > 0 && room.Items.Count > 0)
+        {
+            return $"What answers instead is the uneasy company of {SummarizeEntities(room.Npcs, npc => npc.Name)} and the cold gleam of {SummarizeEntities(room.Items, item => item.Name, item => item.Quantity)}.";
+        }
+
+        if (room.Npcs.Count > 0)
+            return $"What answers instead is the watchful presence of {SummarizeEntities(room.Npcs, npc => npc.Name)}.";
+
+        if (room.Items.Count > 0)
+            return $"What answers instead is the stubborn gleam of {SummarizeEntities(room.Items, item => item.Name, item => item.Quantity)}.";
+
+        return "Only the room's hush and whatever faint echo lives in its corners answer back.";
+    }
+
+    private static bool HasUsefulPersonality(string? personality)
+    {
+        if (string.IsNullOrWhiteSpace(personality))
+            return false;
+
+        var normalized = personality.Trim().ToLowerInvariant();
+        return !(normalized.Contains("test", StringComparison.Ordinal)
+            || normalized.Contains("fixture", StringComparison.Ordinal)
+            || normalized.Contains("placeholder", StringComparison.Ordinal)
+            || normalized.Contains("default", StringComparison.Ordinal)
+            || normalized.Contains("generic", StringComparison.Ordinal));
     }
 
     private static bool TryBuildLowStakesFreeFormResponse(PlayerCharacter player, Room room, string rawInput, out FreeFormResponse response)
@@ -547,7 +985,103 @@ public class NarratorService : INarratorService
             : entry.Narration;
 
         summary = StripRoomMetadata(summary);
-        return string.IsNullOrWhiteSpace(summary) ? "- [Room state updated]" : $"- {summary}";
+        if (string.IsNullOrWhiteSpace(summary))
+            return string.IsNullOrWhiteSpace(entry.RawInput) ? "- [Room state updated]" : $"- {entry.RawInput}";
+
+        return string.IsNullOrWhiteSpace(entry.RawInput)
+            ? $"- {summary}"
+            : $"- {entry.RawInput}: {summary}";
+    }
+
+    private static T? FindNamedEntity<T>(IEnumerable<T> entities, Func<T, string?> getName, string? rawQuery) where T : class
+    {
+        var query = NormalizeLookupText(rawQuery);
+        if (string.IsNullOrWhiteSpace(query))
+            return null;
+
+        return entities
+            .Select(entity => new { Entity = entity, Candidate = NormalizeLookupText(getName(entity)) })
+            .Where(entry => !string.IsNullOrWhiteSpace(entry.Candidate))
+            .Select(entry => new { entry.Entity, Score = GetNameMatchScore(query, entry.Candidate) })
+            .Where(entry => entry.Score > 0)
+            .OrderByDescending(entry => entry.Score)
+            .Select(entry => entry.Entity)
+            .FirstOrDefault();
+    }
+
+    private static bool TargetReferencesRoom(Room room, string? rawTarget)
+    {
+        var target = NormalizeLookupText(rawTarget);
+        if (string.IsNullOrWhiteSpace(target))
+            return false;
+
+        if (target is "room" or "around" or "here" or "surroundings")
+            return true;
+
+        var roomName = NormalizeLookupText(room.Name);
+        return target == roomName || Singularize(target) == Singularize(roomName);
+    }
+
+    private static int GetNameMatchScore(string query, string candidate)
+    {
+        if (string.IsNullOrWhiteSpace(candidate))
+            return 0;
+
+        var normalizedQuery = Singularize(query);
+        var normalizedCandidate = Singularize(candidate);
+
+        if (candidate == query || normalizedCandidate == normalizedQuery)
+            return 100;
+
+        if (candidate.StartsWith(query, StringComparison.Ordinal) || candidate.StartsWith(normalizedQuery, StringComparison.Ordinal))
+            return 90;
+
+        if (candidate.Contains(query, StringComparison.Ordinal) || candidate.Contains(normalizedQuery, StringComparison.Ordinal))
+            return 75;
+
+        if (query.StartsWith(candidate, StringComparison.Ordinal) || normalizedQuery.StartsWith(normalizedCandidate, StringComparison.Ordinal))
+            return 65;
+
+        if (query.Contains(candidate, StringComparison.Ordinal) || normalizedQuery.Contains(normalizedCandidate, StringComparison.Ordinal))
+            return 55;
+
+        return 0;
+    }
+
+    private static string NormalizeLookupText(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return string.Empty;
+
+        var normalizedCharacters = value
+            .Trim()
+            .ToLowerInvariant()
+            .Select(character => char.IsLetterOrDigit(character)
+                ? character
+                : character is '-' or '_' || char.IsWhiteSpace(character)
+                    ? ' '
+                    : '\0')
+            .Where(character => character != '\0')
+            .ToArray();
+
+        var normalized = new string(normalizedCharacters);
+        return string.Join(' ', normalized
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Where(word => word is not "the" and not "a" and not "an"));
+    }
+
+    private static string Singularize(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Length <= 3)
+            return value;
+
+        if (value.EndsWith("ies", StringComparison.Ordinal))
+            return value[..^3] + "y";
+
+        if (value.EndsWith('s') && !value.EndsWith("ss", StringComparison.Ordinal))
+            return value[..^1];
+
+        return value;
     }
 
     private static IEnumerable<InventoryItem> GetEquippedItems(PlayerCharacter player)

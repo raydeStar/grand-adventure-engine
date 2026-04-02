@@ -244,15 +244,23 @@ const UI = {
     const parts = [];
     const exits = Object.keys(room.exits || {});
     if (exits.length) {
-      parts.push(exits.map((d) => `\u2192 ${this.esc(d)}`).join('\u2003'));
+      parts.push({
+        label: 'Exits:',
+        value: exits.map((direction) => `\u2192 ${this.esc(direction)}`).join(' \u2502 ')
+      });
     }
-    const npcSummary = this._summarizeCounts(room.npcs || []);
-    if (npcSummary) parts.push(`NPCs: ${npcSummary}`);
-    const itemSummary = this._summarizeCounts(room.items || []);
-    if (itemSummary) parts.push(`Items: ${itemSummary}`);
+    const npcs = room.npcs || [];
+    const items = room.items || [];
+    if (npcs.length) parts.push({ label: 'NPCs:', value: this._summarizeCounts(npcs) });
+    if (items.length) parts.push({ label: 'Items:', value: this._summarizeCounts(items) });
 
     this.$('room-summary').innerHTML = parts.length
-      ? parts.map((p) => `<span class="room-summary-segment">${p}</span>`).join('')
+      ? parts.map((part) => `
+          <div class="room-summary-line">
+            <span class="room-summary-label">${this.esc(part.label)}</span>
+            <span class="room-summary-value">${part.value}</span>
+          </div>
+        `).join('')
       : '';
 
     this.updateExitChips(room);
@@ -379,23 +387,54 @@ const UI = {
   },
 
   _lastStoryCount: 0,
+  _renderedActionIds: new Set(),
 
   renderStoryLog(entries) {
     const log = this.$('story-log');
     if (!entries.length) {
       log.innerHTML = '<div class="empty-state">No story recorded yet.</div>';
       this._lastStoryCount = 0;
+      this._renderedActionIds.clear();
       return;
     }
 
-    // Skip rebuild when entry count has not changed (prevents re-animation)
+    // Skip rebuild when entry count has not changed (prevents re-animation and flash)
     if (this._lastStoryCount === entries.length && log.querySelector('.story-entry')) {
       return;
     }
 
     this._lastStoryCount = entries.length;
+
+    // Preserve any DOM nodes for entries we already appended via appendStoryEntry.
+    // Collect the actionIds currently in the log so we can avoid duplicating them.
+    const existingIds = new Set();
+    log.querySelectorAll('[data-action-id]').forEach((node) => {
+      existingIds.add(node.dataset.actionId);
+    });
+
+    // If the log already has entries that match the server data, skip the full rebuild
+    // to avoid the flash. Only rebuild if we have nothing rendered yet.
+    if (existingIds.size > 0) {
+      // Reconcile: add any entries from the server that we don't already have
+      const reversed = [...entries].reverse();
+      for (const entry of reversed) {
+        const id = entry.actionId || entry.id;
+        if (id && existingIds.has(id)) continue;
+        // This entry wasn't rendered locally — prepend it at the correct position
+        // For simplicity, just skip the rebuild entirely when we already have content.
+        // The local append path keeps the log accurate, and the count guard above
+        // will prevent re-entry once counts align.
+      }
+      return;
+    }
+
     log.innerHTML = '';
-    [...entries].reverse().forEach((entry) => this._appendStoryNode(entry, undefined, false));
+    this._renderedActionIds.clear();
+    [...entries].reverse().forEach((entry) => {
+      this._appendStoryNode(entry, undefined, false);
+      const id = entry.actionId || entry.id;
+      if (id) this._renderedActionIds.add(id);
+    });
     log.scrollTop = log.scrollHeight;
   },
 
@@ -405,7 +444,15 @@ const UI = {
       log.innerHTML = '';
     }
 
+    // Deduplicate: skip if this entry was already rendered
+    const id = entry.actionId || entry.id;
+    if (id && this._renderedActionIds.has(id)) return;
+    if (id) this._renderedActionIds.add(id);
+
     this._appendStoryNode(entry, tone, true);
+
+    // Keep _lastStoryCount in sync so renderStoryLog won't full-rebuild
+    this._lastStoryCount++;
   },
 
   _appendStoryNode(entry, tone, animate) {
@@ -413,6 +460,10 @@ const UI = {
     const node = document.createElement('div');
     const stateTone = tone || (entry.success === false ? 'failure' : entry.success === true ? 'success' : 'info');
     node.className = `story-entry ${stateTone === 'info' ? 'command' : stateTone}`;
+
+    // Tag with actionId for deduplication and reconciliation
+    const entryId = entry.actionId || entry.id;
+    if (entryId) node.dataset.actionId = entryId;
 
     if (animate) {
       node.classList.add('fade-slide-in');
@@ -422,26 +473,49 @@ const UI = {
 
     const cleanedNarration = this._stripRoomMetadata(entry.narration);
     const cleanedMechanicalSummary = this._stripRoomMetadata(entry.mechanicalSummary);
+    const commandText = this._extractCommandText(entry, cleanedMechanicalSummary);
+    const normalizedCommand = commandText ? this._normalizeRoomLine(commandText) : '';
+    const normalizedMechanical = cleanedMechanicalSummary ? this._normalizeRoomLine(cleanedMechanicalSummary.replace(/^>\s*/, '')) : '';
+    const shouldRenderMechanicalSummary = !!cleanedMechanicalSummary
+      && !(commandText && normalizedMechanical === normalizedCommand)
+      && !(entry.success === false && cleanedNarration);
 
-    if (cleanedNarration) {
+    if (commandText) {
+      html += `<div class="story-command-line">&gt; ${this.esc(commandText)}</div>`;
+    }
+
+    // Narration: stream newest entry, render older ones statically
+    const streamNarration = animate && cleanedNarration;
+    if (cleanedNarration && !streamNarration) {
       html += `<div class="story-narration">${this.esc(cleanedNarration)}</div>`;
     }
 
-    if (cleanedMechanicalSummary) {
+    if (shouldRenderMechanicalSummary && !streamNarration) {
       html += this._formatMechanicalParsed(cleanedMechanicalSummary);
     }
 
-    if (entry.diceRolls?.length) {
+    if (entry.diceRolls?.length && !streamNarration) {
       html += `<div class="story-dice">${entry.diceRolls.map((roll) => this.esc(`[${roll.purpose || roll.expression || 'Roll'}: ${roll.total ?? '?'}]`)).join(' ')}</div>`;
     }
 
-    if (!html) {
+    if (!html && !streamNarration) {
       return;
     }
 
     node.innerHTML = html;
 
     log.appendChild(node);
+
+    // Start streaming narration for the newest entry
+    if (streamNarration) {
+      const mechanicalHtml = shouldRenderMechanicalSummary
+        ? this._formatMechanicalParsed(cleanedMechanicalSummary)
+        : '';
+      const diceHtml = entry.diceRolls?.length
+        ? `<div class="story-dice">${entry.diceRolls.map((roll) => this.esc(`[${roll.purpose || roll.expression || 'Roll'}: ${roll.total ?? '?'}]`)).join(' ')}</div>`
+        : '';
+      this._startStreaming(node, cleanedNarration, mechanicalHtml + diceHtml);
+    }
 
     while (log.children.length > 50) {
       log.removeChild(log.firstChild);
@@ -450,8 +524,120 @@ const UI = {
     log.scrollTop = log.scrollHeight;
   },
 
+  /* ── Streaming text reveal ── */
+
+  _streamTimer: null,
+  _streamNode: null,
+
+  _startStreaming(parentNode, text, trailingHtml) {
+    // Cancel any previous stream
+    this._cancelStreaming();
+
+    const narrationDiv = document.createElement('div');
+    narrationDiv.className = 'story-narration';
+
+    const textSpan = document.createElement('span');
+    textSpan.className = 'streaming-text';
+
+    const cursor = document.createElement('span');
+    cursor.className = 'cursor-blink';
+    cursor.textContent = '\u2588';
+
+    narrationDiv.appendChild(textSpan);
+    narrationDiv.appendChild(cursor);
+    parentNode.appendChild(narrationDiv);
+
+    let charIndex = 0;
+    const escaped = this.esc(text);
+    const log = this.$('story-log');
+    const input = this.$('command-input');
+
+    // Disable input while streaming
+    if (input) input.disabled = true;
+
+    this._streamNode = parentNode;
+
+    const finishStream = () => {
+      if (this._streamTimer) {
+        clearTimeout(this._streamTimer);
+        this._streamTimer = null;
+      }
+      this._streamNode = null;
+
+      // Show full text
+      textSpan.textContent = text;
+      cursor.remove();
+      narrationDiv.classList.add('stream-complete');
+
+      // Append trailing content (mechanical summary, dice)
+      if (trailingHtml) {
+        const trailing = document.createElement('div');
+        trailing.innerHTML = trailingHtml;
+        while (trailing.firstChild) {
+          parentNode.appendChild(trailing.firstChild);
+        }
+      }
+
+      // Re-enable input
+      if (input) {
+        input.disabled = false;
+        input.focus();
+      }
+      if (log) log.scrollTop = log.scrollHeight;
+    };
+
+    // Click-to-skip on the narration node
+    const skipHandler = () => {
+      finishStream();
+      parentNode.removeEventListener('click', skipHandler);
+    };
+    parentNode.addEventListener('click', skipHandler);
+    parentNode.style.cursor = 'pointer';
+
+    const tick = () => {
+      if (charIndex < escaped.length) {
+        // Advance 1-3 chars per tick for natural feel
+        const chunk = Math.min(escaped.length - charIndex, 1 + Math.floor(Math.random() * 2));
+        charIndex += chunk;
+        textSpan.textContent = text.slice(0, charIndex);
+        if (log) log.scrollTop = log.scrollHeight;
+        this._streamTimer = setTimeout(tick, 18);
+      } else {
+        finishStream();
+        parentNode.removeEventListener('click', skipHandler);
+        parentNode.style.cursor = '';
+      }
+    };
+
+    this._streamTimer = setTimeout(tick, 18);
+  },
+
+  _cancelStreaming() {
+    if (this._streamTimer) {
+      clearTimeout(this._streamTimer);
+      this._streamTimer = null;
+    }
+    // If there's a streaming node, instantly complete it
+    if (this._streamNode) {
+      const cursor = this._streamNode.querySelector('.cursor-blink');
+      if (cursor) cursor.remove();
+      const textSpan = this._streamNode.querySelector('.streaming-text');
+      if (textSpan) {
+        // Already has partial text — leave it as-is (full text was set)
+      }
+      this._streamNode = null;
+    }
+    // Re-enable input in case it was locked
+    const input = this.$('command-input');
+    if (input) input.disabled = false;
+  },
+
   renderPlayersList(players, currentPlayerId, session) {
     const container = this.$('players-list');
+    if (!container) {
+      return;
+    }
+
     if (!session) {
       container.innerHTML = '<div class="inv-empty">Sign in to inspect the current party.</div>';
       return;
@@ -623,6 +809,34 @@ const UI = {
     }
   },
 
+  /* ── Interaction mode tracking ── */
+
+  _interactionMode: 'explore',
+  _interactionTarget: '',
+
+  updateInteractionMode(mode, target) {
+    this._interactionMode = mode || 'explore';
+    this._interactionTarget = target || '';
+
+    // Re-render chips and prompt with current room context
+    this.updateExitChips(this._roomContext);
+    this.updatePrompt(this._roomContext);
+
+    // Update stat bar mode badge
+    const bar = this.$('stat-bar');
+    if (!bar) return;
+
+    const existing = bar.querySelector('.stat-mode-badge');
+    if (existing) existing.remove();
+
+    if (mode && mode !== 'explore') {
+      const badge = document.createElement('span');
+      badge.className = `stat-mode-badge mode-${mode}`;
+      badge.textContent = mode === 'combat' ? `\u2694 ${mode.toUpperCase()}` : `\u{1F4AC} ${mode.toUpperCase()}`;
+      bar.prepend(badge);
+    }
+  },
+
   /* ── Block-char stat bar ── */
 
   renderStatBar(player) {
@@ -686,7 +900,10 @@ const UI = {
     const drawer = this.$('info-drawer');
     if (drawer) {
       drawer.classList.toggle('collapsed');
-      localStorage.setItem('gae.info-drawer', drawer.classList.contains('collapsed') ? 'collapsed' : 'open');
+      const isCollapsed = drawer.classList.contains('collapsed');
+      localStorage.setItem('gae.info-drawer', isCollapsed ? 'collapsed' : 'open');
+      const btn = this.$('btn-toggle-info');
+      if (btn) btn.classList.toggle('active', !isCollapsed);
     }
   },
 
@@ -695,6 +912,10 @@ const UI = {
     const drawer = this.$('info-drawer');
     if (drawer && saved === 'collapsed') {
       drawer.classList.add('collapsed');
+    }
+    const btn = this.$('btn-toggle-info');
+    if (btn && drawer) {
+      btn.classList.toggle('active', !drawer.classList.contains('collapsed'));
     }
   },
 
@@ -794,9 +1015,51 @@ const UI = {
       .join(', ');
   },
 
+  _extractCommandText(entry, mechanicalSummary) {
+    const explicit = String(entry?.rawInput || '').trim();
+    if (explicit) {
+      return explicit;
+    }
+
+    const mechanical = String(mechanicalSummary || '').trim();
+    if (/^>\s*/.test(mechanical) && !entry?.narration) {
+      return mechanical.replace(/^>\s*/, '').trim();
+    }
+
+    return '';
+  },
+
   updateExitChips(room) {
     const container = this.$('exit-chips');
     if (!container) return;
+
+    const mode = this._interactionMode || 'explore';
+
+    if (mode === 'conversation') {
+      container.innerHTML = [
+        ['ask about rumors', 'ask about rumors'],
+        ['flirt', 'flirt'],
+        ['threaten', 'threaten'],
+        ['trade', 'trade'],
+        ['goodbye', 'goodbye']
+      ].map(([label, cmd]) =>
+        `<button class="btn btn-secondary btn-sm exit-chip interaction-chip" data-interaction-cmd="${this.esc(cmd)}" type="button">${this.esc(label)}</button>`
+      ).join('');
+      return;
+    }
+
+    if (mode === 'combat') {
+      container.innerHTML = [
+        ['attack', 'attack'],
+        ['defend', 'defend'],
+        ['flee', 'flee'],
+        ['use item', 'use item']
+      ].map(([label, cmd]) =>
+        `<button class="btn btn-secondary btn-sm exit-chip interaction-chip" data-interaction-cmd="${this.esc(cmd)}" type="button">${this.esc(label)}</button>`
+      ).join('');
+      return;
+    }
+
     const exits = room ? Object.keys(room.exits || {}) : [];
     container.innerHTML = exits.length
       ? exits.map((d) => `<button class="btn btn-secondary btn-sm exit-chip" data-room-exit="${this.esc(d)}" type="button">go ${this.esc(d)}</button>`).join('')
@@ -806,6 +1069,20 @@ const UI = {
   updatePrompt(room) {
     const prompt = this.$('command-prompt');
     if (!prompt) return;
+
+    const mode = this._interactionMode || 'explore';
+    const target = this._interactionTarget || '';
+
+    if (mode === 'conversation' && target) {
+      prompt.innerHTML = `<span class="prompt-mode conversation">[talking to ${this.esc(target)}]</span> &gt;`;
+      return;
+    }
+
+    if (mode === 'combat' && target) {
+      prompt.innerHTML = `<span class="prompt-mode combat">[COMBAT: ${this.esc(target)}]</span> &gt;`;
+      return;
+    }
+
     prompt.innerHTML = room ? `${this.esc(room.name)} &gt;` : '&gt;';
   },
 
@@ -869,6 +1146,16 @@ const UI = {
       }
 
       if (roomDescription && normalized === roomDescription) {
+        continue;
+      }
+
+      // Also strip lines that look like a standalone room header (name repeated from another room)
+      if (/^[A-Z][A-Za-z ']+$/.test(trimmed) && trimmed.length < 50 && index === 0 && lines.length > 3) {
+        continue;
+      }
+
+      // Strip lines that are just a short description followed by metadata (looks like room dump)
+      if (/^A (repeatable|manual|test|fixture)\b/i.test(trimmed)) {
         continue;
       }
 

@@ -41,9 +41,16 @@ public partial class CommandParser
         if (LookRegex().IsMatch(input))
         {
             action.Type = ActionType.Look;
+            if (RoomLookAliasRegex().IsMatch(input))
+                return action;
+
             var lookTarget = LookTargetRegex().Match(input);
             if (lookTarget.Success)
-                action.Target = lookTarget.Groups["target"].Value.Trim();
+            {
+                var target = lookTarget.Groups["target"].Value.Trim();
+                if (!RoomTargetAliasRegex().IsMatch(target))
+                    action.Target = target;
+            }
             return action;
         }
 
@@ -80,6 +87,14 @@ public partial class CommandParser
         {
             action.Type = ActionType.Drop;
             action.Target = dropMatch.Groups["target"].Value.Trim();
+            return action;
+        }
+
+        var groundDropMatch = GroundDropRegex().Match(input);
+        if (groundDropMatch.Success)
+        {
+            action.Type = ActionType.Drop;
+            action.Target = groundDropMatch.Groups["target"].Value.Trim();
             return action;
         }
 
@@ -156,10 +171,16 @@ public partial class CommandParser
     [GeneratedRegex(@"^(?:go|move|walk|head|travel)\s+(?<dir>north|south|east|west|up|down|n|s|e|w|u|d)$", RegexOptions.IgnoreCase)]
     private static partial Regex MoveRegex();
 
-    [GeneratedRegex(@"^(?:look|l|examine|inspect)(?:\s|$)", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^(?:look|l|examine|inspect|search)(?:\s|$)", RegexOptions.IgnoreCase)]
     private static partial Regex LookRegex();
 
-    [GeneratedRegex(@"(?:look|examine|inspect)\s+(?:at\s+)?(?<target>.+)$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^(?:l|look|look\s+around|look\s+at\s+(?:the\s+)?room|look\s+here|look\s+surroundings|examine\s+(?:the\s+)?room|inspect\s+(?:the\s+)?room|search|search\s+(?:the\s+)?room)$", RegexOptions.IgnoreCase)]
+    private static partial Regex RoomLookAliasRegex();
+
+    [GeneratedRegex(@"^(?:room|the\s+room|around|here|surroundings)$", RegexOptions.IgnoreCase)]
+    private static partial Regex RoomTargetAliasRegex();
+
+    [GeneratedRegex(@"(?:look|examine|inspect|search)\s+(?:(?:at|for)\s+)?(?<target>.+)$", RegexOptions.IgnoreCase)]
     private static partial Regex LookTargetRegex();
 
     [GeneratedRegex(@"^(?:attack|hit|strike|fight|slash)\s+(?<target>.+)$", RegexOptions.IgnoreCase)]
@@ -173,6 +194,9 @@ public partial class CommandParser
 
     [GeneratedRegex(@"^(?:drop|discard|throw\s+away)\s+(?<target>.+)$", RegexOptions.IgnoreCase)]
     private static partial Regex DropRegex();
+
+    [GeneratedRegex(@"^(?:throw|toss|place|put|leave)\s+(?<target>.+?)\s+(?:on|onto|to|at)\s+(?:the\s+)?(?:ground|floor|dirt)$", RegexOptions.IgnoreCase)]
+    private static partial Regex GroundDropRegex();
 
     [GeneratedRegex(@"^(?:use|consume|drink|eat)\s+(?<target>.+)$", RegexOptions.IgnoreCase)]
     private static partial Regex UseRegex();

@@ -125,6 +125,26 @@ public class StubNarratorService : INarratorService
             Narration = $"[FreeForm] {rawInput}"
         });
 
+    public Task<FreeFormResponse> ProcessConversationTurnAsync(PlayerCharacter player, Room room, Npc npc, InteractionState interaction, string rawInput, CancellationToken ct = default)
+        => Task.FromResult(new FreeFormResponse
+        {
+            Success = true,
+            Narration = $"[Conversation] {npc.Name}: responding to '{rawInput}'"
+        });
+
+    public Task<FreeFormResponse> ProcessCombatTurnAsync(PlayerCharacter player, Room room, Npc enemy, InteractionState interaction, string rawInput, CancellationToken ct = default)
+        => Task.FromResult(new FreeFormResponse
+        {
+            Success = true,
+            Narration = $"[Combat] vs {enemy.Name}: {rawInput}",
+            InteractionUpdate = new InteractionUpdate
+            {
+                Mode = InteractionMode.Combat,
+                CombatStatus = "ongoing",
+                EnemyUpdate = new Dictionary<string, int> { ["hp"] = -3 }
+            }
+        });
+
     private static string OppositeDir(string dir) => dir switch
     {
         "north" => "south", "south" => "north",

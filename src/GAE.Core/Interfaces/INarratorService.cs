@@ -11,4 +11,6 @@ public interface INarratorService
     Task<string> GenerateBackstoryAsync(CharacterConcept concept, CancellationToken ct = default);
     Task<string?> ParseIntentAsync(string rawInput, CancellationToken ct = default);
     Task<FreeFormResponse> ProcessFreeFormAsync(PlayerCharacter player, Room room, string rawInput, IReadOnlyList<StoryEntry> recentStory, CancellationToken ct = default);
+    Task<FreeFormResponse> ProcessConversationTurnAsync(PlayerCharacter player, Room room, Npc npc, InteractionState interaction, string rawInput, CancellationToken ct = default);
+    Task<FreeFormResponse> ProcessCombatTurnAsync(PlayerCharacter player, Room room, Npc enemy, InteractionState interaction, string rawInput, CancellationToken ct = default);
 }
