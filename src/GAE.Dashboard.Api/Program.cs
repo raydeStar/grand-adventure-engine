@@ -77,11 +77,18 @@ builder.Services.AddSingleton<IGameEngine, GameEngine>();
 // Narrator — LM Studio HTTP client
 var lmStudioEndpoint = builder.Configuration["LmStudio:Endpoint"] ?? "http://localhost:1234";
 var lmStudioModel = builder.Configuration["LmStudio:Model"] ?? "default";
-builder.Services.AddHttpClient<INarratorService, NarratorService>(client =>
+builder.Services.AddHttpClient("LmStudio", client =>
 {
     client.BaseAddress = new Uri(lmStudioEndpoint + "/");
     client.Timeout = TimeSpan.FromSeconds(30);
-}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler());
+});
+builder.Services.AddSingleton<INarratorService>(sp =>
+{
+    var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("LmStudio");
+    var logger = sp.GetRequiredService<ILogger<NarratorService>>();
+    var knowledge = sp.GetRequiredService<WorldKnowledgeBuilder>();
+    return new NarratorService(httpClient, logger, lmStudioModel, knowledge);
+});
 builder.Services.AddSingleton<WorldKnowledgeBuilder>();
 
 // Wiki.js — GraphQL client
