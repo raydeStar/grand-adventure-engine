@@ -316,13 +316,7 @@ public class NarratorService : INarratorService
             Currencies:
             - Gold: {player.Gold}
             Attributes:
-            - STR: {player.Str} ({player.GetModifier("str"):+0;-0})
-            - DEX: {player.Dex} ({player.GetModifier("dex"):+0;-0})
-            - CON: {player.Con} ({player.GetModifier("con"):+0;-0})
-            - INT: {player.Int} ({player.GetModifier("int"):+0;-0})
-            - WIS: {player.Wis} ({player.GetModifier("wis"):+0;-0})
-            - CHA: {player.Cha} ({player.GetModifier("cha"):+0;-0})
-            - LUCK: {player.Luck} ({player.GetModifier("luck"):+0;-0})
+            {player.FormatStatsDetailed("\n")}
             Equipment Slots:
             - Weapon / Armor / Shield / Helmet
             Equipped Items: {(string.IsNullOrWhiteSpace(equipmentList) ? "None" : equipmentList)}
@@ -330,7 +324,7 @@ public class NarratorService : INarratorService
 
             Player: {player.Name} (Lv.{player.Level} {player.Race} {player.Class})
             HP: {player.Hp}/{player.MaxHp} | MP: {player.Mp}/{player.MaxMp} | Gold: {player.Gold}
-            STR:{player.Str} DEX:{player.Dex} CON:{player.Con} INT:{player.Int} WIS:{player.Wis} CHA:{player.Cha}
+            {player.FormatStatsCompact()}
             Inventory: {inventoryList}
             Location: {room.Name} — {room.Description}
             Room NPCs: {npcList}
@@ -485,7 +479,7 @@ public class NarratorService : INarratorService
         var userPrompt = $$"""
             Player: {{player.Name}} (Lv.{{player.Level}} {{player.Race}} {{player.Class}})
             HP: {{player.Hp}}/{{player.MaxHp}} | MP: {{player.Mp}}/{{player.MaxMp}}
-            STR:{{player.Str}} DEX:{{player.Dex}} CON:{{player.Con}} INT:{{player.Int}} WIS:{{player.Wis}} CHA:{{player.Cha}}
+            {{player.FormatStatsCompact()}}
             Weapon: {{player.Equipment.Weapon?.Name ?? "Fists"}} ({{player.Equipment.Weapon?.DamageDice ?? "1d4"}})
             Location: {{room.Name}}
             Combat turn {{interaction.TurnCount + 1}} vs {{enemy.Name}} (HP: {{enemy.Hp ?? 0}}/{{enemy.MaxHp ?? 0}}, Defense: {{enemy.Defense ?? 10}})

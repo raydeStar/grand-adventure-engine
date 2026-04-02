@@ -18,14 +18,21 @@ public class PlayerCharacter
     public int Xp { get; set; }
     public int Level { get; set; } = 1;
 
-    // Attributes
-    public int Str { get; set; } = 10;
-    public int Dex { get; set; } = 10;
-    public int Con { get; set; } = 10;
-    public int Int { get; set; } = 10;
-    public int Wis { get; set; } = 10;
-    public int Cha { get; set; } = 10;
-    public int Luck { get; set; } = 10;
+    // Data-driven attributes — source of truth
+    public Dictionary<string, int> Stats { get; set; } = new()
+    {
+        ["str"] = 10, ["dex"] = 10, ["con"] = 10,
+        ["int"] = 10, ["wis"] = 10, ["cha"] = 10, ["luck"] = 10
+    };
+
+    // Backward-compat computed properties — delegate to Stats dictionary
+    public int Str { get => Stats.GetValueOrDefault("str", 10); set => Stats["str"] = value; }
+    public int Dex { get => Stats.GetValueOrDefault("dex", 10); set => Stats["dex"] = value; }
+    public int Con { get => Stats.GetValueOrDefault("con", 10); set => Stats["con"] = value; }
+    public int Int { get => Stats.GetValueOrDefault("int", 10); set => Stats["int"] = value; }
+    public int Wis { get => Stats.GetValueOrDefault("wis", 10); set => Stats["wis"] = value; }
+    public int Cha { get => Stats.GetValueOrDefault("cha", 10); set => Stats["cha"] = value; }
+    public int Luck { get => Stats.GetValueOrDefault("luck", 10); set => Stats["luck"] = value; }
 
     // Interaction state
     public InteractionState Interaction { get; set; } = new();
@@ -39,22 +46,26 @@ public class PlayerCharacter
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset LastActiveAt { get; set; } = DateTimeOffset.UtcNow;
 
-    public int GetStatModifier(int statValue) => (statValue - 10) / 2;
+    public static int GetStatModifier(int statValue) => (statValue - 10) / 2;
 
-    public int GetModifier(string stat) => stat.ToLowerInvariant() switch
-    {
-        "str" => GetStatModifier(Str),
-        "dex" => GetStatModifier(Dex),
-        "con" => GetStatModifier(Con),
-        "int" => GetStatModifier(Int),
-        "wis" => GetStatModifier(Wis),
-        "cha" => GetStatModifier(Cha),
-        "luck" => GetStatModifier(Luck),
-        _ => 0
-    };
+    public int GetModifier(string stat) =>
+        Stats.TryGetValue(stat.ToLowerInvariant(), out var value) ? GetStatModifier(value) : 0;
+
+    /// <summary>Returns attribute stats (non-resource) for dynamic display.</summary>
+    public IEnumerable<KeyValuePair<string, int>> GetAttributeStats() =>
+        Stats.Where(kv => kv.Key is not ("hp" or "mp"));
+
+    /// <summary>Formats stats as a compact display string for prompts.</summary>
+    public string FormatStatsCompact() =>
+        string.Join(" ", GetAttributeStats().Select(kv => $"{kv.Key.ToUpperInvariant()}:{kv.Value}"));
+
+    /// <summary>Formats stats with modifiers for detailed display.</summary>
+    public string FormatStatsDetailed(string separator = " | ") =>
+        string.Join(separator, GetAttributeStats().Select(kv =>
+            $"{kv.Key.ToUpperInvariant()}: {kv.Value} ({GetStatModifier(kv.Value):+0;-0})"));
 
     public bool IsAlive => Hp > 0;
     public bool IsConscious => Hp > 0;
 
-    public int Defense => 10 + GetStatModifier(Dex) + (Equipment.Armor?.ArmorValue ?? 0);
+    public int Defense => 10 + GetModifier("dex") + (Equipment.Armor?.ArmorValue ?? 0);
 }

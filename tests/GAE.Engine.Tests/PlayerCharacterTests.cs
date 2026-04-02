@@ -14,8 +14,7 @@ public class PlayerCharacterTests
     [InlineData(1, -4)]   // edge: minimum stat 1 => (1-10)/2 = -4 (integer division floors toward zero in C#)
     public void GetStatModifier_ReturnsCorrectValue(int statValue, int expected)
     {
-        var player = new PlayerCharacter();
-        Assert.Equal(expected, player.GetStatModifier(statValue));
+        Assert.Equal(expected, PlayerCharacter.GetStatModifier(statValue));
     }
 
     [Fact]

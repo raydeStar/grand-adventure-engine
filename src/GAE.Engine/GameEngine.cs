@@ -146,18 +146,19 @@ public class GameEngine : IGameEngine
 
     public async Task<PlayerCharacter> CreateCharacterFromConceptAsync(CharacterConcept concept, CancellationToken ct = default)
     {
-        var stats = concept.StatMethod switch
+        // Derive attribute stat keys from rules (preserving YAML order)
+        var attributeKeys = _rules.Stats
+            .Where(kv => kv.Value.Category == "attribute")
+            .Select(kv => kv.Key)
+            .ToList();
+
+        var statValues = concept.StatMethod switch
         {
             StatAllocationMethod.Roll4d6DropLowest => _dice.RollStatArray(),
             StatAllocationMethod.StandardArray => [.. _rules.CharacterCreation.StandardArray],
-            StatAllocationMethod.FlatValue => Enumerable.Repeat(_rules.CharacterCreation.FlatValue, 6).ToArray(),
+            StatAllocationMethod.FlatValue => Enumerable.Repeat(_rules.CharacterCreation.FlatValue, attributeKeys.Count).ToArray(),
             StatAllocationMethod.Manual when concept.ManualStats is not null =>
-                [concept.ManualStats.GetValueOrDefault("str", 10),
-                 concept.ManualStats.GetValueOrDefault("dex", 10),
-                 concept.ManualStats.GetValueOrDefault("con", 10),
-                 concept.ManualStats.GetValueOrDefault("int", 10),
-                 concept.ManualStats.GetValueOrDefault("wis", 10),
-                 concept.ManualStats.GetValueOrDefault("cha", 10)],
+                attributeKeys.Select(k => concept.ManualStats.GetValueOrDefault(k, 10)).ToArray(),
             _ => [.. _rules.CharacterCreation.StandardArray]
         };
 
@@ -168,22 +169,20 @@ public class GameEngine : IGameEngine
             Race = concept.Race,
             Class = concept.Class,
             Backstory = concept.Backstory,
-            Str = stats[0],
-            Dex = stats[1],
-            Con = stats[2],
-            Int = stats[3],
-            Wis = stats[4],
-            Cha = stats.Length > 5 ? stats[5] : 10,
             Gold = _rules.CharacterCreation.StartingGold,
             CurrentRoomId = "spawn"
         };
 
+        // Populate stats dictionary from rules-defined attributes
+        for (int i = 0; i < attributeKeys.Count && i < statValues.Length; i++)
+            player.Stats[attributeKeys[i]] = statValues[i];
+
         // Calculate HP/MP from rules
         int hpBase = _rules.Stats.GetValueOrDefault("hp")?.Base ?? 20;
         int mpBase = _rules.Stats.GetValueOrDefault("mp")?.Base ?? 10;
-        player.MaxHp = hpBase + player.GetStatModifier(player.Con);
+        player.MaxHp = hpBase + PlayerCharacter.GetStatModifier(player.Con);
         player.Hp = player.MaxHp;
-        player.MaxMp = mpBase + player.GetStatModifier(player.Int);
+        player.MaxMp = mpBase + PlayerCharacter.GetStatModifier(player.Int);
         player.Mp = player.MaxMp;
 
         // Generate backstory if narrator is available
@@ -579,12 +578,12 @@ public class GameEngine : IGameEngine
     private ActionResult ProcessShortRest(PlayerCharacter player, GameAction action)
     {
         var hpRoll = _dice.Roll("1d8", "Short rest HP recovery");
-        int hpRecovery = Math.Max(1, hpRoll.Total + player.GetStatModifier(player.Con));
+        int hpRecovery = Math.Max(1, hpRoll.Total + PlayerCharacter.GetStatModifier(player.Con));
         int oldHp = player.Hp;
         player.Hp = Math.Min(player.MaxHp, player.Hp + hpRecovery);
 
         var mpRoll = _dice.Roll("1d4", "Short rest MP recovery");
-        int mpRecovery = Math.Max(1, mpRoll.Total + player.GetStatModifier(player.Int));
+        int mpRecovery = Math.Max(1, mpRoll.Total + PlayerCharacter.GetStatModifier(player.Int));
         int oldMp = player.Mp;
         player.Mp = Math.Min(player.MaxMp, player.Mp + mpRecovery);
 
@@ -655,9 +654,7 @@ public class GameEngine : IGameEngine
             MechanicalSummary = $"""
                 **{player.Name}** — Level {player.Level} {player.Race} {player.Class}
                 HP: {player.Hp}/{player.MaxHp} | MP: {player.Mp}/{player.MaxMp} | Gold: {player.Gold} | XP: {player.Xp}
-                STR: {player.Str} ({player.GetModifier("str"):+0;-0}) | DEX: {player.Dex} ({player.GetModifier("dex"):+0;-0}) | CON: {player.Con} ({player.GetModifier("con"):+0;-0})
-                INT: {player.Int} ({player.GetModifier("int"):+0;-0}) | WIS: {player.Wis} ({player.GetModifier("wis"):+0;-0}) | CHA: {player.Cha} ({player.GetModifier("cha"):+0;-0})
-                LCK: {player.Luck} ({player.GetModifier("luck"):+0;-0}) | Defense: {player.Defense}
+                {player.FormatStatsDetailed(" | ")} | Defense: {player.Defense}
                 """
         };
     }

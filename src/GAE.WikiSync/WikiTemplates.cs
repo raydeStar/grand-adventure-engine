@@ -31,13 +31,7 @@ public static class WikiTemplates
             ## Stats
             | Stat | Value | Modifier |
             |------|-------|----------|
-            | STR | {player.Str} | {player.GetModifier("str"):+0;-0} |
-            | DEX | {player.Dex} | {player.GetModifier("dex"):+0;-0} |
-            | CON | {player.Con} | {player.GetModifier("con"):+0;-0} |
-            | INT | {player.Int} | {player.GetModifier("int"):+0;-0} |
-            | WIS | {player.Wis} | {player.GetModifier("wis"):+0;-0} |
-            | CHA | {player.Cha} | {player.GetModifier("cha"):+0;-0} |
-            | LCK | {player.Luck} | {player.GetModifier("luck"):+0;-0} |
+            {FormatStatsTable(player)}
 
             ## Resources
             - **HP:** {player.Hp}/{player.MaxHp}
@@ -167,4 +161,8 @@ public static class WikiTemplates
             {entry.Narration}
             """;
     }
+
+    private static string FormatStatsTable(PlayerCharacter player) =>
+        string.Join("\n", player.GetAttributeStats().Select(kv =>
+            $"| {kv.Key.ToUpperInvariant()} | {kv.Value} | {PlayerCharacter.GetStatModifier(kv.Value):+0;-0} |"));
 }
