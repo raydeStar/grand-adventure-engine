@@ -1119,6 +1119,125 @@ textarea { resize: vertical; min-height: 80px; }
 
 /* ───────────────────────── ADMIN WORKSPACE ───────────────────────── */
 
+#workspace-admin {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* ── Admin toolbar / tab bar ── */
+
+.admin-toolbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0 0.6rem;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  min-height: 36px;
+}
+
+.admin-toolbar .admin-tab {
+  position: relative;
+  border: none;
+  background: none;
+  color: var(--dim);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.55rem 0.75rem;
+  cursor: pointer;
+  transition: color 0.12s, background 0.12s;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.admin-toolbar .admin-tab:hover {
+  color: var(--text);
+  background: var(--accent-bg);
+}
+
+.admin-toolbar .admin-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  text-shadow: 0 0 6px var(--glow);
+}
+
+.admin-toolbar-spacer {
+  flex: 1;
+}
+
+.admin-toolbar .btn {
+  margin-left: 0.4rem;
+}
+
+/* ── Tab content panels ── */
+
+.admin-tab-content {
+  display: none;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.admin-tab-content.active {
+  display: block;
+}
+
+.admin-tab-body {
+  padding: 0.8rem;
+  display: grid;
+  gap: 0.8rem;
+}
+
+.admin-tab-body > .panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 0.6rem 0.7rem;
+}
+
+.admin-tab-body > .panel h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--dim);
+  margin-bottom: 0.4rem;
+}
+
+.panel-hint {
+  font-size: 12px;
+  color: var(--dim);
+  margin-bottom: 0.6rem;
+  line-height: 1.5;
+}
+
+/* ── Overview tab grid ── */
+
+.admin-overview-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8rem;
+}
+
+.admin-overview-grid > .panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 0.6rem 0.7rem;
+}
+
+.admin-overview-grid > .panel h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--dim);
+  margin-bottom: 0.4rem;
+}
+
+/* Legacy compat */
 .admin-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1305,6 +1424,7 @@ textarea { resize: vertical; min-height: 80px; }
 @media (max-width: 1100px) {
   .portal-grid { grid-template-columns: 1fr; }
   .admin-grid { grid-template-columns: 1fr; }
+  .admin-overview-grid { grid-template-columns: 1fr; }
   .admin-character-panel-grid { grid-template-columns: 1fr 1fr; }
   .admin-character-panel .char-panel,
   .admin-character-panel .status-panel { grid-column: 1 / -1; }
@@ -1320,8 +1440,11 @@ textarea { resize: vertical; min-height: 80px; }
     grid-template-columns: 1fr;
   }
   .admin-character-panel-grid { grid-template-columns: 1fr; }
+  .admin-overview-grid { grid-template-columns: 1fr; }
   .summary-cards, .system-health { grid-template-columns: 1fr 1fr; }
   .stat-bar { font-size: 10px; }
   .room-panel-shell { grid-template-columns: 1fr; }
   .info-drawer { display: none !important; }
+  .admin-toolbar { flex-wrap: wrap; gap: 0; padding: 0 0.3rem; }
+  .admin-toolbar .admin-tab { padding: 0.4rem 0.5rem; font-size: 10px; }
 }

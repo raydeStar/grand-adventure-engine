@@ -127,6 +127,14 @@
       button.addEventListener('click', () => void runScenario(button.dataset.scenario || ''));
     });
 
+    // Admin tab switching
+    document.querySelectorAll('[data-admin-tab]').forEach((tab) => {
+      tab.addEventListener('click', () => switchAdminTab(tab.dataset.adminTab));
+    });
+    // Restore persisted admin tab
+    const savedTab = localStorage.getItem('gae.admin.tab');
+    if (savedTab) switchAdminTab(savedTab);
+
     UI.$('existing-players').addEventListener('click', handlePortalPlayerClick);
     UI.$('admin-players-table').addEventListener('click', handleAdminRegistryClick);
 
@@ -264,6 +272,16 @@
     if (mode === 'user' && !state.currentPlayerId) {
       UI.renderNoActivePlayer(true);
     }
+  }
+
+  function switchAdminTab(tabName) {
+    document.querySelectorAll('[data-admin-tab]').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.adminTab === tabName);
+    });
+    document.querySelectorAll('[data-admin-panel]').forEach((panel) => {
+      panel.classList.toggle('active', panel.dataset.adminPanel === tabName);
+    });
+    localStorage.setItem('gae.admin.tab', tabName);
   }
 
   async function refreshAll() {
