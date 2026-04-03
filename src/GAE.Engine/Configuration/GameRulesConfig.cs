@@ -50,6 +50,14 @@ public class SkillCheckConfig
     public string Formula { get; set; } = "d20 + {stat_mod}";
     public Dictionary<string, int> DifficultyClasses { get; set; } = new();
     public Dictionary<string, string> StatMapping { get; set; } = new();
+    public Dictionary<string, SocialSkillConfig> SocialSkills { get; set; } = new();
+}
+
+public class SocialSkillConfig
+{
+    public string Stat { get; set; } = "cha";
+    public string? AltStat { get; set; }
+    public List<string> Keywords { get; set; } = [];
 }
 
 public class RestConfig

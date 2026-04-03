@@ -1270,7 +1270,17 @@ public class GameEngine : IGameEngine
 
         // Normal conversation turn — everything the player says goes to the AI as dialogue
         {
-            var freeForm = await _narrator.ProcessConversationTurnAsync(player, room, npc, player.Interaction, action.RawInput, ct);
+            // Check for social skill intent and roll if detected
+            var socialCheck = TryRollSocialCheck(player, npc, action.RawInput);
+            var promptInput = action.RawInput;
+            if (socialCheck is not null)
+            {
+                // Prepend the roll result so the LLM knows the mechanical outcome
+                promptInput = $"{action.RawInput}\n[Social check: {socialCheck.SkillName} ({socialCheck.StatUsed.ToUpperInvariant()} {socialCheck.Roll.Modifier:+0;-0}) → rolled {socialCheck.Roll.Total} vs DC {socialCheck.DC} = {(socialCheck.Succeeded ? "SUCCESS" : "FAILURE")}]";
+                player.Interaction.AppendContext($"[{socialCheck.SkillName} check: {socialCheck.Roll.Total} vs DC {socialCheck.DC} → {(socialCheck.Succeeded ? "success" : "failure")}]");
+            }
+
+            var freeForm = await _narrator.ProcessConversationTurnAsync(player, room, npc, player.Interaction, promptInput, ct);
             ApplyInteractionUpdate(player, room, npc, freeForm);
 
             if (freeForm.InteractionUpdate?.Mode == InteractionMode.Explore)
@@ -1285,13 +1295,18 @@ public class GameEngine : IGameEngine
             await _stateManager.SavePlayerAsync(player, ct);
             await _stateManager.SaveRoomAsync(room, ct);
 
+            var mechanicalLine = $"[Conversation with {npc.Name}, turn {player.Interaction.TurnCount}]";
+            if (socialCheck is not null)
+                mechanicalLine = $"[{socialCheck.SkillName} check: {socialCheck.Roll.Total} vs DC {socialCheck.DC} → {(socialCheck.Succeeded ? "SUCCESS" : "FAILURE")}]";
+
             var result = new ActionResult
             {
                 ActionId = action.Id,
                 RawInput = action.RawInput,
                 Success = freeForm.Success,
-                MechanicalSummary = $"[Conversation with {npc.Name}, turn {player.Interaction.TurnCount}]",
+                MechanicalSummary = mechanicalLine,
                 Narration = freeForm.Narration,
+                DiceRolls = socialCheck is not null ? [socialCheck.Roll] : [],
                 InteractionUpdate = freeForm.InteractionUpdate ?? new InteractionUpdate
                 {
                     Mode = player.Interaction.Mode,
@@ -1528,6 +1543,69 @@ public class GameEngine : IGameEngine
             MechanicalSummary = result.MechanicalSummary,
             Narration = result.Narration ?? result.MechanicalSummary
         }, ct);
+    }
+
+    // --- Social skill checks ---
+
+    private record SocialCheckResult(string SkillName, string StatUsed, DiceRoll Roll, int DC, bool Succeeded);
+
+    /// <summary>
+    /// Scans the player's raw input for social intent keywords. If detected, rolls d20 + stat mod
+    /// against a DC derived from the NPC's disposition intensity (friendlier = easier).
+    /// Returns null if no social intent was detected.
+    /// </summary>
+    private SocialCheckResult? TryRollSocialCheck(PlayerCharacter player, Npc npc, string rawInput)
+    {
+        var input = rawInput.ToLowerInvariant();
+        foreach (var (skillName, config) in _rules.SkillChecks.SocialSkills)
+        {
+            if (!config.Keywords.Any(kw => input.Contains(kw, StringComparison.OrdinalIgnoreCase)))
+                continue;
+
+            // Pick the better stat if an alt is available (e.g. intimidate: STR or CHA)
+            int statMod = player.GetModifier(config.Stat);
+            string statUsed = config.Stat;
+            if (config.AltStat is not null)
+            {
+                int altMod = player.GetModifier(config.AltStat);
+                if (altMod > statMod)
+                {
+                    statMod = altMod;
+                    statUsed = config.AltStat;
+                }
+            }
+
+            var roll = _dice.RollSkillCheck(skillName, statMod);
+
+            // DC based on NPC disposition: friendlier NPCs are easier to persuade
+            // Intensity 0 (hostile) → DC hard(16), Intensity 40 (neutral) → DC medium(12),
+            // Intensity 80+ (devoted) → DC easy(8)
+            int dc = npc.DispositionState.Intensity switch
+            {
+                >= 70 => _rules.SkillChecks.DifficultyClasses.GetValueOrDefault("easy", 8),
+                >= 50 => _rules.SkillChecks.DifficultyClasses.GetValueOrDefault("medium", 12) - 2,
+                >= 30 => _rules.SkillChecks.DifficultyClasses.GetValueOrDefault("medium", 12),
+                >= 15 => _rules.SkillChecks.DifficultyClasses.GetValueOrDefault("hard", 16),
+                _ => _rules.SkillChecks.DifficultyClasses.GetValueOrDefault("very_hard", 20)
+            };
+
+            // Memory flags can shift DC: an insulted NPC is harder to persuade
+            if (npc.DispositionState.MemoryFlags.Any(f => f.Contains("insult", StringComparison.OrdinalIgnoreCase)))
+                dc += 3;
+            if (npc.DispositionState.MemoryFlags.Any(f => f.Contains("romance", StringComparison.OrdinalIgnoreCase)))
+                dc -= 4;
+            if (npc.DispositionState.MemoryFlags.Any(f => f.Contains("friendship", StringComparison.OrdinalIgnoreCase)))
+                dc -= 2;
+            if (npc.DispositionState.MemoryFlags.Any(f => f.Contains("betrayal", StringComparison.OrdinalIgnoreCase)))
+                dc += 5;
+
+            dc = Math.Clamp(dc, 3, 25); // floor/ceiling so nat 20 almost always works
+
+            bool succeeded = roll.IsCritical || (!roll.IsFumble && roll.Total >= dc);
+            return new SocialCheckResult(skillName, statUsed, roll, dc, succeeded);
+        }
+
+        return null;
     }
 
     private static string ShiftDisposition(string current, int direction)

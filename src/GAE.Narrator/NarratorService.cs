@@ -505,6 +505,19 @@ public class NarratorService : INarratorService
             - CHA matters. A high-CHA player should find social interactions easier, a low-CHA player should
               get worse reactions. Factor the player's CHA into how receptive the NPC is.
 
+            SOCIAL SKILL CHECKS:
+            When the player's input includes a [Social check: ...] line, the ENGINE has already rolled dice.
+            You MUST honor the result:
+            - If the check says "SUCCESS", the social attempt WORKS. Narrate the NPC being convinced,
+              charmed, intimidated, fooled, etc. — but in character. Even a success can be grudging.
+            - If the check says "FAILURE", the social attempt FAILS. The NPC sees through the bluff,
+              isn't impressed by the threat, or laughs off the flirtation. Make failures entertaining.
+            - A natural 20 is a spectacular success — the NPC is deeply affected.
+            - A natural 1 is a spectacular failure — the attempt backfires hilariously.
+            - Adjust your disposition update to match: successful charm → disposition improves,
+              failed intimidation → NPC becomes annoyed or hostile.
+            If there is NO [Social check:] line, narrate freely based on context.
+
             DISPOSITION SYSTEM:
             The NPC has a mood that shifts during conversation. Current state:
             - Emotion: {{npc.DispositionState.Emotion}} (intensity: {{npc.DispositionState.Intensity}}/100, baseline: {{npc.DispositionState.Baseline}})
