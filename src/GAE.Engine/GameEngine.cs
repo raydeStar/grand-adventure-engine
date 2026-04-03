@@ -832,7 +832,8 @@ public class GameEngine : IGameEngine
     {
         result = null!;
         var normalizedTarget = NormalizeLookupText(rawTarget);
-        if (normalizedTarget is not "gold" and not "coin" and not "coins" and not "gold coin" and not "gold coins")
+        if (normalizedTarget is not "gold" and not "coin" and not "coins" and not "gold coin" and not "gold coins"
+            and not "gp" and not "gold piece" and not "gold pieces" and not "money")
             return false;
 
         var quantityToDrop = requestedQuantity ?? 1;
