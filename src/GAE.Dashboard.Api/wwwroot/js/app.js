@@ -22,6 +22,14 @@
     interactionTarget: ''
   };
 
+  // C# InteractionMode enum serializes as int — map to lowercase strings
+  const INTERACTION_MODES = ['explore', 'conversation', 'combat', 'trading', 'stealth', 'event'];
+  function normalizeMode(v) {
+    if (typeof v === 'number') return INTERACTION_MODES[v] || 'explore';
+    if (typeof v === 'string' && v.length > 0) return v.toLowerCase();
+    return 'explore';
+  }
+
   const workflowScenarios = {
     'smoke-user': ['look', 'stats', 'inventory', 'help'],
     exploration: ['look', 'go north', 'look'],
@@ -338,7 +346,7 @@
 
     // Sync interaction state from player
     if (player.interaction) {
-      state.interactionMode = player.interaction.mode || 'explore';
+      state.interactionMode = normalizeMode(player.interaction.mode);
       state.interactionTarget = player.interaction.target || '';
     } else {
       state.interactionMode = 'explore';
@@ -714,7 +722,7 @@
   async function afterCommand(playerId, result) {
     // Track interaction mode from result
     if (result.interactionUpdate) {
-      state.interactionMode = result.interactionUpdate.mode || 'explore';
+      state.interactionMode = normalizeMode(result.interactionUpdate.mode);
       state.interactionTarget = result.interactionUpdate.target || state.interactionTarget;
     }
 
