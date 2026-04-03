@@ -1237,6 +1237,75 @@ textarea { resize: vertical; min-height: 80px; }
   margin-bottom: 0.4rem;
 }
 
+/* ── LLM tab ── */
+
+.llm-active-model {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.6rem;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+}
+
+.llm-model-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent);
+  text-shadow: 0 0 6px var(--glow);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.llm-models-list {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.llm-model-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  transition: border-color 0.12s;
+}
+
+.llm-model-card:hover {
+  border-color: var(--accent);
+}
+
+.llm-model-card.active {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.llm-model-card .model-id {
+  font-size: 12px;
+  font-weight: 600;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.llm-model-card .model-badge {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  padding: 0.15rem 0.35rem;
+  border: 1px solid var(--accent);
+  border-radius: var(--r);
+  white-space: nowrap;
+}
+
 /* Legacy compat */
 .admin-grid {
   display: grid;

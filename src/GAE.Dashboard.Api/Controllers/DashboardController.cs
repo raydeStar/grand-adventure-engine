@@ -15,6 +15,7 @@ public class DashboardController : ControllerBase
     private readonly IGameEngine _engine;
     private readonly IGameEventBroadcaster _broadcaster;
     private readonly IWikiService _wikiService;
+    private readonly INarratorService _narrator;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _configuration;
 
@@ -27,6 +28,7 @@ public class DashboardController : ControllerBase
         IGameEngine engine,
         IGameEventBroadcaster broadcaster,
         IWikiService wikiService,
+        INarratorService narrator,
         IHttpClientFactory httpClientFactory,
         IConfiguration configuration)
     {
@@ -34,6 +36,7 @@ public class DashboardController : ControllerBase
         _engine = engine;
         _broadcaster = broadcaster;
         _wikiService = wikiService;
+        _narrator = narrator;
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
     }
@@ -133,6 +136,33 @@ public class DashboardController : ControllerBase
         }
 
         return Ok(checks);
+    }
+
+    // ── LLM / Narrator model management ──
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpGet("admin/llm/models")]
+    public async Task<IActionResult> ListModels(CancellationToken ct)
+    {
+        var available = await _narrator.ListAvailableModelsAsync(ct);
+        var active = _narrator.GetActiveModel();
+        return Ok(new { active, available });
+    }
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpPost("admin/llm/model")]
+    public IActionResult SetModel([FromBody] SetModelRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Model))
+            return BadRequest(new { error = "model is required." });
+
+        _narrator.SetActiveModel(request.Model);
+        return Ok(new { active = _narrator.GetActiveModel(), summary = $"Model switched to {request.Model}." });
+    }
+
+    public class SetModelRequest
+    {
+        public string Model { get; set; } = string.Empty;
     }
 
     [HttpPost("action")]

@@ -258,6 +258,7 @@
       <section id="workspace-admin" class="workspace hidden">
         <nav class="admin-toolbar">
           <button class="admin-tab active" data-admin-tab="overview" type="button">Overview</button>
+          <button class="admin-tab" data-admin-tab="llm" type="button">LLM</button>
           <button class="admin-tab" data-admin-tab="commands" type="button">Commands</button>
           <button class="admin-tab" data-admin-tab="mutations" type="button">Mutations</button>
           <button class="admin-tab" data-admin-tab="players" type="button">Players</button>
@@ -307,6 +308,30 @@
                 <div id="workflow-log" class="activity-log"></div>
               </div>
             </div>
+          </div>
+        </div>
+
+        <!-- ═══ LLM TAB ═══ -->
+        <div class="admin-tab-content" data-admin-panel="llm">
+          <div class="admin-tab-body">
+            <div class="panel">
+              <h3>Active Model</h3>
+              <p class="panel-hint">The model currently used by the narrator for all AI-generated content. Switch models without restarting the server.</p>
+              <div class="llm-active-model">
+                <span class="llm-model-name" id="llm-active-model">loading...</span>
+                <button class="btn btn-secondary btn-sm" id="btn-llm-refresh" type="button">Refresh</button>
+              </div>
+            </div>
+
+            <div class="panel">
+              <h3>Available Models</h3>
+              <p class="panel-hint">Models loaded in LM Studio. Click one to switch the narrator to it immediately.</p>
+              <div id="llm-models-list" class="llm-models-list">
+                <div class="empty-state">Loading models from LM Studio...</div>
+              </div>
+            </div>
+
+            <div id="llm-log" class="activity-log"></div>
           </div>
         </div>
 

@@ -106,6 +106,14 @@ const API = {
     return this.getJson(`${this.base}/health`);
   },
 
+  async getLlmModels() {
+    return this.getJson(`${this.base}/admin/llm/models`);
+  },
+
+  async setLlmModel(model) {
+    return this.postJson(`${this.base}/admin/llm/model`, { model });
+  },
+
   async getJson(url) {
     const res = await fetch(url, { credentials: 'same-origin' });
     if (!res.ok) throw this.createHttpError(res, await this.readError(res));

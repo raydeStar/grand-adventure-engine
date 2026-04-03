@@ -831,6 +831,35 @@ public class NarratorService : INarratorService
         }
     }
 
+    public string GetActiveModel() => _model;
+
+    public void SetActiveModel(string model)
+    {
+        _model = model;
+        _modelResolved = !string.Equals(model, "default", StringComparison.OrdinalIgnoreCase);
+        _logger.LogInformation("Active LM Studio model set to \"{Model}\" (resolved={Resolved})", _model, _modelResolved);
+    }
+
+    public async Task<IReadOnlyList<string>> ListAvailableModelsAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var response = await _httpClient.GetFromJsonAsync<JsonElement>("v1/models", ct);
+            var models = new List<string>();
+            foreach (var item in response.GetProperty("data").EnumerateArray())
+            {
+                var id = item.GetProperty("id").GetString();
+                if (!string.IsNullOrEmpty(id)) models.Add(id);
+            }
+            return models;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not list LM Studio models");
+            return [];
+        }
+    }
+
     private async Task ResolveModelAsync(CancellationToken ct)
     {
         if (_modelResolved) return;

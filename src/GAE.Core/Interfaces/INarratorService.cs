@@ -13,4 +13,13 @@ public interface INarratorService
     Task<FreeFormResponse> ProcessFreeFormAsync(PlayerCharacter player, Room room, string rawInput, IReadOnlyList<StoryEntry> recentStory, CancellationToken ct = default);
     Task<FreeFormResponse> ProcessConversationTurnAsync(PlayerCharacter player, Room room, Npc npc, InteractionState interaction, string rawInput, CancellationToken ct = default);
     Task<FreeFormResponse> ProcessCombatTurnAsync(PlayerCharacter player, Room room, Npc enemy, InteractionState interaction, string rawInput, CancellationToken ct = default);
+
+    /// <summary>Returns the currently active model identifier.</summary>
+    string GetActiveModel();
+
+    /// <summary>Sets the active model at runtime. Pass "default" to re-resolve on next call.</summary>
+    void SetActiveModel(string model);
+
+    /// <summary>Lists available models from the LM Studio /v1/models endpoint.</summary>
+    Task<IReadOnlyList<string>> ListAvailableModelsAsync(CancellationToken ct = default);
 }
