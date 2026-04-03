@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$BaseUrl = 'http://localhost:8181',
+    [string]$BaseUrl,
     [string]$Username,
     [string]$Password,
     [switch]$ReplaceExisting
@@ -8,6 +8,7 @@ param(
 
 . (Join-Path $PSScriptRoot 'gae-ops.ps1')
 
+$BaseUrl = Resolve-BaseUrl -BaseUrl $BaseUrl -FallbackUrl (Get-ConfiguredBaseUrl -EnvironmentVariableName 'GAE_BASE_URL' -FallbackUrl "http://localhost:$(Get-ConfiguredPort -EnvironmentVariableName 'GAE_HOST_PORT' -Fallback 8181)")
 $Username = Get-DefaultValue -Value $Username -Fallback (Get-DefaultValue -Value $env:GAE_DASHBOARD_ADMIN_USERNAME -Fallback 'admin')
 $Password = Get-DefaultValue -Value $Password -Fallback (Get-DefaultValue -Value $env:GAE_DASHBOARD_ADMIN_PASSWORD -Fallback 'GAE-Admin-Local!123')
 

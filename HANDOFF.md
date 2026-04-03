@@ -98,7 +98,7 @@ Check the layout component in wwwroot/ for conditional rendering bugs.
 ## Architecture Notes For Code
 
 - **LM Studio** is the AI backend (OpenAI-compatible API at localhost:1234). Currently running a 2B model.
-- **Wiki.js** is at localhost:3000 with GraphQL API. Used for world lore persistence.
+- **Wiki.js** is published on localhost:3000 by default with GraphQL API. The local reset script can shift it to another free host port when 3000 is already occupied.
 - **No database.** State is in-memory, journaled to disk. `InMemoryStateManager` / `JournaledStateManager`.
 - **WorldKnowledgeBuilder is nullable** in NarratorService — if wiki is down, narrator still works, just without lore context.
 - **Disposition is dual-layer** — always keep `Npc.Disposition` (flat string) and `Npc.DispositionState` (rich object) in sync.

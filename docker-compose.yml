@@ -4,7 +4,7 @@ services:
   gae:
     build: .
     ports:
-      - "8181:8080"
+      - "${GAE_HOST_PORT:-8181}:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       Discord__Token: "${DISCORD_TOKEN:-}"
@@ -27,7 +27,7 @@ services:
   wikijs:
     image: requarks/wiki:2
     ports:
-      - "3000:3000"
+      - "${WIKIJS_HOST_PORT:-3000}:3000"
     environment:
       DB_TYPE: sqlite
       DB_FILEPATH: /wiki/data/wiki.sqlite

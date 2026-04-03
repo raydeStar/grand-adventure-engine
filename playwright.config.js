@@ -1,6 +1,8 @@
 const { defineConfig, devices } = require('@playwright/test');
 
-const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:8181';
+const baseURL = process.env.PLAYWRIGHT_BASE_URL
+  || process.env.GAE_BASE_URL
+  || `http://127.0.0.1:${process.env.GAE_HOST_PORT || '8181'}`;
 const isSnapshotUpdateRun = process.argv.includes('--update-snapshots');
 const isVisualTargetRun = process.argv.includes('--grep')
   || process.argv.some((arg) => arg.includes('dashboard.visual.spec.js') || arg.includes('@visual'));
