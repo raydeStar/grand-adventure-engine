@@ -524,7 +524,8 @@ public class DiscordBotService : IHostedService
                 await message.Channel.SendMessageAsync(
                     "⚠️ The storyteller is resting (AI narrator unreachable). Let's do this the old-fashioned way.\n" +
                     "*(Make sure LM Studio is running on your machine if you want AI-driven creation. Type `restart` to try again.)*\n\n" +
-                    "**What is your character's name?**");
+                    "**Describe your character in one message** — name, race, class, backstory — anything goes!\n" +
+                    "Example: *\"My name is Yuric. I am a Duck Hitman who likes cats and running from oncoming cars.\"*");
                 return;
             }
             var response = session.FallbackSession.ProcessInput(input);
