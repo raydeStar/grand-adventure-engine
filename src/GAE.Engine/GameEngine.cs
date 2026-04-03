@@ -1550,19 +1550,40 @@ public class GameEngine : IGameEngine
     private record SocialCheckResult(string SkillName, string StatUsed, DiceRoll Roll, int DC, bool Succeeded);
 
     /// <summary>
+    /// Built-in social skill definitions that always work, even if the DM strips the YAML config.
+    /// If social_skills is defined in rules, those take priority. Otherwise these kick in.
+    /// Stats resolve via PlayerCharacter.GetModifier() which returns +0 for unknown stats (equivalent to 10, average).
+    /// </summary>
+    private static readonly Dictionary<string, SocialSkillConfig> DefaultSocialSkills = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["persuade"] = new() { Stat = "cha", Keywords = ["persuade", "convince", "charm", "flatter", "flirt", "seduce", "sweet-talk", "beg", "plead", "appeal", "compliment", "woo", "barter", "haggle", "negotiate"] },
+        ["intimidate"] = new() { Stat = "str", AltStat = "cha", Keywords = ["intimidate", "threaten", "scare", "demand", "bully", "menace", "glare", "growl", "loom"] },
+        ["deceive"] = new() { Stat = "cha", Keywords = ["lie", "bluff", "deceive", "trick", "con", "fool", "mislead", "fake", "pretend"] },
+        ["insight"] = new() { Stat = "wis", Keywords = ["read", "gauge", "sense", "detect", "study", "observe", "scrutinize", "size up"] }
+    };
+
+    /// <summary>
     /// Scans the player's raw input for social intent keywords. If detected, rolls d20 + stat mod
     /// against a DC derived from the NPC's disposition intensity (friendlier = easier).
     /// Returns null if no social intent was detected.
+    /// Falls back to hardcoded defaults if the DM hasn't configured social_skills in the rules YAML.
+    /// Stat resolution gracefully returns +0 (average) for any stat not on the player sheet.
     /// </summary>
     private SocialCheckResult? TryRollSocialCheck(PlayerCharacter player, Npc npc, string rawInput)
     {
+        // Use configured social skills if available, otherwise fall back to built-in defaults
+        var socialSkills = _rules.SkillChecks.SocialSkills.Count > 0
+            ? _rules.SkillChecks.SocialSkills
+            : DefaultSocialSkills;
+
         var input = rawInput.ToLowerInvariant();
-        foreach (var (skillName, config) in _rules.SkillChecks.SocialSkills)
+        foreach (var (skillName, config) in socialSkills)
         {
             if (!config.Keywords.Any(kw => input.Contains(kw, StringComparison.OrdinalIgnoreCase)))
                 continue;
 
             // Pick the better stat if an alt is available (e.g. intimidate: STR or CHA)
+            // GetModifier returns +0 for unknown stats — equivalent to stat value 10 (average)
             int statMod = player.GetModifier(config.Stat);
             string statUsed = config.Stat;
             if (config.AltStat is not null)
@@ -1576,36 +1597,47 @@ public class GameEngine : IGameEngine
             }
 
             var roll = _dice.RollSkillCheck(skillName, statMod);
-
-            // DC based on NPC disposition: friendlier NPCs are easier to persuade
-            // Intensity 0 (hostile) → DC hard(16), Intensity 40 (neutral) → DC medium(12),
-            // Intensity 80+ (devoted) → DC easy(8)
-            int dc = npc.DispositionState.Intensity switch
-            {
-                >= 70 => _rules.SkillChecks.DifficultyClasses.GetValueOrDefault("easy", 8),
-                >= 50 => _rules.SkillChecks.DifficultyClasses.GetValueOrDefault("medium", 12) - 2,
-                >= 30 => _rules.SkillChecks.DifficultyClasses.GetValueOrDefault("medium", 12),
-                >= 15 => _rules.SkillChecks.DifficultyClasses.GetValueOrDefault("hard", 16),
-                _ => _rules.SkillChecks.DifficultyClasses.GetValueOrDefault("very_hard", 20)
-            };
-
-            // Memory flags can shift DC: an insulted NPC is harder to persuade
-            if (npc.DispositionState.MemoryFlags.Any(f => f.Contains("insult", StringComparison.OrdinalIgnoreCase)))
-                dc += 3;
-            if (npc.DispositionState.MemoryFlags.Any(f => f.Contains("romance", StringComparison.OrdinalIgnoreCase)))
-                dc -= 4;
-            if (npc.DispositionState.MemoryFlags.Any(f => f.Contains("friendship", StringComparison.OrdinalIgnoreCase)))
-                dc -= 2;
-            if (npc.DispositionState.MemoryFlags.Any(f => f.Contains("betrayal", StringComparison.OrdinalIgnoreCase)))
-                dc += 5;
-
-            dc = Math.Clamp(dc, 3, 25); // floor/ceiling so nat 20 almost always works
+            int dc = CalculateSocialDC(npc);
 
             bool succeeded = roll.IsCritical || (!roll.IsFumble && roll.Total >= dc);
             return new SocialCheckResult(skillName, statUsed, roll, dc, succeeded);
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Calculates the DC for a social check based on NPC disposition and memory flags.
+    /// Uses configured difficulty_classes if available, otherwise hardcoded D&amp;D-style defaults.
+    /// </summary>
+    private int CalculateSocialDC(Npc npc)
+    {
+        int easy = _rules.SkillChecks.DifficultyClasses.GetValueOrDefault("easy", 8);
+        int medium = _rules.SkillChecks.DifficultyClasses.GetValueOrDefault("medium", 12);
+        int hard = _rules.SkillChecks.DifficultyClasses.GetValueOrDefault("hard", 16);
+        int veryHard = _rules.SkillChecks.DifficultyClasses.GetValueOrDefault("very_hard", 20);
+
+        // DC based on NPC disposition: friendlier NPCs are easier to persuade
+        int dc = npc.DispositionState.Intensity switch
+        {
+            >= 70 => easy,
+            >= 50 => medium - 2,
+            >= 30 => medium,
+            >= 15 => hard,
+            _ => veryHard
+        };
+
+        // Memory flags shift the DC — NPC remembers what you've done
+        if (npc.DispositionState.MemoryFlags.Any(f => f.Contains("insult", StringComparison.OrdinalIgnoreCase)))
+            dc += 3;
+        if (npc.DispositionState.MemoryFlags.Any(f => f.Contains("romance", StringComparison.OrdinalIgnoreCase)))
+            dc -= 4;
+        if (npc.DispositionState.MemoryFlags.Any(f => f.Contains("friendship", StringComparison.OrdinalIgnoreCase)))
+            dc -= 2;
+        if (npc.DispositionState.MemoryFlags.Any(f => f.Contains("betrayal", StringComparison.OrdinalIgnoreCase)))
+            dc += 5;
+
+        return Math.Clamp(dc, 3, 25); // floor/ceiling so nat 20 almost always works
     }
 
     private static string ShiftDisposition(string current, int direction)
