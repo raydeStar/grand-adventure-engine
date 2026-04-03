@@ -7,6 +7,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\GAE.Core\GAE.Core.csproj" />
     <ProjectReference Include="..\..\src\GAE.Engine\GAE.Engine.csproj" />
+    <ProjectReference Include="..\..\src\GAE.Discord\GAE.Discord.csproj" />
   </ItemGroup>
 
   <ItemGroup>

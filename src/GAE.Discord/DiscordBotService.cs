@@ -548,17 +548,15 @@ public class DiscordBotService : IHostedService
             return;
         }
 
+        // If the player explicitly asked to change a field, force it even if the AI didn't comply
+        if (session.HasSheet && session.LastAiResponse is not null)
+        {
+            CharacterCreation.SheetOverrides.Apply(input, aiResponse, session.LastAiResponse);
+        }
+
         // Store the AI response
         session.LastAiResponse = aiResponse;
         session.HasSheet = true;
-
-        // Validate and present
-        var validRaces = new[] { "Human", "Elf", "Dwarf", "Halfling", "Orc", "Tiefling" };
-        var validClasses = new[] { "Fighter", "Mage", "Rogue", "Cleric", "Ranger", "Bard" };
-        if (!validRaces.Contains(aiResponse.Race, StringComparer.OrdinalIgnoreCase))
-            aiResponse.Race = "Human";
-        if (!validClasses.Contains(aiResponse.Class, StringComparer.OrdinalIgnoreCase))
-            aiResponse.Class = "Fighter";
 
         var standardArray = new[] { 15, 14, 13, 12, 10, 8 };
         var stats = AssignStatsFromOrder(aiResponse.StatOrder, standardArray);
