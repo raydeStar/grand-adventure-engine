@@ -8,6 +8,7 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       Discord__Token: "${DISCORD_TOKEN:-}"
+      Discord__ChannelId: "${DISCORD_CHANNEL_ID:-}"
       WikiJs__Url: "http://wikijs:3000"
       WikiJs__ApiKey: "${WIKI_API_KEY:-}"
       LmStudio__Endpoint: "http://host.docker.internal:1234"
