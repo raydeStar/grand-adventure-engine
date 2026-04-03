@@ -110,7 +110,7 @@ rooms:
         name: "Thunderstrike Blade"
         description: "A longsword that crackles with blue lightning. Korga's masterwork — she's been looking for someone worthy to carry it."
         type: "Weapon"
-        damage_dice: "2d8+4"
+        damage_dice: "3d8+5"
         damage_stat: "str"
         value: 500
         is_equippable: true
@@ -118,7 +118,7 @@ rooms:
         name: "Ironbark Plate Armor"
         description: "Armor forged from ironwood and tempered steel. Light enough to move in, tough enough to stop a troll's claw."
         type: "Armor"
-        armor_value: 8
+        armor_value: 6
         value: 400
         is_equippable: true
       - id: "starfall_shield"
@@ -189,7 +189,7 @@ rooms:
         name: "Nightfang Dagger"
         description: "A wickedly curved dagger that seems to drink the light. Impossibly sharp. Previous owner didn't need it anymore — on account of being dead."
         type: "Weapon"
-        damage_dice: "2d6+3"
+        damage_dice: "2d8+4"
         damage_stat: "dex"
         value: 300
         is_equippable: true
@@ -370,18 +370,18 @@ rooms:
         faction: "hollow_cult"
         knowledge_scopes: ["hollow_cult", "goretusk", "rituals", "dread_hollow"]
         is_hostile: true
-        level: 4
-        hp: 30
-        max_hp: 30
-        attack_bonus: 6
-        damage_dice: "2d6+2"
-        defense: 14
+        level: 3
+        hp: 25
+        max_hp: 25
+        attack_bonus: 4
+        damage_dice: "1d8+2"
+        defense: 13
         loot:
           - id: "acolyte_staff"
             name: "Staff of Dark Whispers"
             description: "A gnarled staff that hums with malevolent energy. Boosts magic damage significantly."
             type: "Weapon"
-            damage_dice: "2d8+5"
+            damage_dice: "3d6+4"
             damage_stat: "int"
             value: 400
             is_equippable: true
@@ -423,12 +423,12 @@ rooms:
         faction: "hollow_cult"
         knowledge_scopes: ["dread_hollow", "ancient_evil", "hollow_cult"]
         is_hostile: true
-        level: 8
-        hp: 120
-        max_hp: 120
-        attack_bonus: 10
-        damage_dice: "3d8+6"
-        defense: 18
+        level: 6
+        hp: 80
+        max_hp: 80
+        attack_bonus: 8
+        damage_dice: "2d8+4"
+        defense: 15
         loot:
           - id: "goretusk_tusk"
             name: "Tusk of the Undying"

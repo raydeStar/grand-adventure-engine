@@ -77,5 +77,9 @@ public class PlayerCharacter
     public bool IsAlive => Hp > 0;
     public bool IsConscious => Hp > 0;
 
-    public int Defense => 10 + GetStatModifier(Dex) + (Equipment.Armor?.ArmorValue ?? 0);
+    public int Defense => 10
+        + GetStatModifier(Dex)
+        + (Equipment.Armor?.ArmorValue ?? 0)
+        + (Equipment.Shield?.ArmorValue ?? 0)
+        + (Equipment.Helmet?.ArmorValue ?? 0);
 }
