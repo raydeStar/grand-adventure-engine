@@ -132,4 +132,34 @@ public class JournaledStateManager : IStateManager
             Summary = $"Combat ended in {roomId}"
         }, ct);
     }
+
+    public async Task RemoveAllRoomsAsync(CancellationToken ct = default)
+    {
+        await _inner.RemoveAllRoomsAsync(ct);
+        await _journal.AppendAsync(new GameEvent
+        {
+            Type = GameEventType.SystemMessage,
+            Summary = "All rooms removed (world reset)"
+        }, ct);
+    }
+
+    public async Task ClearStoryAsync(CancellationToken ct = default)
+    {
+        await _inner.ClearStoryAsync(ct);
+        await _journal.AppendAsync(new GameEvent
+        {
+            Type = GameEventType.SystemMessage,
+            Summary = "Story log cleared (world reset)"
+        }, ct);
+    }
+
+    public async Task RemoveAllCombatStatesAsync(CancellationToken ct = default)
+    {
+        await _inner.RemoveAllCombatStatesAsync(ct);
+        await _journal.AppendAsync(new GameEvent
+        {
+            Type = GameEventType.SystemMessage,
+            Summary = "All combat states removed (world reset)"
+        }, ct);
+    }
 }

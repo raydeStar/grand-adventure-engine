@@ -72,7 +72,7 @@ public class GameFlowTests : IClassFixture<GaeWebApplicationFactory>
 
         var summary = result.GetProperty("mechanicalSummary").GetString()!;
         Assert.Equal(string.Empty, summary);
-        Assert.DoesNotContain("The Crossroads Inn", summary);
+        Assert.DoesNotContain("The Rusted Flagon", summary);
         Assert.DoesNotContain("Exits:", summary);
     }
 
@@ -142,13 +142,13 @@ public class GameFlowTests : IClassFixture<GaeWebApplicationFactory>
         var response = await _client.PostAsJsonAsync("/api/dashboard/action", new
         {
             PlayerId = "flow-player-move",
-            Command = "go north"
+            Command = "go east"
         });
         response.EnsureSuccessStatusCode();
 
         var result = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.True(result.GetProperty("success").GetBoolean());
-        Assert.Contains("north", result.GetProperty("mechanicalSummary").GetString()!);
+        Assert.Contains("east", result.GetProperty("mechanicalSummary").GetString()!);
 
         // Verify player moved
         var playerResponse = await _client.GetAsync("/api/dashboard/players/flow-player-move");

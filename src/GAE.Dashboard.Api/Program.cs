@@ -69,6 +69,13 @@ builder.Services.AddSingleton<IStateReplayService>(sp => sp.GetRequiredService<S
 builder.Services.AddSingleton<JournaledStateManager>();
 builder.Services.AddSingleton<IStateManager>(sp => sp.GetRequiredService<JournaledStateManager>());
 
+// World seeding config — used by admin reset endpoint
+builder.Services.AddSingleton(new WorldSeedConfig
+{
+    LoreSeedPath = Path.Combine(configDir, "lore-seed.yaml"),
+    YamlDeserializer = yamlDeserializer
+});
+
 // Engine
 builder.Services.AddSingleton<IProbabilityEngine, ProbabilityEngine>();
 builder.Services.AddSingleton<CommandParser>();
@@ -203,7 +210,7 @@ catch
     app.Logger.LogWarning("Wiki.js unreachable at {Url} — wiki sync disabled", wikiUrl);
 }
 
-// Seed starting room if not already present
+// Seed world from lore-seed.yaml if spawn room is not already present
 var stateManager = app.Services.GetRequiredService<IStateManager>();
 var startRoom = await stateManager.GetRoomAsync("spawn");
 if (startRoom is null)
@@ -213,43 +220,8 @@ if (startRoom is null)
     {
         var loreYaml = await File.ReadAllTextAsync(lorePath);
         var lore = yamlDeserializer.Deserialize<LoreSeed>(loreYaml);
-
-        if (lore?.StartingRoom is not null)
-        {
-            var room = new GAE.Core.Models.Room
-            {
-                Id = lore.StartingRoom.Id ?? "spawn",
-                Name = lore.StartingRoom.Name ?? "The Crossroads Inn",
-                Description = lore.StartingRoom.Description ?? "A weathered inn at a crossroads.",
-                IsDiscovered = true,
-                DiscoveredAt = DateTimeOffset.UtcNow
-            };
-
-            if (lore.StartingRoom.Exits is not null)
-                foreach (var exit in lore.StartingRoom.Exits)
-                    room.Exits[exit.Key] = exit.Value;
-
-            if (lore.StartingRoom.Npcs is not null)
-                room.Npcs.AddRange(lore.StartingRoom.Npcs.Select(n =>
-                {
-                    var npc = new GAE.Core.Models.Npc
-                    {
-                        Id = n.Id ?? Guid.NewGuid().ToString(),
-                        Name = n.Name ?? "Unknown",
-                        Personality = n.Personality ?? "",
-                        Faction = n.Faction ?? "neutral"
-                    };
-                    if (n.KnowledgeScopes is not null)
-                        npc.KnowledgeScopes.AddRange(n.KnowledgeScopes);
-                    return npc;
-                }));
-
-            if (lore.StartingRoom.EnvironmentTags is not null)
-                room.EnvironmentTags.AddRange(lore.StartingRoom.EnvironmentTags);
-
-            await stateManager.SaveRoomAsync(room);
-            app.Logger.LogInformation("Seeded starting room: {Room}", room.Name);
-        }
+        var seeded = await SeedWorldFromLore(lore, stateManager);
+        app.Logger.LogInformation("Seeded {Count} rooms from lore-seed.yaml", seeded);
     }
 }
 
@@ -335,28 +307,166 @@ lifetime.ApplicationStopping.Register(() =>
 
 app.Run();
 
+// ── World seeding helper ──────────────────────────────────────────────
+
+static async Task<int> SeedWorldFromLore(LoreSeed? lore, IStateManager stateManager)
+{
+    if (lore is null) return 0;
+
+    var allLoreRooms = new List<LoreRoom>();
+    if (lore.StartingRoom is not null)
+        allLoreRooms.Add(lore.StartingRoom);
+    if (lore.Rooms is not null)
+        allLoreRooms.AddRange(lore.Rooms);
+
+    var count = 0;
+    foreach (var loreRoom in allLoreRooms)
+    {
+        var room = ConvertLoreRoom(loreRoom);
+        await stateManager.SaveRoomAsync(room);
+        count++;
+    }
+
+    return count;
+}
+
+static GAE.Core.Models.Room ConvertLoreRoom(LoreRoom lr)
+{
+    var room = new GAE.Core.Models.Room
+    {
+        Id = lr.Id ?? Guid.NewGuid().ToString("N"),
+        Name = lr.Name ?? "Unknown Room",
+        Description = lr.Description ?? "An unremarkable room.",
+        IsDiscovered = true,
+        DiscoveredAt = DateTimeOffset.UtcNow
+    };
+
+    if (lr.Exits is not null)
+        foreach (var exit in lr.Exits)
+            room.Exits[exit.Key] = exit.Value;
+
+    if (lr.Npcs is not null)
+        room.Npcs.AddRange(lr.Npcs.Select(ConvertLoreNpc));
+
+    if (lr.Items is not null)
+        room.Items.AddRange(lr.Items.Select(ConvertLoreItem));
+
+    if (lr.EnvironmentTags is not null)
+        room.EnvironmentTags.AddRange(lr.EnvironmentTags);
+
+    return room;
+}
+
+static GAE.Core.Models.Npc ConvertLoreNpc(LoreNpc n)
+{
+    var npc = new GAE.Core.Models.Npc
+    {
+        Id = n.Id ?? Guid.NewGuid().ToString("N"),
+        Name = n.Name ?? "Unknown",
+        Personality = n.Personality ?? "",
+        Faction = n.Faction ?? "neutral",
+        IsHostile = n.IsHostile,
+        Level = n.Level ?? 1,
+        Hp = n.Hp,
+        MaxHp = n.MaxHp,
+        AttackBonus = n.AttackBonus,
+        DamageDice = n.DamageDice,
+        Defense = n.Defense
+    };
+
+    if (n.KnowledgeScopes is not null)
+        npc.KnowledgeScopes.AddRange(n.KnowledgeScopes);
+
+    if (n.Loot is not null)
+        npc.LootTable.AddRange(n.Loot.Select(ConvertLoreItem));
+
+    return npc;
+}
+
+static GAE.Core.Models.InventoryItem ConvertLoreItem(LoreItem li)
+{
+    var itemType = Enum.TryParse<GAE.Core.Models.ItemType>(li.Type, true, out var parsed)
+        ? parsed
+        : GAE.Core.Models.ItemType.Misc;
+
+    return new GAE.Core.Models.InventoryItem
+    {
+        Id = li.Id ?? Guid.NewGuid().ToString("N"),
+        Name = li.Name ?? "Unknown Item",
+        Description = li.Description ?? "",
+        Type = itemType,
+        Quantity = Math.Max(1, li.Quantity),
+        Value = Math.Max(0, li.Value),
+        DamageDice = li.DamageDice,
+        DamageStat = li.DamageStat,
+        ArmorValue = Math.Max(0, li.ArmorValue),
+        IsEquippable = li.IsEquippable ?? itemType is GAE.Core.Models.ItemType.Weapon or GAE.Core.Models.ItemType.Armor or GAE.Core.Models.ItemType.Shield or GAE.Core.Models.ItemType.Helmet,
+        IsConsumable = li.IsConsumable ?? itemType is GAE.Core.Models.ItemType.Potion or GAE.Core.Models.ItemType.Scroll,
+        Effect = li.Effect
+    };
+}
+
+// World seed config — allows admin endpoints to re-seed the world
+public class WorldSeedConfig
+{
+    public string LoreSeedPath { get; set; } = string.Empty;
+    public IDeserializer YamlDeserializer { get; set; } = null!;
+}
+
 // Lore seed DTOs for YAML deserialization
-internal class LoreSeed
+public class LoreSeed
 {
     public LoreWorld? World { get; set; }
     public List<LoreRegion>? Regions { get; set; }
     public LoreRoom? StartingRoom { get; set; }
+    public List<LoreRoom>? Rooms { get; set; }
     public List<LoreFaction>? Factions { get; set; }
 }
 
-internal class LoreWorld { public string? Name { get; set; } public string? Description { get; set; } }
-internal class LoreRegion { public string? Id { get; set; } public string? Name { get; set; } public string? Description { get; set; } public List<string>? Tags { get; set; } }
-internal class LoreRoom
+public class LoreWorld { public string? Name { get; set; } public string? Description { get; set; } }
+public class LoreRegion { public string? Id { get; set; } public string? Name { get; set; } public string? Description { get; set; } public List<string>? Tags { get; set; } }
+public class LoreRoom
 {
     public string? Id { get; set; }
     public string? Name { get; set; }
     public string? Description { get; set; }
     public Dictionary<string, string>? Exits { get; set; }
     public List<LoreNpc>? Npcs { get; set; }
+    public List<LoreItem>? Items { get; set; }
     public List<string>? EnvironmentTags { get; set; }
 }
-internal class LoreNpc { public string? Id { get; set; } public string? Name { get; set; } public string? Personality { get; set; } public string? Faction { get; set; } public List<string>? KnowledgeScopes { get; set; } }
-internal class LoreFaction { public string? Id { get; set; } public string? Name { get; set; } public string? Description { get; set; } }
+public class LoreNpc
+{
+    public string? Id { get; set; }
+    public string? Name { get; set; }
+    public string? Personality { get; set; }
+    public string? Faction { get; set; }
+    public List<string>? KnowledgeScopes { get; set; }
+    public bool IsHostile { get; set; }
+    public int? Level { get; set; }
+    public int? Hp { get; set; }
+    public int? MaxHp { get; set; }
+    public int? AttackBonus { get; set; }
+    public string? DamageDice { get; set; }
+    public int? Defense { get; set; }
+    public List<LoreItem>? Loot { get; set; }
+}
+public class LoreItem
+{
+    public string? Id { get; set; }
+    public string? Name { get; set; }
+    public string? Description { get; set; }
+    public string? Type { get; set; }
+    public int Quantity { get; set; } = 1;
+    public int Value { get; set; }
+    public string? DamageDice { get; set; }
+    public string? DamageStat { get; set; }
+    public int ArmorValue { get; set; }
+    public bool? IsEquippable { get; set; }
+    public bool? IsConsumable { get; set; }
+    public string? Effect { get; set; }
+}
+public class LoreFaction { public string? Id { get; set; } public string? Name { get; set; } public string? Description { get; set; } }
 
 // Enables WebApplicationFactory<Program> in integration tests
 public partial class Program { }

@@ -49,6 +49,12 @@ public class InMemoryStateManager : IStateManager
         return Task.CompletedTask;
     }
 
+    public Task RemoveAllRoomsAsync(CancellationToken ct = default)
+    {
+        _rooms.Clear();
+        return Task.CompletedTask;
+    }
+
     // Story operations
     public Task AddStoryEntryAsync(StoryEntry entry, CancellationToken ct = default)
     {
@@ -82,6 +88,15 @@ public class InMemoryStateManager : IStateManager
         }
     }
 
+    public Task ClearStoryAsync(CancellationToken ct = default)
+    {
+        lock (_storyLock)
+        {
+            _storyEntries.Clear();
+        }
+        return Task.CompletedTask;
+    }
+
     // Combat operations
     public Task<CombatState?> GetCombatStateAsync(string roomId, CancellationToken ct = default)
         => Task.FromResult(_combats.GetValueOrDefault(roomId));
@@ -95,6 +110,12 @@ public class InMemoryStateManager : IStateManager
     public Task RemoveCombatStateAsync(string roomId, CancellationToken ct = default)
     {
         _combats.TryRemove(roomId, out _);
+        return Task.CompletedTask;
+    }
+
+    public Task RemoveAllCombatStatesAsync(CancellationToken ct = default)
+    {
+        _combats.Clear();
         return Task.CompletedTask;
     }
 
