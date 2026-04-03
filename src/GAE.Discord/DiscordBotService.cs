@@ -29,6 +29,9 @@ public class DiscordBotService : IHostedService
     private readonly List<DateTimeOffset> _narratorFailures = [];
     private bool _narratorWarningPosted;
 
+    // Prevent concurrent narrator requests from flooding LM Studio
+    private readonly SemaphoreSlim _narratorLock = new(1, 1);
+
     // Configuration — channel names
     private const string MainChannelName = "the-tavern";
     private const string AdminChannelName = "dm-room";
@@ -493,23 +496,23 @@ public class DiscordBotService : IHostedService
             return;
         }
 
-        // Send to AI narrator for character concept — retry once on failure
+        // Send to AI narrator for character concept — single attempt, serialized to avoid flooding LM Studio
         await thread.TriggerTypingAsync();
         CharacterCreationAiResponse? aiResponse = null;
-        for (int attempt = 0; attempt < 2 && aiResponse is null; attempt++)
+        await _narratorLock.WaitAsync();
+        try
         {
-            try
-            {
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-                aiResponse = await _narrator.CreateCharacterFromDescriptionAsync(
-                    input, session.LastSheetJson, cts.Token);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "AI character creation attempt {Attempt} failed: {Message}", attempt + 1, ex.Message);
-                if (attempt == 0)
-                    await thread.TriggerTypingAsync(); // show typing during retry
-            }
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+            aiResponse = await _narrator.CreateCharacterFromDescriptionAsync(
+                input, session.LastSheetJson, cts.Token);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "AI character creation failed: {Message}", ex.Message);
+        }
+        finally
+        {
+            _narratorLock.Release();
         }
 
         if (aiResponse is null)
@@ -766,8 +769,17 @@ public class DiscordBotService : IHostedService
     {
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            var result = await _engine.ProcessActionAsync(player.Id, action, cts.Token);
+            await _narratorLock.WaitAsync();
+            ActionResult result;
+            try
+            {
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                result = await _engine.ProcessActionAsync(player.Id, action, cts.Token);
+            }
+            finally
+            {
+                _narratorLock.Release();
+            }
 
             // Narrator recovered — clear warnings
             if (_narratorWarningPosted && _narratorFailures.Count > 0)
