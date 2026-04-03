@@ -49,7 +49,7 @@ public class FullPlaythroughTests : IClassFixture<GaeWebApplicationFactory>
     {
         using var scope = _factory.Services.CreateScope();
         var state = scope.ServiceProvider.GetRequiredService<IStateManager>();
-        return (await state.GetRoomAsync(roomId))!;
+        return (await state.GetPlayerRoomAsync(PlayerId, roomId))!;
     }
 
     private async Task EquipItem(string itemName)

@@ -145,6 +145,10 @@ public class StubNarratorService : INarratorService
             }
         });
 
+
+    public Task<CharacterCreationAiResponse?> CreateCharacterFromDescriptionAsync(string playerDescription, string? previousSheet, CancellationToken ct = default)
+        => Task.FromResult<CharacterCreationAiResponse?>(null);
+
     public string GetActiveModel() => "stub-model";
     public void SetActiveModel(string model) { }
     public Task<IReadOnlyList<string>> ListAvailableModelsAsync(CancellationToken ct = default)

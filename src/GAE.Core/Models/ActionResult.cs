@@ -17,6 +17,7 @@ public class ActionResult
     public int GoldChange { get; set; }
     public int XpGained { get; set; }
     public InteractionUpdate? InteractionUpdate { get; set; }
+    public bool IsVictory { get; set; }
     public DateTimeOffset Timestamp { get; set; } = DateTimeOffset.UtcNow;
 }
 

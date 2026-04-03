@@ -154,7 +154,7 @@ public class InteractionStateMachineTests
         var player = await stateManager.GetPlayerAsync(PlayerId);
         Assert.NotNull(player);
         // If NPC survived, should be in combat mode
-        var room = await stateManager.GetRoomAsync(player.CurrentRoomId);
+        var room = await stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId);
         var goblin = room?.Npcs.FirstOrDefault(n => n.Name == "Goblin");
         if (goblin is not null && (goblin.Hp ?? 0) > 0)
         {

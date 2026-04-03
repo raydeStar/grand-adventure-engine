@@ -111,7 +111,7 @@ public class GameEngine : IGameEngine
         {
             try
             {
-                var room = await _stateManager.GetRoomAsync(player.CurrentRoomId, ct);
+                var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
                 var recentStory = await _stateManager.GetRecentStoryForRoomAsync(player.CurrentRoomId, 5, ct);
                 var context = new NarratorContext
                 {
@@ -220,7 +220,7 @@ public class GameEngine : IGameEngine
 
     private async Task<ActionResult> ProcessMoveAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
     {
-        var room = await _stateManager.GetRoomAsync(player.CurrentRoomId, ct);
+        var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
         if (room is null)
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "You are in an unknown location." };
 
@@ -228,7 +228,7 @@ public class GameEngine : IGameEngine
         if (!room.Exits.TryGetValue(direction, out var targetRoomId))
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"There is no exit to the {direction}." };
 
-        var targetRoom = await _stateManager.GetRoomAsync(targetRoomId, ct);
+        var targetRoom = await _stateManager.GetPlayerRoomAsync(player.Id, targetRoomId, ct);
         if (targetRoom is null)
         {
             // Generate new room via narrator
@@ -283,7 +283,7 @@ public class GameEngine : IGameEngine
 
     private async Task<ActionResult> ProcessLookAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
     {
-        var room = await _stateManager.GetRoomAsync(player.CurrentRoomId, ct);
+        var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
         if (room is null)
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "You can't see anything." };
 
@@ -303,7 +303,7 @@ public class GameEngine : IGameEngine
 
     private async Task<ActionResult> ProcessAttackAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
     {
-        var room = await _stateManager.GetRoomAsync(player.CurrentRoomId, ct);
+        var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
         if (room is null)
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "You can't attack here." };
 
@@ -405,7 +405,7 @@ public class GameEngine : IGameEngine
 
     private async Task<ActionResult> ProcessTalkInternalAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
     {
-        var room = await _stateManager.GetRoomAsync(player.CurrentRoomId, ct);
+        var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
         if (room is null)
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "You find no one here to answer you." };
 
@@ -452,7 +452,7 @@ public class GameEngine : IGameEngine
 
     private async Task<ActionResult> ProcessTakeAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
     {
-        var room = await _stateManager.GetRoomAsync(player.CurrentRoomId, ct);
+        var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
         if (room is null)
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "There's nothing here to take." };
 
@@ -629,7 +629,7 @@ public class GameEngine : IGameEngine
 
     private async Task<ActionResult> ProcessDropAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
     {
-        var room = await _stateManager.GetRoomAsync(player.CurrentRoomId, ct);
+        var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
         if (room is null)
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "You have nowhere to drop that." };
 
@@ -843,7 +843,7 @@ public class GameEngine : IGameEngine
     {
         _logger.LogInformation("Routing free-form action for {PlayerId} in room {RoomId}: {RawInput}", player.Id, player.CurrentRoomId, action.RawInput);
 
-        var room = await _stateManager.GetRoomAsync(player.CurrentRoomId, ct);
+        var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
         room ??= new Room { Id = player.CurrentRoomId, Name = "Unknown" };
 
         var recentStory = await _stateManager.GetRecentStoryForRoomAsync(player.CurrentRoomId, 5, ct);
@@ -1215,7 +1215,7 @@ public class GameEngine : IGameEngine
 
     private async Task<ActionResult?> ProcessConversationTurnAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
     {
-        var room = await _stateManager.GetRoomAsync(player.CurrentRoomId, ct);
+        var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
         if (room is null)
         {
             player.Interaction.Reset();
@@ -1360,7 +1360,7 @@ public class GameEngine : IGameEngine
 
     private async Task<ActionResult?> ProcessCombatTurnAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
     {
-        var room = await _stateManager.GetRoomAsync(player.CurrentRoomId, ct);
+        var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
         if (room is null)
         {
             player.Interaction.Reset();
@@ -1615,6 +1615,49 @@ public class GameEngine : IGameEngine
         await _stateManager.SaveRoomAsync(room, ct);
         await PersistInteractionStoryEntry(player, action, combatResult, ct);
         return combatResult;
+    }
+
+    /// <summary>Handles player death: respawn at tavern with penalties.</summary>
+    private async Task<(string summary, List<StateChange> changes)> HandlePlayerDeathAsync(
+        PlayerCharacter player, Room room, string defeatedBy, CancellationToken ct)
+    {
+        var oldHp = player.Hp;
+        var oldMp = player.Mp;
+        var oldGold = player.Gold;
+        var oldRoom = player.CurrentRoomId;
+
+        // Respawn at 50% HP/MP
+        player.Hp = Math.Max(1, player.MaxHp / 2);
+        player.Mp = Math.Max(0, player.MaxMp / 2);
+
+        // Death tax: lose 25% gold
+        var goldLost = player.Gold / 4;
+        player.Gold = Math.Max(0, player.Gold - goldLost);
+
+        // Teleport to spawn
+        player.CurrentRoomId = "spawn";
+        player.Interaction.Reset();
+
+        // Memory flag on the enemy
+        var killer = room.Npcs.FirstOrDefault(n => n.Name == defeatedBy);
+        killer?.DispositionState.MemoryFlags.Add("defeated-player");
+
+        var changes = new List<StateChange>
+        {
+            new() { EntityType = "Player", EntityId = player.Id, Property = "Hp", OldValue = oldHp.ToString(), NewValue = player.Hp.ToString() },
+            new() { EntityType = "Player", EntityId = player.Id, Property = "Mp", OldValue = oldMp.ToString(), NewValue = player.Mp.ToString() },
+            new() { EntityType = "Player", EntityId = player.Id, Property = "Gold", OldValue = oldGold.ToString(), NewValue = player.Gold.ToString() },
+            new() { EntityType = "Player", EntityId = player.Id, Property = "CurrentRoomId", OldValue = oldRoom, NewValue = "spawn" }
+        };
+
+        var summary = $"You have been defeated by {defeatedBy}! You wake up in The Rusted Flagon.\n" +
+            $"\U0001F480 You lost {goldLost} gold.\n" +
+            $"\u2764\uFE0F {player.Hp}/{player.MaxHp}  \u2728 {player.Mp}/{player.MaxMp}  \U0001F4B0 {player.Gold}g";
+
+        await _stateManager.SavePlayerAsync(player, ct);
+        await _stateManager.SaveRoomAsync(room, ct);
+
+        return (summary, changes);
     }
 
     private async Task EnterCombatAsync(PlayerCharacter player, Room room, List<Npc> enemies, CancellationToken ct)
@@ -2172,7 +2215,7 @@ public class GameEngine : IGameEngine
     /// </summary>
     private async Task<ActionResult> ProcessBuyAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
     {
-        var room = await _stateManager.GetRoomAsync(player.CurrentRoomId, ct);
+        var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
         if (room is null)
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "There's no shop here." };
 
@@ -2227,7 +2270,7 @@ public class GameEngine : IGameEngine
     /// </summary>
     private async Task<ActionResult> ProcessSellAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
     {
-        var room = await _stateManager.GetRoomAsync(player.CurrentRoomId, ct);
+        var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
         if (room is null)
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "There's no shop here." };
 
@@ -2309,7 +2352,7 @@ public class GameEngine : IGameEngine
         }
 
         // Other input: treat as conversation with shopkeeper
-        var room = await _stateManager.GetRoomAsync(player.CurrentRoomId, ct);
+        var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
         var shopkeeper = room?.Npcs.FirstOrDefault(n => n.IsShopkeeper);
         if (room is null || shopkeeper is null)
         {

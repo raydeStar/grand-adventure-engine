@@ -7,6 +7,9 @@ public class PlayerCharacter
     public string Race { get; set; } = string.Empty;
     public string Class { get; set; } = string.Empty;
     public string Backstory { get; set; } = string.Empty;
+    public string? DiscordId { get; set; }
+    public ulong? ThreadId { get; set; }
+    public bool HasCompletedDemo { get; set; }
     public string CurrentRoomId { get; set; } = "spawn";
 
     // Resources

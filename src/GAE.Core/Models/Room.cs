@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace GAE.Core.Models;
 
 public class Room
@@ -12,4 +14,13 @@ public class Room
     public bool IsDiscovered { get; set; }
     public string? AsciiArt { get; set; }
     public DateTimeOffset? DiscoveredAt { get; set; }
+
+    /// <summary>Creates a deep clone of this room for per-player instancing.</summary>
+    public Room DeepClone(string newId)
+    {
+        var json = JsonSerializer.Serialize(this);
+        var clone = JsonSerializer.Deserialize<Room>(json)!;
+        clone.Id = newId;
+        return clone;
+    }
 }

@@ -13,6 +13,7 @@ public class InMemoryStateManager : IStateManager
 {
     private readonly ConcurrentDictionary<string, PlayerCharacter> _players = new();
     private readonly ConcurrentDictionary<string, Room> _rooms = new();
+    private readonly ConcurrentDictionary<string, Room> _playerRooms = new();
     private readonly ConcurrentDictionary<string, CombatState> _combats = new();
     private readonly List<StoryEntry> _storyEntries = [];
     private readonly Lock _storyLock = new();
@@ -22,7 +23,7 @@ public class InMemoryStateManager : IStateManager
         => Task.FromResult(_players.GetValueOrDefault(playerId));
 
     public Task<PlayerCharacter?> GetPlayerByDiscordIdAsync(string discordId, CancellationToken ct = default)
-        => Task.FromResult(_players.Values.FirstOrDefault(p => p.Id == discordId));
+        => Task.FromResult(_players.Values.FirstOrDefault(p => p.DiscordId == discordId));
 
     public Task<IReadOnlyList<PlayerCharacter>> GetAllPlayersAsync(CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<PlayerCharacter>>(_players.Values.ToList());
@@ -36,7 +37,7 @@ public class InMemoryStateManager : IStateManager
     public Task<bool> RemovePlayerAsync(string playerId, CancellationToken ct = default)
         => Task.FromResult(_players.TryRemove(playerId, out _));
 
-    // Room operations
+    // Room operations (templates)
     public Task<Room?> GetRoomAsync(string roomId, CancellationToken ct = default)
         => Task.FromResult(_rooms.GetValueOrDefault(roomId));
 
@@ -45,13 +46,45 @@ public class InMemoryStateManager : IStateManager
 
     public Task SaveRoomAsync(Room room, CancellationToken ct = default)
     {
-        _rooms[room.Id] = room;
+        // Player room instances have IDs in the format "playerId:roomId"
+        if (room.Id.Contains(':'))
+            _playerRooms[room.Id] = room;
+        else
+            _rooms[room.Id] = room;
         return Task.CompletedTask;
     }
 
     public Task RemoveAllRoomsAsync(CancellationToken ct = default)
     {
         _rooms.Clear();
+        _playerRooms.Clear();
+        return Task.CompletedTask;
+    }
+
+    // Per-player room instances
+    public Task<Room?> GetPlayerRoomAsync(string playerId, string roomId, CancellationToken ct = default)
+    {
+        var key = $"{playerId}:{roomId}";
+        if (_playerRooms.TryGetValue(key, out var existing))
+            return Task.FromResult<Room?>(existing);
+
+        // Clone from template
+        if (!_rooms.TryGetValue(roomId, out var template))
+            return Task.FromResult<Room?>(null);
+
+        var clone = template.DeepClone(key);
+        clone.IsDiscovered = true;
+        clone.DiscoveredAt = DateTimeOffset.UtcNow;
+        _playerRooms[key] = clone;
+        return Task.FromResult<Room?>(clone);
+    }
+
+    public Task RemovePlayerRoomsAsync(string playerId, CancellationToken ct = default)
+    {
+        var prefix = $"{playerId}:";
+        var keysToRemove = _playerRooms.Keys.Where(k => k.StartsWith(prefix)).ToList();
+        foreach (var key in keysToRemove)
+            _playerRooms.TryRemove(key, out _);
         return Task.CompletedTask;
     }
 
@@ -128,6 +161,7 @@ public class InMemoryStateManager : IStateManager
             {
                 Players = _players.Values.ToList(),
                 Rooms = _rooms.Values.ToList(),
+                PlayerRooms = _playerRooms.Values.ToList(),
                 StoryEntries = [.. _storyEntries],
                 CombatStates = _combats.Values.ToList()
             };
@@ -143,6 +177,10 @@ public class InMemoryStateManager : IStateManager
         _rooms.Clear();
         foreach (var r in snapshot.Rooms)
             _rooms[r.Id] = r;
+
+        _playerRooms.Clear();
+        foreach (var r in snapshot.PlayerRooms)
+            _playerRooms[r.Id] = r;
 
         _combats.Clear();
         foreach (var c in snapshot.CombatStates)
@@ -160,6 +198,7 @@ public class StateSnapshot
 {
     public List<PlayerCharacter> Players { get; set; } = [];
     public List<Room> Rooms { get; set; } = [];
+    public List<Room> PlayerRooms { get; set; } = [];
     public List<StoryEntry> StoryEntries { get; set; } = [];
     public List<CombatState> CombatStates { get; set; } = [];
 }

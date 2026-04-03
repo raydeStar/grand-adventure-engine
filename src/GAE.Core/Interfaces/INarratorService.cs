@@ -14,6 +14,9 @@ public interface INarratorService
     Task<FreeFormResponse> ProcessConversationTurnAsync(PlayerCharacter player, Room room, Npc npc, InteractionState interaction, string rawInput, CancellationToken ct = default);
     Task<FreeFormResponse> ProcessCombatTurnAsync(PlayerCharacter player, Room room, Npc enemy, InteractionState interaction, string rawInput, CancellationToken ct = default);
 
+
+    /// <summary>AI-driven character creation: takes a natural-language description and returns a JSON character concept.</summary>
+    Task<CharacterCreationAiResponse?> CreateCharacterFromDescriptionAsync(string playerDescription, string? previousSheet, CancellationToken ct = default);
     /// <summary>Returns the currently active model identifier.</summary>
     string GetActiveModel();
 

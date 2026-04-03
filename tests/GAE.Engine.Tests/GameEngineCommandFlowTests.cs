@@ -143,7 +143,7 @@ public class GameEngineCommandFlowTests
         Assert.True(result.Success);
         var updatedPlayer = (await stateManager.GetPlayerAsync(PlayerId))!;
         Assert.Empty(updatedPlayer.Inventory);
-        var updatedRoom = (await stateManager.GetRoomAsync("gate"))!;
+        var updatedRoom = (await stateManager.GetPlayerRoomAsync(PlayerId, "gate"))!;
         var droppedItem = Assert.Single(updatedRoom.Items);
         Assert.Equal("Silken Rope", droppedItem.Name);
         Assert.Equal(1, droppedItem.Quantity);
@@ -179,7 +179,7 @@ public class GameEngineCommandFlowTests
         var updatedPlayer = (await stateManager.GetPlayerAsync(PlayerId))!;
         Assert.Equal(49, updatedPlayer.Gold);
 
-        var updatedRoom = (await stateManager.GetRoomAsync("gate"))!;
+        var updatedRoom = (await stateManager.GetPlayerRoomAsync(PlayerId, "gate"))!;
         var droppedCoin = Assert.Single(updatedRoom.Items);
         Assert.Equal("Gold Coin", droppedCoin.Name);
         Assert.Equal(1, droppedCoin.Quantity);
@@ -216,7 +216,7 @@ public class GameEngineCommandFlowTests
         var invItem = Assert.Single(updatedPlayer.Inventory);
         Assert.Equal("Silken Rope", invItem.Name);
 
-        var updatedRoom = (await stateManager.GetRoomAsync("gate"))!;
+        var updatedRoom = (await stateManager.GetPlayerRoomAsync(PlayerId, "gate"))!;
         Assert.Empty(updatedRoom.Items);
     }
 
@@ -254,7 +254,7 @@ public class GameEngineCommandFlowTests
         Assert.Equal("Inspection Token", invItem.Name);
         Assert.Equal(3, invItem.Quantity);
 
-        var updatedRoom = (await stateManager.GetRoomAsync("lab"))!;
+        var updatedRoom = (await stateManager.GetPlayerRoomAsync(PlayerId, "lab"))!;
         Assert.Empty(updatedRoom.Items);
     }
 
@@ -550,7 +550,7 @@ public class GameEngineCommandFlowTests
         Assert.Equal(InteractionMode.Combat, player!.Interaction.Mode);
 
         // CombatState should exist with both enemies + player
-        var combat = await stateManager.GetCombatStateAsync(room.Id);
+        var combat = await stateManager.GetCombatStateAsync($"{PlayerId}:{room.Id}");
         Assert.NotNull(combat);
         Assert.True(combat!.TurnOrder.Count >= 2); // At least player + surviving enemies
     }
@@ -691,6 +691,10 @@ public class GameEngineCommandFlowTests
                     EnemyUpdate = new Dictionary<string, int> { ["hp"] = -3 }
                 }
             });
+
+
+        public Task<CharacterCreationAiResponse?> CreateCharacterFromDescriptionAsync(string playerDescription, string? previousSheet, CancellationToken ct = default)
+            => Task.FromResult<CharacterCreationAiResponse?>(null);
 
         public string GetActiveModel() => "test-model";
         public void SetActiveModel(string model) { }

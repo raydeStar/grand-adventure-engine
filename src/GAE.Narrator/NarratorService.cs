@@ -305,6 +305,53 @@ public class NarratorService : INarratorService
         return await CompletionAsync(systemPrompt, userPrompt, ct);
     }
 
+    /// <inheritdoc/>
+    public async Task<CharacterCreationAiResponse?> CreateCharacterFromDescriptionAsync(
+        string playerDescription, string? previousSheet, CancellationToken ct = default)
+    {
+        var systemPrompt = """
+            You are a character creation assistant for a D&D-style text adventure.
+            The player will describe their character in natural language. Based on their
+            description, generate a character sheet.
+
+            You MUST assign stats from the standard array [15, 14, 13, 12, 10, 8].
+            Order them based on the player's description (strong character -> STR gets 15, etc.)
+
+            Valid races: Human, Elf, Dwarf, Halfling, Orc, Tiefling
+            Valid classes: Fighter, Mage, Rogue, Cleric, Ranger, Bard
+
+            Return ONLY valid JSON, no markdown fences:
+            {
+              "name": "suggested name or null if player did not say one",
+              "race": "Human",
+              "class": "Fighter",
+              "statOrder": ["str", "con", "dex", "wis", "cha", "int"],
+              "backstory": "2-3 sentence backstory based on their description",
+              "followUpQuestion": "optional question if the description was vague, or null"
+            }
+
+            If the player asks to adjust stats, re-order the standard array accordingly.
+            If the player specifies a name, use it. If they change their mind, update it.
+            """;
+
+        var userPrompt = previousSheet is not null
+            ? $"Previous sheet:\n{previousSheet}\n\nPlayer says: {playerDescription}"
+            : $"Player says: {playerDescription}";
+
+        try
+        {
+            var json = await CompletionAsync(systemPrompt, userPrompt, ct);
+            json = SanitizeLmCompletion(json);
+            return System.Text.Json.JsonSerializer.Deserialize<CharacterCreationAiResponse>(json,
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "AI character creation failed, returning null");
+            return null;
+        }
+    }
+
     public async Task<string?> ParseIntentAsync(string rawInput, CancellationToken ct = default)
     {
         var systemPrompt = """

@@ -123,6 +123,7 @@ if (!string.IsNullOrEmpty(discordToken) && discordToken != "YOUR_DISCORD_BOT_TOK
         sp.GetRequiredService<DiscordSocketClient>(),
         sp.GetRequiredService<IGameEngine>(),
         sp.GetRequiredService<IStateManager>(),
+        sp.GetRequiredService<INarratorService>(),
         sp.GetRequiredService<ILogger<DiscordBotService>>(),
         discordToken));
 }
