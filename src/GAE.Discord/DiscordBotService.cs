@@ -30,7 +30,7 @@ public class DiscordBotService : IHostedService
     private bool _narratorWarningPosted;
 
     // Configuration — channel names
-    private const string MainChannelName = "gae-tavern";
+    private const string MainChannelName = "the-tavern";
     private const string AdminChannelName = "dm-room";
 
     public DiscordBotService(
@@ -438,10 +438,16 @@ public class DiscordBotService : IHostedService
         try
         {
             var threadName = $"\u2694\uFE0F {user.Username}'s Adventure";
+
+            // Public threads need a starter message in the parent channel so they show up in the sidebar
+            var starterMessage = await textChannel.SendMessageAsync(
+                $"⚔️ **{user.Username}** has begun a new adventure! Follow along below.");
+
             var thread = await textChannel.CreateThreadAsync(
                 threadName,
                 ThreadType.PublicThread,
-                autoArchiveDuration: ThreadArchiveDuration.OneDay);
+                autoArchiveDuration: ThreadArchiveDuration.OneDay,
+                message: starterMessage);
 
             _logger.LogInformation("Created thread {ThreadId} for user {User}", thread.Id, user.Username);
             return thread;
