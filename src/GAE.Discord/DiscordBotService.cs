@@ -311,6 +311,23 @@ public class DiscordBotService : IHostedService
             catch (Exception ex) { _logger.LogWarning(ex, "Failed to unarchive thread {ThreadId}", thread.Id); }
         }
 
+        // Only the thread owner (or someone mid-creation in this thread) can issue commands.
+        // Everyone else can read but not play.
+        var threadOwner = await _stateManager.GetAllPlayersAsync();
+        var ownerPlayer = threadOwner.FirstOrDefault(p => p.ThreadId == thread.Id);
+        bool isCreating = _creationSessions.TryGetValue(message.Author.Id, out var pendingSession);
+
+        if (ownerPlayer is not null && ownerPlayer.DiscordId != discordId)
+        {
+            // Not the owner — silently ignore (they can spectate but not play)
+            return;
+        }
+        if (!isCreating && ownerPlayer is null)
+        {
+            // No owner yet and not in creation — ignore
+            return;
+        }
+
         // Quick restart keywords — works anytime in thread
         var contentLower = content.ToLowerInvariant();
         if (contentLower is "restart" or "start over" or "!restart" or "!start over")
