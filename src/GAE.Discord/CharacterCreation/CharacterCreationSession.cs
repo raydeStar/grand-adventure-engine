@@ -11,7 +11,6 @@ public class CharacterCreationSession
     public string? Race { get; private set; }
     public string? Class { get; private set; }
     public string? Backstory { get; private set; }
-    public StatAllocationMethod StatMethod { get; private set; } = StatAllocationMethod.StandardArray;
     public bool IsComplete { get; private set; }
 
     public CharacterCreationSession(string discordId)
@@ -43,26 +42,9 @@ public class CharacterCreationSession
 
             case CreationStep.Class:
                 Class = input;
-                _step = CreationStep.Stats;
-                return """
-                    **Step 4: How would you like to assign stats?**
-                    1. **Standard Array** (15, 14, 13, 12, 10, 8) — balanced and predictable
-                    2. **Roll 4d6 Drop Lowest** — random but potentially powerful
-                    3. **Flat 10s** — all stats start at 10
-                    (Type the number or name)
-                    """;
-
-            case CreationStep.Stats:
-                StatMethod = input.Trim().ToLowerInvariant() switch
-                {
-                    "1" or "standard" or "standard array" => StatAllocationMethod.StandardArray,
-                    "2" or "roll" or "4d6" or "roll 4d6" => StatAllocationMethod.Roll4d6DropLowest,
-                    "3" or "flat" or "flat 10" or "flat 10s" => StatAllocationMethod.FlatValue,
-                    _ => StatAllocationMethod.StandardArray
-                };
                 _step = CreationStep.Backstory;
                 return """
-                    **Step 5: Tell us about your character's backstory.**
+                    **Step 4: Tell us about your character's backstory.**
                     (Write a brief description, or type "skip" to have one generated for you)
                     """;
 
@@ -72,7 +54,7 @@ public class CharacterCreationSession
                 return "Creating your character...";
 
             default:
-                return "Something went wrong. Please try `!create` again.";
+                return "Something went wrong. Please try `/create` again.";
         }
     }
 
@@ -83,7 +65,7 @@ public class CharacterCreationSession
         Race = Race ?? "Human",
         Class = Class ?? "Warrior",
         Backstory = Backstory ?? "",
-        StatMethod = StatMethod
+        StatMethod = StatAllocationMethod.StandardArray
     };
 
     private enum CreationStep
@@ -91,7 +73,6 @@ public class CharacterCreationSession
         Name,
         Race,
         Class,
-        Stats,
         Backstory
     }
 }

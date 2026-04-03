@@ -311,13 +311,13 @@ public class FullPlaythroughTests : IClassFixture<GaeWebApplicationFactory>
             StatMethod = StatAllocationMethod.StandardArray
         });
 
-        // Standard array: [15, 14, 13, 12, 10, 8] → assigned to stats in YAML order
-        // STR 15 (+2), DEX 14 (+2), CON 13 (+1), INT 12 (+1), WIS 10 (+0), CHA 8 (-1)
+        // Standard array: [15, 14, 13, 12, 10, 8] → class-optimized for Fighter
+        // STR 15 (+2), CON 14 (+2), DEX 13 (+1), WIS 12 (+1), CHA 10 (+0), INT 8 (-1)
         Assert.Equal(15, player.Str);
-        Assert.Equal(14, player.Dex);
+        Assert.Equal(13, player.Dex);
 
-        // Base defense: 10 + 2 (DEX) = 12
-        Assert.Equal(12, player.Defense);
+        // Base defense: 10 + 1 (DEX) = 11
+        Assert.Equal(11, player.Defense);
 
         // Grant OP gear via admin and equip
         var adminClient = _factory.CreateAdminClient();
@@ -352,7 +352,7 @@ public class FullPlaythroughTests : IClassFixture<GaeWebApplicationFactory>
             AutoEquip = true
         });
 
-        // Verify defense: 10 + 2 (DEX) + 6 (armor) + 4 (shield) + 2 (helmet) = 24
+        // Verify defense: 10 + 1 (DEX) + 6 (armor) + 4 (shield) + 2 (helmet) = 23
         using var scope2 = _factory.Services.CreateScope();
         var state = scope2.ServiceProvider.GetRequiredService<IStateManager>();
         var geared = (await state.GetPlayerAsync("math-check"))!;
@@ -360,11 +360,11 @@ public class FullPlaythroughTests : IClassFixture<GaeWebApplicationFactory>
         Assert.NotNull(geared.Equipment.Armor);
         Assert.NotNull(geared.Equipment.Shield);
         Assert.NotNull(geared.Equipment.Helmet);
-        Assert.Equal(24, geared.Defense);
+        Assert.Equal(23, geared.Defense);
 
-        // Goretusk (+8 attack) vs AC 24: needs 16+ on d20 = 25% hit rate
-        // Player at 21 HP, Goretusk does avg 13 damage = avg 3.25 DPR
-        // Player survives ~6 rounds without healing — very doable with potions
+        // Goretusk (+8 attack) vs AC 23: needs 15+ on d20 = 30% hit rate
+        // Player at 22 HP (CON 14 = +2 mod), Goretusk does avg 13 damage = avg 3.9 DPR
+        // Player survives ~5-6 rounds without healing — very doable with potions
 
         // Player (+2 STR mod) with Thunderstrike (3d8+5) vs Goretusk AC 15:
         // needs 13+ on d20 = 40% hit rate

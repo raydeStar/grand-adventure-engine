@@ -158,11 +158,11 @@ public class GameEngine : IGameEngine
         var statValues = concept.StatMethod switch
         {
             StatAllocationMethod.Roll4d6DropLowest => _dice.RollStatArray(),
-            StatAllocationMethod.StandardArray => [.. _rules.CharacterCreation.StandardArray],
+            StatAllocationMethod.StandardArray => OrderStandardArrayByClass(concept.Class, attributeKeys, _rules.CharacterCreation.StandardArray),
             StatAllocationMethod.FlatValue => Enumerable.Repeat(_rules.CharacterCreation.FlatValue, attributeKeys.Count).ToArray(),
             StatAllocationMethod.Manual when concept.ManualStats is not null =>
                 attributeKeys.Select(k => concept.ManualStats.GetValueOrDefault(k, 10)).ToArray(),
-            _ => [.. _rules.CharacterCreation.StandardArray]
+            _ => OrderStandardArrayByClass(concept.Class, attributeKeys, _rules.CharacterCreation.StandardArray)
         };
 
         var player = new PlayerCharacter
@@ -1153,6 +1153,48 @@ public class GameEngine : IGameEngine
             return 55;
 
         return 0;
+    }
+
+    /// <summary>
+    /// Orders the standard array values so the highest stats go to the class's primary attributes.
+    /// e.g. a Mage gets INT=15, WIS=14; a Warrior gets STR=15, CON=14, etc.
+    /// </summary>
+    private static int[] OrderStandardArrayByClass(string className, List<string> attributeKeys, int[] standardArray)
+    {
+        // Define priority stat order per class archetype
+        var classPriority = className.ToLowerInvariant() switch
+        {
+            "warrior" or "fighter" or "barbarian" or "paladin" or "knight" => new[] { "str", "con", "dex", "wis", "cha", "int", "luck" },
+            "mage" or "wizard" or "sorcerer" or "warlock" => new[] { "int", "wis", "con", "dex", "cha", "str", "luck" },
+            "rogue" or "thief" or "assassin" => new[] { "dex", "str", "con", "wis", "cha", "int", "luck" },
+            "ranger" or "hunter" => new[] { "dex", "wis", "str", "con", "cha", "int", "luck" },
+            "cleric" or "priest" or "healer" or "monk" => new[] { "wis", "con", "str", "cha", "dex", "int", "luck" },
+            "bard" or "skald" => new[] { "cha", "dex", "int", "con", "wis", "str", "luck" },
+            _ => new[] { "str", "dex", "con", "int", "wis", "cha", "luck" } // generic fallback
+        };
+
+        var sorted = new int[attributeKeys.Count];
+        var arrayValues = standardArray.OrderByDescending(v => v).ToArray();
+
+        // Map priority order to attribute key positions
+        int valueIndex = 0;
+        foreach (var stat in classPriority)
+        {
+            var keyIndex = attributeKeys.FindIndex(k => k.Equals(stat, StringComparison.OrdinalIgnoreCase));
+            if (keyIndex >= 0 && valueIndex < arrayValues.Length)
+            {
+                sorted[keyIndex] = arrayValues[valueIndex++];
+            }
+        }
+
+        // Fill any remaining stats (in case attribute keys don't match priority list)
+        for (int i = 0; i < sorted.Length; i++)
+        {
+            if (sorted[i] == 0 && valueIndex < arrayValues.Length)
+                sorted[i] = arrayValues[valueIndex++];
+        }
+
+        return sorted;
     }
 
     private static string NormalizeLookupText(string? value)

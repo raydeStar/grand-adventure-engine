@@ -168,6 +168,13 @@ public class DiscordBotService : IHostedService
         var player = await _stateManager.GetPlayerByDiscordIdAsync(discordId);
         if (player is null)
         {
+            // No character — check if they have a creation session they want to restart
+            if (_creationSessions.ContainsKey(command.User.Id))
+            {
+                _creationSessions.Remove(command.User.Id);
+                await command.FollowupAsync("Character creation reset. Use `/create` to start fresh.", ephemeral: true);
+                return;
+            }
             await command.FollowupAsync("You don't have a character. Use `/create` first.", ephemeral: true);
             return;
         }
@@ -304,6 +311,29 @@ public class DiscordBotService : IHostedService
             catch (Exception ex) { _logger.LogWarning(ex, "Failed to unarchive thread {ThreadId}", thread.Id); }
         }
 
+        // Quick restart keywords — works anytime in thread
+        var contentLower = content.ToLowerInvariant();
+        if (contentLower is "restart" or "start over" or "!restart" or "!start over")
+        {
+            var existingPlayer = await _stateManager.GetPlayerByDiscordIdAsync(discordId);
+            if (existingPlayer is not null || _creationSessions.ContainsKey(message.Author.Id))
+            {
+                // If still in creation, skip confirmation — just wipe and restart
+                if (_creationSessions.ContainsKey(message.Author.Id) && existingPlayer is null)
+                {
+                    _creationSessions.Remove(message.Author.Id);
+                    await thread.SendMessageAsync("🗑️ Character creation reset. Let's start fresh.\n");
+                    await StartAiCharacterCreation(thread, message.Author.Id, discordId);
+                    return;
+                }
+                // Existing character — confirm then wipe
+                await HandleRestartConfirmedAsync(message, thread, discordId);
+                return;
+            }
+            await message.Channel.SendMessageAsync("You don't have a character yet! Use `/create` to begin.");
+            return;
+        }
+
         // Check for active creation session
         if (_creationSessions.TryGetValue(message.Author.Id, out var session))
         {
@@ -393,7 +423,7 @@ public class DiscordBotService : IHostedService
             var threadName = $"\u2694\uFE0F {user.Username}'s Adventure";
             var thread = await textChannel.CreateThreadAsync(
                 threadName,
-                ThreadType.PrivateThread,
+                ThreadType.PublicThread,
                 autoArchiveDuration: ThreadArchiveDuration.OneDay);
 
             _logger.LogInformation("Created thread {ThreadId} for user {User}", thread.Id, user.Username);
@@ -435,19 +465,33 @@ public class DiscordBotService : IHostedService
             return;
         }
 
-        // Send to AI narrator for character concept
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        var aiResponse = await _narrator.CreateCharacterFromDescriptionAsync(
-            input, session.LastSheetJson, cts.Token);
+        // Send to AI narrator for character concept (30s timeout — LM Studio models can be slow to load)
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await thread.TriggerTypingAsync();
+        CharacterCreationAiResponse? aiResponse = null;
+        try
+        {
+            aiResponse = await _narrator.CreateCharacterFromDescriptionAsync(
+                input, session.LastSheetJson, cts.Token);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "AI character creation call failed: {Message}", ex.Message);
+        }
 
         if (aiResponse is null)
         {
+            _logger.LogWarning("AI character creation returned null — LM Studio may not be running at {Endpoint}",
+                "http://host.docker.internal:1234");
+
             // Fallback to rigid wizard
             if (session.FallbackSession is null)
             {
                 session.FallbackSession = new CharacterCreation.CharacterCreationSession(discordId);
                 await message.Channel.SendMessageAsync(
-                    "The storyteller is resting. Let's do this the old-fashioned way.\n\n**What is your character's name?**");
+                    "⚠️ The storyteller is resting (AI narrator unreachable). Let's do this the old-fashioned way.\n" +
+                    "*(Make sure LM Studio is running on your machine if you want AI-driven creation. Type `restart` to try again.)*\n\n" +
+                    "**What is your character's name?**");
                 return;
             }
             var response = session.FallbackSession.ProcessInput(input);
