@@ -42,6 +42,126 @@ function Invoke-Compose {
     }
 }
 
+function Get-ConfiguredPort {
+    param(
+        [Parameter(Mandatory)]
+        [string]$EnvironmentVariableName,
+
+        [Parameter(Mandatory)]
+        [int]$Fallback
+    )
+
+    $rawValue = [Environment]::GetEnvironmentVariable($EnvironmentVariableName)
+    if ([string]::IsNullOrWhiteSpace($rawValue)) {
+        return $Fallback
+    }
+
+    $parsedValue = 0
+    $parsedSuccessfully = [int]::TryParse($rawValue.Trim(), [ref]$parsedValue)
+    if (-not $parsedSuccessfully -or $parsedValue -lt 1 -or $parsedValue -gt 65535) {
+        throw "Environment variable '$EnvironmentVariableName' must be a valid TCP port. Current value: '$rawValue'."
+    }
+
+    return $parsedValue
+}
+
+function Get-ConfiguredBaseUrl {
+    param(
+        [Parameter(Mandatory)]
+        [string]$EnvironmentVariableName,
+
+        [Parameter(Mandatory)]
+        [string]$FallbackUrl
+    )
+
+    $rawValue = [Environment]::GetEnvironmentVariable($EnvironmentVariableName)
+    if ([string]::IsNullOrWhiteSpace($rawValue)) {
+        return $FallbackUrl.TrimEnd('/')
+    }
+
+    return $rawValue.TrimEnd('/')
+}
+
+function Test-TcpPortListening {
+    param(
+        [Parameter(Mandatory)]
+        [int]$Port
+    )
+
+    $listeners = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().GetActiveTcpListeners()
+    return @($listeners | Where-Object { $_.Port -eq $Port }).Count -gt 0
+}
+
+function Get-TcpPortOwnerSummary {
+    param(
+        [Parameter(Mandatory)]
+        [int]$Port
+    )
+
+    $netTcpCommand = Get-Command 'Get-NetTCPConnection' -ErrorAction SilentlyContinue
+    if ($null -eq $netTcpCommand) {
+        return 'another process'
+    }
+
+    $connections = @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue | Sort-Object OwningProcess -Unique)
+    if ($connections.Count -eq 0) {
+        return 'another process'
+    }
+
+    $owners = foreach ($connection in $connections) {
+        $process = Get-Process -Id $connection.OwningProcess -ErrorAction SilentlyContinue
+        if ($null -eq $process) {
+            "PID $($connection.OwningProcess)"
+        }
+        else {
+            "$($process.ProcessName) (PID $($process.Id))"
+        }
+    }
+
+    return ($owners -join ', ')
+}
+
+function Resolve-AvailableTcpPort {
+    param(
+        [Parameter(Mandatory)]
+        [int]$PreferredPort,
+
+        [Parameter(Mandatory)]
+        [string]$ServiceName,
+
+        [int]$MaxOffset = 20
+    )
+
+    for ($candidatePort = $PreferredPort; $candidatePort -le ($PreferredPort + $MaxOffset); $candidatePort++) {
+        if (-not (Test-TcpPortListening -Port $candidatePort)) {
+            if ($candidatePort -ne $PreferredPort) {
+                $owners = Get-TcpPortOwnerSummary -Port $PreferredPort
+                Write-Warning "$ServiceName host port $PreferredPort is already in use by $owners. Using $candidatePort instead."
+            }
+
+            return $candidatePort
+        }
+    }
+
+    throw "Could not find a free host port for $ServiceName in range $PreferredPort-$($PreferredPort + $MaxOffset)."
+}
+
+function Resolve-BaseUrl {
+    param(
+        [AllowNull()]
+        [string]$BaseUrl,
+
+        [Parameter(Mandatory)]
+        [string]$FallbackUrl
+    )
+
+    if ([string]::IsNullOrWhiteSpace($BaseUrl)) {
+        return $FallbackUrl.TrimEnd('/')
+    }
+
+    return $BaseUrl.TrimEnd('/')
+}
+
 function Wait-ForHttpOk {
     param(
         [Parameter(Mandatory)]

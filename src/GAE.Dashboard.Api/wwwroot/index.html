@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=2" />
+  <link rel="stylesheet" href="css/style.css?v=3" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.7/signalr.min.js"
           crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="https://cdn.jsdelivr.net/npm/rot-js@2/dist/rot.min.js"
@@ -256,44 +256,104 @@
       </section>
 
       <section id="workspace-admin" class="workspace hidden">
-        <div class="admin-grid">
-          <div id="admin-overview-panel" class="panel span-2">
-            <div class="panel-heading">
-              <h3>Admin Snapshot</h3>
-              <button class="btn btn-secondary" id="btn-seed-demo-admin" type="button">Seed Demo User + Admin</button>
-            </div>
+        <nav class="admin-toolbar">
+          <button class="admin-tab active" data-admin-tab="overview" type="button">Overview</button>
+          <button class="admin-tab" data-admin-tab="llm" type="button">LLM</button>
+          <button class="admin-tab" data-admin-tab="commands" type="button">Commands</button>
+          <button class="admin-tab" data-admin-tab="mutations" type="button">Mutations</button>
+          <button class="admin-tab" data-admin-tab="players" type="button">Players</button>
+          <button class="admin-tab" data-admin-tab="world" type="button">World</button>
+          <span class="admin-toolbar-spacer"></span>
+          <button class="btn btn-secondary btn-sm" id="btn-seed-demo-admin" type="button">Seed Demo</button>
+        </nav>
+
+        <!-- ═══ OVERVIEW TAB ═══ -->
+        <div class="admin-tab-content active" data-admin-panel="overview">
+          <div class="admin-tab-body">
             <div id="summary-cards" class="summary-cards"></div>
             <div id="admin-health" class="system-health"></div>
-          </div>
 
-          <div id="admin-workflow-panel" class="panel">
-            <h3>Workflow Runner</h3>
-            <label class="field-label" for="workflow-player-select">Target player</label>
-            <select id="workflow-player-select"></select>
-            <div class="stack-buttons">
-              <button class="btn btn-primary" data-scenario="smoke-user" type="button">Run User Smoke</button>
-              <button class="btn btn-secondary" data-scenario="exploration" type="button">Run Exploration Flow</button>
-              <button class="btn btn-secondary" data-scenario="ops-check" type="button">Run Ops Check</button>
+            <div class="admin-overview-grid">
+              <div class="panel">
+                <h3>Operator Notes</h3>
+                <div class="workflow-reference compact">
+                  <div class="reference-step">
+                    <strong>Smoke flow</strong>
+                    <span>Create or seed a player, run look, stats, inventory, help, then confirm the room and story state update together.</span>
+                  </div>
+                  <div class="reference-step">
+                    <strong>Exploration flow</strong>
+                    <span>Move north to force room generation, then inspect the new room and verify the world map expands.</span>
+                  </div>
+                  <div class="reference-step">
+                    <strong>Repeatability</strong>
+                    <span>Use explicit player ids in the portal workshop so automation and manual admin checks hit the same actors every time.</span>
+                  </div>
+                  <div class="reference-step">
+                    <strong>Protected API</strong>
+                    <span>Use the same admin login in the browser, Playwright, or PowerShell to run mutations and direct command probes through the secured endpoints.</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="panel">
+                <h3>Quick Workflow</h3>
+                <label class="field-label" for="workflow-player-select">Target player</label>
+                <select id="workflow-player-select"></select>
+                <div class="stack-buttons">
+                  <button class="btn btn-primary" data-scenario="smoke-user" type="button">Run User Smoke</button>
+                  <button class="btn btn-secondary" data-scenario="exploration" type="button">Run Exploration Flow</button>
+                  <button class="btn btn-secondary" data-scenario="ops-check" type="button">Run Ops Check</button>
+                </div>
+                <div id="workflow-log" class="activity-log"></div>
+              </div>
             </div>
-            <div id="workflow-log" class="activity-log"></div>
           </div>
+        </div>
 
-          <div id="admin-command-panel" class="panel">
-            <h3>Question / Command Harness</h3>
-            <form id="admin-command-form" class="admin-command-form">
-              <select id="admin-player-select"></select>
-              <input type="text" id="admin-command-input" placeholder="Ask or run a command as any character" autocomplete="off" />
-              <button type="submit" class="btn btn-primary">Ask / Execute</button>
-            </form>
-            <div id="admin-command-log" class="activity-log"></div>
-          </div>
-
-          <div id="admin-mutation-panel" class="panel span-2">
-            <div class="panel-heading compact-heading">
-              <h3>Mutation Studio</h3>
-              <span class="field-label">Teleport actors, adjust state, seed fixtures, and create manual repro cases without leaving the browser.</span>
+        <!-- ═══ LLM TAB ═══ -->
+        <div class="admin-tab-content" data-admin-panel="llm">
+          <div class="admin-tab-body">
+            <div class="panel">
+              <h3>Active Model</h3>
+              <p class="panel-hint">The model currently used by the narrator for all AI-generated content. Switch models without restarting the server.</p>
+              <div class="llm-active-model">
+                <span class="llm-model-name" id="llm-active-model">loading...</span>
+                <button class="btn btn-secondary btn-sm" id="btn-llm-refresh" type="button">Refresh</button>
+              </div>
             </div>
 
+            <div class="panel">
+              <h3>Available Models</h3>
+              <p class="panel-hint">Models loaded in LM Studio. Click one to switch the narrator to it immediately.</p>
+              <div id="llm-models-list" class="llm-models-list">
+                <div class="empty-state">Loading models from LM Studio...</div>
+              </div>
+            </div>
+
+            <div id="llm-log" class="activity-log"></div>
+          </div>
+        </div>
+
+        <!-- ═══ COMMANDS TAB ═══ -->
+        <div class="admin-tab-content" data-admin-panel="commands">
+          <div class="admin-tab-body">
+            <div class="panel">
+              <h3>Command Harness</h3>
+              <p class="panel-hint">Run any command as any character. Useful for testing NPC interactions, combat, and free-form actions.</p>
+              <form id="admin-command-form" class="admin-command-form">
+                <select id="admin-player-select"></select>
+                <input type="text" id="admin-command-input" placeholder="Ask or run a command as any character" autocomplete="off" />
+                <button type="submit" class="btn btn-primary">Execute</button>
+              </form>
+              <div id="admin-command-log" class="activity-log"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══ MUTATIONS TAB ═══ -->
+        <div class="admin-tab-content" data-admin-panel="mutations">
+          <div class="admin-tab-body">
             <div class="mutation-grid">
               <form id="mutation-resource-form" class="mutation-form">
                 <h4>Resources</h4>
@@ -528,103 +588,87 @@
                 <button class="btn btn-primary" type="submit">Upsert Room Fixture</button>
               </form>
             </div>
-
             <div id="mutation-log" class="activity-log"></div>
           </div>
+        </div>
 
-          <div id="admin-registry-panel" class="panel span-2">
-            <h3>Player Registry</h3>
-            <div id="admin-players-table" class="registry-table"></div>
-          </div>
-
-          <div id="admin-room-catalogue-panel" class="panel span-2">
-            <h3>Room Catalogue</h3>
-            <div id="admin-rooms-list" class="room-catalogue"></div>
-          </div>
-
-          <div id="admin-payload-panel" class="panel span-2">
-            <h3>Payload Inspector</h3>
-            <div class="payload-grid">
-              <div class="payload-block">
-                <div class="payload-title">Current player payload</div>
-                <pre id="player-payload" class="payload-view">Select a character to inspect live payloads.</pre>
-              </div>
-              <div class="payload-block">
-                <div class="payload-title">Current room payload</div>
-                <pre id="room-payload" class="payload-view">Select a character to inspect the current room payload.</pre>
-              </div>
+        <!-- ═══ PLAYERS TAB ═══ -->
+        <div class="admin-tab-content" data-admin-panel="players">
+          <div class="admin-tab-body">
+            <div class="panel">
+              <h3>Player Registry</h3>
+              <div id="admin-players-table" class="registry-table"></div>
             </div>
-          </div>
 
-          <div id="admin-character-panel" class="panel span-2 admin-character-panel">
-            <div class="panel-heading compact-heading">
+            <div id="admin-character-panel" class="panel admin-character-panel">
               <h3>Live Character Snapshot</h3>
-              <span class="field-label">Admin-only character details for the active actor while User Flow stays full-width.</span>
-            </div>
-            <div class="admin-character-panel-grid">
-              <div class="sidebar-section char-panel">
-                <h3 id="char-title">Character</h3>
-                <div class="char-info">
-                  <div class="char-meta" id="char-meta">No active character selected.</div>
-                  <div class="resource-bars">
-                    <div class="bar-group">
-                      <label>HP</label>
-                      <div class="bar bar-hp"><div class="bar-fill" id="hp-bar"></div><span class="bar-text" id="hp-text">0 / 0</span></div>
+              <div class="admin-character-panel-grid">
+                <div class="sidebar-section char-panel">
+                  <h3 id="char-title">Character</h3>
+                  <div class="char-info">
+                    <div class="char-meta" id="char-meta">No active character selected.</div>
+                    <div class="resource-bars">
+                      <div class="bar-group">
+                        <label>HP</label>
+                        <div class="bar bar-hp"><div class="bar-fill" id="hp-bar"></div><span class="bar-text" id="hp-text">0 / 0</span></div>
+                      </div>
+                      <div class="bar-group">
+                        <label>MP</label>
+                        <div class="bar bar-mp"><div class="bar-fill" id="mp-bar"></div><span class="bar-text" id="mp-text">0 / 0</span></div>
+                      </div>
+                      <div class="bar-group">
+                        <label>XP</label>
+                        <div class="bar bar-xp"><div class="bar-fill" id="xp-bar"></div><span class="bar-text" id="xp-text">0 / 100</span></div>
+                      </div>
                     </div>
-                    <div class="bar-group">
-                      <label>MP</label>
-                      <div class="bar bar-mp"><div class="bar-fill" id="mp-bar"></div><span class="bar-text" id="mp-text">0 / 0</span></div>
+                    <div class="stats-grid" id="stats-grid"></div>
+                    <div id="character-details" class="detail-grid"></div>
+                    <div class="char-resources">
+                      <span id="char-gold">Gold 0</span>
+                      <span id="char-level">Level 1</span>
+                      <span id="char-defense">Defense 10</span>
                     </div>
-                    <div class="bar-group">
-                      <label>XP</label>
-                      <div class="bar bar-xp"><div class="bar-fill" id="xp-bar"></div><span class="bar-text" id="xp-text">0 / 100</span></div>
-                    </div>
-                  </div>
-                  <div class="stats-grid" id="stats-grid"></div>
-                  <div id="character-details" class="detail-grid"></div>
-                  <div class="char-resources">
-                    <span id="char-gold">Gold 0</span>
-                    <span id="char-level">Level 1</span>
-                    <span id="char-defense">Defense 10</span>
                   </div>
                 </div>
-              </div>
 
-              <div class="sidebar-section equip-panel">
-                <h3>Equipment</h3>
-                <div id="equipment-slots" class="equipment-slots"></div>
-              </div>
+                <div class="sidebar-section equip-panel">
+                  <h3>Equipment</h3>
+                  <div id="equipment-slots" class="equipment-slots"></div>
+                </div>
 
-              <div class="sidebar-section inv-panel">
-                <h3>Inventory</h3>
-                <div id="inventory-list" class="inventory-list"></div>
-              </div>
+                <div class="sidebar-section inv-panel">
+                  <h3>Inventory</h3>
+                  <div id="inventory-list" class="inventory-list"></div>
+                </div>
 
-              <div class="sidebar-section status-panel">
-                <h3>Status Effects</h3>
-                <div id="status-effects" class="status-effects"></div>
+                <div class="sidebar-section status-panel">
+                  <h3>Status Effects</h3>
+                  <div id="status-effects" class="status-effects"></div>
+                </div>
               </div>
             </div>
           </div>
+        </div>
 
-          <div id="admin-notes-panel" class="panel">
-            <h3>Operator Notes</h3>
-            <div class="workflow-reference compact">
-              <div class="reference-step">
-                <strong>Smoke flow</strong>
-                <span>Create or seed a player, run look, stats, inventory, help, then confirm the room and story state update together.</span>
-              </div>
-              <div class="reference-step">
-                <strong>Exploration flow</strong>
-                <span>Move north to force room generation, then inspect the new room and verify the world map expands.</span>
-              </div>
-              <div class="reference-step">
-                <strong>Repeatability</strong>
-                <span>Use explicit player ids in the portal workshop so automation and manual admin checks hit the same actors every time.</span>
-              </div>
-              <div class="reference-step">
-                <strong>Protected API</strong>
-                <span>Use the same admin login in the browser, Playwright, or PowerShell to run mutations and direct command probes through the secured endpoints.</span>
+        <!-- ═══ WORLD TAB ═══ -->
+        <div class="admin-tab-content" data-admin-panel="world">
+          <div class="admin-tab-body">
+            <div class="panel">
+              <h3>Room Catalogue</h3>
+              <div id="admin-rooms-list" class="room-catalogue"></div>
+            </div>
+
+            <div class="panel">
+              <h3>Payload Inspector</h3>
+              <div class="payload-grid">
+                <div class="payload-block">
+                  <div class="payload-title">Current player payload</div>
+                  <pre id="player-payload" class="payload-view">Select a character to inspect live payloads.</pre>
+                </div>
+                <div class="payload-block">
+                  <div class="payload-title">Current room payload</div>
+                  <pre id="room-payload" class="payload-view">Select a character to inspect the current room payload.</pre>
+                </div>
               </div>
             </div>
           </div>
@@ -633,10 +677,10 @@
     </main>
   </div>
 
-  <script src="js/api.js?v=2"></script>
-  <script src="js/signalr-client.js?v=2"></script>
-  <script src="js/room-map.js?v=2"></script>
-  <script src="js/ui.js?v=2"></script>
-  <script src="js/app.js?v=2"></script>
+  <script src="js/api.js?v=3"></script>
+  <script src="js/signalr-client.js?v=3"></script>
+  <script src="js/room-map.js?v=3"></script>
+  <script src="js/ui.js?v=3"></script>
+  <script src="js/app.js?v=3"></script>
 </body>
 </html>

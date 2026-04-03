@@ -60,7 +60,7 @@ public class HealthAndBootstrapTests : IClassFixture<GaeWebApplicationFactory>
 
         var spawnRoom = rooms.EnumerateArray().FirstOrDefault(r =>
             r.GetProperty("id").GetString() == "spawn");
-        Assert.Equal("The Crossroads Inn", spawnRoom.GetProperty("name").GetString());
+        Assert.Equal("The Rusted Flagon", spawnRoom.GetProperty("name").GetString());
     }
 
     [Fact]
@@ -71,7 +71,7 @@ public class HealthAndBootstrapTests : IClassFixture<GaeWebApplicationFactory>
 
         var room = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("spawn", room.GetProperty("id").GetString());
-        Assert.Equal("The Crossroads Inn", room.GetProperty("name").GetString());
+        Assert.Equal("The Rusted Flagon", room.GetProperty("name").GetString());
     }
 
     [Fact]

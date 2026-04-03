@@ -19,7 +19,9 @@
     commandHistory: [],
     commandHistoryIndex: -1,
     interactionMode: 'explore',
-    interactionTarget: ''
+    interactionTarget: '',
+    llmActive: '',
+    llmModels: []
   };
 
   // C# InteractionMode enum serializes as int — map to lowercase strings
@@ -96,6 +98,8 @@
     });
     UI.$('btn-seed-demo').addEventListener('click', () => void seedDemoCharacters(false));
     UI.$('btn-seed-demo-admin').addEventListener('click', () => void seedDemoCharacters(false));
+    UI.$('btn-llm-refresh').addEventListener('click', () => void refreshLlmModels());
+    UI.$('llm-models-list').addEventListener('click', handleLlmModelClick);
 
     UI.$('create-form').addEventListener('submit', handleCreateCharacter);
     UI.$('command-input').addEventListener('keydown', handleCommandKeydown);
@@ -126,6 +130,14 @@
     document.querySelectorAll('[data-scenario]').forEach((button) => {
       button.addEventListener('click', () => void runScenario(button.dataset.scenario || ''));
     });
+
+    // Admin tab switching
+    document.querySelectorAll('[data-admin-tab]').forEach((tab) => {
+      tab.addEventListener('click', () => switchAdminTab(tab.dataset.adminTab));
+    });
+    // Restore persisted admin tab
+    const savedTab = localStorage.getItem('gae.admin.tab');
+    if (savedTab) switchAdminTab(savedTab);
 
     UI.$('existing-players').addEventListener('click', handlePortalPlayerClick);
     UI.$('admin-players-table').addEventListener('click', handleAdminRegistryClick);
@@ -266,6 +278,16 @@
     }
   }
 
+  function switchAdminTab(tabName) {
+    document.querySelectorAll('[data-admin-tab]').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.adminTab === tabName);
+    });
+    document.querySelectorAll('[data-admin-panel]').forEach((panel) => {
+      panel.classList.toggle('active', panel.dataset.adminPanel === tabName);
+    });
+    localStorage.setItem('gae.admin.tab', tabName);
+  }
+
   async function refreshAll() {
     if (!state.session) return;
 
@@ -273,7 +295,8 @@
       refreshPlayers(),
       refreshRooms(),
       refreshSummary(),
-      refreshHealth()
+      refreshHealth(),
+      refreshLlmModels()
     ]);
 
     if (state.currentPlayerId) {
@@ -320,6 +343,56 @@
   async function refreshHealth() {
     state.health = await API.getHealth();
     UI.renderHealth(state.health);
+  }
+
+  async function refreshLlmModels() {
+    if (!state.session?.isAdmin) return;
+
+    try {
+      const data = await API.getLlmModels();
+      state.llmActive = data.active || 'unknown';
+      state.llmModels = data.available || [];
+      renderLlmPanel();
+    } catch (error) {
+      UI.$('llm-active-model').textContent = 'Error loading model info';
+      UI.$('llm-models-list').innerHTML = '<div class="empty-state">Could not reach LM Studio.</div>';
+    }
+  }
+
+  function renderLlmPanel() {
+    UI.$('llm-active-model').textContent = state.llmActive;
+
+    const list = UI.$('llm-models-list');
+    if (!state.llmModels.length) {
+      list.innerHTML = '<div class="empty-state">No models loaded in LM Studio.</div>';
+      return;
+    }
+
+    list.innerHTML = state.llmModels.map((id) => {
+      const isActive = id === state.llmActive;
+      return `<div class="llm-model-card${isActive ? ' active' : ''}" data-llm-model="${id}">
+        <span class="model-id">${id}</span>
+        ${isActive ? '<span class="model-badge">Active</span>' : '<button class="btn btn-primary btn-sm">Use This Model</button>'}
+      </div>`;
+    }).join('');
+  }
+
+  async function handleLlmModelClick(event) {
+    const card = event.target.closest('[data-llm-model]');
+    if (!card) return;
+
+    const model = card.dataset.llmModel;
+    if (model === state.llmActive) return;
+    if (!ensureAdmin()) return;
+
+    try {
+      const result = await API.setLlmModel(model);
+      state.llmActive = result.active || model;
+      renderLlmPanel();
+      UI.appendActivity('llm-log', result.summary || `Switched to ${model}.`, 'success');
+    } catch (error) {
+      UI.appendActivity('llm-log', error.message || 'Failed to switch model.', 'failure');
+    }
   }
 
   async function refreshCurrentPlayer() {

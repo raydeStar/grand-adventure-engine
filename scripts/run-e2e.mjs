@@ -1,6 +1,8 @@
 import { spawn } from 'node:child_process';
 
-const baseUrl = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:8181';
+const baseUrl = process.env.PLAYWRIGHT_BASE_URL
+  || process.env.GAE_BASE_URL
+  || `http://127.0.0.1:${process.env.GAE_HOST_PORT || '8181'}`;
 
 function run(command, args, options = {}) {
   return new Promise((resolve, reject) => {

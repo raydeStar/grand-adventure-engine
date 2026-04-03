@@ -2,7 +2,7 @@
 
 ## Local access
 
-- Browser URL: `http://localhost:8181`
+- Browser URL: `http://localhost:8181` by default. `reset-docker-stack.ps1` automatically falls forward to another free port and prints the actual URL when `8181` is already in use.
 - User account: `user`
 - User password: `GAE-User-Local!123`
 - Admin account: `admin`
@@ -14,6 +14,8 @@ Override any of those through Docker environment variables or configuration keys
 - `GAE_DASHBOARD_USER_PASSWORD`
 - `GAE_DASHBOARD_ADMIN_USERNAME`
 - `GAE_DASHBOARD_ADMIN_PASSWORD`
+- `GAE_HOST_PORT`
+- `WIKIJS_HOST_PORT`
 
 ## Manual browser workflow
 
@@ -24,7 +26,11 @@ Override any of those through Docker environment variables or configuration keys
 ## PowerShell examples
 
 ```powershell
-$base = 'http://localhost:8181'
+$base = $env:GAE_BASE_URL
+if ([string]::IsNullOrWhiteSpace($base)) {
+  $base = 'http://localhost:8181'
+}
+
 $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
 
 Invoke-RestMethod "$base/api/dashboard/auth/login" `
@@ -67,6 +73,12 @@ Invoke-RestMethod "$base/api/dashboard/action" `
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\reset-docker-stack.ps1
+```
+
+- Reset the Docker stack on explicit host ports:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\reset-docker-stack.ps1 -GaePort 8182 -WikiPort 3001
 ```
 
 - Force a clean rebuild of the `gae` image before restart:

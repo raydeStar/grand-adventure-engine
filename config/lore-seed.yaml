@@ -1,49 +1,446 @@
-# LORE SEED — Initial world bootstrapping content
+# LORE SEED — Demo World: Thornwall & the Dread Hollow
 # "Every world begins with a whisper of history." — Sir Thaddeus
+#
+# VICTORY CONDITION: Defeat Goretusk the Undying in the Dread Hollow depths.
+# A small town, a forest, and a dungeon. Short, punchy, and fun.
 
 world:
-  name: "The Shattered Reaches"
-  description: "A fractured land where ancient magic bleeds through reality's cracks."
+  name: "Thornwall and the Dread Hollow"
+  description: >-
+    A small frontier town perched on the edge of a cursed forest.
+    Something stirs in the dungeon beneath the old ruins, and the townsfolk
+    are too scared to investigate. That's where you come in.
 
 regions:
-  - id: "thornveil"
-    name: "The Thornveil"
-    description: "A dark forest where the canopy blocks all but the most persistent light."
-    tags: ["forest", "dark", "magical"]
+  - id: "thornwall"
+    name: "Thornwall"
+    description: "A modest frontier town with a tavern, a blacksmith, and more rumors than residents."
+    tags: ["town", "safe", "trade"]
 
-  - id: "ironhold"
-    name: "Ironhold"
-    description: "A fortified trade city built around a massive iron deposit."
-    tags: ["city", "trade", "fortified"]
+  - id: "whisperwood"
+    name: "The Whisperwood"
+    description: "A dense, fog-choked forest between Thornwall and the Dread Hollow."
+    tags: ["forest", "dark", "wilderness"]
+
+  - id: "dread_hollow"
+    name: "The Dread Hollow"
+    description: "Ancient ruins and tunnels carved deep into the earth. Something terrible waits at the bottom."
+    tags: ["dungeon", "underground", "dangerous"]
+
+factions:
+  - id: "thornwall_militia"
+    name: "Thornwall Militia"
+    description: "The town's small but loyal guard force. Underpaid, overworked, deeply suspicious of adventurers."
+
+  - id: "hollow_cult"
+    name: "The Hollow Cult"
+    description: "Cultists who worship Goretusk and feed the dungeon with offerings."
+
+  - id: "merchants_guild"
+    name: "Thornwall Merchants"
+    description: "The shopkeepers and traders who keep Thornwall running."
+
+# ──────────────────────────────────────────────────────────
+#  TOWN: THORNWALL
+# ──────────────────────────────────────────────────────────
 
 starting_room:
   id: "spawn"
-  name: "The Crossroads Inn"
+  name: "The Rusted Flagon"
   description: >-
-    A weathered inn at the junction of three ancient roads. The hearth crackles
-    with warmth, and the smell of roasting meat fills the air. A grizzled
-    innkeeper polishes a mug behind the bar.
+    A creaky tavern that smells of woodsmoke and cheap ale. Mismatched chairs
+    surround battered tables, and a mounted boar's head watches the room with
+    glass eyes. The barkeep, Mara, keeps one hand under the counter at all times.
+    A notice board near the door is covered in bounty postings and desperate pleas.
   exits:
-    north: "thornveil_edge"
-    east: "ironhold_gate"
-    south: "dusty_trail"
+    east: "town_square"
+    south: "back_alley"
   npcs:
     - id: "innkeeper_mara"
-      name: "Mara the Innkeeper"
-      personality: "Gruff but kind. Knows every rumor in the region. Respects strength and honesty."
+      name: "Mara the Barkeep"
+      personality: "Warm and flirtatious, but sharp as a knife. Knows every secret in Thornwall. Has a soft spot for adventurers with good stories. Lonely since her husband left."
+      faction: "merchants_guild"
+      knowledge_scopes: ["rumors", "town", "whisperwood", "dread_hollow", "merchants_guild"]
+    - id: "drunk_pete"
+      name: "Stumbling Pete"
+      personality: "Town drunk. Cowardly, gullible, and desperate for coin. Claims he saw the dungeon boss once. Nobody believes him. Surprisingly honest when sober, which is never."
       faction: "neutral"
-      knowledge_scopes: ["rumors", "inn", "crossroads", "thornveil", "ironhold"]
-  environment_tags: ["indoor", "safe", "lit"]
+      knowledge_scopes: ["rumors", "dread_hollow"]
+  environment_tags: ["indoor", "safe", "lit", "tavern"]
 
-factions:
-  - id: "iron_guard"
-    name: "The Iron Guard"
-    description: "Ironhold's military and peacekeeping force."
+rooms:
+  - id: "town_square"
+    name: "Thornwall Town Square"
+    description: >-
+      The heart of Thornwall — a cobblestone clearing ringed by crooked buildings.
+      A stone well sits in the center, and a militia guardsman leans against a post,
+      watching passersby with the enthusiasm of a man who'd rather be anywhere else.
+      The blacksmith's hammer rings from the north. The tavern is to the west, and the
+      town gate opens east toward the forest.
+    exits:
+      west: "spawn"
+      north: "blacksmith"
+      south: "general_store"
+      east: "town_gate"
+    npcs:
+      - id: "guard_bram"
+        name: "Bram the Gate Guard"
+        personality: "Stern, gruff, and suspicious. Devoted to his post. Extremely hard to charm or bribe. Respects strength and directness. Hates adventurers who cause trouble."
+        faction: "thornwall_militia"
+        knowledge_scopes: ["town", "militia", "whisperwood", "security"]
+    environment_tags: ["outdoor", "safe", "lit", "town_center"]
 
-  - id: "thornweavers"
-    name: "The Thornweavers"
-    description: "Druids and rangers who protect the Thornveil from exploitation."
+  - id: "blacksmith"
+    name: "Korga's Forge"
+    description: >-
+      Waves of heat pour from the open-air forge where a massive orc woman hammers
+      glowing steel into shape. Weapons and armor hang from every surface — some
+      mundane, others crackling with faint enchantment. A sign reads:
+      "YOU BREAK IT, YOU BUY IT. YES, THAT INCLUDES YOUR FACE."
+    exits:
+      south: "town_square"
+    npcs:
+      - id: "blacksmith_korga"
+        name: "Korga Ironjaw"
+        personality: "Blunt, loud, and proud of her work. An orc blacksmith who settled in Thornwall after retiring from mercenary life. Respects fighters. Finds rogues amusing. Will give discounts to people who impress her."
+        faction: "merchants_guild"
+        knowledge_scopes: ["weapons", "armor", "combat", "mercenary_life"]
+    items:
+      - id: "thunderstrike_blade"
+        name: "Thunderstrike Blade"
+        description: "A longsword that crackles with blue lightning. Korga's masterwork — she's been looking for someone worthy to carry it."
+        type: "Weapon"
+        damage_dice: "3d8+5"
+        damage_stat: "str"
+        value: 500
+        is_equippable: true
+      - id: "ironbark_plate"
+        name: "Ironbark Plate Armor"
+        description: "Armor forged from ironwood and tempered steel. Light enough to move in, tough enough to stop a troll's claw."
+        type: "Armor"
+        armor_value: 6
+        value: 400
+        is_equippable: true
+      - id: "starfall_shield"
+        name: "Starfall Shield"
+        description: "A round shield inlaid with a meteor fragment. Glows faintly in the dark."
+        type: "Shield"
+        armor_value: 4
+        value: 250
+        is_equippable: true
+    environment_tags: ["indoor", "safe", "lit", "forge", "hot"]
 
-  - id: "shadow_market"
-    name: "The Shadow Market"
-    description: "A loose network of smugglers, thieves, and information brokers."
+  - id: "general_store"
+    name: "Needful Things"
+    description: >-
+      A cramped shop stuffed floor to ceiling with everything a frontier town
+      could need. Rope, torches, dried rations, questionable potions, and a
+      taxidermied owlbear that might be watching you. The shopkeeper, a
+      fast-talking halfling named Pip, grins from behind the counter.
+    exits:
+      north: "town_square"
+    npcs:
+      - id: "shopkeeper_pip"
+        name: "Pip Needler"
+        personality: "Cheerful, fast-talking, and a shameless haggler. A halfling with big dreams and bigger prices. Friendly to everyone because everyone is a potential customer. Secretly terrified of the forest."
+        faction: "merchants_guild"
+        knowledge_scopes: ["trade", "supplies", "rumors", "town"]
+    items:
+      - id: "healing_potion_1"
+        name: "Greater Healing Potion"
+        description: "A thick red liquid that tastes like cherries and regret. Restores a massive amount of health."
+        type: "Potion"
+        value: 50
+        is_consumable: true
+        effect: "Restores 30 HP"
+        quantity: 3
+      - id: "mana_potion_1"
+        name: "Azure Mana Draught"
+        description: "A shimmering blue potion. Tastes like a thunderstorm."
+        type: "Potion"
+        value: 40
+        is_consumable: true
+        effect: "Restores 20 MP"
+        quantity: 2
+      - id: "dungeon_key_hint"
+        name: "Old Journal Page"
+        description: "A torn page from an explorer's journal. It mentions a hidden passage in the dungeon depths, behind a statue of a boar."
+        type: "QuestItem"
+        value: 5
+    environment_tags: ["indoor", "safe", "lit", "shop"]
+
+  - id: "back_alley"
+    name: "Thornwall Back Alley"
+    description: >-
+      A narrow, shadow-choked passage behind the tavern. Crates and barrels
+      are stacked haphazardly, and the air smells of damp stone and something
+      less pleasant. A hooded figure leans against the wall, watching you with
+      unsettling calm.
+    exits:
+      north: "spawn"
+    npcs:
+      - id: "fence_silas"
+        name: "Silas the Fence"
+        personality: "Quiet, calculating, and amoral. Buys and sells anything with no questions asked. Loyal only to coin. Secretly a member of a thieves' network. Very hard to deceive — he's heard every con."
+        faction: "neutral"
+        knowledge_scopes: ["black_market", "rumors", "dread_hollow", "hollow_cult"]
+    items:
+      - id: "shadow_dagger"
+        name: "Nightfang Dagger"
+        description: "A wickedly curved dagger that seems to drink the light. Impossibly sharp. Previous owner didn't need it anymore — on account of being dead."
+        type: "Weapon"
+        damage_dice: "2d8+4"
+        damage_stat: "dex"
+        value: 300
+        is_equippable: true
+    environment_tags: ["outdoor", "dark", "shady", "alley"]
+
+  - id: "town_gate"
+    name: "Thornwall Eastern Gate"
+    description: >-
+      The town's main gate — two heavy wooden doors reinforced with iron bands.
+      Beyond them, a dirt road winds into the dark tree line of the Whisperwood.
+      Claw marks score the outside of the gate. A militia guard paces nervously.
+    exits:
+      west: "town_square"
+      east: "forest_edge"
+    npcs:
+      - id: "gate_guard_lena"
+        name: "Lena the Gate Guard"
+        personality: "Young, nervous, and eager to prove herself. Recently joined the militia after her brother went missing in the Whisperwood. Brave but inexperienced. Easy to talk to, hard to intimidate because she's already scared of everything."
+        faction: "thornwall_militia"
+        knowledge_scopes: ["militia", "whisperwood", "monsters", "missing_people"]
+    environment_tags: ["outdoor", "lit", "fortified", "gate"]
+
+# ──────────────────────────────────────────────────────────
+#  FOREST: THE WHISPERWOOD
+# ──────────────────────────────────────────────────────────
+
+  - id: "forest_edge"
+    name: "Edge of the Whisperwood"
+    description: >-
+      The tree line hits you like a wall. Ancient oaks crowd together, their
+      branches tangled overhead into a canopy that blocks most of the sky.
+      The path splits — north toward strange lights between the trees, and
+      east deeper into the forest where the fog thickens.
+    exits:
+      west: "town_gate"
+      north: "fairy_grove"
+      east: "deep_forest"
+    npcs:
+      - id: "ranger_thorne"
+        name: "Thorne the Ranger"
+        personality: "Quiet, weathered, and world-weary. A retired adventurer who patrols the forest edge to keep Thornwall safe. Respects nature and anyone who doesn't waste his time. Will warn about dangers ahead honestly."
+        faction: "neutral"
+        knowledge_scopes: ["whisperwood", "monsters", "dread_hollow", "survival", "herbs"]
+    environment_tags: ["outdoor", "forest", "dim", "wilderness"]
+
+  - id: "fairy_grove"
+    name: "The Fairy Grove"
+    description: >-
+      A clearing where soft golden light filters through crystalline leaves.
+      Tiny luminous shapes dart between mushroom rings, leaving trails of
+      sparkling dust. It's beautiful and deeply unsettling. A massive ancient
+      tree stands in the center, its trunk carved with faces that seem to watch you.
+    exits:
+      south: "forest_edge"
+    items:
+      - id: "fairy_crown"
+        name: "Crown of the Fae"
+        description: "A circlet woven from living silver vines. Whispers ancient secrets to its wearer. Dramatically boosts magical ability."
+        type: "Helmet"
+        armor_value: 2
+        value: 600
+        is_equippable: true
+        effect: "+5 to INT and WIS while worn"
+      - id: "healing_mushroom"
+        name: "Glowcap Mushroom"
+        description: "A luminous mushroom that pulses with warm light. Eating it restores health and cures poison."
+        type: "Potion"
+        value: 25
+        is_consumable: true
+        effect: "Restores 20 HP and cures poison"
+        quantity: 5
+    environment_tags: ["outdoor", "forest", "magical", "lit", "fae"]
+
+  - id: "deep_forest"
+    name: "The Tangled Deep"
+    description: >-
+      The fog is so thick you can barely see your own hands. Roots snake across
+      the ground like tripwires, and every sound is swallowed by the damp
+      stillness. Something large crashed through here recently — broken branches
+      and deep gouges mark the trail heading south toward crumbling stone ruins.
+    exits:
+      west: "forest_edge"
+      south: "dungeon_entrance"
+    npcs:
+      - id: "wolf_alpha"
+        name: "Shadowfang"
+        personality: "A massive dire wolf with glowing amber eyes. Territorial and aggressive. Will attack on sight unless the player shows dominance or offers food."
+        faction: "neutral"
+        knowledge_scopes: []
+        is_hostile: true
+        level: 3
+        hp: 35
+        max_hp: 35
+        attack_bonus: 5
+        damage_dice: "2d6+3"
+        defense: 13
+        loot:
+          - id: "wolf_pelt"
+            name: "Shadowfang Pelt"
+            description: "A thick, dark pelt that radiates warmth. Worth a fortune to the right buyer."
+            type: "Misc"
+            value: 150
+            quantity: 1
+    environment_tags: ["outdoor", "forest", "dark", "fog", "dangerous"]
+
+# ──────────────────────────────────────────────────────────
+#  DUNGEON: THE DREAD HOLLOW
+# ──────────────────────────────────────────────────────────
+
+  - id: "dungeon_entrance"
+    name: "Dread Hollow Entrance"
+    description: >-
+      Crumbling stone archways frame a yawning darkness that descends into the
+      earth. The air smells of rot and old blood. Carved into the lintel above
+      the entrance is a crude image of a tusked beast. Someone has scratched
+      "TURN BACK" into the stone in shaky letters. The path continues down.
+    exits:
+      north: "deep_forest"
+      down: "dungeon_hall"
+    environment_tags: ["outdoor", "ruins", "dark", "dangerous", "dungeon_entrance"]
+
+  - id: "dungeon_hall"
+    name: "The Hollow Hall"
+    description: >-
+      A long underground corridor lined with crumbling pillars. Torches flicker
+      in rusty sconces — someone has been maintaining them. Bones crunch
+      underfoot. The hall branches east toward the sound of chanting, and a
+      heavy iron door blocks the passage deeper down.
+    exits:
+      up: "dungeon_entrance"
+      east: "cultist_shrine"
+      down: "dungeon_depths"
+    npcs:
+      - id: "skeleton_guard_1"
+        name: "Hollow Skeleton"
+        personality: "An animated skeleton in rusted armor. Mindless but relentless. Attacks any living creature on sight."
+        faction: "hollow_cult"
+        knowledge_scopes: []
+        is_hostile: true
+        level: 2
+        hp: 20
+        max_hp: 20
+        attack_bonus: 3
+        damage_dice: "1d8+1"
+        defense: 12
+        loot:
+          - id: "rusted_sword"
+            name: "Rusted Longsword"
+            description: "Pitted and dull, but still capable of drawing blood."
+            type: "Weapon"
+            damage_dice: "1d8"
+            damage_stat: "str"
+            value: 10
+            is_equippable: true
+    items:
+      - id: "old_shield"
+        name: "Battered Iron Shield"
+        description: "Dented and scarred from countless battles. Still holds together. Barely."
+        type: "Shield"
+        armor_value: 2
+        value: 15
+        is_equippable: true
+    environment_tags: ["indoor", "underground", "dark", "dungeon", "dangerous"]
+
+  - id: "cultist_shrine"
+    name: "Shrine of the Tusk"
+    description: >-
+      A circular chamber dominated by a crude stone altar stained dark with
+      old blood. Candles flicker around a massive boar skull mounted on the
+      wall. Hooded figures kneel in prayer, murmuring in a language that makes
+      your teeth hurt. They haven't noticed you. Yet.
+    exits:
+      west: "dungeon_hall"
+    npcs:
+      - id: "cultist_leader"
+        name: "High Acolyte Vex"
+        personality: "Fanatical, unhinged, and dangerously intelligent. Leads the Hollow Cult's rituals. Believes Goretusk is a god. Will try to convert the player before attacking. Immune to intimidation — she genuinely welcomes death."
+        faction: "hollow_cult"
+        knowledge_scopes: ["hollow_cult", "goretusk", "rituals", "dread_hollow"]
+        is_hostile: true
+        level: 3
+        hp: 25
+        max_hp: 25
+        attack_bonus: 4
+        damage_dice: "1d8+2"
+        defense: 13
+        loot:
+          - id: "acolyte_staff"
+            name: "Staff of Dark Whispers"
+            description: "A gnarled staff that hums with malevolent energy. Boosts magic damage significantly."
+            type: "Weapon"
+            damage_dice: "3d6+4"
+            damage_stat: "int"
+            value: 400
+            is_equippable: true
+      - id: "cultist_grunt"
+        name: "Hollow Cultist"
+        personality: "A brainwashed follower. Fearful of Vex, more fearful of Goretusk. Will flee if Vex is defeated."
+        faction: "hollow_cult"
+        knowledge_scopes: ["hollow_cult"]
+        is_hostile: true
+        level: 2
+        hp: 15
+        max_hp: 15
+        attack_bonus: 2
+        damage_dice: "1d6+1"
+        defense: 11
+    items:
+      - id: "cult_treasure"
+        name: "Offering Chest"
+        description: "A chest filled with gold coins and trinkets offered to Goretusk. The cultists won't miss it. Probably."
+        type: "Misc"
+        value: 200
+    environment_tags: ["indoor", "underground", "dark", "shrine", "dangerous", "cultist"]
+
+  - id: "dungeon_depths"
+    name: "The Dread Depths"
+    description: >-
+      The deepest chamber of the Dread Hollow. The ceiling soars into darkness
+      above. The floor is cracked and scorched. In the center of the room,
+      chained to a massive stone pillar, is a creature from nightmares —
+      Goretusk the Undying. A monstrous boar-demon the size of a wagon,
+      with tusks like scimitars and eyes that burn with hellfire. The chains
+      are cracking. It sees you. It smiles.
+    exits:
+      up: "dungeon_hall"
+    npcs:
+      - id: "boss_goretusk"
+        name: "Goretusk the Undying"
+        personality: "Ancient, malevolent, and theatrical. A demon-boar bound beneath the Dread Hollow for centuries. Loves to monologue before killing. Respects nothing. Cannot be reasoned with — only destroyed. VICTORY CONDITION: defeating this creature wins the demo."
+        faction: "hollow_cult"
+        knowledge_scopes: ["dread_hollow", "ancient_evil", "hollow_cult"]
+        is_hostile: true
+        level: 6
+        hp: 80
+        max_hp: 80
+        attack_bonus: 8
+        damage_dice: "2d8+4"
+        defense: 15
+        loot:
+          - id: "goretusk_tusk"
+            name: "Tusk of the Undying"
+            description: "A massive curved tusk torn from Goretusk's skull. It pulses with dark power. Proof that you actually did it."
+            type: "QuestItem"
+            value: 1000
+          - id: "champion_blade"
+            name: "Demonslayer Greatsword"
+            description: "A legendary weapon forged in Goretusk's own hellfire. Absurdly powerful. You earned this."
+            type: "Weapon"
+            damage_dice: "4d8+8"
+            damage_stat: "str"
+            value: 2000
+            is_equippable: true
+    environment_tags: ["indoor", "underground", "dark", "boss_arena", "hellfire", "dangerous"]

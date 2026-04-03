@@ -15,8 +15,10 @@ public class DashboardController : ControllerBase
     private readonly IGameEngine _engine;
     private readonly IGameEventBroadcaster _broadcaster;
     private readonly IWikiService _wikiService;
+    private readonly INarratorService _narrator;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _configuration;
+    private readonly WorldSeedConfig _worldSeedConfig;
 
     private static readonly TimeSpan NarratorCacheDuration = TimeSpan.FromSeconds(60);
     private static object? _narratorCachedResult;
@@ -27,15 +29,19 @@ public class DashboardController : ControllerBase
         IGameEngine engine,
         IGameEventBroadcaster broadcaster,
         IWikiService wikiService,
+        INarratorService narrator,
         IHttpClientFactory httpClientFactory,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        WorldSeedConfig worldSeedConfig)
     {
         _stateManager = stateManager;
         _engine = engine;
         _broadcaster = broadcaster;
         _wikiService = wikiService;
+        _narrator = narrator;
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
+        _worldSeedConfig = worldSeedConfig;
     }
 
     [HttpGet("players")]
@@ -133,6 +139,33 @@ public class DashboardController : ControllerBase
         }
 
         return Ok(checks);
+    }
+
+    // ── LLM / Narrator model management ──
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpGet("admin/llm/models")]
+    public async Task<IActionResult> ListModels(CancellationToken ct)
+    {
+        var available = await _narrator.ListAvailableModelsAsync(ct);
+        var active = _narrator.GetActiveModel();
+        return Ok(new { active, available });
+    }
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpPost("admin/llm/model")]
+    public IActionResult SetModel([FromBody] SetModelRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Model))
+            return BadRequest(new { error = "model is required." });
+
+        _narrator.SetActiveModel(request.Model);
+        return Ok(new { active = _narrator.GetActiveModel(), summary = $"Model switched to {request.Model}." });
+    }
+
+    public class SetModelRequest
+    {
+        public string Model { get; set; } = string.Empty;
     }
 
     [HttpPost("action")]
@@ -259,6 +292,176 @@ public class DashboardController : ControllerBase
             createdCount,
             players = seededPlayers.OrderBy(player => player.Name)
         });
+    }
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpPost("admin/reset-world")]
+    public async Task<IActionResult> ResetWorld([FromBody] ResetWorldRequest? request, CancellationToken ct)
+    {
+        var keepPlayers = request?.KeepPlayers ?? true;
+        var players = await _stateManager.GetAllPlayersAsync(ct);
+
+        // 1. Nuke rooms, story, and combat
+        await _stateManager.RemoveAllRoomsAsync(ct);
+        await _stateManager.ClearStoryAsync(ct);
+        await _stateManager.RemoveAllCombatStatesAsync(ct);
+
+        // 2. Handle players
+        if (keepPlayers)
+        {
+            // Reset players back to spawn with clean state, keep their identity
+            foreach (var player in players)
+            {
+                player.CurrentRoomId = "spawn";
+                player.Hp = player.MaxHp;
+                player.Mp = player.MaxMp;
+                player.Inventory.Clear();
+                player.Equipment = new GAE.Core.Models.EquipmentLoadout();
+                player.StatusEffects.Clear();
+                player.Interaction = new GAE.Core.Models.InteractionState();
+                player.Gold = 50;
+                player.Xp = 0;
+                player.Level = 1;
+                player.LastActiveAt = DateTimeOffset.UtcNow;
+                await _stateManager.SavePlayerAsync(player, ct);
+            }
+        }
+        else
+        {
+            // Delete all players
+            foreach (var player in players)
+                await _stateManager.RemovePlayerAsync(player.Id, ct);
+        }
+
+        // 3. Re-seed from lore-seed.yaml
+        var roomsSeeded = 0;
+        if (System.IO.File.Exists(_worldSeedConfig.LoreSeedPath))
+        {
+            var loreYaml = await System.IO.File.ReadAllTextAsync(_worldSeedConfig.LoreSeedPath, ct);
+            var lore = _worldSeedConfig.YamlDeserializer.Deserialize<LoreSeed>(loreYaml);
+            roomsSeeded = await SeedWorldFromLore(lore, _stateManager);
+        }
+
+        var summary = keepPlayers
+            ? $"World reset. {roomsSeeded} rooms seeded. {players.Count} player(s) reset to spawn."
+            : $"World reset. {roomsSeeded} rooms seeded. All players deleted.";
+
+        await BroadcastAdminMutationAsync(
+            summary: summary,
+            data: new Dictionary<string, object?>
+            {
+                ["mutation"] = "reset-world",
+                ["roomsSeeded"] = roomsSeeded,
+                ["playersKept"] = keepPlayers,
+                ["playerCount"] = players.Count
+            },
+            ct: ct);
+
+        return Ok(new
+        {
+            summary,
+            roomsSeeded,
+            playersKept = keepPlayers,
+            playerCount = players.Count
+        });
+    }
+
+    // SeedWorldFromLore is defined as a static method in Program.cs — call it via the same pattern
+    private static async Task<int> SeedWorldFromLore(LoreSeed? lore, IStateManager stateManager)
+    {
+        if (lore is null) return 0;
+
+        var allLoreRooms = new List<LoreRoom>();
+        if (lore.StartingRoom is not null)
+            allLoreRooms.Add(lore.StartingRoom);
+        if (lore.Rooms is not null)
+            allLoreRooms.AddRange(lore.Rooms);
+
+        var count = 0;
+        foreach (var loreRoom in allLoreRooms)
+        {
+            var room = ConvertLoreRoom(loreRoom);
+            await stateManager.SaveRoomAsync(room);
+            count++;
+        }
+
+        return count;
+    }
+
+    private static GAE.Core.Models.Room ConvertLoreRoom(LoreRoom lr)
+    {
+        var room = new GAE.Core.Models.Room
+        {
+            Id = lr.Id ?? Guid.NewGuid().ToString("N"),
+            Name = lr.Name ?? "Unknown Room",
+            Description = lr.Description ?? "An unremarkable room.",
+            IsDiscovered = true,
+            DiscoveredAt = DateTimeOffset.UtcNow
+        };
+
+        if (lr.Exits is not null)
+            foreach (var exit in lr.Exits)
+                room.Exits[exit.Key] = exit.Value;
+
+        if (lr.Npcs is not null)
+            room.Npcs.AddRange(lr.Npcs.Select(ConvertLoreNpc));
+
+        if (lr.Items is not null)
+            room.Items.AddRange(lr.Items.Select(ConvertLoreItem));
+
+        if (lr.EnvironmentTags is not null)
+            room.EnvironmentTags.AddRange(lr.EnvironmentTags);
+
+        return room;
+    }
+
+    private static GAE.Core.Models.Npc ConvertLoreNpc(LoreNpc n)
+    {
+        var npc = new GAE.Core.Models.Npc
+        {
+            Id = n.Id ?? Guid.NewGuid().ToString("N"),
+            Name = n.Name ?? "Unknown",
+            Personality = n.Personality ?? "",
+            Faction = n.Faction ?? "neutral",
+            IsHostile = n.IsHostile,
+            Level = n.Level ?? 1,
+            Hp = n.Hp,
+            MaxHp = n.MaxHp,
+            AttackBonus = n.AttackBonus,
+            DamageDice = n.DamageDice,
+            Defense = n.Defense
+        };
+
+        if (n.KnowledgeScopes is not null)
+            npc.KnowledgeScopes.AddRange(n.KnowledgeScopes);
+
+        if (n.Loot is not null)
+            npc.LootTable.AddRange(n.Loot.Select(ConvertLoreItem));
+
+        return npc;
+    }
+
+    private static GAE.Core.Models.InventoryItem ConvertLoreItem(LoreItem li)
+    {
+        var itemType = Enum.TryParse<ItemType>(li.Type, true, out var parsed)
+            ? parsed
+            : ItemType.Misc;
+
+        return new InventoryItem
+        {
+            Id = li.Id ?? Guid.NewGuid().ToString("N"),
+            Name = li.Name ?? "Unknown Item",
+            Description = li.Description ?? "",
+            Type = itemType,
+            Quantity = Math.Max(1, li.Quantity),
+            Value = Math.Max(0, li.Value),
+            DamageDice = li.DamageDice,
+            DamageStat = li.DamageStat,
+            ArmorValue = Math.Max(0, li.ArmorValue),
+            IsEquippable = li.IsEquippable ?? itemType is ItemType.Weapon or ItemType.Armor or ItemType.Shield or ItemType.Helmet,
+            IsConsumable = li.IsConsumable ?? itemType is ItemType.Potion or ItemType.Scroll,
+            Effect = li.Effect
+        };
     }
 
     [Authorize(Policy = DashboardPolicies.AdminAccess)]
@@ -822,6 +1025,15 @@ public class CreateCharacterRequest
 public class SeedDemoCharactersRequest
 {
     public bool ReplaceExisting { get; set; }
+}
+
+public class ResetWorldRequest
+{
+    /// <summary>
+    /// If true, keeps existing players but resets them to spawn with full HP/MP and empty inventory.
+    /// If false, deletes all players too.
+    /// </summary>
+    public bool KeepPlayers { get; set; } = true;
 }
 
 public class AdjustResourcesRequest

@@ -94,10 +94,29 @@ skill_checks:
     perception: "wis"
     persuasion: "cha"
     intimidation: "cha"
+    deception: "cha"
+    insight: "wis"
     arcana: "int"
     survival: "wis"
     lockpicking: "dex"
     lore_knowledge: "int"
+
+  # Social skill categories — broad buckets for RP checks during conversation.
+  # Keywords in the player's input are matched to determine which skill to roll.
+  social_skills:
+    persuade:
+      stat: "cha"
+      keywords: ["persuade", "convince", "charm", "flatter", "flirt", "seduce", "sweet-talk", "beg", "plead", "appeal", "compliment", "woo", "barter", "haggle", "negotiate"]
+    intimidate:
+      stat: "str"          # STR or CHA, engine picks the higher one
+      alt_stat: "cha"
+      keywords: ["intimidate", "threaten", "scare", "demand", "bully", "menace", "glare", "growl", "loom"]
+    deceive:
+      stat: "cha"
+      keywords: ["lie", "bluff", "deceive", "trick", "con", "fool", "mislead", "fake", "pretend"]
+    insight:
+      stat: "wis"
+      keywords: ["read", "gauge", "sense", "detect", "study", "observe", "scrutinize", "size up"]
 
 rest:
   short_rest_hp_recovery: "d8 + con_mod"

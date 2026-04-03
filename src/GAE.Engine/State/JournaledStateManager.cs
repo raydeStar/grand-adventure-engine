@@ -132,4 +132,52 @@ public class JournaledStateManager : IStateManager
             Summary = $"Combat ended in {roomId}"
         }, ct);
     }
+
+    public async Task RemoveAllRoomsAsync(CancellationToken ct = default)
+    {
+        await _inner.RemoveAllRoomsAsync(ct);
+        await _journal.AppendAsync(new GameEvent
+        {
+            Type = GameEventType.SystemMessage,
+            Summary = "All rooms removed (world reset)"
+        }, ct);
+    }
+
+    public async Task ClearStoryAsync(CancellationToken ct = default)
+    {
+        await _inner.ClearStoryAsync(ct);
+        await _journal.AppendAsync(new GameEvent
+        {
+            Type = GameEventType.SystemMessage,
+            Summary = "Story log cleared (world reset)"
+        }, ct);
+    }
+
+    public async Task RemoveAllCombatStatesAsync(CancellationToken ct = default)
+    {
+        await _inner.RemoveAllCombatStatesAsync(ct);
+        await _journal.AppendAsync(new GameEvent
+        {
+            Type = GameEventType.SystemMessage,
+            Summary = "All combat states removed (world reset)"
+        }, ct);
+    }
+
+    // Per-player room instances
+    public async Task<Room?> GetPlayerRoomAsync(string playerId, string roomId, CancellationToken ct = default)
+    {
+        var existing = await _inner.GetPlayerRoomAsync(playerId, roomId, ct);
+        return existing;
+    }
+
+    public async Task RemovePlayerRoomsAsync(string playerId, CancellationToken ct = default)
+    {
+        await _inner.RemovePlayerRoomsAsync(playerId, ct);
+        await _journal.AppendAsync(new GameEvent
+        {
+            Type = GameEventType.SystemMessage,
+            PlayerId = playerId,
+            Summary = $"All player room instances removed for {playerId}"
+        }, ct);
+    }
 }

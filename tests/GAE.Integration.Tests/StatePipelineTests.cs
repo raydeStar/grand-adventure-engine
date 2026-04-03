@@ -141,8 +141,7 @@ public class StatePipelineTests : IClassFixture<GaeWebApplicationFactory>
         var spawn = await state.GetRoomAsync("spawn");
 
         Assert.NotNull(spawn);
-        Assert.Equal("The Crossroads Inn", spawn.Name);
-        Assert.True(spawn.Exits.ContainsKey("north"), "Spawn should have north exit");
+        Assert.Equal("The Rusted Flagon", spawn.Name);
         Assert.True(spawn.Exits.ContainsKey("east"), "Spawn should have east exit");
         Assert.True(spawn.Exits.ContainsKey("south"), "Spawn should have south exit");
         Assert.True(spawn.Npcs.Count > 0, "Spawn should have at least one NPC");

@@ -11,7 +11,7 @@ public class InteractionStateMachineTests
 {
     private const string PlayerId = "test-player";
 
-    // ── Conversation entry ──
+    // â”€â”€ Conversation entry â”€â”€
 
     [Fact]
     public async Task TalkTo_EntersConversationMode()
@@ -125,7 +125,7 @@ public class InteractionStateMachineTests
         Assert.Equal(InteractionMode.Explore, player.Interaction.Mode);
     }
 
-    // ── Combat entry ──
+    // â”€â”€ Combat entry â”€â”€
 
     [Fact]
     public async Task Attack_HostileNpc_EntersCombatMode()
@@ -141,6 +141,8 @@ public class InteractionStateMachineTests
         dice.Setup(d => d.RollAttack(It.IsAny<int>())).Returns(new DiceRoll { Expression = "1d20+1", Total = 12, IndividualRolls = [11] });
         dice.Setup(d => d.Roll(It.IsAny<string>())).Returns(new DiceRoll { Expression = "1d6", Total = 4, IndividualRolls = [4] });
         dice.Setup(d => d.RollDamage(It.IsAny<string>(), It.IsAny<int>())).Returns(new DiceRoll { Expression = "1d4+1", Total = 4, IndividualRolls = [3] });
+        dice.Setup(d => d.RollInitiative(It.IsAny<int>())).Returns(new DiceRoll { Expression = "1d20", Total = 10, IndividualRolls = [10] });
+        dice.Setup(d => d.Roll(It.IsAny<string>(), It.IsAny<string>())).Returns(new DiceRoll { Expression = "1d100", Total = 50, IndividualRolls = [50] });
 
         var engine = CreateEngine(stateManager, narrator.Object, dice.Object);
 
@@ -152,7 +154,7 @@ public class InteractionStateMachineTests
         var player = await stateManager.GetPlayerAsync(PlayerId);
         Assert.NotNull(player);
         // If NPC survived, should be in combat mode
-        var room = await stateManager.GetRoomAsync(player.CurrentRoomId);
+        var room = await stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId);
         var goblin = room?.Npcs.FirstOrDefault(n => n.Name == "Goblin");
         if (goblin is not null && (goblin.Hp ?? 0) > 0)
         {
@@ -161,7 +163,7 @@ public class InteractionStateMachineTests
         }
     }
 
-    // ── InteractionState model tests ──
+    // â”€â”€ InteractionState model tests â”€â”€
 
     [Fact]
     public void InteractionState_AppendContext_CapsAt20()
@@ -203,7 +205,7 @@ public class InteractionStateMachineTests
         Assert.Null(state.LeaveConsequence);
     }
 
-    // ── Helpers ──
+    // â”€â”€ Helpers â”€â”€
 
     private static GameEngine CreateEngine(IStateManager stateManager, INarratorService narrator, IProbabilityEngine? dice = null)
     {

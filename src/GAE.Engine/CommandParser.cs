@@ -107,6 +107,24 @@ public partial class CommandParser
             return action;
         }
 
+        // Buy
+        var buyMatch = BuyRegex().Match(input);
+        if (buyMatch.Success)
+        {
+            action.Type = ActionType.Buy;
+            action.Target = buyMatch.Groups["target"].Value.Trim();
+            return action;
+        }
+
+        // Sell
+        var sellMatch = SellRegex().Match(input);
+        if (sellMatch.Success)
+        {
+            action.Type = ActionType.Sell;
+            action.Target = sellMatch.Groups["target"].Value.Trim();
+            return action;
+        }
+
         // Equip
         var equipMatch = EquipRegex().Match(input);
         if (equipMatch.Success)
@@ -200,6 +218,12 @@ public partial class CommandParser
 
     [GeneratedRegex(@"^(?:use|consume|drink|eat)\s+(?<target>.+)$", RegexOptions.IgnoreCase)]
     private static partial Regex UseRegex();
+
+    [GeneratedRegex(@"^(?:buy|purchase)\s+(?<target>.+)$", RegexOptions.IgnoreCase)]
+    private static partial Regex BuyRegex();
+
+    [GeneratedRegex(@"^(?:sell)\s+(?<target>.+)$", RegexOptions.IgnoreCase)]
+    private static partial Regex SellRegex();
 
     [GeneratedRegex(@"^(?:equip|wear|wield)\s+(?<target>.+)$", RegexOptions.IgnoreCase)]
     private static partial Regex EquipRegex();

@@ -30,18 +30,29 @@ public class NarratorService : INarratorService
         if (TryBuildDeterministicLookNarration(context, out var lookNarration))
             return lookNarration;
 
+        // Movement gets a specialized "arrival impressions" prompt
+        if (context.Action.Type == ActionType.Move && context.MechanicalResult.Success)
+            return await NarrateRoomArrivalAsync(context, ct);
+
         var systemPrompt = """
-            You are Sir Thaddeus, the Grand Narrator of the Shattered Reaches.
-            You speak in a dramatic, literary style with touches of dry wit.
-            You narrate what the engine has already decided — never contradict the mechanical result.
-            Write 2-4 vivid sentences with concrete sensory detail and at least one specific visual focal point.
-            If the action failed, narrate the failed attempt in-world and honor the exact failure reason without repeating blunt system text verbatim.
-            If combat occurred, describe the action dramatically.
-            Always address the player's character by name.
-            Never ask the player questions.
-            Never mention prompts, systems, mechanics, waiting for results, or that you are narrating.
-            For movement, acknowledge the transition and the new location.
-            For direct actions, describe only consequences that are already supported by the supplied outcome and room context.
+            You are the narrator of a dark-fantasy text adventure with the comic sensibility of
+            classic Sierra point-and-click games (Quest for Glory, King's Quest, Space Quest).
+
+            VOICE:
+            - Dry, sardonic wit. You love absurd observations and understated reactions.
+            - When the player FAILS, make it entertaining — slapstick, ironic commentary, the universe conspiring.
+              Never just say "nothing happens." Make failures *memorable and funny.*
+            - When the player SUCCEEDS, let them feel cool, but sneak in a wry aside.
+            - Use concrete sensory detail and at least one vivid visual focal point.
+            - Write 2-4 sentences. Be punchy, not flowery.
+
+            RULES:
+            - Narrate what the engine decided. Never contradict the mechanical result.
+            - Always use the player's character name.
+            - Never ask the player questions or break the fourth wall about being a narrator/AI.
+            - For failed movement, describe the futile attempt with humor. The wall is unyielding, the cliff uninviting, etc.
+            - For failed actions, honor the failure reason but translate it into something entertaining.
+            - NPCs should react to absurd actions with personality — annoyance, amusement, disgust, concern.
             """;
 
         var resolvedOutcome = string.IsNullOrWhiteSpace(context.MechanicalResult.MechanicalSummary)
@@ -85,14 +96,119 @@ public class NarratorService : INarratorService
         }
     }
 
+    /// <summary>
+    /// Specialized narration for room arrivals. Produces atmospheric first impressions —
+    /// NPC reactions, sensory details, things that catch the eye — rather than repeating
+    /// the room description (which is shown in the room panel).
+    /// </summary>
+    private async Task<string> NarrateRoomArrivalAsync(NarratorContext context, CancellationToken ct)
+    {
+        var systemPrompt = """
+            You are the narrator of a dark-fantasy text adventure with the comic sensibility of
+            classic Sierra point-and-click games (Quest for Glory, King's Quest, Space Quest).
+
+            The player just walked into a new room. The room's NAME and DESCRIPTION are already
+            displayed in a separate panel — DO NOT repeat them. Instead, narrate the ARRIVAL MOMENT:
+
+            WHAT TO INCLUDE (pick 2-3, not all):
+            - A sensory hit: the first thing the player smells, hears, or feels on their skin.
+            - NPC reactions: does anyone look up? Ignore them? Reach for a weapon? Offer a drink?
+            - Something that catches the eye: a glint, a stain, something out of place.
+            - Atmosphere/mood: the vibe of the space as you step in. Tension, warmth, dread, boredom.
+            - A brief transition beat: how the previous space gives way to this one.
+
+            VOICE:
+            - Dry, sardonic Sierra wit. Vivid but concise.
+            - Write 2-3 sentences. This is a quick establishing shot, not a novel paragraph.
+            - Use the player's character name.
+            - Never say "You enter [room name]" or "You find yourself in [description]."
+              The player already knows where they are from the room panel.
+            - Never ask questions or break the fourth wall.
+            """;
+
+        var npcsPresent = context.CurrentRoom.Npcs.Count > 0
+            ? string.Join(", ", context.CurrentRoom.Npcs.Select(n =>
+                $"{n.Name} ({n.Personality}{(n.IsHostile ? ", hostile" : "")})"
+              ))
+            : "Empty — no one here";
+
+        var notableItems = context.CurrentRoom.Items.Count > 0
+            ? string.Join(", ", context.CurrentRoom.Items.Select(i =>
+                i.Quantity > 1 ? $"{i.Name} (x{i.Quantity})" : i.Name
+              ))
+            : "Nothing notable on the ground";
+
+        var envTags = context.CurrentRoom.EnvironmentTags.Count > 0
+            ? string.Join(", ", context.CurrentRoom.EnvironmentTags)
+            : "none";
+
+        var loreContext = await GetRoomKnowledgeAsync(context.CurrentRoom, ct);
+
+        var userPrompt = $"""
+            Player: {context.Player.Name} ({context.Player.Race} {context.Player.Class}, Level {context.Player.Level})
+            Arrived at: {context.CurrentRoom.Name}
+            Room vibe: {context.CurrentRoom.Description}
+            Environment: {envTags}
+            NPCs present: {npcsPresent}
+            Items visible: {notableItems}
+            Direction traveled: {context.Action.Direction ?? "unknown"}
+            {loreContext}
+            Narrate the arrival moment.
+            """;
+
+        try
+        {
+            return await CompletionOrThrowAsync(systemPrompt, userPrompt, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "LM Studio request failed for room arrival, using fallback");
+            return BuildArrivalFallback(context);
+        }
+    }
+
+    /// <summary>Builds a reasonable offline fallback for room arrivals.</summary>
+    private static string BuildArrivalFallback(NarratorContext context)
+    {
+        var room = context.CurrentRoom;
+        var player = context.Player;
+        var parts = new List<string>();
+
+        if (room.Npcs.Count > 0)
+        {
+            var firstNpc = room.Npcs[0];
+            parts.Add($"{firstNpc.Name} glances up as {player.Name} steps in.");
+        }
+        else
+        {
+            parts.Add($"{player.Name} arrives to find the place empty — or at least, that's how it looks.");
+        }
+
+        if (room.Items.Count > 0)
+        {
+            var item = room.Items[0];
+            parts.Add($"A {item.Name.ToLowerInvariant()} catches the eye.");
+        }
+
+        if (room.Exits.Count > 2)
+        {
+            parts.Add($"Paths lead {string.Join(", ", room.Exits.Keys)}.");
+        }
+
+        return string.Join(" ", parts);
+    }
+
     public async Task<Room> GenerateRoomAsync(string roomId, string direction, Room sourceRoom, CancellationToken ct = default)
     {
         var systemPrompt = """
-            You are a world-building engine for a dark fantasy RPG.
+            You are a world-building engine for a dark fantasy RPG with the flavor of classic Sierra adventures.
             Generate a room/location as JSON with these fields:
             { "name": "...", "description": "2-3 sentences", "environmentTags": ["tag1", "tag2"],
-              "npcs": [{ "id": "snake_id", "name": "...", "personality": "...", "isHostile": false }] }
+              "npcs": [{ "id": "snake_id", "name": "...", "personality": "one-line personality with attitude", "isHostile": false }] }
             Keep it consistent with the source location's theme.
+            Descriptions should be atmospheric and hint at things worth interacting with.
+            NPCs should have distinct, memorable personalities — not generic fantasy cardboard.
+            Give NPCs personality traits like: grumpy, oblivious, flirty, paranoid, cheerfully unhelpful, etc.
             """;
 
         var userPrompt = $"""
@@ -185,9 +301,61 @@ public class NarratorService : INarratorService
 
     public async Task<string> GenerateBackstoryAsync(CharacterConcept concept, CancellationToken ct = default)
     {
-        var systemPrompt = "Generate a 2-3 sentence backstory for a dark fantasy RPG character. Be dramatic but concise.";
+        var systemPrompt = "Generate a 2-3 sentence backstory for a dark fantasy RPG character. Be dramatic but concise. Include one colorful detail that hints at personality — a quirk, a regret, or a dubious accomplishment.";
         var userPrompt = $"Character: {concept.Name}, a {concept.Race} {concept.Class}. Additional context: {concept.Backstory}";
         return await CompletionAsync(systemPrompt, userPrompt, ct, maxTokens: 256);
+    }
+
+    /// <inheritdoc/>
+    public async Task<CharacterCreationAiResponse?> CreateCharacterFromDescriptionAsync(
+        string playerDescription, string? previousSheet, CancellationToken ct = default)
+    {
+        var systemPrompt = """
+            You are a character creation assistant for a D&D-style text adventure.
+            The player will describe their character in natural language. Based on their
+            description, generate a character sheet.
+
+            You MUST assign stats from the standard array [15, 14, 13, 12, 10, 8].
+            Order them based on the player's description (strong character -> STR gets 15, etc.)
+
+            The player can be ANYTHING they want. Use exactly what they say.
+            Common races: Human, Elf, Dwarf, Halfling, Orc, Tiefling — but if they say
+            they're a Duck, a Sentient Mushroom, or a Talking Sword, USE THAT as their race.
+            Common classes: Fighter, Mage, Rogue, Cleric, Ranger, Bard — but if they say
+            they're a Hitman, a Pirate, or a Cheese Wizard, USE THAT as their class.
+            Never override the player's creative choices. Embrace the weird.
+
+            Return ONLY valid JSON, no markdown fences:
+            {
+              "name": "suggested name or null if player did not say one",
+              "race": "whatever the player said",
+              "class": "whatever fits their description",
+              "statOrder": ["str", "con", "dex", "wis", "cha", "int"],
+              "backstory": "2-3 sentence backstory based on their description",
+              "followUpQuestion": "optional question if the description was vague, or null"
+            }
+
+            If the player asks to change something, change EXACTLY what they asked for
+            and keep everything else the same. Do not revert previous choices.
+            If the player specifies a name, use it. If they change their mind, update it.
+            """;
+
+        var userPrompt = previousSheet is not null
+            ? $"Previous sheet:\n{previousSheet}\n\nPlayer says: {playerDescription}"
+            : $"Player says: {playerDescription}";
+
+        try
+        {
+            var json = await CompletionAsync(systemPrompt, userPrompt, ct);
+            json = SanitizeLmCompletion(json);
+            return System.Text.Json.JsonSerializer.Deserialize<CharacterCreationAiResponse>(json,
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "AI character creation failed, returning null");
+            return null;
+        }
     }
 
     public async Task<string?> ParseIntentAsync(string rawInput, CancellationToken ct = default)
@@ -240,37 +408,36 @@ public class NarratorService : INarratorService
 
     public async Task<FreeFormResponse> ProcessFreeFormAsync(PlayerCharacter player, Room room, string rawInput, IReadOnlyList<StoryEntry> recentStory, CancellationToken ct = default)
     {
-        if (TryBuildLowStakesFreeFormResponse(player, room, rawInput, out var lowStakesResponse))
-        {
-            _logger.LogInformation("Resolved low-stakes free-form action locally for {PlayerId}: {RawInput}", player.Id, rawInput);
-            return lowStakesResponse;
-        }
 
         var systemPrompt = """
-            You are the AI Game Master for a dark-fantasy text-adventure RPG.
-            The player typed an action that is NOT a recognized system command.
-            You must simulate the outcome as a fair, creative dungeon master.
+            You are the Game Master for a dark-fantasy text-adventure RPG with the comic sensibility
+            of classic Sierra point-and-click adventures (Quest for Glory, King's Quest, Space Quest).
 
-            GAME MASTER INSTRUCTIONS:
-            - Resolve the action using the supplied Character Definition Card, current room state, and recent history.
-            - Keep continuity with the world state. Do not invent items, exits, wounds, or NPCs that contradict the provided context.
-            - Use the character attributes naturally: STR for force, DEX for agility/precision, CON for endurance, INT for reasoning or spellcraft, WIS for perception/judgment, CHA for social pressure, LUCK for chance.
-            - Equipment slots available to this game are Weapon, Armor, Shield, and Helmet.
-            - Prefer small, credible state changes over wild swings. Risky actions can fail or partially succeed.
-            - For low-stakes emotes, jokes, or bodily actions, keep the outcome literal and local.
-            - Do NOT reinterpret body-part words or casual verbs as touching unrelated objects or NPC possessions.
-            - Most low-stakes actions should not change stats, inventory, room layout, exits, or NPC rosters.
+            VOICE & TONE:
+            - Dry, sardonic wit. You love the absurd. Channel the narrator from Space Quest who delights
+              in describing your failures in excruciating, hilarious detail.
+            - Failures should be FUNNY. Slapstick, ironic consequences, bystander reactions, deadpan commentary.
+              Never just "nothing happens." If someone tries to pee on a gate, describe the awkward attempt,
+              the wind direction, a guard's horrified expression — make the player laugh even when they fail.
+            - Successes can be cool but with a wry edge — the universe is amused by heroism.
+            - NPCs react with PERSONALITY. A gruff barmaid rolls her eyes. A guard reaches for his weapon
+              not because he's threatened but because he can't believe what he just saw.
+            - For silly/harmless actions (emotes, jokes, bodily functions), narrate them literally and locally
+              with humor. These should never change stats or inventory.
 
-            RULES:
-            - Narrate the outcome in 2-4 dramatic sentences.
-            - Determine mechanical consequences: stat changes, item gains/losses, NPC reactions, room changes.
-            - Be fair — do not give free loot or instant kills. Risky actions should sometimes fail.
-            - Respect the player's current state (HP, inventory, location).
-            - If the action is impossible or absurd, narrate a humorous failure but do NOT punish harshly.
-            - Leave statChanges empty unless a concrete resource changed.
+            GAME MASTER RULES:
+            - Resolve actions using the Character Definition Card, room state, and recent history.
+            - Keep continuity. Do not invent items, exits, or NPCs that aren't in the context.
+            - Use attributes naturally: STR for force, DEX for agility, CON for endurance, INT for spellcraft,
+              WIS for perception, CHA for social pressure, LUCK for chance.
+            - Equipment slots: Weapon, Armor, Shield, Helmet.
+            - Prefer small, credible state changes. Risky actions can fail or partially succeed.
+            - Be fair — no free loot, no instant kills. But make the journey entertaining.
+            - Leave statChanges empty unless a concrete resource actually changed.
             - Leave inventoryChanges empty unless an item was clearly gained or lost.
-            - Leave entityChanges empty unless the player directly interacted with that entity and the change is obvious.
+            - Leave entityChanges empty unless the player directly interacted with that entity.
             - Leave roomChanges null unless the environment itself clearly changed.
+            - Do NOT reinterpret body-part words or casual verbs as touching unrelated objects.
 
             Respond with ONLY valid JSON in this exact shape (no markdown, no code fences):
             {
@@ -309,7 +476,7 @@ public class NarratorService : INarratorService
             : "None";
 
         var npcList = room.Npcs.Count > 0
-            ? SummarizeEntities(room.Npcs, npc => npc.IsHostile ? $"{npc.Name} (hostile)" : npc.Name)
+            ? SummarizeEntities(room.Npcs, npc => FormatNpcForPrompt(npc))
             : "None";
 
         var itemList = room.Items.Count > 0
@@ -373,17 +540,59 @@ public class NarratorService : INarratorService
 
     public async Task<FreeFormResponse> ProcessConversationTurnAsync(PlayerCharacter player, Room room, Npc npc, InteractionState interaction, string rawInput, CancellationToken ct = default)
     {
+        var memoryFlagsSummary = npc.DispositionState.MemoryFlags.Count > 0
+            ? string.Join(", ", npc.DispositionState.MemoryFlags)
+            : "none";
+
         var systemPrompt = $$"""
             You are now voicing {{npc.Name}} in direct conversation with the player.
-            You MUST:
+            Channel the memorable NPCs of classic Sierra adventure games — each person has a distinct
+            voice, quirks, and opinions. They are NOT quest dispensers; they are characters with lives.
 
-            1. Write the NPC's actual dialogue in quotes.
-            2. Include the NPC's physical reactions and body language.
-            3. Track the NPC's emotional state. Start at their current disposition ({{interaction.NpcDisposition ?? npc.Disposition}}) and shift it based on what the player says.
-            4. Return an updated disposition in your response from: "friendly", "neutral", "annoyed", "angry", "hostile", "amused", "flirtatious", "scared", "sad", "suspicious".
-            5. If the conversation reaches a natural end (NPC dismisses the player, player says goodbye, NPC storms off), return mode: "explore" to exit conversation mode.
-            6. If the player tries to LEAVE mid-conversation, narrate the NPC's reaction to being cut off.
-            7. NPCs can reveal information, offer quests, give items, refuse service, call guards, or attack — based on their disposition and what the player says.
+            VOICE:
+            - Write the NPC's actual dialogue in quotes. Give them verbal tics, catchphrases, or speech patterns.
+            - Include physical reactions and body language — eye rolls, sighs, smirks, crossed arms.
+            - The NPC has a PERSONALITY. A gruff barmaid doesn't suddenly become helpful because the player asked
+              nicely. A nervous merchant stutters more when intimidated. A flirty rogue enjoys the banter.
+            - Humor is welcome. NPCs can be sarcastic, oblivious, self-important, or accidentally funny.
+            - CHA matters. A high-CHA player should find social interactions easier, a low-CHA player should
+              get worse reactions. Factor the player's CHA into how receptive the NPC is.
+
+            SOCIAL SKILL CHECKS:
+            When the player's input includes a [Social check: ...] line, the ENGINE has already rolled dice.
+            You MUST honor the result:
+            - If the check says "SUCCESS", the social attempt WORKS. Narrate the NPC being convinced,
+              charmed, intimidated, fooled, etc. — but in character. Even a success can be grudging.
+            - If the check says "FAILURE", the social attempt FAILS. The NPC sees through the bluff,
+              isn't impressed by the threat, or laughs off the flirtation. Make failures entertaining.
+            - A natural 20 is a spectacular success — the NPC is deeply affected.
+            - A natural 1 is a spectacular failure — the attempt backfires hilariously.
+            - Adjust your disposition update to match: successful charm → disposition improves,
+              failed intimidation → NPC becomes annoyed or hostile.
+            If there is NO [Social check:] line, narrate freely based on context.
+
+            DISPOSITION SYSTEM:
+            The NPC has a mood that shifts during conversation. Current state:
+            - Emotion: {{npc.DispositionState.Emotion}} (intensity: {{npc.DispositionState.Intensity}}/100, baseline: {{npc.DispositionState.Baseline}})
+            - Memory flags: {{memoryFlagsSummary}}
+            Intensity scale: 0=hostile, 20=angry, 40=neutral, 60=friendly, 80=devoted/loyal
+            The NPC remembers everything in their memory flags. Romance means they love the player.
+            Friendship means they're loyal. Crime/betrayal means they hold a grudge.
+            React accordingly — a romanced NPC is warm, a betrayed NPC is cold even if they're calm.
+
+            RULES:
+            1. Track the NPC's emotional state. Shift based on what the player says and their CHA modifier.
+            2. Return an updated disposition from: "friendly", "neutral", "annoyed", "angry", "hostile", "amused", "flirtatious", "scared", "sad", "suspicious".
+            3. If the conversation ends naturally (dismissal, goodbye, storms off), return mode: "explore".
+            4. If the player tries to LEAVE mid-conversation, narrate the NPC's reaction.
+            5. NPCs can reveal info, offer quests, give items, refuse service, call guards, or attack — based on their disposition and what the player says.
+            6. If the player does something outrageous (insults, flirts aggressively, threatens), the NPC should react strongly and memorably, not just give a generic response.
+            7. For SIGNIFICANT moments, add memory flags: "romance" (love established), "friendship" (bond formed),
+               "crime-witnessed" (player committed crime in front of NPC), "betrayal" (player betrayed trust),
+               "helped-in-battle" (fought together), "insulted" (seriously offended), "flirted" (romantic interest shown).
+               Only add flags for truly significant moments — not every interaction.
+            8. If this NPC belongs to a faction ({{npc.Faction}}) and the player does something that would affect
+               the whole faction (attacking a guard, helping their cause), set factionMoodShift (-20 to +20).
 
             NPC Background:
             - Name: {{npc.Name}}
@@ -409,7 +618,9 @@ public class NarratorService : INarratorService
                 "context": ["brief summary of what happened this turn"],
                 "combatStatus": null,
                 "loot": [],
-                "enemyUpdate": {}
+                "enemyUpdate": {},
+                "memoryFlags": [],
+                "factionMoodShift": 0
               }
             }
             """;
@@ -418,6 +629,7 @@ public class NarratorService : INarratorService
 
         var userPrompt = $$"""
             Player: {{player.Name}} (Lv.{{player.Level}} {{player.Race}} {{player.Class}})
+            {{player.FormatStatsCompact()}}
             Location: {{room.Name}} — {{room.Description}}
             Turn {{interaction.TurnCount + 1}} of conversation with {{npc.Name}}.
             Player says/does: "{{rawInput}}"
@@ -456,17 +668,29 @@ public class NarratorService : INarratorService
 
     public async Task<FreeFormResponse> ProcessCombatTurnAsync(PlayerCharacter player, Room room, Npc enemy, InteractionState interaction, string rawInput, CancellationToken ct = default)
     {
+        var combatMemory = enemy.DispositionState.MemoryFlags.Count > 0
+            ? $"\n            Enemy memory: {string.Join(", ", enemy.DispositionState.MemoryFlags)}"
+            : "";
+
         var systemPrompt = $$"""
             Combat is active against {{enemy.Name}}.
             Enemy HP: {{enemy.Hp ?? 0}}/{{enemy.MaxHp ?? 0}}
             Player HP: {{player.Hp}}/{{player.MaxHp}}
+            Enemy faction: {{enemy.Faction}}{{combatMemory}}
+
+            VOICE: Narrate combat with dramatic flair and dark humor. Misses should be entertaining —
+            a sword clangs off a helmet and rings like a dinner bell, an arrow embeds itself in a
+            perfectly innocent wall. Hits should feel impactful and visceral. If someone does something
+            stupid in combat, the narrator should notice.
 
             1. Resolve the player's action. Calculate hit/miss using relevant stat + random factor vs enemy defense.
-            2. Narrate the player's action dramatically.
+            2. Narrate the player's action with personality — not just "you hit," but HOW.
             3. Then resolve the enemy's turn. The enemy acts tactically based on its type.
-            4. Narrate the enemy's action.
+            4. Narrate the enemy's action with character — they have fighting styles and reactions too.
             5. Return all stat changes for BOTH sides.
-            6. If either side reaches 0 HP, end combat. Award XP and loot for victory. Narrate death for defeat.
+            6. If either side reaches 0 HP, end combat. Award XP and loot for victory. Narrate death dramatically for defeat.
+            7. If this combat would alarm the enemy's faction (e.g. attacking a guard in front of other guards),
+               set factionMoodShift to a negative value (-10 to -20) so allies become hostile too.
 
             Combat history:
             {{string.Join("\n", interaction.Context.TakeLast(10))}}
@@ -486,7 +710,9 @@ public class NarratorService : INarratorService
                 "context": ["brief summary of combat actions this turn"],
                 "combatStatus": "ongoing",
                 "loot": [],
-                "enemyUpdate": { "hp": -8 }
+                "enemyUpdate": { "hp": -8 },
+                "memoryFlags": [],
+                "factionMoodShift": 0
               }
             }
 
@@ -829,6 +1055,35 @@ public class NarratorService : INarratorService
         {
             _logger.LogWarning(ex, "LM Studio request failed, using fallback narration");
             return FallbackNarration();
+        }
+    }
+
+    public string GetActiveModel() => _model;
+
+    public void SetActiveModel(string model)
+    {
+        _model = model;
+        _modelResolved = !string.Equals(model, "default", StringComparison.OrdinalIgnoreCase);
+        _logger.LogInformation("Active LM Studio model set to \"{Model}\" (resolved={Resolved})", _model, _modelResolved);
+    }
+
+    public async Task<IReadOnlyList<string>> ListAvailableModelsAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var response = await _httpClient.GetFromJsonAsync<JsonElement>("v1/models", ct);
+            var models = new List<string>();
+            foreach (var item in response.GetProperty("data").EnumerateArray())
+            {
+                var id = item.GetProperty("id").GetString();
+                if (!string.IsNullOrEmpty(id)) models.Add(id);
+            }
+            return models;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not list LM Studio models");
+            return [];
         }
     }
 
@@ -1335,6 +1590,22 @@ public class NarratorService : INarratorService
 
         if (player.Equipment.Helmet is not null)
             yield return player.Equipment.Helmet;
+    }
+
+    /// <summary>Formats an NPC's name + disposition + memory for prompt context.</summary>
+    private static string FormatNpcForPrompt(Npc npc)
+    {
+        var parts = new List<string> { npc.Name };
+
+        if (npc.IsHostile)
+            parts.Add("hostile");
+        else if (npc.DispositionState.Emotion != "neutral")
+            parts.Add($"{npc.DispositionState.ToFlatDisposition()}");
+
+        if (npc.DispositionState.MemoryFlags.Count > 0)
+            parts.Add($"remembers: {string.Join(", ", npc.DispositionState.MemoryFlags)}");
+
+        return parts.Count == 1 ? npc.Name : $"{npc.Name} ({string.Join("; ", parts.Skip(1))})";
     }
 
     private static string SummarizeEntities<T>(IEnumerable<T> entities, Func<T, string?> getName, Func<T, int>? getQuantity = null)

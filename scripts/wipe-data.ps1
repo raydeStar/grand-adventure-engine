@@ -2,7 +2,7 @@
 param(
     [switch]$Force,
     [switch]$Restart,
-    [string]$BaseUrl = 'http://localhost:8181',
+    [string]$BaseUrl,
     [int]$WaitSeconds = 120
 )
 
@@ -32,5 +32,11 @@ if ($PSCmdlet.ShouldProcess('GAE persistent data', 'Remove docker compose volume
 
 if ($Restart) {
     Write-Host 'Restarting stack on a clean state...'
-    & (Join-Path $PSScriptRoot 'reset-docker-stack.ps1') -BaseUrl $BaseUrl -WaitSeconds $WaitSeconds
+
+    $restartArguments = @('-WaitSeconds', $WaitSeconds)
+    if (-not [string]::IsNullOrWhiteSpace($BaseUrl)) {
+        $restartArguments += @('-BaseUrl', $BaseUrl)
+    }
+
+    & (Join-Path $PSScriptRoot 'reset-docker-stack.ps1') @restartArguments
 }

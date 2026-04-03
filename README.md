@@ -29,15 +29,17 @@ dotnet build GrandAdventureEngine.slnx
 dotnet test
 
 # Start the local stack
-docker compose up --build -d
+powershell -ExecutionPolicy Bypass -File .\scripts\reset-docker-stack.ps1
 
 # Browser E2E
 npm run test:e2e
 ```
 
+`reset-docker-stack.ps1` publishes the dashboard on `http://localhost:8181` and Wiki.js on `http://localhost:3000` by default, but will automatically move either service to the next free host port if those ports are already busy.
+
 ## Browser Dashboard
 
-- Local URL: `http://localhost:8181`
+- Local URL: `http://localhost:8181` by default. Check the `reset-docker-stack.ps1` output for the actual URL if that port is already occupied.
 - Embedded in `src/GAE.Dashboard.Api/wwwroot`
 - Supports protected user and admin flows, live state inspection, manual mutation tools, and Playwright visual regression coverage
 
