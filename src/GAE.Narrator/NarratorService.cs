@@ -202,23 +202,35 @@ public class NarratorService : INarratorService
     {
         var systemPrompt = """
             You are a world-building engine for a dark fantasy RPG with the flavor of classic Sierra adventures.
-            Generate a room/location as JSON with these fields:
-            { "name": "...", "description": "2-3 sentences", "environmentTags": ["tag1", "tag2"],
-              "npcs": [{ "id": "snake_id", "name": "...", "personality": "one-line personality with attitude", "isHostile": false }] }
-            Keep it consistent with the source location's theme.
-            Descriptions should be atmospheric and hint at things worth interacting with.
-            NPCs should have distinct, memorable personalities — not generic fantasy cardboard.
-            Give NPCs personality traits like: grumpy, oblivious, flirty, paranoid, cheerfully unhelpful, etc.
+            Generate a room/location as JSON with these exact fields:
+            {
+              "name": "Short Evocative Name",
+              "description": "2-3 atmospheric sentences. Hint at things worth interacting with.",
+              "environmentTags": ["tag1", "tag2"],
+              "npcs": [{ "id": "unique_id", "name": "NPC Name", "personality": "one-line personality with attitude", "isHostile": false }],
+              "items": [{ "name": "Item Name", "description": "brief flavor text", "quantity": 1 }]
+            }
+
+            RULES:
+            - Keep it consistent with the source location's theme and direction of travel.
+            - Include 0-2 NPCs with distinct, memorable personalities (grumpy, paranoid, flirty, etc.)
+            - Include 1-3 items that make sense for the location (weapons, potions, gold, curiosities, junk)
+            - Descriptions should hint at interactive elements: things to search, people to talk to, paths to explore.
+            - Add 2-4 environment tags for mood/theme (e.g. "dark", "tavern", "forest", "ruins", "marketplace").
+            - Name should be evocative, not generic ("The Butcher's Alley" not "Alley").
+            - Vary between indoor/outdoor, populated/desolate, safe/dangerous.
+            - Return ONLY valid JSON, no markdown, no code fences.
             """;
 
         var userPrompt = $"""
             The player is moving {direction} from "{sourceRoom.Name}" ({string.Join(", ", sourceRoom.EnvironmentTags)}).
             Generate a new location for room ID "{roomId}".
+            Make it interesting — give the player something to do, someone to talk to, or something to find.
             """;
 
         try
         {
-            var json = await CompletionAsync(systemPrompt, userPrompt, ct, maxTokens: 512);
+            var json = await CompletionAsync(systemPrompt, userPrompt, ct, maxTokens: 768);
             var generated = JsonSerializer.Deserialize<GeneratedRoom>(json, _jsonOptions);
             if (generated is not null)
             {
@@ -234,6 +246,14 @@ public class NarratorService : INarratorService
                         Name = n.Name ?? "Unknown",
                         Personality = n.Personality ?? "",
                         IsHostile = n.IsHostile
+                    }).ToList() ?? [],
+                    Items = generated.Items?.Select(i => new InventoryItem
+                    {
+                        Id = Guid.NewGuid().ToString("N"),
+                        Name = i.Name ?? "Mysterious Object",
+                        Description = i.Description ?? "",
+                        Quantity = Math.Max(1, i.Quantity),
+                        Type = ItemType.Misc
                     }).ToList() ?? [],
                     Exits = new Dictionary<string, string>
                     {
@@ -1733,6 +1753,7 @@ public class NarratorService : INarratorService
         public string? Description { get; set; }
         public List<string>? EnvironmentTags { get; set; }
         public List<GeneratedNpc>? Npcs { get; set; }
+        public List<GeneratedItem>? Items { get; set; }
     }
 
     private class GeneratedNpc
@@ -1743,5 +1764,12 @@ public class NarratorService : INarratorService
         public string? Faction { get; set; }
         public bool IsHostile { get; set; }
         public int Level { get; set; } = 1;
+    }
+
+    private class GeneratedItem
+    {
+        public string? Name { get; set; }
+        public string? Description { get; set; }
+        public int Quantity { get; set; } = 1;
     }
 }

@@ -875,7 +875,11 @@ public class DiscordBotService : IHostedService
             ActionResult result;
             try
             {
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                // Movement may generate a new room + narrate (2 narrator calls), so allow more time
+                var timeout = action.Type == Core.Models.ActionType.Move
+                    ? TimeSpan.FromSeconds(90)
+                    : TimeSpan.FromSeconds(45);
+                using var cts = new CancellationTokenSource(timeout);
                 result = await _engine.ProcessActionAsync(player.Id, action, cts.Token);
             }
             finally
