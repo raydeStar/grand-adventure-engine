@@ -385,7 +385,7 @@ public class DiscordBotService : IHostedService
         var player = await _stateManager.GetPlayerByDiscordIdAsync(discordId);
         if (player is null)
         {
-            await message.Channel.SendMessageAsync("You don't have a character yet! Use `/create` or `!create` in the main channel.");
+            await message.Channel.SendMessageAsync("You don't have a character yet! Use `/create` in the main channel.");
             return;
         }
 
@@ -399,32 +399,9 @@ public class DiscordBotService : IHostedService
         // Update activity timestamp
         player.LastActiveAt = DateTimeOffset.UtcNow;
 
-        // Determine if prefix is required based on interaction mode
-        string? command = null;
-
-        if (content.StartsWith('!'))
-        {
-            command = content[1..].Trim();
-        }
-        else if (player.Interaction.Mode is InteractionMode.Conversation or InteractionMode.Combat or InteractionMode.Trading)
-        {
-            // No prefix needed in conversation/combat/trading modes
-            // Check for exit keywords
-            var lower = content.ToLowerInvariant();
-            if (IsExitKeyword(lower))
-            {
-                command = lower.StartsWith("go ") ? lower : "leave";
-            }
-            else
-            {
-                command = content;
-            }
-        }
-        else
-        {
-            // In explore mode, require ! prefix — ignore non-prefixed messages
-            return;
-        }
+        // No prefix required — thread is gated to owner only, so everything is a game command.
+        // Strip leading ! if present (for habit/compatibility) but don't require it.
+        var command = content.StartsWith('!') ? content[1..].Trim() : content;
 
         if (string.IsNullOrEmpty(command)) return;
 
@@ -675,10 +652,11 @@ public class DiscordBotService : IHostedService
 
         var embed = new EmbedBuilder()
             .WithTitle($"\U0001F4CD {room.Name}")
+            .WithDescription(room.Description)
             .WithColor(Color.Orange);
 
         // NPCs
-        var npcNames = room.Npcs.Select(n => n.Name).ToList();
+        var npcNames = room.Npcs.Select(n => n.IsHostile ? $"⚠️ {n.Name}" : n.Name).ToList();
         if (npcNames.Count > 0)
             embed.AddField("\U0001F464 NPCs", string.Join(", ", SummarizeEntities(npcNames)), inline: true);
 
@@ -687,8 +665,21 @@ public class DiscordBotService : IHostedService
         if (itemNames.Count > 0)
             embed.AddField("\U0001F4E6 Items", string.Join(", ", SummarizeEntities(itemNames)), inline: true);
 
-        // Exits
-        var exits = room.Exits.Select(e => $"\u2190 {e.Key} ({e.Value.Replace("_", " ")})");
+        // Exits — show as compass-style directions
+        var exits = room.Exits.Select(e =>
+        {
+            var dirEmoji = e.Key.ToLowerInvariant() switch
+            {
+                "north" => "⬆️",
+                "south" => "⬇️",
+                "east" => "➡️",
+                "west" => "⬅️",
+                "up" => "🔼",
+                "down" => "🔽",
+                _ => "↪️"
+            };
+            return $"{dirEmoji} {e.Key} — {e.Value.Replace("_", " ")}";
+        });
         embed.AddField("\U0001F6AA Exits", string.Join("\n", exits));
 
         embed.WithFooter(FormatStatusBar(player));
@@ -1099,22 +1090,23 @@ public class DiscordBotService : IHostedService
         return new EmbedBuilder()
             .WithTitle("Grand Adventure Engine — Commands")
             .WithColor(Color.Teal)
-            .AddField("Movement", "`!go <direction>` / `!north` `!south` `!east` `!west`")
-            .AddField("Observation", "`!look` / `!look at <target>`")
-            .AddField("Combat", "`!attack <target>`")
-            .AddField("Social", "`!talk to <target>`")
-            .AddField("Items", "`!take <item>` / `!drop <item>` / `!use <item>` / `!equip <item>` / `!unequip <item>`")
-            .AddField("Commerce", "`!buy <item>` / `!sell <item>`")
-            .AddField("Rest", "`!rest` / `!short rest` / `!long rest`")
-            .AddField("Info", "`!stats` / `!inv` / `!map` / `!help`")
-            .AddField("Other", "`!restart` — reset character\n*In conversation/combat mode, no `!` prefix needed.*")
+            .AddField("Movement", "`go <direction>` / `north` `south` `east` `west`")
+            .AddField("Observation", "`look` / `look at <target>`")
+            .AddField("Combat", "`attack <target>`")
+            .AddField("Social", "`talk to <target>`")
+            .AddField("Items", "`take <item>` / `drop <item>` / `use <item>` / `equip <item>` / `unequip <item>`")
+            .AddField("Commerce", "`buy <item>` / `sell <item>`")
+            .AddField("Rest", "`rest` / `short rest` / `long rest`")
+            .AddField("Info", "`stats` / `inv` / `map` / `help`")
+            .AddField("Free-form", "*Just type naturally! \"I search the bookshelf\" or \"I flex at the bartender\"*")
+            .AddField("Other", "`restart` — reset character")
             .WithFooter("Slash commands: /create, /restart, /stats, /inventory, /help, /map");
     }
 
     private async Task SendCharacterCreatedEmbed(SocketThreadChannel thread, PlayerCharacter player)
     {
         var embed = BuildCharacterEmbed(player)
-            .WithDescription("Your character has been created! Type `!look` to see your surroundings.");
+            .WithDescription("Your character has been created! Type `look` to see your surroundings.");
         await thread.SendMessageAsync(embed: embed.Build());
     }
 
