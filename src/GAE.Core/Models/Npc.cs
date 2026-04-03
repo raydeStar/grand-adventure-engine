@@ -29,8 +29,16 @@ public class NpcDispositionState
     public DateTimeOffset LastUpdated { get; set; } = DateTimeOffset.UtcNow;
 
     /// <summary>
+    /// Permanent or long-lasting memory flags that alter decay behavior.
+    /// Examples: "crime-witnessed", "romance", "friendship", "betrayal", "helped-in-battle"
+    /// Flags starting with "!" are permanent (never auto-removed).
+    /// </summary>
+    public List<string> MemoryFlags { get; set; } = [];
+
+    /// <summary>
     /// Drifts intensity toward baseline over elapsed time.
     /// Half-life is ~1 hour: after 1 hour, half the excess intensity has faded.
+    /// Memory flags can lock a minimum/maximum intensity floor.
     /// </summary>
     public void DecayTowardBaseline(TimeSpan elapsed)
     {
@@ -44,6 +52,11 @@ public class NpcDispositionState
         var decayFactor = Math.Pow(0.5, elapsed.TotalHours / halfLifeHours);
         Intensity = Baseline + (int)Math.Round(excess * decayFactor);
         LastUpdated = DateTimeOffset.UtcNow;
+
+        // Memory flags can enforce intensity floors/ceilings
+        var floor = GetMemoryFloor();
+        var ceiling = GetMemoryCeiling();
+        Intensity = Math.Clamp(Intensity, floor, ceiling);
 
         // If decayed close to baseline and emotion was transient, reset to neutral
         if (Math.Abs(Intensity - Baseline) <= 5 && Emotion != "neutral")
@@ -68,5 +81,30 @@ public class NpcDispositionState
         };
 
         return $"{intensityWord} {Emotion}";
+    }
+
+    /// <summary>
+    /// Positive memory flags enforce a minimum intensity (NPC can't fully forget good things).
+    /// </summary>
+    private int GetMemoryFloor()
+    {
+        if (MemoryFlags.Any(f => f.Contains("romance", StringComparison.OrdinalIgnoreCase)))
+            return 65; // Romance prevents falling below "very" friendly
+        if (MemoryFlags.Any(f => f.Contains("friendship", StringComparison.OrdinalIgnoreCase)))
+            return 50; // Friendship prevents falling below "somewhat" friendly
+        return 0;
+    }
+
+    /// <summary>
+    /// Negative memory flags enforce a maximum intensity cap (NPC remembers wrongs).
+    /// Crime/betrayal keep hostility from fading too much.
+    /// </summary>
+    private int GetMemoryCeiling()
+    {
+        if (MemoryFlags.Any(f => f.Contains("betrayal", StringComparison.OrdinalIgnoreCase)))
+            return 25; // Betrayal keeps intensity low (angry)
+        if (MemoryFlags.Any(f => f.Contains("crime", StringComparison.OrdinalIgnoreCase)))
+            return 35; // Crime keeps intensity suppressed
+        return 100;
     }
 }

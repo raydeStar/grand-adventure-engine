@@ -29,6 +29,10 @@ public class NarratorService : INarratorService
         if (TryBuildDeterministicLookNarration(context, out var lookNarration))
             return lookNarration;
 
+        // Movement gets a specialized "arrival impressions" prompt
+        if (context.Action.Type == ActionType.Move && context.MechanicalResult.Success)
+            return await NarrateRoomArrivalAsync(context, ct);
+
         var systemPrompt = """
             You are the narrator of a dark-fantasy text adventure with the comic sensibility of
             classic Sierra point-and-click games (Quest for Glory, King's Quest, Space Quest).
@@ -45,7 +49,7 @@ public class NarratorService : INarratorService
             - Narrate what the engine decided. Never contradict the mechanical result.
             - Always use the player's character name.
             - Never ask the player questions or break the fourth wall about being a narrator/AI.
-            - For movement, describe the transition and first impressions of the new place.
+            - For failed movement, describe the futile attempt with humor. The wall is unyielding, the cliff uninviting, etc.
             - For failed actions, honor the failure reason but translate it into something entertaining.
             - NPCs should react to absurd actions with personality — annoyance, amusement, disgust, concern.
             """;
@@ -89,6 +93,108 @@ public class NarratorService : INarratorService
             _logger.LogWarning(ex, "LM Studio request failed, using contextual narration fallback");
             return BuildContextualFallbackNarration(context);
         }
+    }
+
+    /// <summary>
+    /// Specialized narration for room arrivals. Produces atmospheric first impressions —
+    /// NPC reactions, sensory details, things that catch the eye — rather than repeating
+    /// the room description (which is shown in the room panel).
+    /// </summary>
+    private async Task<string> NarrateRoomArrivalAsync(NarratorContext context, CancellationToken ct)
+    {
+        var systemPrompt = """
+            You are the narrator of a dark-fantasy text adventure with the comic sensibility of
+            classic Sierra point-and-click games (Quest for Glory, King's Quest, Space Quest).
+
+            The player just walked into a new room. The room's NAME and DESCRIPTION are already
+            displayed in a separate panel — DO NOT repeat them. Instead, narrate the ARRIVAL MOMENT:
+
+            WHAT TO INCLUDE (pick 2-3, not all):
+            - A sensory hit: the first thing the player smells, hears, or feels on their skin.
+            - NPC reactions: does anyone look up? Ignore them? Reach for a weapon? Offer a drink?
+            - Something that catches the eye: a glint, a stain, something out of place.
+            - Atmosphere/mood: the vibe of the space as you step in. Tension, warmth, dread, boredom.
+            - A brief transition beat: how the previous space gives way to this one.
+
+            VOICE:
+            - Dry, sardonic Sierra wit. Vivid but concise.
+            - Write 2-3 sentences. This is a quick establishing shot, not a novel paragraph.
+            - Use the player's character name.
+            - Never say "You enter [room name]" or "You find yourself in [description]."
+              The player already knows where they are from the room panel.
+            - Never ask questions or break the fourth wall.
+            """;
+
+        var npcsPresent = context.CurrentRoom.Npcs.Count > 0
+            ? string.Join(", ", context.CurrentRoom.Npcs.Select(n =>
+                $"{n.Name} ({n.Personality}{(n.IsHostile ? ", hostile" : "")})"
+              ))
+            : "Empty — no one here";
+
+        var notableItems = context.CurrentRoom.Items.Count > 0
+            ? string.Join(", ", context.CurrentRoom.Items.Select(i =>
+                i.Quantity > 1 ? $"{i.Name} (x{i.Quantity})" : i.Name
+              ))
+            : "Nothing notable on the ground";
+
+        var envTags = context.CurrentRoom.EnvironmentTags.Count > 0
+            ? string.Join(", ", context.CurrentRoom.EnvironmentTags)
+            : "none";
+
+        var loreContext = await GetRoomKnowledgeAsync(context.CurrentRoom, ct);
+
+        var userPrompt = $"""
+            Player: {context.Player.Name} ({context.Player.Race} {context.Player.Class}, Level {context.Player.Level})
+            Arrived at: {context.CurrentRoom.Name}
+            Room vibe: {context.CurrentRoom.Description}
+            Environment: {envTags}
+            NPCs present: {npcsPresent}
+            Items visible: {notableItems}
+            Direction traveled: {context.Action.Direction ?? "unknown"}
+            {loreContext}
+            Narrate the arrival moment.
+            """;
+
+        try
+        {
+            return await CompletionOrThrowAsync(systemPrompt, userPrompt, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "LM Studio request failed for room arrival, using fallback");
+            return BuildArrivalFallback(context);
+        }
+    }
+
+    /// <summary>Builds a reasonable offline fallback for room arrivals.</summary>
+    private static string BuildArrivalFallback(NarratorContext context)
+    {
+        var room = context.CurrentRoom;
+        var player = context.Player;
+        var parts = new List<string>();
+
+        if (room.Npcs.Count > 0)
+        {
+            var firstNpc = room.Npcs[0];
+            parts.Add($"{firstNpc.Name} glances up as {player.Name} steps in.");
+        }
+        else
+        {
+            parts.Add($"{player.Name} arrives to find the place empty — or at least, that's how it looks.");
+        }
+
+        if (room.Items.Count > 0)
+        {
+            var item = room.Items[0];
+            parts.Add($"A {item.Name.ToLowerInvariant()} catches the eye.");
+        }
+
+        if (room.Exits.Count > 2)
+        {
+            parts.Add($"Paths lead {string.Join(", ", room.Exits.Keys)}.");
+        }
+
+        return string.Join(" ", parts);
     }
 
     public async Task<Room> GenerateRoomAsync(string roomId, string direction, Room sourceRoom, CancellationToken ct = default)
@@ -317,7 +423,7 @@ public class NarratorService : INarratorService
             : "None";
 
         var npcList = room.Npcs.Count > 0
-            ? SummarizeEntities(room.Npcs, npc => npc.IsHostile ? $"{npc.Name} (hostile)" : npc.Name)
+            ? SummarizeEntities(room.Npcs, npc => FormatNpcForPrompt(npc))
             : "None";
 
         var itemList = room.Items.Count > 0
@@ -381,6 +487,10 @@ public class NarratorService : INarratorService
 
     public async Task<FreeFormResponse> ProcessConversationTurnAsync(PlayerCharacter player, Room room, Npc npc, InteractionState interaction, string rawInput, CancellationToken ct = default)
     {
+        var memoryFlagsSummary = npc.DispositionState.MemoryFlags.Count > 0
+            ? string.Join(", ", npc.DispositionState.MemoryFlags)
+            : "none";
+
         var systemPrompt = $$"""
             You are now voicing {{npc.Name}} in direct conversation with the player.
             Channel the memorable NPCs of classic Sierra adventure games — each person has a distinct
@@ -395,13 +505,28 @@ public class NarratorService : INarratorService
             - CHA matters. A high-CHA player should find social interactions easier, a low-CHA player should
               get worse reactions. Factor the player's CHA into how receptive the NPC is.
 
+            DISPOSITION SYSTEM:
+            The NPC has a mood that shifts during conversation. Current state:
+            - Emotion: {{npc.DispositionState.Emotion}} (intensity: {{npc.DispositionState.Intensity}}/100, baseline: {{npc.DispositionState.Baseline}})
+            - Memory flags: {{memoryFlagsSummary}}
+            Intensity scale: 0=hostile, 20=angry, 40=neutral, 60=friendly, 80=devoted/loyal
+            The NPC remembers everything in their memory flags. Romance means they love the player.
+            Friendship means they're loyal. Crime/betrayal means they hold a grudge.
+            React accordingly — a romanced NPC is warm, a betrayed NPC is cold even if they're calm.
+
             RULES:
-            1. Track the NPC's emotional state. Start at current disposition ({{interaction.NpcDisposition ?? npc.Disposition}}) and shift based on what the player says and their CHA modifier.
+            1. Track the NPC's emotional state. Shift based on what the player says and their CHA modifier.
             2. Return an updated disposition from: "friendly", "neutral", "annoyed", "angry", "hostile", "amused", "flirtatious", "scared", "sad", "suspicious".
             3. If the conversation ends naturally (dismissal, goodbye, storms off), return mode: "explore".
             4. If the player tries to LEAVE mid-conversation, narrate the NPC's reaction.
             5. NPCs can reveal info, offer quests, give items, refuse service, call guards, or attack — based on their disposition and what the player says.
             6. If the player does something outrageous (insults, flirts aggressively, threatens), the NPC should react strongly and memorably, not just give a generic response.
+            7. For SIGNIFICANT moments, add memory flags: "romance" (love established), "friendship" (bond formed),
+               "crime-witnessed" (player committed crime in front of NPC), "betrayal" (player betrayed trust),
+               "helped-in-battle" (fought together), "insulted" (seriously offended), "flirted" (romantic interest shown).
+               Only add flags for truly significant moments — not every interaction.
+            8. If this NPC belongs to a faction ({{npc.Faction}}) and the player does something that would affect
+               the whole faction (attacking a guard, helping their cause), set factionMoodShift (-20 to +20).
 
             NPC Background:
             - Name: {{npc.Name}}
@@ -427,7 +552,9 @@ public class NarratorService : INarratorService
                 "context": ["brief summary of what happened this turn"],
                 "combatStatus": null,
                 "loot": [],
-                "enemyUpdate": {}
+                "enemyUpdate": {},
+                "memoryFlags": [],
+                "factionMoodShift": 0
               }
             }
             """;
@@ -475,10 +602,15 @@ public class NarratorService : INarratorService
 
     public async Task<FreeFormResponse> ProcessCombatTurnAsync(PlayerCharacter player, Room room, Npc enemy, InteractionState interaction, string rawInput, CancellationToken ct = default)
     {
+        var combatMemory = enemy.DispositionState.MemoryFlags.Count > 0
+            ? $"\n            Enemy memory: {string.Join(", ", enemy.DispositionState.MemoryFlags)}"
+            : "";
+
         var systemPrompt = $$"""
             Combat is active against {{enemy.Name}}.
             Enemy HP: {{enemy.Hp ?? 0}}/{{enemy.MaxHp ?? 0}}
             Player HP: {{player.Hp}}/{{player.MaxHp}}
+            Enemy faction: {{enemy.Faction}}{{combatMemory}}
 
             VOICE: Narrate combat with dramatic flair and dark humor. Misses should be entertaining —
             a sword clangs off a helmet and rings like a dinner bell, an arrow embeds itself in a
@@ -491,6 +623,8 @@ public class NarratorService : INarratorService
             4. Narrate the enemy's action with character — they have fighting styles and reactions too.
             5. Return all stat changes for BOTH sides.
             6. If either side reaches 0 HP, end combat. Award XP and loot for victory. Narrate death dramatically for defeat.
+            7. If this combat would alarm the enemy's faction (e.g. attacking a guard in front of other guards),
+               set factionMoodShift to a negative value (-10 to -20) so allies become hostile too.
 
             Combat history:
             {{string.Join("\n", interaction.Context.TakeLast(10))}}
@@ -510,7 +644,9 @@ public class NarratorService : INarratorService
                 "context": ["brief summary of combat actions this turn"],
                 "combatStatus": "ongoing",
                 "loot": [],
-                "enemyUpdate": { "hp": -8 }
+                "enemyUpdate": { "hp": -8 },
+                "memoryFlags": [],
+                "factionMoodShift": 0
               }
             }
 
@@ -1331,6 +1467,22 @@ public class NarratorService : INarratorService
 
         if (player.Equipment.Helmet is not null)
             yield return player.Equipment.Helmet;
+    }
+
+    /// <summary>Formats an NPC's name + disposition + memory for prompt context.</summary>
+    private static string FormatNpcForPrompt(Npc npc)
+    {
+        var parts = new List<string> { npc.Name };
+
+        if (npc.IsHostile)
+            parts.Add("hostile");
+        else if (npc.DispositionState.Emotion != "neutral")
+            parts.Add($"{npc.DispositionState.ToFlatDisposition()}");
+
+        if (npc.DispositionState.MemoryFlags.Count > 0)
+            parts.Add($"remembers: {string.Join(", ", npc.DispositionState.MemoryFlags)}");
+
+        return parts.Count == 1 ? npc.Name : $"{npc.Name} ({string.Join("; ", parts.Skip(1))})";
     }
 
     private static string SummarizeEntities<T>(IEnumerable<T> entities, Func<T, string?> getName, Func<T, int>? getQuantity = null)

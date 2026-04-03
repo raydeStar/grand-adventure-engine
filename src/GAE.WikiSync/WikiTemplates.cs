@@ -31,7 +31,13 @@ public static class WikiTemplates
             ## Stats
             | Stat | Value | Modifier |
             |------|-------|----------|
-            {FormatStatsTable(player)}
+            | STR | {player.Str} | {player.GetModifier("str"):+0;-0} |
+            | DEX | {player.Dex} | {player.GetModifier("dex"):+0;-0} |
+            | CON | {player.Con} | {player.GetModifier("con"):+0;-0} |
+            | INT | {player.Int} | {player.GetModifier("int"):+0;-0} |
+            | WIS | {player.Wis} | {player.GetModifier("wis"):+0;-0} |
+            | CHA | {player.Cha} | {player.GetModifier("cha"):+0;-0} |
+            | LCK | {player.Luck} | {player.GetModifier("luck"):+0;-0} |
 
             ## Resources
             - **HP:** {player.Hp}/{player.MaxHp}
@@ -104,12 +110,9 @@ public static class WikiTemplates
 
     public static string NpcPage(Npc npc)
     {
-        var stats = new List<string>();
-        if (npc.Hp.HasValue) stats.Add($"- **HP:** {npc.Hp}/{npc.MaxHp}");
-        if (npc.AttackBonus.HasValue) stats.Add($"- **Attack Bonus:** {npc.AttackBonus:+0;-0}");
-        if (npc.DamageDice is not null) stats.Add($"- **Damage:** {npc.DamageDice}");
-        if (npc.Defense.HasValue) stats.Add($"- **Defense:** {npc.Defense}");
-        var statsStr = stats.Count > 0 ? string.Join("\n", stats) : "- Not yet determined";
+        var memory = npc.DispositionState.MemoryFlags.Count > 0
+            ? string.Join(", ", npc.DispositionState.MemoryFlags)
+            : "none";
 
         var loot = npc.LootTable.Count > 0
             ? string.Join("\n", npc.LootTable.Select(i => $"- {i.Name} (x{i.Quantity})"))
@@ -119,24 +122,28 @@ public static class WikiTemplates
             ---
             title: {npc.Name}
             description: {npc.Personality}
-            tags: [npc, {npc.Faction.ToLowerInvariant()}]
+            tags: [npc, {npc.Faction}]
             ---
 
             # {npc.Name}
 
-            **Faction:** {npc.Faction} | **Level:** {npc.Level} | **Disposition:** {npc.Disposition}
-
-            ## Personality
-            {npc.Personality}
+            **Personality:** {npc.Personality}
+            **Faction:** {npc.Faction}
+            **Disposition:** {npc.Disposition} (baseline: {npc.DispositionState.Baseline})
+            **Hostile:** {(npc.IsHostile ? "Yes" : "No")}
+            **Level:** {npc.Level}
 
             ## Combat Stats
-            {statsStr}
+            - **HP:** {npc.Hp?.ToString() ?? "N/A"}/{npc.MaxHp?.ToString() ?? "N/A"}
+            - **Attack Bonus:** {npc.AttackBonus?.ToString() ?? "N/A"}
+            - **Damage:** {npc.DamageDice ?? "N/A"}
+            - **Defense:** {npc.Defense?.ToString() ?? "N/A"}
+
+            ## Memory
+            {memory}
 
             ## Loot Table
             {loot}
-
-            ---
-            *Hostile: {(npc.IsHostile ? "Yes" : "No")}*
             """;
     }
 
@@ -161,8 +168,4 @@ public static class WikiTemplates
             {entry.Narration}
             """;
     }
-
-    private static string FormatStatsTable(PlayerCharacter player) =>
-        string.Join("\n", player.GetAttributeStats().Select(kv =>
-            $"| {kv.Key.ToUpperInvariant()} | {kv.Value} | {PlayerCharacter.GetStatModifier(kv.Value):+0;-0} |"));
 }

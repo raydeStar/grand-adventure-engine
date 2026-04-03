@@ -164,6 +164,63 @@ public class NarratorServiceTests
     }
 
     [Fact]
+    public async Task NarrateActionAsync_ForSuccessfulMove_UsesArrivalFallbackWhenHttpFails()
+    {
+        var handler = new FakeHttpMessageHandler(new HttpRequestException("Connection refused"));
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") };
+        var narrator = new NarratorService(httpClient, NullLogger<NarratorService>.Instance);
+
+        var narration = await narrator.NarrateActionAsync(new NarratorContext
+        {
+            Player = new PlayerCharacter { Name = "Thorin", Race = "Dwarf", Class = "Fighter" },
+            CurrentRoom = new Room
+            {
+                Id = "tavern",
+                Name = "The Rusty Mug",
+                Description = "A smoky tavern with low ceilings.",
+                Npcs = [new Npc { Id = "mara", Name = "Mara", Personality = "Gruff barmaid" }],
+                Items = [new InventoryItem { Id = "ale", Name = "Flat Ale", Quantity = 1 }],
+                Exits = new Dictionary<string, string> { ["south"] = "crossroads", ["up"] = "rooms" }
+            },
+            Action = new GameAction { PlayerId = "p1", RawInput = "go north", Type = ActionType.Move, Direction = "north" },
+            MechanicalResult = new ActionResult { Success = true, MechanicalSummary = "You move north to The Rusty Mug." }
+        });
+
+        // Arrival fallback should mention the NPC reacting and the notable item
+        Assert.Contains("Mara", narration);
+        Assert.Contains("Thorin", narration);
+        Assert.Contains("ale", narration, StringComparison.OrdinalIgnoreCase);
+        // Should NOT just say the mechanical summary
+        Assert.DoesNotContain("You move north", narration);
+    }
+
+    [Fact]
+    public async Task NarrateActionAsync_ForFailedMove_StillUsesGeneralNarration()
+    {
+        // Failed moves (no exit) should NOT go through arrival — they use the general humor prompt
+        var handler = new FakeHttpMessageHandler(new HttpRequestException("Connection refused"));
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") };
+        var narrator = new NarratorService(httpClient, NullLogger<NarratorService>.Instance);
+
+        var narration = await narrator.NarrateActionAsync(new NarratorContext
+        {
+            Player = new PlayerCharacter { Name = "Thorin", Race = "Dwarf", Class = "Fighter" },
+            CurrentRoom = new Room
+            {
+                Id = "spawn",
+                Name = "The Crossroads Inn",
+                Description = "A weathered inn."
+            },
+            Action = new GameAction { PlayerId = "p1", RawInput = "go west", Type = ActionType.Move, Direction = "west" },
+            MechanicalResult = new ActionResult { Success = false, MechanicalSummary = "There is no exit to the west." }
+        });
+
+        // Should use the general fallback (failure path), not the arrival path
+        Assert.Contains("Thorin", narration);
+        Assert.DoesNotContain("arrives", narration, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task NarrateActionAsync_ForMissingLookTarget_AvoidsTemplateFailureText()
     {
         var handler = new FakeHttpMessageHandler(new HttpRequestException("HTTP should not be called for deterministic look narration."));

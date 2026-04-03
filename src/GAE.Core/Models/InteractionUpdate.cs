@@ -13,4 +13,17 @@ public class InteractionUpdate
     public string? CombatStatus { get; set; }
     public List<InventoryItem> Loot { get; set; } = [];
     public Dictionary<string, int> EnemyUpdate { get; set; } = new();
+
+    /// <summary>
+    /// Memory flags to add to the NPC's permanent memory.
+    /// Examples: "crime-witnessed", "romance", "friendship", "betrayal", "helped-in-battle"
+    /// Flags starting with "!" are permanent and cannot be auto-removed.
+    /// </summary>
+    public List<string> MemoryFlags { get; set; } = [];
+
+    /// <summary>
+    /// Faction-wide mood shift (-100 to 100). Positive = faction becomes friendlier,
+    /// negative = faction becomes more hostile. Applied to all same-faction NPCs in the room.
+    /// </summary>
+    public int FactionMoodShift { get; set; } = 0;
 }

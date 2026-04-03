@@ -134,7 +134,7 @@ public class DiscordBotService : IHostedService
                 **Character Created!**
                 **{player.Name}** — Level {player.Level} {player.Race} {player.Class}
                 HP: {player.Hp}/{player.MaxHp} | MP: {player.Mp}/{player.MaxMp} | Gold: {player.Gold}
-                {player.FormatStatsCompact()}
+                STR: {player.Str} | DEX: {player.Dex} | CON: {player.Con} | INT: {player.Int} | WIS: {player.Wis} | CHA: {player.Cha}
 
                 {player.Backstory}
 

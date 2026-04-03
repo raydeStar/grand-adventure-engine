@@ -173,9 +173,18 @@ public class GameEngine : IGameEngine
             CurrentRoomId = "spawn"
         };
 
-        // Populate stats dictionary from rules-defined attributes
+        // Populate stats from rules-defined attributes
+        var statMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         for (int i = 0; i < attributeKeys.Count && i < statValues.Length; i++)
-            player.Stats[attributeKeys[i]] = statValues[i];
+            statMap[attributeKeys[i]] = statValues[i];
+
+        player.Str = statMap.GetValueOrDefault("str", 10);
+        player.Dex = statMap.GetValueOrDefault("dex", 10);
+        player.Con = statMap.GetValueOrDefault("con", 10);
+        player.Int = statMap.GetValueOrDefault("int", 10);
+        player.Wis = statMap.GetValueOrDefault("wis", 10);
+        player.Cha = statMap.GetValueOrDefault("cha", 10);
+        player.Luck = statMap.GetValueOrDefault("luck", 10);
 
         // Calculate HP/MP from rules
         int hpBase = _rules.Stats.GetValueOrDefault("hp")?.Base ?? 20;
@@ -1321,6 +1330,29 @@ public class GameEngine : IGameEngine
         else if (update.NpcDisposition is not null)
         {
             npc.Disposition = update.NpcDisposition;
+        }
+
+        // Apply memory flags from the LLM (additive — never remove via this path)
+        foreach (var flag in update.MemoryFlags)
+        {
+            if (!string.IsNullOrWhiteSpace(flag) && !npc.DispositionState.MemoryFlags.Contains(flag, StringComparer.OrdinalIgnoreCase))
+                npc.DispositionState.MemoryFlags.Add(flag);
+        }
+
+        // Faction ripple: shift mood of same-faction NPCs in the room
+        if (update.FactionMoodShift != 0 && !string.IsNullOrWhiteSpace(npc.Faction) && npc.Faction != "neutral")
+        {
+            var factionPeers = room.Npcs
+                .Where(n => n.Id != npc.Id && string.Equals(n.Faction, npc.Faction, StringComparison.OrdinalIgnoreCase));
+
+            foreach (var peer in factionPeers)
+            {
+                // Peers get 50% of the faction shift (dampened ripple)
+                var peerShift = update.FactionMoodShift / 2;
+                peer.DispositionState.Intensity = Math.Clamp(peer.DispositionState.Intensity + peerShift, 0, 100);
+                peer.DispositionState.LastUpdated = DateTimeOffset.UtcNow;
+                peer.Disposition = peer.DispositionState.ToFlatDisposition();
+            }
         }
 
         foreach (var contextEntry in update.Context)
