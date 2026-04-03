@@ -271,35 +271,39 @@ public class DiscordBotService : IHostedService
 
     private async Task HandleMainChannelMessageAsync(SocketUserMessage message, string discordId, string content)
     {
-        if (content.StartsWith("!create", StringComparison.OrdinalIgnoreCase) ||
-            content.Equals("/create", StringComparison.OrdinalIgnoreCase))
-        {
-            var existing = await _stateManager.GetPlayerByDiscordIdAsync(discordId);
-            if (existing is not null)
-            {
-                var link = existing.ThreadId.HasValue ? $"<#{existing.ThreadId}>" : "your thread";
-                await message.Channel.SendMessageAsync($"You already have a character: **{existing.Name}**. Head to {link} to play!");
-                return;
-            }
+        // Only respond in the main channel if the bot is @mentioned
+        var botUser = _client.CurrentUser;
+        if (botUser is null) return;
 
-            var thread = await CreatePlayerThreadAsync(message.Channel, message.Author);
-            if (thread is null)
-            {
-                await message.Channel.SendMessageAsync("Couldn't create your adventure thread.");
-                return;
-            }
+        bool isMentioned = message.MentionedUsers.Any(u => u.Id == botUser.Id);
+        if (!isMentioned) return;
 
-            await message.Channel.SendMessageAsync($"Your adventure begins! Head to <#{thread.Id}>");
-            await StartAiCharacterCreation(thread, message.Author.Id, discordId);
-            return;
-        }
-
-        // Any other game command in main channel
+        // Bot was @mentioned — respond helpfully with commands and status
         var player = await _stateManager.GetPlayerByDiscordIdAsync(discordId);
-        if (player?.ThreadId is not null)
-            await message.Channel.SendMessageAsync($"Head to your adventure thread to play! <#{player.ThreadId}>");
+        if (player is not null)
+        {
+            var link = player.ThreadId.HasValue ? $"<#{player.ThreadId}>" : "your adventure thread";
+            await message.Channel.SendMessageAsync(
+                $"Hey {message.Author.Mention}! You're playing as **{player.Name}** ({player.Race} {player.Class}). " +
+                $"Head to {link} to continue your adventure!\n\n" +
+                "**Commands:**\n" +
+                "> `/stats` — View your character sheet\n" +
+                "> `/inventory` — Check your gear\n" +
+                "> `/map` — See discovered rooms\n" +
+                "> `/restart` — Start over with a new character");
+        }
         else
-            await message.Channel.SendMessageAsync("Head to your adventure thread to play! If you don't have one, type `/create`.");
+        {
+            await message.Channel.SendMessageAsync(
+                $"Hey {message.Author.Mention}! Welcome to the Grand Adventure Engine! ⚔️\n\n" +
+                "**Getting Started:**\n" +
+                "> `/create` — Begin your adventure! I'll help you create a character.\n\n" +
+                "**Other Commands:**\n" +
+                "> `/stats` — View your character sheet\n" +
+                "> `/inventory` — Check your gear\n" +
+                "> `/map` — See discovered rooms\n" +
+                "> `/help` — Full command list");
+        }
     }
 
     private async Task HandleThreadMessageAsync(SocketUserMessage message, SocketThreadChannel thread, string discordId, string content)
