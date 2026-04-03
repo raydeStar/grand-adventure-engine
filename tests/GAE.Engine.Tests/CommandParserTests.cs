@@ -17,7 +17,11 @@ public class CommandParserTests
     [InlineData("go north", ActionType.Move, "north")]
     [InlineData("move south", ActionType.Move, "south")]
     [InlineData("walk east", ActionType.Move, "east")]
-    [InlineData("go n", ActionType.Move, "n")]
+    [InlineData("go n", ActionType.Move, "north")]
+    [InlineData("south", ActionType.Move, "south")]
+    [InlineData("n", ActionType.Move, "north")]
+    [InlineData("e", ActionType.Move, "east")]
+    [InlineData("w", ActionType.Move, "west")]
     public void Parse_MoveCommands_ReturnsCorrectDirection(string input, ActionType expectedType, string expectedDir)
     {
         var action = _parser.Parse("player1", input);

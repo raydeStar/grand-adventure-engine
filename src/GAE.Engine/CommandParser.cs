@@ -28,12 +28,19 @@ public partial class CommandParser
             return action;
         }
 
-        // Movement
+        // Movement — "go north", "head south", or just bare "north", "n", etc.
         var moveMatch = MoveRegex().Match(input);
         if (moveMatch.Success)
         {
             action.Type = ActionType.Move;
-            action.Direction = moveMatch.Groups["dir"].Value.ToLowerInvariant();
+            action.Direction = NormalizeDirection(moveMatch.Groups["dir"].Value);
+            return action;
+        }
+        var bareMove = BareDirectionRegex().Match(input);
+        if (bareMove.Success)
+        {
+            action.Type = ActionType.Move;
+            action.Direction = NormalizeDirection(bareMove.Groups["dir"].Value);
             return action;
         }
 
@@ -188,6 +195,20 @@ public partial class CommandParser
 
     [GeneratedRegex(@"^(?:go|move|walk|head|travel)\s+(?<dir>north|south|east|west|up|down|n|s|e|w|u|d)$", RegexOptions.IgnoreCase)]
     private static partial Regex MoveRegex();
+
+    [GeneratedRegex(@"^(?<dir>north|south|east|west|up|down|n|s|e|w|u|d)$", RegexOptions.IgnoreCase)]
+    private static partial Regex BareDirectionRegex();
+
+    private static string NormalizeDirection(string dir) => dir.ToLowerInvariant() switch
+    {
+        "n" => "north",
+        "s" => "south",
+        "e" => "east",
+        "w" => "west",
+        "u" => "up",
+        "d" => "down",
+        _ => dir.ToLowerInvariant()
+    };
 
     [GeneratedRegex(@"^(?:look|l|examine|inspect|search)(?:\s|$)", RegexOptions.IgnoreCase)]
     private static partial Regex LookRegex();
