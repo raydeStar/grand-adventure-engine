@@ -77,7 +77,7 @@ public class GameEngine : IGameEngine
             ActionType.Look => await ProcessLookAsync(player, action, ct),
             ActionType.Attack => await ProcessAttackAsync(player, action, ct),
             ActionType.Talk => await ProcessTalkAsync(player, action, ct),
-            ActionType.Take => ProcessTake(player, action),
+            ActionType.Take => await ProcessTakeAsync(player, action, ct),
             ActionType.Drop => await ProcessDropAsync(player, action, ct),
             ActionType.Equip => ProcessEquip(player, action),
             ActionType.Unequip => ProcessUnequip(player, action),
@@ -446,14 +446,148 @@ public class GameEngine : IGameEngine
         return result;
     }
 
-    private ActionResult ProcessTake(PlayerCharacter player, GameAction action)
+    private async Task<ActionResult> ProcessTakeAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
     {
+        var room = await _stateManager.GetRoomAsync(player.CurrentRoomId, ct);
+        if (room is null)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "There's nothing here to take." };
+
+        var (requestedQuantity, rawTarget) = ParseQuantityTarget(action.Target);
+
+        // Try gold pickup first ("take gold", "pick up 10 gold")
+        if (TryResolveGoldPickup(player, room, requestedQuantity, rawTarget, out var goldResult))
+        {
+            goldResult.ActionId = action.Id;
+            await _stateManager.SaveRoomAsync(room, ct);
+            return goldResult;
+        }
+
+        var item = FindNamedEntity(room.Items, roomItem => roomItem.Name, rawTarget);
+
+        if (item is null)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"You don't see any '{action.Target}' here to pick up." };
+
+        var quantityToTake = requestedQuantity ?? item.Quantity;
+        if (quantityToTake <= 0)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "You need to take at least one." };
+
+        // When no explicit quantity and there are multiple individual stacks with same name, gather them all
+        var allMatchingItems = room.Items
+            .Where(i => string.Equals(i.Name, item.Name, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        int totalAvailable = allMatchingItems.Sum(i => i.Quantity);
+        if (requestedQuantity.HasValue && requestedQuantity.Value > totalAvailable)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"There are only {totalAvailable} {item.Name} here." };
+
+        int actualQuantity = requestedQuantity ?? totalAvailable;
+
+        // Remove items from room
+        int remaining = actualQuantity;
+        foreach (var roomItem in allMatchingItems)
+        {
+            if (remaining <= 0) break;
+            if (roomItem.Quantity <= remaining)
+            {
+                remaining -= roomItem.Quantity;
+                room.Items.Remove(roomItem);
+            }
+            else
+            {
+                roomItem.Quantity -= remaining;
+                remaining = 0;
+            }
+        }
+
+        // Add to player inventory (stack with existing if possible)
+        var existingStack = player.Inventory.FirstOrDefault(i =>
+            string.Equals(i.Name, item.Name, StringComparison.OrdinalIgnoreCase));
+
+        var takenItem = CloneInventoryItem(item, actualQuantity);
+
+        if (existingStack is not null)
+        {
+            existingStack.Quantity += actualQuantity;
+        }
+        else
+        {
+            player.Inventory.Add(takenItem);
+        }
+
+        await _stateManager.SaveRoomAsync(room, ct);
+
+        int totalInInventory = existingStack?.Quantity ?? actualQuantity;
+        var itemLabel = actualQuantity > 1 ? $"{item.Name} (x{actualQuantity})" : item.Name;
+        var inventoryNote = totalInInventory > actualQuantity
+            ? $" You now have {totalInInventory}."
+            : "";
+
         return new ActionResult
         {
             ActionId = action.Id,
             Success = true,
-            MechanicalSummary = $"You reach for {action.Target}."
+            MechanicalSummary = $"{itemLabel} added to inventory.{inventoryNote}",
+            ItemsGained = [takenItem],
+            StateChanges =
+            [
+                new StateChange { EntityType = "Player", EntityId = player.Id, Property = "Inventory", NewValue = $"added {itemLabel}" },
+                new StateChange { EntityType = "Room", EntityId = room.Id, Property = "Items", NewValue = $"removed {itemLabel}" }
+            ]
         };
+    }
+
+    /// <summary>Handle "take gold" / "pick up gold coins" from room floor.</summary>
+    private static bool TryResolveGoldPickup(PlayerCharacter player, Room room, int? requestedQuantity, string rawTarget, out ActionResult result)
+    {
+        result = null!;
+        var normalizedTarget = NormalizeLookupText(rawTarget);
+        if (normalizedTarget is not "gold" and not "coin" and not "coins" and not "gold coin" and not "gold coins")
+            return false;
+
+        var goldItems = room.Items
+            .Where(i => string.Equals(i.Name, "Gold Coin", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (goldItems.Count == 0) return false;
+
+        int totalGold = goldItems.Sum(i => i.Quantity);
+        int toTake = requestedQuantity ?? totalGold;
+        if (toTake > totalGold)
+        {
+            result = new ActionResult { Success = false, MechanicalSummary = $"There are only {totalGold} gold coins here." };
+            return true;
+        }
+
+        // Remove gold from room
+        int remaining = toTake;
+        foreach (var coin in goldItems)
+        {
+            if (remaining <= 0) break;
+            if (coin.Quantity <= remaining)
+            {
+                remaining -= coin.Quantity;
+                room.Items.Remove(coin);
+            }
+            else
+            {
+                coin.Quantity -= remaining;
+                remaining = 0;
+            }
+        }
+
+        player.Gold += toTake;
+
+        result = new ActionResult
+        {
+            Success = true,
+            MechanicalSummary = $"Picked up {toTake} gold. You now have {player.Gold} gold.",
+            GoldChange = toTake,
+            StateChanges =
+            [
+                new StateChange { EntityType = "Player", EntityId = player.Id, Property = "Gold", OldValue = $"{player.Gold - toTake}", NewValue = $"{player.Gold}" }
+            ]
+        };
+        return true;
     }
 
     private async Task<ActionResult> ProcessDropAsync(PlayerCharacter player, GameAction action, CancellationToken ct)

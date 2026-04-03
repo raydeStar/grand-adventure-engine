@@ -185,6 +185,128 @@ public class GameEngineCommandFlowTests
         Assert.Equal(1, droppedCoin.Quantity);
     }
 
+    [Fact]
+    public async Task ProcessActionAsync_TakeItem_RemovesFromRoomAndAddsToInventory()
+    {
+        var stateManager = await CreateStateAsync(room: new Room
+        {
+            Id = "gate",
+            Name = "Ironhold Gate",
+            Description = "A rusted war gate with iron plates.",
+            Items = [new InventoryItem { Id = "rope", Name = "Silken Rope", Quantity = 1, Type = ItemType.Misc }]
+        });
+
+        var narrator = new Mock<INarratorService>();
+        narrator
+            .Setup(service => service.NarrateActionAsync(It.IsAny<NarratorContext>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("Narrated take.");
+
+        var engine = CreateEngine(stateManager, narrator.Object);
+        var action = engine.ParseCommand(PlayerId, "take silken rope");
+
+        var result = await engine.ProcessActionAsync(PlayerId, action);
+
+        Assert.True(result.Success);
+        Assert.Contains("Silken Rope", result.MechanicalSummary);
+        Assert.Contains("added to inventory", result.MechanicalSummary);
+        var gained = Assert.Single(result.ItemsGained);
+        Assert.Equal("Silken Rope", gained.Name);
+
+        var updatedPlayer = (await stateManager.GetPlayerAsync(PlayerId))!;
+        var invItem = Assert.Single(updatedPlayer.Inventory);
+        Assert.Equal("Silken Rope", invItem.Name);
+
+        var updatedRoom = (await stateManager.GetRoomAsync("gate"))!;
+        Assert.Empty(updatedRoom.Items);
+    }
+
+    [Fact]
+    public async Task ProcessActionAsync_PickUpMultipleStacks_GathersAllMatchingItems()
+    {
+        var stateManager = await CreateStateAsync(room: new Room
+        {
+            Id = "lab",
+            Name = "QA Lab",
+            Description = "A test room.",
+            Items =
+            [
+                new InventoryItem { Id = "t1", Name = "Inspection Token", Quantity = 1, Type = ItemType.Misc },
+                new InventoryItem { Id = "t2", Name = "Inspection Token", Quantity = 1, Type = ItemType.Misc },
+                new InventoryItem { Id = "t3", Name = "Inspection Token", Quantity = 1, Type = ItemType.Misc }
+            ]
+        });
+
+        var narrator = new Mock<INarratorService>();
+        narrator
+            .Setup(service => service.NarrateActionAsync(It.IsAny<NarratorContext>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("Narrated take.");
+
+        var engine = CreateEngine(stateManager, narrator.Object);
+        var action = engine.ParseCommand(PlayerId, "pick up inspection tokens");
+
+        var result = await engine.ProcessActionAsync(PlayerId, action);
+
+        Assert.True(result.Success);
+        Assert.Contains("Inspection Token (x3)", result.MechanicalSummary);
+
+        var updatedPlayer = (await stateManager.GetPlayerAsync(PlayerId))!;
+        var invItem = Assert.Single(updatedPlayer.Inventory);
+        Assert.Equal("Inspection Token", invItem.Name);
+        Assert.Equal(3, invItem.Quantity);
+
+        var updatedRoom = (await stateManager.GetRoomAsync("lab"))!;
+        Assert.Empty(updatedRoom.Items);
+    }
+
+    [Fact]
+    public async Task ProcessActionAsync_TakeNonexistentItem_FailsGracefully()
+    {
+        var stateManager = await CreateStateAsync(room: new Room
+        {
+            Id = "gate",
+            Name = "Ironhold Gate",
+            Description = "A rusted war gate."
+        });
+
+        var narrator = new Mock<INarratorService>(MockBehavior.Strict);
+        var engine = CreateEngine(stateManager, narrator.Object);
+        var action = engine.ParseCommand(PlayerId, "take diamond");
+
+        var result = await engine.ProcessActionAsync(PlayerId, action);
+
+        Assert.False(result.Success);
+        Assert.Contains("diamond", result.MechanicalSummary, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ProcessActionAsync_PickUpGoldCoins_AddsToGoldTotal()
+    {
+        var stateManager = await CreateStateAsync(room: new Room
+        {
+            Id = "gate",
+            Name = "Ironhold Gate",
+            Description = "A rusted war gate.",
+            Items = [new InventoryItem { Id = "gc", Name = "Gold Coin", Quantity = 5, Type = ItemType.Misc }]
+        });
+
+        var narrator = new Mock<INarratorService>();
+        narrator
+            .Setup(service => service.NarrateActionAsync(It.IsAny<NarratorContext>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("Narrated take.");
+
+        var engine = CreateEngine(stateManager, narrator.Object);
+        var action = engine.ParseCommand(PlayerId, "pick up gold");
+
+        var result = await engine.ProcessActionAsync(PlayerId, action);
+
+        Assert.True(result.Success);
+        Assert.Equal(5, result.GoldChange);
+        Assert.Contains("5 gold", result.MechanicalSummary);
+
+        var updatedPlayer = (await stateManager.GetPlayerAsync(PlayerId))!;
+        Assert.Equal(5, updatedPlayer.Gold); // 0 starting + 5 picked up
+    }
+
     private static GameEngine CreateEngine(IStateManager stateManager, INarratorService narrator)
     {
         var dice = new Mock<IProbabilityEngine>(MockBehavior.Strict);
