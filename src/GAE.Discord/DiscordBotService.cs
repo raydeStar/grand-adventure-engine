@@ -405,12 +405,18 @@ public class DiscordBotService : IHostedService
 
         if (string.IsNullOrEmpty(command)) return;
 
+        // Show typing indicator while processing
+        await thread.TriggerTypingAsync();
+
         // Parse and process
         var action = _engine.ParseCommand(player.Id, command);
         var result = await ProcessWithNarratorFallbackAsync(player, action, thread);
 
+        // Refresh player state so status bar reflects changes from this action
+        player = await _stateManager.GetPlayerByDiscordIdAsync(discordId) ?? player;
+
         // Format and send response
-        await SendGameResponseAsync(thread, player, result);
+        await SendGameResponseAsync(thread, player, action, result);
     }
 
     // ==================== Thread Management ====================
@@ -615,12 +621,40 @@ public class DiscordBotService : IHostedService
 
     // ==================== Game Response Formatting ====================
 
-    private async Task SendGameResponseAsync(SocketThreadChannel thread, PlayerCharacter player, ActionResult result)
+    private async Task SendGameResponseAsync(SocketThreadChannel thread, PlayerCharacter player, GameAction action, ActionResult result)
     {
-        // Room entry — embed + narration
+        // Room entry — embed + narration (movement or plain "look" at room)
         if (result.NewRoom is not null)
         {
             await SendRoomEntryAsync(thread, player, result);
+            return;
+        }
+
+        // "look" with no target shows the room card
+        if (action.Type == Core.Models.ActionType.Look && string.IsNullOrWhiteSpace(action.Target) && result.Success)
+        {
+            await SendRoomEntryAsync(thread, player, result);
+            return;
+        }
+
+        // Inventory — show as proper embed
+        if (action.Type == Core.Models.ActionType.Inventory)
+        {
+            await thread.SendMessageAsync(embed: BuildInventoryEmbed(player).Build());
+            return;
+        }
+
+        // Stats — show as proper embed
+        if (action.Type == Core.Models.ActionType.Stats)
+        {
+            await thread.SendMessageAsync(embed: BuildCharacterEmbed(player).Build());
+            return;
+        }
+
+        // Help — show as proper embed
+        if (action.Type == Core.Models.ActionType.Help)
+        {
+            await thread.SendMessageAsync(embed: BuildHelpEmbed().Build());
             return;
         }
 
@@ -637,12 +671,56 @@ public class DiscordBotService : IHostedService
             await SendVictoryAnnouncementAsync(thread, player);
         }
 
-        // Standard response
-        var text = FormatNarrativeResponse(result);
-        var statusFooter = FormatStatusBar(player);
-        text += $"\n\n{statusFooter}";
+        // Build an embed for consistent styling
+        var embed = new EmbedBuilder();
 
-        await SendChunkedAsync(thread, text);
+        // Determine color based on result
+        if (!result.Success)
+            embed.WithColor(Color.Red);
+        else if (result.GoldChange != 0 || result.ItemsGained.Count > 0 || result.ItemsLost.Count > 0)
+            embed.WithColor(Color.Green);
+        else
+            embed.WithColor(new Color(0x2f, 0x31, 0x36)); // Dark grey — blends with Discord
+
+        // Narration or mechanical summary as description
+        var narration = result.Narration ?? result.MechanicalSummary;
+        if (!result.Success)
+            narration = $"❌ {narration}";
+        embed.WithDescription(narration);
+
+        // Dice rolls as a field
+        if (result.DiceRolls.Count > 0)
+        {
+            var rollLines = result.DiceRolls.Select(roll =>
+            {
+                var rollStr = $"🎲 [{string.Join(", ", roll.IndividualRolls)}]";
+                if (roll.Modifier != 0)
+                    rollStr += $" {(roll.Modifier > 0 ? "+" : "")}{roll.Modifier}";
+                rollStr += $" = **{roll.Total}** ({roll.Purpose})";
+                if (roll.IsCritical) rollStr += " 💥 **CRITICAL!**";
+                if (roll.IsFumble) rollStr += " 💀 **FUMBLE!**";
+                return rollStr;
+            });
+            embed.AddField("Rolls", string.Join("\n", rollLines));
+        }
+
+        // Rewards & changes inline
+        var changes = new List<string>();
+        if (result.GoldChange > 0) changes.Add($"💰 +{result.GoldChange} gold");
+        if (result.GoldChange < 0) changes.Add($"💰 {result.GoldChange} gold");
+        if (result.XpGained > 0) changes.Add($"⭐ +{result.XpGained} XP");
+        foreach (var item in result.ItemsGained)
+            changes.Add($"📥 +{item.Name}{(item.Quantity > 1 ? $" (x{item.Quantity})" : "")}");
+        foreach (var item in result.ItemsLost)
+            changes.Add($"📤 -{item.Name}{(item.Quantity > 1 ? $" (x{item.Quantity})" : "")}");
+
+        if (changes.Count > 0)
+            embed.AddField("Changes", string.Join("\n", changes), inline: true);
+
+        // Status bar footer
+        embed.WithFooter(FormatStatusBar(player));
+
+        await thread.SendMessageAsync(embed: embed.Build());
     }
 
     private async Task SendRoomEntryAsync(SocketThreadChannel thread, PlayerCharacter player, ActionResult? result = null)
@@ -651,22 +729,32 @@ public class DiscordBotService : IHostedService
         if (room is null) return;
 
         var embed = new EmbedBuilder()
-            .WithTitle($"\U0001F4CD {room.Name}")
+            .WithTitle($"📍 {room.Name}")
             .WithDescription(room.Description)
             .WithColor(Color.Orange);
 
         // NPCs
-        var npcNames = room.Npcs.Select(n => n.IsHostile ? $"⚠️ {n.Name}" : n.Name).ToList();
-        if (npcNames.Count > 0)
-            embed.AddField("\U0001F464 NPCs", string.Join(", ", SummarizeEntities(npcNames)), inline: true);
+        if (room.Npcs.Count > 0)
+        {
+            var npcLines = room.Npcs.Select(n =>
+            {
+                var prefix = n.IsHostile ? "⚠️" : "🧑";
+                return $"{prefix} {n.Name}";
+            });
+            embed.AddField("NPCs", string.Join("\n", npcLines), inline: true);
+        }
 
         // Items
-        var itemNames = room.Items.Select(i => i.Quantity > 1 ? $"{i.Name} (x{i.Quantity})" : i.Name).ToList();
-        if (itemNames.Count > 0)
-            embed.AddField("\U0001F4E6 Items", string.Join(", ", SummarizeEntities(itemNames)), inline: true);
+        if (room.Items.Count > 0)
+        {
+            var itemLines = room.Items.Select(i =>
+                i.Quantity > 1 ? $"📦 {i.Name} (x{i.Quantity})" : $"📦 {i.Name}");
+            embed.AddField("Items", string.Join("\n", itemLines), inline: true);
+        }
 
-        // Exits — show as compass-style directions
-        var exits = room.Exits.Select(e =>
+        // Exits — resolve target room names where possible
+        var exitLines = new List<string>();
+        foreach (var e in room.Exits)
         {
             var dirEmoji = e.Key.ToLowerInvariant() switch
             {
@@ -678,57 +766,80 @@ public class DiscordBotService : IHostedService
                 "down" => "🔽",
                 _ => "↪️"
             };
-            return $"{dirEmoji} {e.Key} — {e.Value.Replace("_", " ")}";
-        });
-        embed.AddField("\U0001F6AA Exits", string.Join("\n", exits));
+            // Try to resolve the target room name
+            var targetRoom = await _stateManager.GetPlayerRoomAsync(player.Id, e.Value);
+            var targetName = targetRoom?.Name ?? e.Value.Replace("_", " ");
+            exitLines.Add($"{dirEmoji} **{e.Key}** → {targetName}");
+        }
+        if (exitLines.Count > 0)
+            embed.AddField("Exits", string.Join("\n", exitLines));
 
         embed.WithFooter(FormatStatusBar(player));
 
+        // Send narration text above the embed (if there is any)
         var narration = result?.Narration ?? result?.MechanicalSummary ?? "";
-        await thread.SendMessageAsync(text: narration, embed: embed.Build());
+        if (!string.IsNullOrWhiteSpace(narration))
+            await thread.SendMessageAsync(text: narration, embed: embed.Build());
+        else
+            await thread.SendMessageAsync(embed: embed.Build());
     }
 
     private async Task SendCombatResultAsync(SocketThreadChannel thread, PlayerCharacter player, ActionResult result)
     {
-        var sb = new StringBuilder();
+        var combatStatus = result.InteractionUpdate?.CombatStatus ?? "ongoing";
+        var embedColor = combatStatus switch
+        {
+            "victory" => Color.Gold,
+            "defeat" => Color.DarkRed,
+            "fled" => Color.LightGrey,
+            _ => new Color(0xcc, 0x33, 0x33) // Combat red
+        };
+
+        var embed = new EmbedBuilder()
+            .WithTitle(combatStatus switch
+            {
+                "victory" => "⚔️ Victory!",
+                "defeat" => "💀 Defeated...",
+                "fled" => "🏃 Fled!",
+                _ => "⚔️ Combat"
+            })
+            .WithColor(embedColor);
+
+        // Narration as description
+        embed.WithDescription(result.Narration ?? result.MechanicalSummary);
 
         // Dice rolls
-        foreach (var roll in result.DiceRolls)
+        if (result.DiceRolls.Count > 0)
         {
-            sb.Append($"\U0001F3B2 [{string.Join(", ", roll.IndividualRolls)}]");
-            if (roll.Modifier != 0)
-                sb.Append($" {(roll.Modifier > 0 ? "+" : "")}{roll.Modifier}");
-            sb.Append($" = **{roll.Total}** ({roll.Purpose})");
-            if (roll.IsCritical) sb.Append(" \U0001F4A5 **CRITICAL!**");
-            if (roll.IsFumble) sb.Append(" \U0001F480 **FUMBLE!**");
-            sb.AppendLine();
+            var rollLines = result.DiceRolls.Select(roll =>
+            {
+                var rollStr = $"🎲 [{string.Join(", ", roll.IndividualRolls)}]";
+                if (roll.Modifier != 0)
+                    rollStr += $" {(roll.Modifier > 0 ? "+" : "")}{roll.Modifier}";
+                rollStr += $" = **{roll.Total}** ({roll.Purpose})";
+                if (roll.IsCritical) rollStr += " 💥 **CRITICAL!**";
+                if (roll.IsFumble) rollStr += " 💀 **FUMBLE!**";
+                return rollStr;
+            });
+            embed.AddField("Rolls", string.Join("\n", rollLines));
         }
 
-        // Narration
-        if (result.Narration is not null)
-            sb.AppendLine(result.Narration);
-        else
-            sb.AppendLine(result.MechanicalSummary);
-
         // Rewards
-        if (result.XpGained > 0)
-            sb.AppendLine($"\u2B50 +{result.XpGained} XP");
-        if (result.GoldChange > 0)
-            sb.AppendLine($"\U0001F4B0 +{result.GoldChange} gold");
-
-        // Loot
+        var rewards = new List<string>();
+        if (result.XpGained > 0) rewards.Add($"⭐ +{result.XpGained} XP");
+        if (result.GoldChange > 0) rewards.Add($"💰 +{result.GoldChange} gold");
         foreach (var item in result.ItemsGained)
-            sb.AppendLine($"\U0001F381 Loot: {item.Name}");
+            rewards.Add($"🎁 {item.Name}");
+        if (rewards.Count > 0)
+            embed.AddField("Rewards", string.Join("\n", rewards), inline: true);
 
-        // Refresh player for latest stats
-        var updated = await _stateManager.GetPlayerByDiscordIdAsync(player.DiscordId ?? player.Id) ?? player;
-        sb.AppendLine($"\n{FormatStatusBar(updated)}");
+        embed.WithFooter(FormatStatusBar(player));
 
-        await SendChunkedAsync(thread, sb.ToString());
+        await thread.SendMessageAsync(embed: embed.Build());
 
         // Victory check
         if (result.IsVictory)
-            await SendVictoryAnnouncementAsync(thread, updated);
+            await SendVictoryAnnouncementAsync(thread, player);
     }
 
     private async Task SendVictoryAnnouncementAsync(SocketThreadChannel thread, PlayerCharacter player)
@@ -1112,42 +1223,8 @@ public class DiscordBotService : IHostedService
 
     // ==================== Helpers ====================
 
-    private static string FormatNarrativeResponse(ActionResult result)
-    {
-        var parts = new List<string>();
-
-        if (!result.Success)
-        {
-            parts.Add($"\u274C {result.MechanicalSummary}");
-            return string.Join("\n", parts);
-        }
-
-        // Dice rolls
-        foreach (var roll in result.DiceRolls)
-        {
-            var rollStr = $"\U0001F3B2 [{string.Join(", ", roll.IndividualRolls)}]";
-            if (roll.Modifier != 0)
-                rollStr += $" {(roll.Modifier > 0 ? "+" : "")}{roll.Modifier}";
-            rollStr += $" = **{roll.Total}** ({roll.Purpose})";
-            if (roll.IsCritical) rollStr += " \U0001F4A5 **CRITICAL!**";
-            if (roll.IsFumble) rollStr += " \U0001F480 **FUMBLE!**";
-            parts.Add(rollStr);
-        }
-
-        // Narration
-        parts.Add(result.Narration ?? result.MechanicalSummary);
-
-        // Rewards
-        if (result.GoldChange > 0)
-            parts.Add($"\U0001F4B0 +{result.GoldChange} gold");
-        if (result.XpGained > 0)
-            parts.Add($"\u2B50 +{result.XpGained} XP");
-
-        return string.Join("\n", parts);
-    }
-
     private static string FormatStatusBar(PlayerCharacter player) =>
-        $"\u2764\uFE0F {player.Hp}/{player.MaxHp}  \u2728 {player.Mp}/{player.MaxMp}  \U0001F4B0 {player.Gold}g";
+        $"❤️ {player.Hp}/{player.MaxHp}  ✨ {player.Mp}/{player.MaxMp}  💰 {player.Gold}g  ⭐ Lv.{player.Level} ({player.Xp} XP)";
 
     private static bool IsExitKeyword(string text)
     {
