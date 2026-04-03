@@ -441,7 +441,8 @@ public class DiscordBotService : IHostedService
 
             // Public threads need a starter message in the parent channel so they show up in the sidebar
             var starterMessage = await textChannel.SendMessageAsync(
-                $"⚔️ **{user.Username}** has begun a new adventure! Follow along below.");
+                $"⚔️ **{user.Username}** has begun a new adventure! Click the thread below to spectate. " +
+                $"(Right-click the thread → **Follow** to get notified of updates)");
 
             var thread = await textChannel.CreateThreadAsync(
                 threadName,
@@ -488,18 +489,23 @@ public class DiscordBotService : IHostedService
             return;
         }
 
-        // Send to AI narrator for character concept (30s timeout — LM Studio models can be slow to load)
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        // Send to AI narrator for character concept — retry once on failure
         await thread.TriggerTypingAsync();
         CharacterCreationAiResponse? aiResponse = null;
-        try
+        for (int attempt = 0; attempt < 2 && aiResponse is null; attempt++)
         {
-            aiResponse = await _narrator.CreateCharacterFromDescriptionAsync(
-                input, session.LastSheetJson, cts.Token);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "AI character creation call failed: {Message}", ex.Message);
+            try
+            {
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                aiResponse = await _narrator.CreateCharacterFromDescriptionAsync(
+                    input, session.LastSheetJson, cts.Token);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "AI character creation attempt {Attempt} failed: {Message}", attempt + 1, ex.Message);
+                if (attempt == 0)
+                    await thread.TriggerTypingAsync(); // show typing during retry
+            }
         }
 
         if (aiResponse is null)

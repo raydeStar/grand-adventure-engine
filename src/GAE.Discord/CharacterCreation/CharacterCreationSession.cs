@@ -26,18 +26,18 @@ public class CharacterCreationSession
                 Name = input;
                 _step = CreationStep.Race;
                 return """
-                    **Step 2: Choose your race.**
-                    Options: Human, Elf, Dwarf, Halfling, Orc, Tiefling
-                    (Or type any race you'd like!)
+                    **Step 2: What are you?**
+                    Common picks: Human, Elf, Dwarf, Halfling, Orc, Tiefling
+                    *(But you can be anything — Duck, Sentient Mushroom, whatever you want.)*
                     """;
 
             case CreationStep.Race:
                 Race = input;
                 _step = CreationStep.Class;
                 return """
-                    **Step 3: Choose your class.**
-                    Options: Warrior, Mage, Rogue, Cleric, Ranger, Bard
-                    (Or type any class you'd like!)
+                    **Step 3: What do you do?**
+                    Common picks: Warrior, Mage, Rogue, Cleric, Ranger, Bard
+                    *(Or anything — Hitman, Pirate, Cheese Wizard, you name it.)*
                     """;
 
             case CreationStep.Class:

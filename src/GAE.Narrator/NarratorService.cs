@@ -317,20 +317,25 @@ public class NarratorService : INarratorService
             You MUST assign stats from the standard array [15, 14, 13, 12, 10, 8].
             Order them based on the player's description (strong character -> STR gets 15, etc.)
 
-            Valid races: Human, Elf, Dwarf, Halfling, Orc, Tiefling
-            Valid classes: Fighter, Mage, Rogue, Cleric, Ranger, Bard
+            The player can be ANYTHING they want. Use exactly what they say.
+            Common races: Human, Elf, Dwarf, Halfling, Orc, Tiefling — but if they say
+            they're a Duck, a Sentient Mushroom, or a Talking Sword, USE THAT as their race.
+            Common classes: Fighter, Mage, Rogue, Cleric, Ranger, Bard — but if they say
+            they're a Hitman, a Pirate, or a Cheese Wizard, USE THAT as their class.
+            Never override the player's creative choices. Embrace the weird.
 
             Return ONLY valid JSON, no markdown fences:
             {
               "name": "suggested name or null if player did not say one",
-              "race": "Human",
-              "class": "Fighter",
+              "race": "whatever the player said",
+              "class": "whatever fits their description",
               "statOrder": ["str", "con", "dex", "wis", "cha", "int"],
               "backstory": "2-3 sentence backstory based on their description",
               "followUpQuestion": "optional question if the description was vague, or null"
             }
 
-            If the player asks to adjust stats, re-order the standard array accordingly.
+            If the player asks to change something, change EXACTLY what they asked for
+            and keep everything else the same. Do not revert previous choices.
             If the player specifies a name, use it. If they change their mind, update it.
             """;
 
