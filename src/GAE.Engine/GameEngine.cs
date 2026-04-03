@@ -1597,7 +1597,7 @@ public class GameEngine : IGameEngine
             }
 
             var roll = _dice.RollSkillCheck(skillName, statMod);
-            int dc = CalculateSocialDC(npc);
+            int dc = CalculateSocialDC(npc, skillName);
 
             bool succeeded = roll.IsCritical || (!roll.IsFumble && roll.Total >= dc);
             return new SocialCheckResult(skillName, statUsed, roll, dc, succeeded);
@@ -1607,17 +1607,19 @@ public class GameEngine : IGameEngine
     }
 
     /// <summary>
-    /// Calculates the DC for a social check based on NPC disposition and memory flags.
-    /// Uses configured difficulty_classes if available, otherwise hardcoded D&amp;D-style defaults.
+    /// Calculates the DC for a social check based on NPC disposition, level, personality traits,
+    /// faction role, hostility, and memory flags. Higher-level NPCs are harder to influence.
+    /// Personality keywords make certain skills easier or harder (a brave guard resists intimidation,
+    /// a naive barmaid is easier to deceive, etc.).
     /// </summary>
-    private int CalculateSocialDC(Npc npc)
+    private int CalculateSocialDC(Npc npc, string skillName)
     {
         int easy = _rules.SkillChecks.DifficultyClasses.GetValueOrDefault("easy", 8);
         int medium = _rules.SkillChecks.DifficultyClasses.GetValueOrDefault("medium", 12);
         int hard = _rules.SkillChecks.DifficultyClasses.GetValueOrDefault("hard", 16);
         int veryHard = _rules.SkillChecks.DifficultyClasses.GetValueOrDefault("very_hard", 20);
 
-        // DC based on NPC disposition: friendlier NPCs are easier to persuade
+        // --- Base DC from disposition: friendlier NPCs are easier to persuade ---
         int dc = npc.DispositionState.Intensity switch
         {
             >= 70 => easy,
@@ -1627,18 +1629,129 @@ public class GameEngine : IGameEngine
             _ => veryHard
         };
 
-        // Memory flags shift the DC — NPC remembers what you've done
-        if (npc.DispositionState.MemoryFlags.Any(f => f.Contains("insult", StringComparison.OrdinalIgnoreCase)))
-            dc += 3;
-        if (npc.DispositionState.MemoryFlags.Any(f => f.Contains("romance", StringComparison.OrdinalIgnoreCase)))
-            dc -= 4;
-        if (npc.DispositionState.MemoryFlags.Any(f => f.Contains("friendship", StringComparison.OrdinalIgnoreCase)))
-            dc -= 2;
-        if (npc.DispositionState.MemoryFlags.Any(f => f.Contains("betrayal", StringComparison.OrdinalIgnoreCase)))
-            dc += 5;
+        // --- Level scaling: experienced NPCs are harder to influence ---
+        // +1 DC per level above 1 (a level 5 guard is +4 harder than a level 1 peasant)
+        if (npc.Level > 1)
+            dc += npc.Level - 1;
 
-        return Math.Clamp(dc, 3, 25); // floor/ceiling so nat 20 almost always works
+        // --- Hostility: openly hostile NPCs are harder for everything except intimidation ---
+        if (npc.IsHostile && !string.Equals(skillName, "intimidate", StringComparison.OrdinalIgnoreCase))
+            dc += 3;
+
+        // --- Personality trait modifiers: scan the NPC's personality for relevant keywords ---
+        dc += GetPersonalityDCModifier(npc, skillName);
+
+        // --- Memory flags: NPC remembers what you've done ---
+        dc += GetMemoryDCModifier(npc.DispositionState.MemoryFlags);
+
+        return Math.Clamp(dc, 3, 25); // floor 3 so nat 20 almost always works, cap 25
     }
+
+    /// <summary>
+    /// Scans NPC personality text and faction for traits that make certain social skills
+    /// easier or harder. Returns a DC modifier (positive = harder, negative = easier).
+    /// </summary>
+    private static int GetPersonalityDCModifier(Npc npc, string skillName)
+    {
+        // Combine personality + faction into one searchable string
+        var profile = $"{npc.Personality} {npc.Faction} {npc.Name}".ToLowerInvariant();
+        int mod = 0;
+        var skill = skillName.ToLowerInvariant();
+
+        // --- PERSUADE / CHARM modifiers ---
+        if (skill == "persuade")
+        {
+            // Harder to charm
+            if (HasAny(profile, "gruff", "stern", "cold", "stoic", "aloof", "reserved", "prickly"))
+                mod += 2;
+            if (HasAny(profile, "married", "devoted", "faithful", "taken", "spouse", "husband", "wife"))
+                mod += 3; // committed relationships resist romantic persuasion
+            if (HasAny(profile, "stubborn", "obstinate", "unyielding", "hardened", "resolute"))
+                mod += 2;
+            // Easier to charm
+            if (HasAny(profile, "flirty", "flirtatious", "lonely", "romantic", "amorous", "smitten"))
+                mod -= 3;
+            if (HasAny(profile, "friendly", "warm", "cheerful", "welcoming", "amiable", "sociable"))
+                mod -= 2;
+            if (HasAny(profile, "naive", "innocent", "trusting", "gullible"))
+                mod -= 2;
+        }
+
+        // --- INTIMIDATE modifiers ---
+        if (skill == "intimidate")
+        {
+            // Harder to intimidate (trained or brave)
+            if (HasAny(profile, "brave", "fearless", "bold", "courageous", "unflappable", "steely"))
+                mod += 3;
+            if (HasAny(profile, "guard", "soldier", "captain", "sergeant", "knight", "warrior", "veteran", "military"))
+                mod += 2; // trained to stand firm
+            if (HasAny(profile, "stubborn", "proud", "defiant"))
+                mod += 2;
+            // Easier to intimidate
+            if (HasAny(profile, "cowardly", "nervous", "timid", "meek", "fearful", "anxious", "jittery", "skittish"))
+                mod -= 3;
+            if (HasAny(profile, "small", "frail", "weak", "elderly", "old"))
+                mod -= 2;
+            if (HasAny(profile, "merchant", "trader", "shopkeeper", "peddler", "innkeeper", "barmaid", "barkeep"))
+                mod -= 1; // civilians are easier to push around
+        }
+
+        // --- DECEIVE modifiers ---
+        if (skill == "deceive")
+        {
+            // Harder to fool
+            if (HasAny(profile, "perceptive", "shrewd", "suspicious", "paranoid", "sharp", "observant", "skeptical", "wary"))
+                mod += 3;
+            if (HasAny(profile, "merchant", "trader", "fence", "broker", "con"))
+                mod += 2; // seen every trick in the book
+            if (HasAny(profile, "wise", "experienced", "worldly"))
+                mod += 2;
+            // Easier to fool
+            if (HasAny(profile, "gullible", "naive", "trusting", "simple", "innocent", "dim", "clueless"))
+                mod -= 3;
+            if (HasAny(profile, "drunk", "distracted", "absent-minded", "oblivious"))
+                mod -= 2;
+        }
+
+        // --- INSIGHT modifiers ---
+        if (skill == "insight")
+        {
+            // Harder to read (good at hiding emotions)
+            if (HasAny(profile, "stoic", "inscrutable", "poker", "mask", "guarded", "cryptic", "enigmatic"))
+                mod += 3;
+            if (HasAny(profile, "deceptive", "sly", "cunning", "manipulative", "scheming"))
+                mod += 2;
+            // Easier to read (wears heart on sleeve)
+            if (HasAny(profile, "expressive", "emotional", "hot-headed", "transparent", "open", "loud"))
+                mod -= 2;
+            if (HasAny(profile, "nervous", "fidgety", "twitchy", "anxious"))
+                mod -= 2;
+        }
+
+        return mod;
+    }
+
+    /// <summary>DC modifiers from NPC memory flags (what they remember about the player).</summary>
+    private static int GetMemoryDCModifier(List<string> memoryFlags)
+    {
+        int mod = 0;
+        foreach (var flag in memoryFlags)
+        {
+            var f = flag.ToLowerInvariant();
+            if (f.Contains("insult")) mod += 3;        // offended → harder to influence
+            if (f.Contains("betrayal")) mod += 5;       // deep grudge
+            if (f.Contains("crime")) mod += 4;          // witnessed crime → distrustful
+            if (f.Contains("romance")) mod -= 4;        // in love → very receptive
+            if (f.Contains("friendship")) mod -= 2;     // friends → easier
+            if (f.Contains("helped")) mod -= 2;         // gratitude
+            if (f.Contains("flirted")) mod -= 1;        // some rapport established
+        }
+        return mod;
+    }
+
+    /// <summary>Returns true if the text contains any of the specified keywords.</summary>
+    private static bool HasAny(string text, params string[] keywords) =>
+        keywords.Any(kw => text.Contains(kw, StringComparison.Ordinal));
 
     private static string ShiftDisposition(string current, int direction)
     {
