@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 using GAE.Core.Interfaces;
 using GAE.Core.Models;
 using GAE.Narrator;
@@ -185,6 +186,84 @@ public class NarratorServiceTests
 
         Assert.Contains("sentinel", narration, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("nothing here answers that description", narration, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void TryParseFreeFormResponse_WithBrokenDialogueQuotes_RepairsAndParses()
+    {
+        // Simulates the exact broken JSON that arrives after CompletionOrThrowAsync
+        // deserializes the outer LM Studio response — dialogue quotes are bare/unescaped,
+        // and the LLM returns "narrative" instead of "narration".
+        var brokenJson = """{"narrative": ""Rumors?" Mara says, leaning closer. "Don't you start with that nonsense, kid," she mutters.", "success": true, "statChanges": {}, "inventoryChanges": [], "entityChanges": [], "combatInitiated": false, "interactionUpdate": {"mode": "conversation", "npcDisposition": "annoyed"}}""";
+
+        var result = NarratorService.TryParseFreeFormResponse(brokenJson, out var response);
+
+        Assert.True(result);
+        Assert.Contains("Rumors", response.Narration);
+        Assert.Contains("Mara", response.Narration);
+        Assert.True(response.Success);
+        Assert.NotNull(response.InteractionUpdate);
+    }
+
+    [Fact]
+    public async Task ProcessConversationTurnAsync_WhenLlmReturnsDialogueQuotes_ParsesSuccessfully()
+    {
+        // Simulate the exact broken pattern: after outer JSON deserialization by
+        // CompletionOrThrowAsync, the inner JSON has bare unescaped dialogue quotes like:
+        //   {"narrative": ""Rumors?" Mara says.", "success": true}
+        // We build the outer response so that the content field, when deserialized,
+        // produces this broken inner JSON.
+        //
+        // The broken inner JSON (what TryParseFreeFormResponse receives):
+        var brokenInner = """{"narrative": ""Rumors?" Mara says, leaning closer. "Don't you start with that nonsense, kid," she mutters.", "success": true, "statChanges": {}, "inventoryChanges": [], "entityChanges": [], "combatInitiated": false, "interactionUpdate": {"mode": "conversation", "npcDisposition": "annoyed"}}""";
+        // Wrap it in a proper LM Studio response — JsonSerializer.Serialize escapes quotes
+        // so that after outer deserialization we get the broken inner JSON back.
+        var outerJson = "{\"choices\":[{\"message\":{\"content\":" + JsonSerializer.Serialize(brokenInner) + "}}]}";
+        var handler = new ResponseHttpMessageHandler(outerJson);
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") };
+        // Pass a specific model name to skip model resolution (avoids extra HTTP call)
+        var narrator = new NarratorService(httpClient, NullLogger<NarratorService>.Instance, model: "test-model");
+
+        var response = await narrator.ProcessConversationTurnAsync(
+            new PlayerCharacter { Name = "Zephyr", Race = "Human", Class = "Rogue", Level = 1 },
+            new Room { Id = "tavern", Name = "Tavern", Description = "A smoky tavern." },
+            new Npc { Id = "mara", Name = "Mara", Personality = "Gruff barmaid" },
+            new InteractionState { Mode = InteractionMode.Conversation, Target = "mara" },
+            "flirt with Mara");
+
+        Assert.NotNull(response);
+        Assert.Contains("Rumors", response.Narration);
+        Assert.DoesNotContain("noncommittal", response.Narration, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ProcessConversationTurnAsync_WhenLlmReturnsNarrativeKey_NormalizesToNarration()
+    {
+        // LLM returns "narrative" instead of "narration" — should still parse
+        var handler = new ResponseHttpMessageHandler("""
+            {
+              "choices": [
+                {
+                  "message": {
+                    "content": "{\"narrative\": \"The barkeep nods slowly.\", \"success\": true, \"statChanges\": {}, \"inventoryChanges\": [], \"entityChanges\": []}"
+                  }
+                }
+              ]
+            }
+            """);
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") };
+        var narrator = new NarratorService(httpClient, NullLogger<NarratorService>.Instance);
+
+        var response = await narrator.ProcessConversationTurnAsync(
+            new PlayerCharacter { Name = "Zephyr", Race = "Human", Class = "Rogue", Level = 1 },
+            new Room { Id = "tavern", Name = "Tavern", Description = "A smoky tavern." },
+            new Npc { Id = "barkeep", Name = "Barkeep", Personality = "Friendly" },
+            new InteractionState { Mode = InteractionMode.Conversation, Target = "barkeep" },
+            "ask about rumors");
+
+        Assert.NotNull(response);
+        Assert.Contains("barkeep", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("noncommittal", response.Narration, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

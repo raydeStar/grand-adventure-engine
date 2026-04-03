@@ -1,6 +1,10 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <InternalsVisibleTo Include="GAE.Narrator.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\GAE.Core\GAE.Core.csproj" />
   </ItemGroup>
 

@@ -426,13 +426,17 @@ public class NarratorService : INarratorService
         string? rawCompletion = null;
         try
         {
-            rawCompletion = await CompletionOrThrowAsync(systemPrompt, userPrompt, ct, operation: "conversation", logPayload: true);
+            rawCompletion = await CompletionOrThrowAsync(systemPrompt, userPrompt, ct, operation: "conversation");
             if (TryParseFreeFormResponse(rawCompletion, out var response))
                 return response;
+
+            _logger.LogWarning("Conversation parse failed — raw completion ({Length} chars): {Preview}",
+                rawCompletion?.Length ?? 0, rawCompletion?[..Math.Min(rawCompletion.Length, 200)] ?? "(null)");
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Conversation narration failed for \"{RawInput}\"", rawInput);
+            _logger.LogWarning(ex, "Conversation narration failed for \"{RawInput}\" — raw: {Preview}",
+                rawInput, rawCompletion?[..Math.Min(rawCompletion?.Length ?? 0, 200)] ?? "(null)");
         }
 
         // Deterministic fallback — NPC responds generically
@@ -531,7 +535,7 @@ public class NarratorService : INarratorService
         };
     }
 
-    private static bool TryParseFreeFormResponse(string rawCompletion, out FreeFormResponse response)
+    internal static bool TryParseFreeFormResponse(string rawCompletion, out FreeFormResponse response)
     {
         response = null!;
 
@@ -578,7 +582,14 @@ public class NarratorService : INarratorService
 
         try
         {
-            var parsed = JsonSerializer.Deserialize<FreeFormResponse>(rawCompletion, _jsonOptions);
+            // LLMs sometimes return "narrative" instead of "narration" — normalize before parsing
+            var normalized = NormalizeFreeFormJsonKeys(rawCompletion);
+
+            // LLMs often embed dialogue quotes (\"text\") in JSON. After the outer JSON layer is
+            // deserialized, these become bare quotes that break the inner JSON. Repair them.
+            var repaired = RepairLmJsonQuotes(normalized);
+
+            var parsed = JsonSerializer.Deserialize<FreeFormResponse>(repaired, _jsonOptions);
             if (parsed is null || string.IsNullOrWhiteSpace(parsed.Narration))
                 return false;
 
@@ -593,6 +604,101 @@ public class NarratorService : INarratorService
         {
             return false;
         }
+    }
+
+    /// <summary>Normalize common LLM JSON key variations (e.g. "narrative" → "narration").</summary>
+    internal static string NormalizeFreeFormJsonKeys(string json)
+    {
+        // Simple string replacement — "narrative" is not a substring of any other expected key
+        if (json.Contains("\"narrative\""))
+            json = json.Replace("\"narrative\"", "\"narration\"");
+        return json;
+    }
+
+    /// <summary>
+    /// Fix broken JSON strings where the LLM used escaped quotes (\"dialogue\") that lost their
+    /// escaping after the outer JSON layer was deserialized. Locates the narration value using
+    /// known adjacent key boundaries, then escapes all bare quotes within that range.
+    /// </summary>
+    internal static string RepairLmJsonQuotes(string json)
+    {
+        // Find the "narration" key and its string value boundaries
+        int keyIdx = json.IndexOf("\"narration\"", StringComparison.Ordinal);
+        if (keyIdx < 0) return json;
+
+        int colonIdx = json.IndexOf(':', keyIdx + "\"narration\"".Length);
+        if (colonIdx < 0) return json;
+
+        // Find the opening quote of the narration value
+        int openQuote = -1;
+        for (int i = colonIdx + 1; i < json.Length; i++)
+        {
+            if (json[i] == '"') { openQuote = i; break; }
+            if (!char.IsWhiteSpace(json[i])) return json; // not a string value
+        }
+        if (openQuote < 0) return json;
+
+        int closeQuote = FindNarrationCloseQuote(json, openQuote);
+        if (closeQuote <= openQuote) return json;
+
+        // Extract the raw narration content and escape bare quotes
+        string rawValue = json[(openQuote + 1)..closeQuote];
+        string escaped = rawValue
+            .Replace("\\\"", "\x01")   // preserve already-escaped quotes
+            .Replace("\"", "\\\"")     // escape bare quotes
+            .Replace("\x01", "\\\"");  // restore previously-escaped quotes
+
+        return string.Concat(json.AsSpan(0, openQuote + 1), escaped, json.AsSpan(closeQuote));
+    }
+
+    /// <summary>
+    /// Find the closing quote of the narration value by locating the next known JSON key
+    /// boundary (e.g. "success":) and working backwards to the last unescaped quote before it.
+    /// </summary>
+    internal static int FindNarrationCloseQuote(string json, int openQuote)
+    {
+        // Known keys in FreeFormResponse (camelCase as serialized)
+        string[] nextKeys = ["success", "statChanges", "inventoryChanges",
+                             "entityChanges", "combatInitiated", "roomChanges",
+                             "interactionUpdate"];
+
+        int bestNextKey = json.Length;
+
+        foreach (var key in nextKeys)
+        {
+            var pattern = $"\"{key}\"";
+            int searchFrom = openQuote + 1;
+
+            while (searchFrom < json.Length)
+            {
+                int pos = json.IndexOf(pattern, searchFrom, StringComparison.Ordinal);
+                if (pos < 0) break;
+
+                // Verify this is a JSON key (followed by :)
+                int afterKey = pos + pattern.Length;
+                while (afterKey < json.Length && char.IsWhiteSpace(json[afterKey])) afterKey++;
+
+                if (afterKey < json.Length && json[afterKey] == ':' && pos < bestNextKey)
+                {
+                    bestNextKey = pos;
+                    break;
+                }
+
+                searchFrom = pos + 1;
+            }
+        }
+
+        // The close quote is the last unescaped " before the next key (or closing brace)
+        int searchEnd = bestNextKey < json.Length ? bestNextKey : json.LastIndexOf('}');
+        if (searchEnd <= openQuote) return -1;
+
+        for (int i = searchEnd - 1; i > openQuote; i--)
+        {
+            if (json[i] == '"' && (i == 0 || json[i - 1] != '\\'))
+                return i;
+        }
+
+        return -1;
     }
 
     private static FreeFormResponse BuildLocalFreeFormFallbackResponse(PlayerCharacter player, Room room, string rawInput)
@@ -1255,7 +1361,8 @@ public class NarratorService : INarratorService
     private static readonly JsonSerializerOptions _jsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
 
     // LM Studio OpenAI-compatible DTOs
