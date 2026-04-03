@@ -267,9 +267,11 @@ public class NarratorServiceTests
     }
 
     [Fact]
-    public async Task ProcessFreeFormAsync_ForLowStakesAction_ResolvesLocally()
+    public async Task ProcessFreeFormAsync_ForLowStakesAction_WhenHttpFails_ReturnsFallback()
     {
-        var handler = new FakeHttpMessageHandler(new HttpRequestException("HTTP should not be called for low-stakes local free-form resolution."));
+        // Low-stakes actions now go through the LLM for humorous narration.
+        // When LLM is offline, the fallback still handles them gracefully.
+        var handler = new FakeHttpMessageHandler(new HttpRequestException("Connection refused"));
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") };
         var narrator = new NarratorService(httpClient, NullLogger<NarratorService>.Instance);
 
@@ -279,12 +281,8 @@ public class NarratorServiceTests
             "pick nose",
             []);
 
-        Assert.True(response.Success);
-        Assert.Empty(response.StatChanges);
-        Assert.Empty(response.InventoryChanges);
-        Assert.Empty(response.EntityChanges);
-        Assert.Contains("Sentinel", response.Narration);
-        Assert.DoesNotContain("mug", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.NotNull(response);
+        Assert.NotEmpty(response.Narration);
     }
 
     private class FakeHttpMessageHandler : HttpMessageHandler

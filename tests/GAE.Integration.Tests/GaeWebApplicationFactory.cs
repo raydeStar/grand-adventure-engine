@@ -145,6 +145,11 @@ public class StubNarratorService : INarratorService
             }
         });
 
+    public string GetActiveModel() => "stub-model";
+    public void SetActiveModel(string model) { }
+    public Task<IReadOnlyList<string>> ListAvailableModelsAsync(CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyList<string>>(["stub-model"]);
+
     private static string OppositeDir(string dir) => dir switch
     {
         "north" => "south", "south" => "north",

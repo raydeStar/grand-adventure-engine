@@ -282,5 +282,10 @@ public class GameEngineCommandFlowTests
                     EnemyUpdate = new Dictionary<string, int> { ["hp"] = -3 }
                 }
             });
+
+        public string GetActiveModel() => "test-model";
+        public void SetActiveModel(string model) { }
+        public Task<IReadOnlyList<string>> ListAvailableModelsAsync(CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<string>>(["test-model"]);
     }
 }
