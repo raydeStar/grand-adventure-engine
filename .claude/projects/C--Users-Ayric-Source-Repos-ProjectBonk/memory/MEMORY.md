@@ -1,0 +1,3 @@
+- [User Profile](user_profile.md) — Ayric, building GAE, uses Cowork + Claude Code workflow
+- [GAE Architecture](project_gae_architecture.md) — LM Studio, Wiki.js, no DB, in-memory state, dual disposition
+- [GAE Next Steps](project_next_steps.md) — Priority task list from 2026-04-02 Cowork handoff

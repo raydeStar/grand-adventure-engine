@@ -17,6 +17,8 @@ public class Npc
     public int? Defense { get; set; }
     public int Level { get; set; } = 1;
     public List<InventoryItem> LootTable { get; set; } = [];
+    public bool IsShopkeeper { get; set; }
+    public List<InventoryItem> ShopInventory { get; set; } = [];
     public Dictionary<string, string> Dialogue { get; set; } = new();
 }
 

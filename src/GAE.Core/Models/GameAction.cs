@@ -21,6 +21,8 @@ public enum ActionType
     Use,
     Take,
     Drop,
+    Buy,
+    Sell,
     Equip,
     Unequip,
     Rest,
