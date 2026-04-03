@@ -167,7 +167,8 @@ public class FullPlaythroughTests : IClassFixture<GaeWebApplicationFactory>
         var takeSword = await Act("take thunderstrike blade");
         Assert.True(takeSword.GetProperty("success").GetBoolean());
         player = await GetPlayer();
-        Assert.Contains(player.Inventory, i => i.Name.Contains("Thunderstrike"));
+        Assert.NotNull(player.Equipment.Weapon);
+        Assert.Contains("Thunderstrike", player.Equipment.Weapon!.Name);
 
         // Verify it was removed from room
         smith = await GetRoom("blacksmith");
