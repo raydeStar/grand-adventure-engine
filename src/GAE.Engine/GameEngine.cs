@@ -86,7 +86,7 @@ public class GameEngine : IGameEngine
             ActionType.Use => await ProcessUseAsync(player, action, ct),
             ActionType.Buy => await ProcessBuyAsync(player, action, ct),
             ActionType.Sell => await ProcessSellAsync(player, action, ct),
-            ActionType.Equip => ProcessEquip(player, action),
+            ActionType.Equip => await ProcessEquipAsync(player, action, ct),
             ActionType.Unequip => ProcessUnequip(player, action),
             ActionType.Rest or ActionType.ShortRest => ProcessShortRest(player, action),
             ActionType.LongRest => ProcessLongRest(player, action),
@@ -707,13 +707,37 @@ public class GameEngine : IGameEngine
         };
     }
 
-    private ActionResult ProcessEquip(PlayerCharacter player, GameAction action)
+    private async Task<ActionResult> ProcessEquipAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
     {
         var item = FindNamedEntity(player.Inventory.Where(i => i.IsEquippable), inventoryItem => inventoryItem.Name, action.Target);
 
+        // If not in inventory, check the room — auto-take and equip in one step
+        Room? room = null;
+        bool takenFromRoom = false;
         if (item is null)
-            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"Equip target '{action.Target}' was not found among your equippable gear." };
+        {
+            room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
+            if (room is not null)
+            {
+                var roomItem = FindNamedEntity(room.Items.Where(i => i.IsEquippable), ri => ri.Name, action.Target);
+                if (roomItem is not null)
+                {
+                    // Take from room into inventory, then equip below
+                    room.Items.Remove(roomItem);
+                    item = roomItem;
+                    takenFromRoom = true;
+                }
+            }
+        }
 
+        if (item is null)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"Equip target '{action.Target}' was not found in your inventory or the current room." };
+
+        // Remove from inventory if it was there (not if just taken from room)
+        if (!takenFromRoom)
+            player.Inventory.Remove(item);
+
+        // Swap into equipment slot, returning old item to inventory
         switch (item.Type)
         {
             case ItemType.Weapon:
@@ -737,15 +761,32 @@ public class GameEngine : IGameEngine
                 player.Equipment.Helmet = item;
                 break;
             default:
+                // Put it back where it came from
+                if (takenFromRoom && room is not null)
+                    room.Items.Add(item);
+                else
+                    player.Inventory.Add(item);
                 return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"{item.Name} is not equippable." };
         }
+
+        if (takenFromRoom && room is not null)
+            await _stateManager.SaveRoomAsync(room, ct);
+        await _stateManager.SavePlayerAsync(player, ct);
+
+        var pickupNote = takenFromRoom ? $"You pick up {item.Name} and equip it." : $"You equip {item.Name}.";
+        var changes = new List<StateChange>
+        {
+            new() { EntityType = "Player", EntityId = player.Id, Property = "Equipment", NewValue = item.Name }
+        };
+        if (takenFromRoom)
+            changes.Add(new StateChange { EntityType = "Room", EntityId = room!.Id, Property = "Items", NewValue = $"removed {item.Name}" });
 
         return new ActionResult
         {
             ActionId = action.Id,
             Success = true,
-            MechanicalSummary = $"You equip {item.Name}.",
-            StateChanges = [new StateChange { EntityType = "Player", EntityId = player.Id, Property = "Equipment", NewValue = item.Name }]
+            MechanicalSummary = pickupNote,
+            StateChanges = changes
         };
     }
 
