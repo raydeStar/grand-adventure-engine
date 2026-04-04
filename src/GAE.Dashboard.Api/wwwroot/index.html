@@ -267,6 +267,7 @@
           <button class="admin-tab" data-admin-tab="mutations" type="button">Mutations</button>
           <button class="admin-tab" data-admin-tab="players" type="button">Players</button>
           <button class="admin-tab" data-admin-tab="world" type="button">World</button>
+          <button class="admin-tab" data-admin-tab="registry" type="button">Registry</button>
           <button class="admin-tab" data-admin-tab="logs" type="button">AI Logs</button>
           <span class="admin-toolbar-spacer"></span>
           <button class="btn btn-secondary btn-sm" id="btn-seed-demo-admin" type="button">Seed Demo</button>
@@ -711,6 +712,56 @@
                   <div class="payload-title">Current room payload</div>
                   <pre id="room-payload" class="payload-view">Select a character to inspect the current room payload.</pre>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══ CONTENT REGISTRY TAB ═══ -->
+        <div class="admin-tab-content" data-admin-panel="registry">
+          <div class="admin-tab-body">
+            <div class="panel">
+              <h3>Content Registry</h3>
+              <p class="panel-hint">Browse, create, and edit all game content -- spells, items, classes, races. Use the AI generator to describe what you want and it fills in the details.</p>
+              <div class="registry-toolbar">
+                <select id="registry-type-select">
+                  <option value="spells">Spells</option>
+                  <option value="items">Items</option>
+                  <option value="classes">Classes</option>
+                  <option value="races">Races</option>
+                </select>
+                <button class="btn btn-primary btn-sm" id="btn-refresh-registry" type="button">Refresh</button>
+                <button class="btn btn-primary btn-sm" id="btn-new-registry-entry" type="button">+ New</button>
+                <span class="registry-count" id="registry-count"></span>
+              </div>
+              <div id="registry-list" class="registry-entries"></div>
+            </div>
+
+            <!-- Editor / Generator panel -->
+            <div id="registry-editor-panel" class="panel hidden">
+              <h3 id="registry-editor-title">New Entry</h3>
+              <div class="registry-editor-layout">
+                <div class="registry-ai-chat">
+                  <div class="registry-chat-messages" id="registry-chat-messages">
+                    <div class="chat-msg system">Describe what you want to create or change. The AI will fill in the structured details for you.</div>
+                  </div>
+                  <div class="registry-chat-input-row">
+                    <input type="text" id="registry-chat-input" placeholder="e.g. A fire spell that does moderate damage, available to mages at level 3..." autocomplete="off" />
+                    <button class="btn btn-primary btn-sm" id="btn-registry-chat-send" type="button">Send</button>
+                  </div>
+                </div>
+                <div class="registry-json-editor">
+                  <div class="registry-json-header">
+                    <span>JSON Preview</span>
+                    <button class="btn btn-secondary btn-sm" id="btn-registry-json-edit" type="button">Edit JSON</button>
+                  </div>
+                  <textarea id="registry-json-textarea" class="registry-json-area" spellcheck="false" rows="20"></textarea>
+                </div>
+              </div>
+              <div class="registry-editor-actions">
+                <button class="btn btn-primary" id="btn-registry-save" type="button">Save to Registry</button>
+                <button class="btn btn-secondary" id="btn-registry-cancel" type="button">Cancel</button>
+                <button class="btn btn-danger" id="btn-registry-delete" type="button">Delete</button>
               </div>
             </div>
           </div>

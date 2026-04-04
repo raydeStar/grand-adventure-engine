@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using GAE.Core.Interfaces;
 using GAE.Core.Models;
+using GAE.Core.Registry;
 using Microsoft.Extensions.Logging;
 
 namespace GAE.Narrator;
@@ -808,6 +809,17 @@ public class NarratorService : INarratorService
         }
 
         return false;
+    }
+
+    /// <summary>Extract the first JSON object from a raw LLM response, stripping code fences.</summary>
+    private static string? ExtractJson(string rawCompletion)
+    {
+        var sanitized = SanitizeLmCompletion(rawCompletion);
+        var jsonStart = sanitized.IndexOf('{');
+        var jsonEnd = sanitized.LastIndexOf('}');
+        if (jsonStart >= 0 && jsonEnd > jsonStart)
+            return sanitized[jsonStart..(jsonEnd + 1)];
+        return null;
     }
 
     private static string SanitizeLmCompletion(string? rawCompletion)
@@ -1820,5 +1832,278 @@ public class NarratorService : INarratorService
         public string? Name { get; set; }
         public string? Description { get; set; }
         public int Quantity { get; set; } = 1;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  Improvised Spell Evaluation (Power Budget System)
+    // ═══════════════════════════════════════════════════════════════
+
+    public async Task<ImprovisedSpellResult> EvaluateImprovisedSpellAsync(
+        PlayerCharacter player, Room room, string spellName, string? target,
+        int powerCap, IReadOnlyList<StoryEntry> recentStory, CancellationToken ct = default)
+    {
+        var systemPrompt = $$"""
+            You are the spell evaluation system for a dark-fantasy RPG with Sierra adventure game humor.
+
+            A player is attempting to cast an IMPROVISED spell (not in the spell registry).
+            Your job is to:
+            1. Assess the power level of the attempted spell (1-10 scale)
+            2. Determine if it succeeds or fizzles based on the player's power cap
+            3. Calculate reasonable mana cost and effects
+            4. Write a dramatic, funny narration
+
+            POWER SCALE:
+            1-2: Cantrip/minor effect (small spark, dim light, minor trick)
+            3-4: Intermediate (decent damage, useful utility, moderate healing)
+            5-6: Advanced (significant damage, strong effects, area impact)
+            7-8: Expert (devastating, reality-bending, powerful transformations)
+            9-10: Legendary/godlike (city-destroying, time manipulation, resurrection)
+
+            RULES:
+            - The player's power cap is {{powerCap}}. If the spell's power exceeds this, it FIZZLES.
+            - Fizzles should be HILARIOUS. Slapstick, ironic backfire, embarrassing failure. Never boring.
+            - Even successful improvised spells should be slightly unpredictable/quirky — they're not polished.
+            - Mana cost scales with power level: roughly power * 2 MP.
+            - Damage scales: power 1 = 1d4, power 2 = 1d6, power 3 = 2d4, power 5 = 3d6, etc.
+            - A level 1 attempting "Death Ray" = power 10 = spectacular fizzle. Make it MEMORABLE.
+            - Creative but low-power spells should succeed! "Wall of bees" at power 2 = yes, a few confused bees.
+
+            Respond with ONLY valid JSON (no markdown, no code fences):
+            {
+              "powerLevel": 3,
+              "success": true,
+              "manaCost": 6,
+              "damage": 8,
+              "healing": 0,
+              "narration": "Your dramatic narration of the spell attempt.",
+              "statChanges": {},
+              "target": "Goblin Scout"
+            }
+
+            For fizzles, set success=false, damage=0, healing=0, and write a funny fizzle narration.
+            statChanges can include "hp" for backfire damage on fizzle (e.g. {"hp": -2}).
+            """;
+
+        var recentLines = recentStory.Count > 0
+            ? string.Join("\n", recentStory.Select(FormatStoryContextLine))
+            : "(No recent history)";
+
+        var userPrompt = $"""
+            CASTER: {player.Name} (Lv.{player.Level} {player.Race} {player.Class})
+            HP: {player.Hp}/{player.MaxHp} | MP: {player.Mp}/{player.MaxMp}
+            {player.FormatStatsCompact()}
+            POWER CAP: {powerCap}
+
+            LOCATION: {room.Name} - {room.Description}
+            NPCs present: {string.Join(", ", room.Npcs.Select(n => $"{n.Name} (HP:{n.Hp ?? 0}/{n.MaxHp ?? 0})"))}
+
+            SPELL ATTEMPTED: "{spellName}"
+            TARGET: {target ?? "(no specific target)"}
+
+            Recent history:
+            {recentLines}
+
+            Evaluate this spell attempt. Remember: power cap is {powerCap}.
+            """;
+
+        try
+        {
+            var rawResponse = await CompletionOrThrowAsync(systemPrompt, userPrompt, ct,
+                operation: "improvised-spell", playerId: player.Id, roomId: room.Id);
+
+            var json = ExtractJson(rawResponse);
+            if (json is not null)
+            {
+                var parsed = JsonSerializer.Deserialize<ImprovisedSpellJsonResponse>(json, _jsonOptions);
+                if (parsed is not null)
+                {
+                    return new ImprovisedSpellResult
+                    {
+                        PowerLevel = parsed.PowerLevel,
+                        PlayerCap = powerCap,
+                        Success = parsed.Success,
+                        ManaCost = Math.Max(0, parsed.ManaCost),
+                        Damage = Math.Max(0, parsed.Damage),
+                        Healing = Math.Max(0, parsed.Healing),
+                        Narration = parsed.Narration ?? "The spell fizzles without explanation.",
+                        StatChanges = parsed.StatChanges ?? new(),
+                        Target = parsed.Target
+                    };
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Improvised spell evaluation failed for '{Spell}'", spellName);
+        }
+
+        // Fallback: assume it fizzles safely
+        return new ImprovisedSpellResult
+        {
+            PowerLevel = powerCap + 1,
+            PlayerCap = powerCap,
+            Success = false,
+            ManaCost = 1,
+            Narration = $"You attempt to cast {spellName}, but the magical energy dissipates before it can take form. A faint smell of burnt toast lingers.",
+            StatChanges = new()
+        };
+    }
+
+    private class ImprovisedSpellJsonResponse
+    {
+        [JsonPropertyName("powerLevel")]
+        public int PowerLevel { get; set; }
+        [JsonPropertyName("success")]
+        public bool Success { get; set; }
+        [JsonPropertyName("manaCost")]
+        public int ManaCost { get; set; }
+        [JsonPropertyName("damage")]
+        public int Damage { get; set; }
+        [JsonPropertyName("healing")]
+        public int Healing { get; set; }
+        [JsonPropertyName("narration")]
+        public string? Narration { get; set; }
+        [JsonPropertyName("statChanges")]
+        public Dictionary<string, int>? StatChanges { get; set; }
+        [JsonPropertyName("target")]
+        public string? Target { get; set; }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  AI Content Generator — describe what you want, AI fills in details
+    // ═══════════════════════════════════════════════════════════════
+
+    public async Task<string> GenerateContentAsync(string contentType, string description, string? existingJson, CancellationToken ct = default)
+    {
+        var schemaExamples = contentType.ToLowerInvariant() switch
+        {
+            "spell" => """
+                {
+                  "id": "snake_id_format",
+                  "name": "Display Name",
+                  "description": "Flavor text describing the spell.",
+                  "school": "evocation|restoration|abjuration|illusion|conjuration|divination|necromancy|transmutation",
+                  "mana_cost": 5,
+                  "damage_dice": "2d6+2",
+                  "damage_stat": "int",
+                  "heal_dice": null,
+                  "status_effect": null,
+                  "duration": 0,
+                  "range": "self|touch|ranged",
+                  "required_classes": ["mage", "sorcerer"],
+                  "required_level": 1,
+                  "power_level": 3,
+                  "tags": ["fire", "aoe"]
+                }
+                """,
+            "item" => """
+                {
+                  "id": "snake_id_format",
+                  "name": "Display Name",
+                  "description": "Flavor text describing the item.",
+                  "type": "Weapon|Armor|Shield|Helmet|Potion|Scroll|Key|QuestItem|Misc",
+                  "damage_dice": "1d8+2",
+                  "damage_stat": "str",
+                  "armor_value": 0,
+                  "is_equippable": true,
+                  "is_consumable": false,
+                  "effect": null,
+                  "value": 50,
+                  "rarity": "common|uncommon|rare|epic|legendary",
+                  "required_classes": [],
+                  "required_level": 1,
+                  "tags": ["melee", "slashing"]
+                }
+                """,
+            "class" => """
+                {
+                  "id": "snake_id_format",
+                  "name": "Display Name",
+                  "description": "Class description and lore.",
+                  "hit_die": "d10",
+                  "primary_stat": "str",
+                  "secondary_stat": "con",
+                  "base_mp_bonus": 0,
+                  "can_cast_spells": false,
+                  "spell_list": [],
+                  "allowed_weapon_types": ["Weapon"],
+                  "allowed_armor_types": ["Armor", "Shield", "Helmet"],
+                  "stat_bonuses": {"str": 2, "con": 1},
+                  "starting_equipment": ["iron_sword"],
+                  "improvised_spell_cap": [1, 1, 2, 2, 3, 3, 4, 4, 5, 5],
+                  "tags": ["martial"]
+                }
+                """,
+            "race" => """
+                {
+                  "id": "snake_id_format",
+                  "name": "Display Name",
+                  "description": "Race description and lore.",
+                  "stat_bonuses": {"dex": 2, "int": 1},
+                  "traits": ["Darkvision", "Fey Ancestry"],
+                  "allowed_classes": [],
+                  "tags": ["fey"]
+                }
+                """,
+            "npc" => """
+                {
+                  "id": "snake_id_format",
+                  "name": "Display Name",
+                  "personality": "A brief personality description.",
+                  "faction": "neutral",
+                  "is_hostile": false,
+                  "level": 3,
+                  "hp": 25,
+                  "max_hp": 25,
+                  "attack_bonus": 3,
+                  "damage_dice": "1d6+2",
+                  "defense": 12,
+                  "knowledge_scopes": ["town", "rumors"],
+                  "is_shopkeeper": false,
+                  "dialogue": {"greeting": "Hello there!"},
+                  "loot": [{"id": "gold_coins", "name": "Gold Coins", "type": "Misc", "value": 10}]
+                }
+                """,
+            "room" => """
+                {
+                  "id": "snake_id_format",
+                  "name": "Display Name",
+                  "description": "A vivid description of the room.",
+                  "exits": {"north": "other_room_id", "south": "another_room_id"},
+                  "npcs": [],
+                  "items": [],
+                  "environment_tags": ["indoor", "dark", "dungeon"]
+                }
+                """,
+            _ => """{"id": "snake_id", "name": "Name", "description": "Description"}"""
+        };
+
+        var systemPrompt = $"""
+            You are a content creation assistant for a dark-fantasy RPG called the Grand Adventure Engine.
+            The game has the comic sensibility of classic Sierra adventures (Quest for Glory, King's Quest).
+
+            You are generating a {contentType} definition. The user will describe what they want in natural language,
+            and you will fill in ALL the structured fields with balanced, creative values.
+
+            RULES:
+            - Use the exact JSON schema shown below. Return ONLY valid JSON, no markdown or code fences.
+            - Use snake_case for the "id" field (e.g., "flaming_sword", "goblin_shaman").
+            - Be creative with descriptions — capture the Sierra adventure tone.
+            - Be balanced — don't make things overpowered unless the user specifically asks.
+            - If the user provides partial details, fill in reasonable defaults for everything else.
+            - If editing existing content, preserve any fields the user doesn't mention changing.
+
+            JSON SCHEMA for {contentType}:
+            {schemaExamples}
+            """;
+
+        var userPrompt = description;
+        if (existingJson is not null)
+            userPrompt = $"EXISTING CONTENT (edit this):\n{existingJson}\n\nUSER REQUEST:\n{description}";
+
+        var rawResponse = await CompletionOrThrowAsync(systemPrompt, userPrompt, ct,
+            operation: "content-generate", maxTokens: 4096);
+
+        return ExtractJson(rawResponse) ?? rawResponse;
     }
 }

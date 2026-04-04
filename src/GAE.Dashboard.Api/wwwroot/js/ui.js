@@ -802,19 +802,17 @@ const UI = {
     this._adminPlayers = players;
     this._adminCurrentPlayerId = currentPlayerId;
 
-    // Build search bar + list wrapper if not present
-    if (!container.querySelector('.admin-search-bar')) {
-      container.innerHTML = `
-        <div class="admin-search-bar search-bar">
-          <input type="text" id="admin-player-search" placeholder="Search players by name, id, race, class..." />
-          <span class="search-count" id="admin-player-count"></span>
-        </div>
-        <div id="admin-players-list" class="portal-player-list"></div>
-      `;
-      const searchInput = this.$('admin-player-search');
-      if (searchInput) {
-        searchInput.addEventListener('input', () => this._filterAdminPlayers());
-      }
+    // Always rebuild search bar + list wrapper
+    container.innerHTML = `
+      <div class="admin-search-bar search-bar" style="margin-bottom:0.75rem;">
+        <input type="text" id="admin-player-search" placeholder="Search players by name, id, race, class..." />
+        <span class="search-count" id="admin-player-count"></span>
+      </div>
+      <div id="admin-players-list" class="portal-player-list"></div>
+    `;
+    const searchInput = this.$('admin-player-search');
+    if (searchInput) {
+      searchInput.addEventListener('input', () => this._filterAdminPlayers());
     }
 
     this._filterAdminPlayers();
@@ -1398,6 +1396,215 @@ const UI = {
       playerFilter.addEventListener('input', () => {
         clearTimeout(debounce);
         debounce = setTimeout(() => this.loadConversationLogs(), 400);
+      });
+    }
+  },
+
+  // ═══════════════════════════════════════════════════════════
+  //  CONTENT REGISTRY TAB
+  // ═══════════════════════════════════════════════════════════
+
+  _registryData: [],
+  _registryEditingId: null,
+
+  async loadRegistry() {
+    const type = this.$('registry-type-select')?.value || 'spells';
+    const countEl = this.$('registry-count');
+    const list = this.$('registry-list');
+    if (!list) return;
+
+    try {
+      this._registryData = await API.getRegistry(type);
+      if (countEl) countEl.textContent = `${this._registryData.length} entries`;
+      this.renderRegistryList(type, this._registryData);
+    } catch (err) {
+      list.innerHTML = `<div class="empty-state">Failed to load: ${this.esc(err.message)}</div>`;
+    }
+  },
+
+  renderRegistryList(type, entries) {
+    const list = this.$('registry-list');
+    if (!entries.length) {
+      list.innerHTML = '<div class="empty-state">No entries in this registry.</div>';
+      return;
+    }
+
+    list.innerHTML = entries.map(entry => {
+      const meta = this._getEntryMeta(type, entry);
+      const tags = (entry.tags || []).slice(0, 5);
+      return `
+        <div class="registry-entry" data-registry-id="${this.esc(entry.id)}">
+          <div>
+            <div class="registry-entry-name">${this.esc(entry.name)}</div>
+            <div class="registry-entry-meta">${this.esc(meta)}</div>
+            ${tags.length ? `<div class="registry-entry-tags">${tags.map(t => `<span class="registry-entry-tag">${this.esc(t)}</span>`).join('')}</div>` : ''}
+          </div>
+          <div class="registry-entry-actions">
+            <button class="btn btn-primary btn-sm" data-reg-action="edit" data-reg-id="${this.esc(entry.id)}" type="button">Edit</button>
+            <button class="btn btn-danger btn-sm" data-reg-action="delete" data-reg-id="${this.esc(entry.id)}" type="button">Del</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  },
+
+  _getEntryMeta(type, entry) {
+    switch (type) {
+      case 'spells':
+        return `${entry.school || '?'} | Power ${entry.powerLevel || '?'} | ${entry.manaCost || 0} MP | Lv.${entry.requiredLevel || 1}${entry.damageDice ? ` | ${entry.damageDice}` : ''}${entry.healDice ? ` | Heal ${entry.healDice}` : ''}`;
+      case 'items':
+        return `${entry.type || 'Misc'} | ${entry.rarity || 'common'} | ${entry.value || 0}g${entry.damageDice ? ` | ${entry.damageDice}` : ''}${entry.armorValue ? ` | AC+${entry.armorValue}` : ''}`;
+      case 'classes':
+        return `${entry.hitDie || '?'} | ${entry.primaryStat || '?'}${entry.canCastSpells ? ' | Caster' : ' | Martial'} | ${(entry.spellList || []).length} spells`;
+      case 'races':
+        return `${(entry.traits || []).join(', ')}`;
+      default:
+        return entry.id || '';
+    }
+  },
+
+  openRegistryEditor(entry, type) {
+    const panel = this.$('registry-editor-panel');
+    const title = this.$('registry-editor-title');
+    const textarea = this.$('registry-json-textarea');
+    const chatMessages = this.$('registry-chat-messages');
+    const deleteBtn = this.$('btn-registry-delete');
+
+    if (!panel) return;
+    panel.classList.remove('hidden');
+
+    if (entry) {
+      this._registryEditingId = entry.id;
+      title.textContent = `Edit: ${entry.name}`;
+      textarea.value = JSON.stringify(entry, null, 2);
+      if (deleteBtn) deleteBtn.classList.remove('hidden');
+    } else {
+      this._registryEditingId = null;
+      title.textContent = `New ${type || 'Entry'}`;
+      textarea.value = '';
+      if (deleteBtn) deleteBtn.classList.add('hidden');
+    }
+
+    chatMessages.innerHTML = '<div class="chat-msg system">Describe what you want to create or change. The AI will fill in the structured details for you.</div>';
+  },
+
+  closeRegistryEditor() {
+    const panel = this.$('registry-editor-panel');
+    if (panel) panel.classList.add('hidden');
+    this._registryEditingId = null;
+  },
+
+  async sendRegistryChat() {
+    const input = this.$('registry-chat-input');
+    const chatMessages = this.$('registry-chat-messages');
+    const textarea = this.$('registry-json-textarea');
+    const type = this.$('registry-type-select')?.value || 'spells';
+
+    if (!input || !input.value.trim()) return;
+
+    const userMsg = input.value.trim();
+    input.value = '';
+
+    // Add user message
+    chatMessages.innerHTML += `<div class="chat-msg user">${this.esc(userMsg)}</div>`;
+    chatMessages.innerHTML += `<div class="chat-msg ai loading" id="reg-chat-loading">Thinking...</div>`;
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+
+    try {
+      // Singular form for API
+      const singularType = type.replace(/s$/, '');
+      const existingJson = textarea.value.trim() || null;
+      const result = await API.generateContent(singularType, userMsg, existingJson);
+
+      const loadingEl = this.$('reg-chat-loading');
+      if (loadingEl) loadingEl.remove();
+
+      chatMessages.innerHTML += `<div class="chat-msg ai">Done! Check the JSON preview. Send another message to refine, or Save to Registry when ready.</div>`;
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+
+      // Update JSON preview
+      if (result.json) {
+        try {
+          const parsed = JSON.parse(result.json);
+          textarea.value = JSON.stringify(parsed, null, 2);
+        } catch {
+          textarea.value = result.json;
+        }
+      }
+    } catch (err) {
+      const loadingEl = this.$('reg-chat-loading');
+      if (loadingEl) loadingEl.remove();
+      chatMessages.innerHTML += `<div class="chat-msg system">Error: ${this.esc(err.message)}</div>`;
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+  },
+
+  async saveRegistryEntry() {
+    const type = this.$('registry-type-select')?.value || 'spells';
+    const textarea = this.$('registry-json-textarea');
+    if (!textarea?.value.trim()) return;
+
+    try {
+      const data = JSON.parse(textarea.value);
+      await API.upsertRegistryEntry(type, data);
+      this.closeRegistryEditor();
+      await this.loadRegistry();
+    } catch (err) {
+      alert('Save failed: ' + err.message);
+    }
+  },
+
+  async deleteRegistryEntry(id) {
+    const type = this.$('registry-type-select')?.value || 'spells';
+    if (!id) return;
+    if (!confirm(`Delete "${id}" from ${type}?`)) return;
+
+    try {
+      await API.deleteRegistryEntry(type, id);
+      this.closeRegistryEditor();
+      await this.loadRegistry();
+    } catch (err) {
+      alert('Delete failed: ' + err.message);
+    }
+  },
+
+  wireRegistryTab() {
+    const typeSelect = this.$('registry-type-select');
+    const refreshBtn = this.$('btn-refresh-registry');
+    const newBtn = this.$('btn-new-registry-entry');
+    const saveBtn = this.$('btn-registry-save');
+    const cancelBtn = this.$('btn-registry-cancel');
+    const deleteBtn = this.$('btn-registry-delete');
+    const sendBtn = this.$('btn-registry-chat-send');
+    const chatInput = this.$('registry-chat-input');
+    const listEl = this.$('registry-list');
+
+    if (typeSelect) typeSelect.addEventListener('change', () => this.loadRegistry());
+    if (refreshBtn) refreshBtn.addEventListener('click', () => this.loadRegistry());
+    if (newBtn) newBtn.addEventListener('click', () => this.openRegistryEditor(null, (typeSelect?.value || 'spells').replace(/s$/, '')));
+    if (saveBtn) saveBtn.addEventListener('click', () => this.saveRegistryEntry());
+    if (cancelBtn) cancelBtn.addEventListener('click', () => this.closeRegistryEditor());
+    if (deleteBtn) deleteBtn.addEventListener('click', () => this.deleteRegistryEntry(this._registryEditingId));
+    if (sendBtn) sendBtn.addEventListener('click', () => this.sendRegistryChat());
+    if (chatInput) {
+      chatInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') this.sendRegistryChat();
+      });
+    }
+
+    // Click on entries in the list
+    if (listEl) {
+      listEl.addEventListener('click', (e) => {
+        const editBtn = e.target.closest('[data-reg-action="edit"]');
+        const delBtn = e.target.closest('[data-reg-action="delete"]');
+        if (editBtn) {
+          const id = editBtn.dataset.regId;
+          const entry = this._registryData.find(e => e.id === id);
+          if (entry) this.openRegistryEditor(entry, (typeSelect?.value || 'spells').replace(/s$/, ''));
+        }
+        if (delBtn) {
+          this.deleteRegistryEntry(delBtn.dataset.regId);
+        }
       });
     }
   }

@@ -4,8 +4,10 @@ using GAE.Dashboard.Api.Hubs;
 using GAE.Dashboard.Api.Security;
 using GAE.Dashboard.Api.Services;
 using GAE.Discord;
+using GAE.Core.Registry;
 using GAE.Engine;
 using GAE.Engine.Configuration;
+using GAE.Engine.Registry;
 using GAE.Engine.State;
 using GAE.Narrator;
 using GAE.WikiSync;
@@ -85,6 +87,11 @@ builder.Services.AddSingleton(new WorldSeedConfig
 // Engine
 builder.Services.AddSingleton<IProbabilityEngine, ProbabilityEngine>();
 builder.Services.AddSingleton<CommandParser>();
+
+// Content Registries — loaded from YAML seeds, holds all game content definitions
+builder.Services.AddSingleton<ContentRegistryService>();
+builder.Services.AddSingleton<IContentRegistryService>(sp => sp.GetRequiredService<ContentRegistryService>());
+
 builder.Services.AddSingleton<IGameEngine, GameEngine>();
 
 // Narrator — LM Studio HTTP client
@@ -216,6 +223,28 @@ try
 catch
 {
     app.Logger.LogWarning("Wiki.js unreachable at {Url} — wiki sync disabled", wikiUrl);
+}
+
+// ── Load content registries from seed files ──────────────────────────
+var registryService = app.Services.GetRequiredService<ContentRegistryService>();
+{
+    var spellsPath = Path.Combine(configDir, "spells-seed.yaml");
+    if (File.Exists(spellsPath))
+        RegistrySeedLoader.LoadSpells(registryService.Spells, await File.ReadAllTextAsync(spellsPath), app.Logger);
+
+    var classesPath = Path.Combine(configDir, "classes-seed.yaml");
+    if (File.Exists(classesPath))
+        RegistrySeedLoader.LoadClasses(registryService.Classes, await File.ReadAllTextAsync(classesPath), app.Logger);
+
+    var racesPath = Path.Combine(configDir, "races-seed.yaml");
+    if (File.Exists(racesPath))
+        RegistrySeedLoader.LoadRaces(registryService.Races, await File.ReadAllTextAsync(racesPath), app.Logger);
+
+    var loreSeedPath = Path.Combine(configDir, "lore-seed.yaml");
+    if (File.Exists(loreSeedPath))
+        RegistrySeedLoader.LoadItemsFromLoreSeed(registryService.Items, await File.ReadAllTextAsync(loreSeedPath), app.Logger);
+
+    registryService.LogRegistrySummary();
 }
 
 // Seed world from lore-seed.yaml if spawn room is not already present

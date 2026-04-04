@@ -1,5 +1,6 @@
 using GAE.Core.Interfaces;
 using GAE.Core.Models;
+using GAE.Core.Registry;
 using GAE.Engine.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -14,6 +15,7 @@ public class GameEngine : IGameEngine
     private readonly GameRulesConfig _rules;
     private readonly ILogger<GameEngine> _logger;
     private readonly IWikiService? _wiki;
+    private readonly IContentRegistryService? _registry;
 
     public GameEngine(
         IStateManager stateManager,
@@ -22,7 +24,8 @@ public class GameEngine : IGameEngine
         CommandParser parser,
         GameRulesConfig rules,
         ILogger<GameEngine> logger,
-        IWikiService? wiki = null)
+        IWikiService? wiki = null,
+        IContentRegistryService? registry = null)
     {
         _stateManager = stateManager;
         _dice = dice;
@@ -31,6 +34,7 @@ public class GameEngine : IGameEngine
         _rules = rules;
         _logger = logger;
         _wiki = wiki;
+        _registry = registry;
     }
 
     public GameAction ParseCommand(string playerId, string rawInput)
@@ -88,6 +92,7 @@ public class GameEngine : IGameEngine
             ActionType.LongRest => ProcessLongRest(player, action),
             ActionType.Inventory => ProcessInventory(player, action),
             ActionType.Stats => ProcessStats(player, action),
+            ActionType.Cast => await ProcessCastAsync(player, action, ct),
             ActionType.Help => ProcessHelp(action),
             ActionType.Map => await ProcessMapAsync(player, action, ct),
             _ => await ProcessFreeFormActionAsync(player, action, ct)
@@ -107,6 +112,7 @@ public class GameEngine : IGameEngine
             && action.Type != ActionType.Stats
             && action.Type != ActionType.Inventory
             && action.Type != ActionType.Map
+            && action.Type != ActionType.Cast
             && action.Type != ActionType.Unknown;
 
         if (shouldNarrate)
@@ -858,6 +864,248 @@ public class GameEngine : IGameEngine
                 {player.FormatStatsDetailed(" | ")} | Defense: {player.Defense}
                 """
         };
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  CAST — registered spell with exact mechanics, or improvised spell
+    //         evaluated by the LLM with a power-budget system.
+    // ═══════════════════════════════════════════════════════════════════
+
+    private async Task<ActionResult> ProcessCastAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
+    {
+        var spellName = action.Target ?? action.RawInput;
+        var target = action.Parameters.GetValueOrDefault("target");
+        var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
+        room ??= new Room { Id = player.CurrentRoomId, Name = "Unknown" };
+
+        _logger.LogInformation("Cast attempt by {Player}: spell={Spell}, target={Target}", player.Name, spellName, target ?? "(none)");
+
+        // ── Try registered spell first ──────────────────────────────
+        if (_registry is not null)
+        {
+            var validation = _registry.ValidateSpellCast(spellName, player.Class, player.Level, player.Mp);
+            if (validation.IsValid && validation.Spell is not null)
+                return await CastRegisteredSpellAsync(player, validation.Spell, target, room, action, ct);
+
+            // Spell IS in registry but player can't use it
+            if (validation.Spell is not null && validation.FailureReason is not null)
+            {
+                var failResult = new ActionResult
+                {
+                    ActionId = action.Id,
+                    Success = false,
+                    MechanicalSummary = validation.FailureReason
+                };
+
+                // Ask narrator for a fun fizzle description
+                var recentStory = await _stateManager.GetRecentStoryForRoomAsync(player.CurrentRoomId, 3, ct);
+                var fizzleNarration = await _narrator.ProcessFreeFormAsync(player, room,
+                    $"I try to cast {spellName} but fail because: {validation.FailureReason}. Describe the comedic fizzle.",
+                    recentStory, ct);
+                failResult.Narration = fizzleNarration.Narration;
+                return failResult;
+            }
+        }
+
+        // ── Not in registry — improvised spell with power budget ────
+        return await CastImprovisedSpellAsync(player, spellName, target, room, action, ct);
+    }
+
+    private async Task<ActionResult> CastRegisteredSpellAsync(
+        PlayerCharacter player, SpellDefinition spell, string? target,
+        Room room, GameAction action, CancellationToken ct)
+    {
+        var result = new ActionResult { ActionId = action.Id, Success = true };
+        var mechanics = new List<string>();
+
+        // Deduct mana
+        var oldMp = player.Mp;
+        player.Mp -= spell.ManaCost;
+        result.StateChanges.Add(new StateChange
+        {
+            EntityType = "player", EntityId = player.Id,
+            Property = "mp", OldValue = oldMp.ToString(), NewValue = player.Mp.ToString()
+        });
+        mechanics.Add($"MP: {oldMp} -> {player.Mp} (-{spell.ManaCost})");
+
+        // Resolve damage
+        if (!string.IsNullOrEmpty(spell.DamageDice))
+        {
+            var statMod = player.GetModifier(spell.DamageStat ?? "int");
+            var damageRoll = _dice.RollDamage(spell.DamageDice, statMod);
+            mechanics.Add($"Damage: {damageRoll.Expression} + {statMod} = {damageRoll.Total}");
+
+            // Apply damage to target NPC if specified
+            if (!string.IsNullOrEmpty(target))
+            {
+                var targetNpc = room.Npcs.FirstOrDefault(n =>
+                    n.Name.Contains(target, StringComparison.OrdinalIgnoreCase));
+                if (targetNpc is not null && targetNpc.Hp.HasValue)
+                {
+                    var oldHp = targetNpc.Hp.Value;
+                    targetNpc.Hp = Math.Max(0, targetNpc.Hp.Value - damageRoll.Total);
+                    mechanics.Add($"{targetNpc.Name} HP: {oldHp} -> {targetNpc.Hp}");
+                    result.StateChanges.Add(new StateChange
+                    {
+                        EntityType = "npc", EntityId = targetNpc.Id,
+                        Property = "hp", OldValue = oldHp.ToString(), NewValue = targetNpc.Hp.Value.ToString()
+                    });
+
+                    if (targetNpc.Hp <= 0)
+                        mechanics.Add($"{targetNpc.Name} has been defeated!");
+                }
+            }
+        }
+
+        // Resolve healing
+        if (!string.IsNullOrEmpty(spell.HealDice))
+        {
+            var healRoll = _dice.Roll(spell.HealDice, "Spell healing");
+            var oldHp = player.Hp;
+            player.Hp = Math.Min(player.MaxHp, player.Hp + healRoll.Total);
+            mechanics.Add($"Healed: {healRoll.Total} HP ({oldHp} -> {player.Hp})");
+            result.StateChanges.Add(new StateChange
+            {
+                EntityType = "player", EntityId = player.Id,
+                Property = "hp", OldValue = oldHp.ToString(), NewValue = player.Hp.ToString()
+            });
+        }
+
+        // Status effect
+        if (!string.IsNullOrEmpty(spell.StatusEffect))
+        {
+            mechanics.Add($"Applied: {spell.StatusEffect} ({spell.Duration} turns)");
+        }
+
+        result.MechanicalSummary = $"**{spell.Name}** ({spell.School})\n" + string.Join("\n", mechanics);
+
+        // Narrate the successful cast
+        var recentStory = await _stateManager.GetRecentStoryForRoomAsync(player.CurrentRoomId, 3, ct);
+        var narration = await _narrator.ProcessFreeFormAsync(player, room,
+            $"I cast {spell.Name}{(target is not null ? $" at {target}" : "")}. Mechanical result: {result.MechanicalSummary}",
+            recentStory, ct);
+        result.Narration = narration.Narration;
+
+        // Save state
+        player.LastActiveAt = DateTimeOffset.UtcNow;
+        await _stateManager.SavePlayerAsync(player, ct);
+        await _stateManager.SaveRoomAsync(room, ct);
+
+        return result;
+    }
+
+    private async Task<ActionResult> CastImprovisedSpellAsync(
+        PlayerCharacter player, string spellName, string? target,
+        Room room, GameAction action, CancellationToken ct)
+    {
+        // Determine the player's power budget
+        var powerCap = _registry?.GetImprovisedSpellCap(player.Class, player.Level) ?? Math.Max(1, (player.Level + 1) / 2);
+
+        _logger.LogInformation("Improvised spell '{Spell}' by {Player} (Lv.{Level} {Class}). Power cap: {Cap}",
+            spellName, player.Name, player.Level, player.Class, powerCap);
+
+        // Ask the LLM to evaluate the improvised spell
+        var recentStory = await _stateManager.GetRecentStoryForRoomAsync(player.CurrentRoomId, 3, ct);
+        var evalResult = await _narrator.EvaluateImprovisedSpellAsync(
+            player, room, spellName, target, powerCap, recentStory, ct);
+
+        var result = new ActionResult
+        {
+            ActionId = action.Id,
+            Success = evalResult.Success,
+            Narration = evalResult.Narration
+        };
+
+        if (evalResult.Success)
+        {
+            // Apply mana cost
+            if (evalResult.ManaCost > 0)
+            {
+                var oldMp = player.Mp;
+                player.Mp = Math.Max(0, player.Mp - evalResult.ManaCost);
+                result.StateChanges.Add(new StateChange
+                {
+                    EntityType = "player", EntityId = player.Id,
+                    Property = "mp", OldValue = oldMp.ToString(), NewValue = player.Mp.ToString()
+                });
+            }
+
+            // Apply stat changes from the evaluation
+            foreach (var (stat, delta) in evalResult.StatChanges)
+            {
+                switch (stat.ToLowerInvariant())
+                {
+                    case "hp":
+                        var oldHp = player.Hp;
+                        player.Hp = Math.Clamp(player.Hp + delta, 0, player.MaxHp);
+                        result.StateChanges.Add(new StateChange { EntityType = "player", EntityId = player.Id, Property = "hp", OldValue = oldHp.ToString(), NewValue = player.Hp.ToString() });
+                        break;
+                    case "gold":
+                        var oldGold = player.Gold;
+                        player.Gold = Math.Max(0, player.Gold + delta);
+                        result.StateChanges.Add(new StateChange { EntityType = "player", EntityId = player.Id, Property = "gold", OldValue = oldGold.ToString(), NewValue = player.Gold.ToString() });
+                        break;
+                }
+            }
+
+            // Apply damage to target NPC
+            if (evalResult.Damage > 0 && !string.IsNullOrEmpty(target))
+            {
+                var targetNpc = room.Npcs.FirstOrDefault(n =>
+                    n.Name.Contains(target, StringComparison.OrdinalIgnoreCase));
+                if (targetNpc is not null && targetNpc.Hp.HasValue)
+                {
+                    var oldHp = targetNpc.Hp.Value;
+                    targetNpc.Hp = Math.Max(0, targetNpc.Hp.Value - evalResult.Damage);
+                    result.StateChanges.Add(new StateChange
+                    {
+                        EntityType = "npc", EntityId = targetNpc.Id,
+                        Property = "hp", OldValue = oldHp.ToString(), NewValue = targetNpc.Hp.Value.ToString()
+                    });
+                }
+            }
+
+            // Apply healing
+            if (evalResult.Healing > 0)
+            {
+                var oldHp = player.Hp;
+                player.Hp = Math.Min(player.MaxHp, player.Hp + evalResult.Healing);
+                result.StateChanges.Add(new StateChange
+                {
+                    EntityType = "player", EntityId = player.Id,
+                    Property = "hp", OldValue = oldHp.ToString(), NewValue = player.Hp.ToString()
+                });
+            }
+
+            result.MechanicalSummary = $"**Improvised: {spellName}** (Power {evalResult.PowerLevel}/{powerCap})"
+                + (evalResult.ManaCost > 0 ? $" | MP: -{evalResult.ManaCost}" : "")
+                + (evalResult.Damage > 0 ? $" | Damage: {evalResult.Damage}" : "")
+                + (evalResult.Healing > 0 ? $" | Healed: {evalResult.Healing}" : "");
+        }
+        else
+        {
+            // Fizzle — still costs some mana for the attempt
+            var fizzleCost = Math.Max(1, evalResult.ManaCost / 2);
+            if (player.Mp >= fizzleCost)
+            {
+                var oldMp = player.Mp;
+                player.Mp -= fizzleCost;
+                result.StateChanges.Add(new StateChange
+                {
+                    EntityType = "player", EntityId = player.Id,
+                    Property = "mp", OldValue = oldMp.ToString(), NewValue = player.Mp.ToString()
+                });
+            }
+
+            result.MechanicalSummary = $"**Fizzle: {spellName}** (Power {evalResult.PowerLevel} exceeds your cap of {powerCap})"
+                + (fizzleCost > 0 ? $" | MP wasted: -{fizzleCost}" : "");
+        }
+
+        player.LastActiveAt = DateTimeOffset.UtcNow;
+        await _stateManager.SavePlayerAsync(player, ct);
+        await _stateManager.SaveRoomAsync(room, ct);
+
+        return result;
     }
 
     private async Task<ActionResult> ProcessFreeFormActionAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
@@ -2265,6 +2513,7 @@ public class GameEngine : IGameEngine
                 `sell <item>` - Sell an item to a shopkeeper
                 `equip <item>` - Equip an item
                 `unequip <item>` - Unequip an item
+                `cast <spell>` / `cast <spell> at <target>` - Cast a registered or improvised spell
                 `rest` / `short rest` / `long rest` - Rest and recover
                 `inventory` - View your inventory
                 `stats` - View your character stats
@@ -2272,6 +2521,7 @@ public class GameEngine : IGameEngine
                 `help` - Show this help message
 
                 You can also type anything in natural language and the narrator will try to interpret it!
+                Improvised spells are welcome - but beware, too much power may fizzle spectacularly!
                 """
         };
     }

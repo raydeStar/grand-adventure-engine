@@ -181,6 +181,17 @@ public partial class CommandParser
             return action;
         }
 
+        // Cast
+        var castMatch = CastRegex().Match(input);
+        if (castMatch.Success)
+        {
+            action.Type = ActionType.Cast;
+            action.Target = castMatch.Groups["spell"].Value.Trim();
+            if (castMatch.Groups["target"].Success)
+                action.Parameters["target"] = castMatch.Groups["target"].Value.Trim();
+            return action;
+        }
+
         // Map
         if (MapRegex().IsMatch(input))
         {
@@ -273,6 +284,9 @@ public partial class CommandParser
 
     [GeneratedRegex(@"^(?:stats|status|character|char|me)$", RegexOptions.IgnoreCase)]
     private static partial Regex StatsRegex();
+
+    [GeneratedRegex(@"^(?:cast|channel|invoke|conjure)\s+(?<spell>.+?)(?:\s+(?:at|on|toward|against)\s+(?<target>.+))?$", RegexOptions.IgnoreCase)]
+    private static partial Regex CastRegex();
 
     [GeneratedRegex(@"^(?:map|look\s+(?:at\s+)?map|show\s+map|view\s+map|world\s+map|check\s+map)$", RegexOptions.IgnoreCase)]
     private static partial Regex MapRegex();

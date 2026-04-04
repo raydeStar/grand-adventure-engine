@@ -1,0 +1,135 @@
+# ============================================================
+# Grand Adventure Engine - Class Registry Seed
+# ============================================================
+# improvised_spell_cap: max power level for improvised spells
+#   at each character level (index 0 = level 1).
+#   Casters get higher caps; martial classes get lower caps.
+# ============================================================
+
+classes:
+
+  - id: fighter
+    name: Fighter
+    description: "A master of martial combat, trained in weapons and armor. Fighters rely on strength and endurance to prevail."
+    hit_die: d10
+    primary_stat: str
+    secondary_stat: con
+    base_mp_bonus: 0
+    can_cast_spells: false
+    spell_list: [smite]
+    allowed_weapon_types: [Weapon]
+    allowed_armor_types: [Armor, Shield, Helmet]
+    stat_bonuses:
+      str: 2
+      con: 1
+    starting_equipment: [iron_sword, leather_armor]
+    improvised_spell_cap: [1, 1, 1, 2, 2, 2, 3, 3, 3, 4]
+    tags: [martial, tank, melee]
+
+  - id: mage
+    name: Mage
+    description: "A scholarly spellcaster who commands arcane forces through intellect and study. Fragile but devastating at range."
+    hit_die: d6
+    primary_stat: int
+    secondary_stat: wis
+    base_mp_bonus: 10
+    can_cast_spells: true
+    spell_list: [magic_missile, firebolt, fireball, lightning_bolt, shield, mage_armor, minor_illusion, invisibility, poison_spray, chill_touch, drain_life, haste, detect_magic]
+    allowed_weapon_types: [Weapon]
+    allowed_armor_types: []
+    stat_bonuses:
+      int: 2
+      wis: 1
+    starting_equipment: [wooden_staff]
+    improvised_spell_cap: [2, 3, 4, 5, 6, 7, 8, 9, 10, 10]
+    tags: [caster, arcane, ranged]
+
+  - id: rogue
+    name: Rogue
+    description: "A cunning trickster who uses stealth, deception, and precision strikes. Rogues excel at finding and exploiting weaknesses."
+    hit_die: d8
+    primary_stat: dex
+    secondary_stat: cha
+    base_mp_bonus: 2
+    can_cast_spells: false
+    spell_list: [minor_illusion, invisibility]
+    allowed_weapon_types: [Weapon]
+    allowed_armor_types: [Armor]
+    stat_bonuses:
+      dex: 2
+      cha: 1
+    starting_equipment: [iron_dagger, leather_armor]
+    improvised_spell_cap: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5]
+    tags: [stealth, precision, melee, ranged]
+
+  - id: cleric
+    name: Cleric
+    description: "A divine spellcaster who channels the power of the gods. Clerics heal, protect, and smite the unholy."
+    hit_die: d8
+    primary_stat: wis
+    secondary_stat: con
+    base_mp_bonus: 8
+    can_cast_spells: true
+    spell_list: [sacred_flame, smite, cure_wounds, healing_word, lesser_restoration, bless, detect_magic, entangle]
+    allowed_weapon_types: [Weapon]
+    allowed_armor_types: [Armor, Shield, Helmet]
+    stat_bonuses:
+      wis: 2
+      con: 1
+    starting_equipment: [iron_mace, chain_mail]
+    improvised_spell_cap: [2, 3, 4, 5, 6, 7, 8, 8, 9, 10]
+    tags: [caster, divine, healer, support]
+
+  - id: ranger
+    name: Ranger
+    description: "A warrior of the wilderness who combines martial skill with nature magic. Rangers are trackers, hunters, and survivalists."
+    hit_die: d10
+    primary_stat: dex
+    secondary_stat: wis
+    base_mp_bonus: 4
+    can_cast_spells: true
+    spell_list: [cure_wounds, lesser_restoration, hunters_mark, entangle, poison_spray, detect_magic]
+    allowed_weapon_types: [Weapon]
+    allowed_armor_types: [Armor, Shield]
+    stat_bonuses:
+      dex: 2
+      wis: 1
+    starting_equipment: [hunting_bow, leather_armor]
+    improvised_spell_cap: [1, 2, 3, 3, 4, 5, 5, 6, 7, 8]
+    tags: [hybrid, nature, ranged, tracker]
+
+  - id: sorcerer
+    name: Sorcerer
+    description: "A natural-born spellcaster whose power comes from innate magical talent rather than study. Chaotic, powerful, unpredictable."
+    hit_die: d6
+    primary_stat: cha
+    secondary_stat: int
+    base_mp_bonus: 8
+    can_cast_spells: true
+    spell_list: [magic_missile, firebolt, fireball, lightning_bolt, shield, minor_illusion, invisibility, poison_spray, chill_touch, drain_life, haste]
+    allowed_weapon_types: [Weapon]
+    allowed_armor_types: []
+    stat_bonuses:
+      cha: 2
+      int: 1
+    starting_equipment: [crystal_focus]
+    improvised_spell_cap: [3, 4, 5, 6, 7, 8, 9, 10, 10, 10]
+    tags: [caster, arcane, innate, wild]
+
+  - id: monk
+    name: Monk
+    description: "A martial artist who channels inner ki through disciplined combat. Monks strike fast and move faster."
+    hit_die: d8
+    primary_stat: dex
+    secondary_stat: wis
+    base_mp_bonus: 4
+    can_cast_spells: false
+    spell_list: []
+    allowed_weapon_types: [Weapon]
+    allowed_armor_types: []
+    stat_bonuses:
+      dex: 2
+      wis: 1
+    starting_equipment: [wooden_staff]
+    improvised_spell_cap: [1, 2, 2, 3, 3, 4, 4, 5, 5, 6]
+    tags: [martial, melee, agile, ki]

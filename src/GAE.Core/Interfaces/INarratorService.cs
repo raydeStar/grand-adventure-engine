@@ -1,4 +1,5 @@
 using GAE.Core.Models;
+using GAE.Core.Registry;
 
 namespace GAE.Core.Interfaces;
 
@@ -14,6 +15,14 @@ public interface INarratorService
     Task<FreeFormResponse> ProcessConversationTurnAsync(PlayerCharacter player, Room room, Npc npc, InteractionState interaction, string rawInput, CancellationToken ct = default);
     Task<FreeFormResponse> ProcessCombatTurnAsync(PlayerCharacter player, Room room, Npc enemy, InteractionState interaction, string rawInput, CancellationToken ct = default);
 
+
+    /// <summary>Evaluate an improvised (unregistered) spell attempt using the power-budget system.</summary>
+    Task<ImprovisedSpellResult> EvaluateImprovisedSpellAsync(
+        PlayerCharacter player, Room room, string spellName, string? target,
+        int powerCap, IReadOnlyList<StoryEntry> recentStory, CancellationToken ct = default);
+
+    /// <summary>AI content generator: describe what you want and the AI fills in the structured details.</summary>
+    Task<string> GenerateContentAsync(string contentType, string description, string? existingJson, CancellationToken ct = default);
 
     /// <summary>AI-driven character creation: takes a natural-language description and returns a JSON character concept.</summary>
     Task<CharacterCreationAiResponse?> CreateCharacterFromDescriptionAsync(string playerDescription, string? previousSheet, CancellationToken ct = default);

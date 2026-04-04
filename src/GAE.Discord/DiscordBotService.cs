@@ -670,6 +670,29 @@ public class DiscordBotService : IHostedService
             return;
         }
 
+        // Cast — show spell result with mechanical details and narration
+        if (action.Type == Core.Models.ActionType.Cast)
+        {
+            var spellColor = result.Success ? Color.Purple : Color.DarkRed;
+            var spellEmbed = new EmbedBuilder()
+                .WithTitle(result.Success ? "Spell Cast" : "Spell Fizzle")
+                .WithColor(spellColor)
+                .WithFooter(FormatStatusBar(player));
+
+            if (!string.IsNullOrEmpty(result.MechanicalSummary))
+                spellEmbed.AddField("Mechanics", result.MechanicalSummary.Length > 1024
+                    ? result.MechanicalSummary[..1020] + "..."
+                    : result.MechanicalSummary);
+
+            if (!string.IsNullOrEmpty(result.Narration))
+                spellEmbed.WithDescription(result.Narration.Length > 4096
+                    ? result.Narration[..4092] + "..."
+                    : result.Narration);
+
+            await thread.SendMessageAsync(embed: spellEmbed.Build());
+            return;
+        }
+
         // Combat result
         if (result.InteractionUpdate?.CombatStatus is not null)
         {
@@ -1220,6 +1243,7 @@ public class DiscordBotService : IHostedService
             .AddField("Movement", "`go <direction>` / `north` `south` `east` `west`")
             .AddField("Observation", "`look` / `look at <target>`")
             .AddField("Combat", "`attack <target>`")
+            .AddField("Magic", "`cast <spell>` / `cast <spell> at <target>` — registered spells or improvise!")
             .AddField("Social", "`talk to <target>`")
             .AddField("Items", "`take <item>` / `drop <item>` / `use <item>` / `equip <item>` / `unequip <item>`")
             .AddField("Commerce", "`buy <item>` / `sell <item>`")

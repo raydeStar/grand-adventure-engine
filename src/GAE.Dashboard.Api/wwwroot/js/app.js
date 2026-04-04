@@ -142,6 +142,9 @@
     // Wire up AI logs tab events
     UI.wireLogsTab();
 
+    // Wire up content registry tab
+    UI.wireRegistryTab();
+
     // Admin character edit form
     UI.$('btn-admin-edit-char').addEventListener('click', () => {
       if (!state.currentPlayer) return;
@@ -363,6 +366,10 @@
     // Auto-load conversation logs when switching to the logs tab
     if (tabName === 'logs') {
       UI.loadConversationLogs();
+    }
+    // Auto-load registry when switching to registry tab
+    if (tabName === 'registry') {
+      UI.loadRegistry();
     }
   }
 

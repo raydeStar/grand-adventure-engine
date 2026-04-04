@@ -1,0 +1,293 @@
+# ============================================================
+# Grand Adventure Engine - Spell Registry Seed
+# ============================================================
+# Power levels: 1-2 = cantrip/basic, 3-4 = intermediate,
+#               5-6 = advanced, 7-8 = expert, 9-10 = legendary
+# ============================================================
+
+spells:
+
+  # ── EVOCATION (damage dealing) ──────────────────────────────
+
+  - id: magic_missile
+    name: Magic Missile
+    description: "Bolts of arcane energy streak toward the target, never missing."
+    school: evocation
+    mana_cost: 2
+    damage_dice: "1d4+1"
+    damage_stat: int
+    range: ranged
+    required_classes: [mage, sorcerer]
+    required_level: 1
+    power_level: 1
+    tags: [force, auto-hit, single-target]
+
+  - id: firebolt
+    name: Firebolt
+    description: "A mote of fire streaks toward the target."
+    school: evocation
+    mana_cost: 1
+    damage_dice: "1d10"
+    damage_stat: int
+    range: ranged
+    required_classes: [mage, sorcerer]
+    required_level: 1
+    power_level: 1
+    tags: [fire, single-target, cantrip]
+
+  - id: fireball
+    name: Fireball
+    description: "A bright streak flashes from your finger to a point you choose, then blossoms into an explosion of flame."
+    school: evocation
+    mana_cost: 8
+    damage_dice: "3d6"
+    damage_stat: int
+    range: ranged
+    required_classes: [mage, sorcerer]
+    required_level: 3
+    power_level: 5
+    tags: [fire, aoe]
+
+  - id: lightning_bolt
+    name: Lightning Bolt
+    description: "A stroke of lightning forming a line 60 feet long and 5 feet wide blasts out from you."
+    school: evocation
+    mana_cost: 8
+    damage_dice: "3d6"
+    damage_stat: int
+    range: ranged
+    required_classes: [mage, sorcerer]
+    required_level: 3
+    power_level: 5
+    tags: [lightning, line]
+
+  - id: sacred_flame
+    name: Sacred Flame
+    description: "Flame-like radiance descends on a creature that you can see."
+    school: evocation
+    mana_cost: 1
+    damage_dice: "1d8"
+    damage_stat: wis
+    range: ranged
+    required_classes: [cleric]
+    required_level: 1
+    power_level: 1
+    tags: [radiant, single-target, cantrip]
+
+  - id: smite
+    name: Divine Smite
+    description: "Channel divine energy through your weapon strike."
+    school: evocation
+    mana_cost: 4
+    damage_dice: "2d8"
+    damage_stat: str
+    range: touch
+    required_classes: [cleric, fighter]
+    required_level: 2
+    power_level: 3
+    tags: [radiant, melee, single-target]
+
+  # ── RESTORATION (healing) ────────────────────────────────────
+
+  - id: cure_wounds
+    name: Cure Wounds
+    description: "A creature you touch regains hit points."
+    school: restoration
+    mana_cost: 3
+    heal_dice: "1d8+2"
+    range: touch
+    required_classes: [cleric, ranger]
+    required_level: 1
+    power_level: 2
+    tags: [healing, single-target]
+
+  - id: healing_word
+    name: Healing Word
+    description: "A quick word of restoration mends wounds at a distance."
+    school: restoration
+    mana_cost: 2
+    heal_dice: "1d4+1"
+    range: ranged
+    required_classes: [cleric]
+    required_level: 1
+    power_level: 1
+    tags: [healing, single-target, quick]
+
+  - id: lesser_restoration
+    name: Lesser Restoration
+    description: "You touch a creature and can end one disease or condition afflicting it."
+    school: restoration
+    mana_cost: 4
+    status_effect: "cleanse"
+    range: touch
+    required_classes: [cleric, ranger]
+    required_level: 2
+    power_level: 3
+    tags: [healing, cleanse, single-target]
+
+  # ── ABJURATION (protection) ─────────────────────────────────
+
+  - id: shield
+    name: Shield
+    description: "An invisible barrier of magical force appears and protects you."
+    school: abjuration
+    mana_cost: 2
+    status_effect: "shielded"
+    duration: 3
+    range: self
+    required_classes: [mage, sorcerer]
+    required_level: 1
+    power_level: 2
+    tags: [defense, self]
+
+  - id: mage_armor
+    name: Mage Armor
+    description: "You touch a willing creature and a protective magical force surrounds it."
+    school: abjuration
+    mana_cost: 3
+    status_effect: "mage_armor"
+    duration: 10
+    range: touch
+    required_classes: [mage, sorcerer]
+    required_level: 1
+    power_level: 2
+    tags: [defense, single-target]
+
+  - id: bless
+    name: Bless
+    description: "You bestow divine favor upon your allies."
+    school: abjuration
+    mana_cost: 4
+    status_effect: "blessed"
+    duration: 5
+    range: ranged
+    required_classes: [cleric]
+    required_level: 1
+    power_level: 2
+    tags: [buff, party]
+
+  # ── ILLUSION ────────────────────────────────────────────────
+
+  - id: minor_illusion
+    name: Minor Illusion
+    description: "You create a sound or an image of an object within range."
+    school: illusion
+    mana_cost: 1
+    range: ranged
+    required_classes: [mage, sorcerer, rogue]
+    required_level: 1
+    power_level: 1
+    tags: [utility, cantrip]
+
+  - id: invisibility
+    name: Invisibility
+    description: "A creature you touch becomes invisible until the spell ends."
+    school: illusion
+    mana_cost: 5
+    status_effect: "invisible"
+    duration: 5
+    range: touch
+    required_classes: [mage, sorcerer, rogue]
+    required_level: 2
+    power_level: 4
+    tags: [stealth, single-target]
+
+  # ── CONJURATION ─────────────────────────────────────────────
+
+  - id: poison_spray
+    name: Poison Spray
+    description: "You extend your hand toward a creature and project a puff of noxious gas."
+    school: conjuration
+    mana_cost: 1
+    damage_dice: "1d12"
+    damage_stat: int
+    range: touch
+    required_classes: [mage, sorcerer, ranger]
+    required_level: 1
+    power_level: 1
+    tags: [poison, single-target, cantrip]
+
+  # ── DIVINATION ──────────────────────────────────────────────
+
+  - id: detect_magic
+    name: Detect Magic
+    description: "You sense the presence of magic within 30 feet of you."
+    school: divination
+    mana_cost: 2
+    range: self
+    required_classes: []
+    required_level: 1
+    power_level: 1
+    tags: [utility, detection]
+
+  # ── NECROMANCY ──────────────────────────────────────────────
+
+  - id: chill_touch
+    name: Chill Touch
+    description: "A ghostly, skeletal hand reaches for the target, sapping their life force."
+    school: necromancy
+    mana_cost: 2
+    damage_dice: "1d8"
+    damage_stat: int
+    range: ranged
+    required_classes: [mage, sorcerer]
+    required_level: 1
+    power_level: 2
+    tags: [necrotic, single-target]
+
+  - id: drain_life
+    name: Drain Life
+    description: "Dark tendrils of energy siphon life from the target to you."
+    school: necromancy
+    mana_cost: 6
+    damage_dice: "2d6"
+    damage_stat: int
+    heal_dice: "1d6"
+    range: ranged
+    required_classes: [mage, sorcerer]
+    required_level: 3
+    power_level: 4
+    tags: [necrotic, drain, single-target]
+
+  # ── TRANSMUTATION ───────────────────────────────────────────
+
+  - id: haste
+    name: Haste
+    description: "You alter time around a willing creature, doubling its speed."
+    school: transmutation
+    mana_cost: 6
+    status_effect: "hasted"
+    duration: 5
+    range: touch
+    required_classes: [mage, sorcerer]
+    required_level: 3
+    power_level: 5
+    tags: [buff, single-target]
+
+  # ── RANGER SPELLS ───────────────────────────────────────────
+
+  - id: hunters_mark
+    name: "Hunter's Mark"
+    description: "You choose a creature and mystically mark it as your quarry."
+    school: divination
+    mana_cost: 2
+    status_effect: "marked"
+    duration: 10
+    range: ranged
+    required_classes: [ranger]
+    required_level: 1
+    power_level: 2
+    tags: [buff, tracking, single-target]
+
+  - id: entangle
+    name: Entangle
+    description: "Grasping weeds and vines sprout from the ground, restraining creatures."
+    school: conjuration
+    mana_cost: 3
+    status_effect: "entangled"
+    duration: 3
+    range: ranged
+    required_classes: [ranger, cleric]
+    required_level: 1
+    power_level: 2
+    tags: [control, aoe, nature]

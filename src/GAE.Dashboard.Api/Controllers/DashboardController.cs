@@ -1,5 +1,6 @@
 using GAE.Core.Interfaces;
 using GAE.Core.Models;
+using GAE.Core.Registry;
 using GAE.Dashboard.Api.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -20,6 +21,7 @@ public class DashboardController : ControllerBase
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _configuration;
     private readonly WorldSeedConfig _worldSeedConfig;
+    private readonly IContentRegistryService _registry;
 
     private static readonly TimeSpan NarratorCacheDuration = TimeSpan.FromSeconds(60);
     private static object? _narratorCachedResult;
@@ -34,7 +36,8 @@ public class DashboardController : ControllerBase
         IConversationLogger conversationLogger,
         IHttpClientFactory httpClientFactory,
         IConfiguration configuration,
-        WorldSeedConfig worldSeedConfig)
+        WorldSeedConfig worldSeedConfig,
+        IContentRegistryService registry)
     {
         _stateManager = stateManager;
         _engine = engine;
@@ -45,6 +48,7 @@ public class DashboardController : ControllerBase
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
         _worldSeedConfig = worldSeedConfig;
+        _registry = registry;
     }
 
     [HttpGet("players")]
@@ -1104,6 +1108,132 @@ public class DashboardController : ControllerBase
             StatMethod = "StandardArray"
         };
     }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  REGISTRY ENDPOINTS — browse, edit, generate content
+    // ═══════════════════════════════════════════════════════════════════
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpGet("admin/registry/{type}")]
+    public IActionResult GetRegistry(string type)
+    {
+        return type.ToLowerInvariant() switch
+        {
+            "spells" => Ok(_registry.Spells.GetAll()),
+            "classes" => Ok(_registry.Classes.GetAll()),
+            "races" => Ok(_registry.Races.GetAll()),
+            "items" => Ok(_registry.Items.GetAll()),
+            _ => NotFound(new { error = $"Unknown registry type: {type}" })
+        };
+    }
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpGet("admin/registry/{type}/{id}")]
+    public IActionResult GetRegistryEntry(string type, string id)
+    {
+        object? entry = type.ToLowerInvariant() switch
+        {
+            "spells" => _registry.Spells.GetById(id),
+            "classes" => _registry.Classes.GetById(id),
+            "races" => _registry.Races.GetById(id),
+            "items" => _registry.Items.GetById(id),
+            _ => null
+        };
+        return entry is not null ? Ok(entry) : NotFound();
+    }
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpGet("admin/registry/summary")]
+    public IActionResult GetRegistrySummary()
+    {
+        return Ok(new
+        {
+            spells = _registry.Spells.Count,
+            classes = _registry.Classes.Count,
+            races = _registry.Races.Count,
+            items = _registry.Items.Count,
+            spellList = _registry.Spells.GetAll().Select(s => new { s.Id, s.Name, s.School, s.PowerLevel, s.ManaCost, s.RequiredLevel }),
+            classList = _registry.Classes.GetAll().Select(c => new { c.Id, c.Name, c.CanCastSpells, c.PrimaryStat }),
+            raceList = _registry.Races.GetAll().Select(r => new { r.Id, r.Name, r.Traits }),
+        });
+    }
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpPost("admin/registry/{type}")]
+    public IActionResult UpsertRegistryEntry(string type, [FromBody] System.Text.Json.JsonElement body)
+    {
+        try
+        {
+            var options = new System.Text.Json.JsonSerializerOptions
+            {
+                PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower,
+                PropertyNameCaseInsensitive = true
+            };
+
+            switch (type.ToLowerInvariant())
+            {
+                case "spells":
+                    var spell = System.Text.Json.JsonSerializer.Deserialize<SpellDefinition>(body.GetRawText(), options);
+                    if (spell is null || string.IsNullOrWhiteSpace(spell.Id)) return BadRequest(new { error = "Invalid spell data" });
+                    _registry.Spells.Register(spell);
+                    return Ok(spell);
+                case "classes":
+                    var cls = System.Text.Json.JsonSerializer.Deserialize<ClassDefinition>(body.GetRawText(), options);
+                    if (cls is null || string.IsNullOrWhiteSpace(cls.Id)) return BadRequest(new { error = "Invalid class data" });
+                    _registry.Classes.Register(cls);
+                    return Ok(cls);
+                case "races":
+                    var race = System.Text.Json.JsonSerializer.Deserialize<RaceDefinition>(body.GetRawText(), options);
+                    if (race is null || string.IsNullOrWhiteSpace(race.Id)) return BadRequest(new { error = "Invalid race data" });
+                    _registry.Races.Register(race);
+                    return Ok(race);
+                case "items":
+                    var item = System.Text.Json.JsonSerializer.Deserialize<ItemTemplate>(body.GetRawText(), options);
+                    if (item is null || string.IsNullOrWhiteSpace(item.Id)) return BadRequest(new { error = "Invalid item data" });
+                    _registry.Items.Register(item);
+                    return Ok(item);
+                default:
+                    return NotFound(new { error = $"Unknown registry type: {type}" });
+            }
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpDelete("admin/registry/{type}/{id}")]
+    public IActionResult DeleteRegistryEntry(string type, string id)
+    {
+        switch (type.ToLowerInvariant())
+        {
+            case "spells": _registry.Spells.Remove(id); break;
+            case "classes": _registry.Classes.Remove(id); break;
+            case "races": _registry.Races.Remove(id); break;
+            case "items": _registry.Items.Remove(id); break;
+            default: return NotFound(new { error = $"Unknown registry type: {type}" });
+        }
+        return Ok(new { success = true, id });
+    }
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpPost("admin/registry/generate")]
+    public async Task<IActionResult> GenerateContent([FromBody] ContentGenerateRequest request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.ContentType) || string.IsNullOrWhiteSpace(request.Description))
+            return BadRequest(new { error = "contentType and description are required." });
+
+        var result = await _narrator.GenerateContentAsync(request.ContentType, request.Description, request.ExistingJson, ct);
+        return Ok(new { json = result });
+    }
+}
+
+public class ContentGenerateRequest
+{
+    public string ContentType { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string? ExistingJson { get; set; }
 }
 
 public class ActionRequest

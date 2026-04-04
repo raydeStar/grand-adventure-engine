@@ -129,6 +129,36 @@ const API = {
     return this.getJson(`${this.base}/admin/conversations/stats`);
   },
 
+  // ── Content Registry ───────────────────────────────────
+  async getRegistry(type) {
+    return this.getJson(`${this.base}/admin/registry/${encodeURIComponent(type)}`);
+  },
+
+  async getRegistryEntry(type, id) {
+    return this.getOptionalJson(`${this.base}/admin/registry/${encodeURIComponent(type)}/${encodeURIComponent(id)}`);
+  },
+
+  async getRegistrySummary() {
+    return this.getJson(`${this.base}/admin/registry/summary`);
+  },
+
+  async upsertRegistryEntry(type, data) {
+    return this.postJson(`${this.base}/admin/registry/${encodeURIComponent(type)}`, data);
+  },
+
+  async deleteRegistryEntry(type, id) {
+    const res = await fetch(`${this.base}/admin/registry/${encodeURIComponent(type)}/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      credentials: 'same-origin'
+    });
+    if (!res.ok) throw this.createHttpError(res, await this.readError(res));
+    return res.json();
+  },
+
+  async generateContent(contentType, description, existingJson) {
+    return this.postJson(`${this.base}/admin/registry/generate`, { contentType, description, existingJson });
+  },
+
   async getJson(url) {
     const res = await fetch(url, { credentials: 'same-origin' });
     if (!res.ok) throw this.createHttpError(res, await this.readError(res));

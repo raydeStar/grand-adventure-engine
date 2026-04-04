@@ -149,6 +149,21 @@ public class StubNarratorService : INarratorService
     public Task<CharacterCreationAiResponse?> CreateCharacterFromDescriptionAsync(string playerDescription, string? previousSheet, CancellationToken ct = default)
         => Task.FromResult<CharacterCreationAiResponse?>(null);
 
+    public Task<GAE.Core.Registry.ImprovisedSpellResult> EvaluateImprovisedSpellAsync(
+        PlayerCharacter player, Room room, string spellName, string? target,
+        int powerCap, IReadOnlyList<StoryEntry> recentStory, CancellationToken ct = default)
+        => Task.FromResult(new GAE.Core.Registry.ImprovisedSpellResult
+        {
+            PowerLevel = powerCap + 1,
+            PlayerCap = powerCap,
+            Success = false,
+            ManaCost = 1,
+            Narration = $"[Fizzle] {spellName}"
+        });
+
+    public Task<string> GenerateContentAsync(string contentType, string description, string? existingJson, CancellationToken ct = default)
+        => Task.FromResult("{}");
+
     public string GetActiveModel() => "stub-model";
     public void SetActiveModel(string model) { }
     public Task<IReadOnlyList<string>> ListAvailableModelsAsync(CancellationToken ct = default)
