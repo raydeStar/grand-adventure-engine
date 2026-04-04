@@ -129,6 +129,15 @@ const API = {
     return this.getJson(`${this.base}/admin/conversations/stats`);
   },
 
+  // ── DM Console ─────────────────────────────────────────
+  async dmSearch(query) {
+    return this.getJson(`${this.base}/admin/dm/search?q=${encodeURIComponent(query)}`);
+  },
+
+  async dmBrowse(type) {
+    return this.getJson(`${this.base}/admin/dm/browse/${encodeURIComponent(type)}`);
+  },
+
   // ── Content Registry ───────────────────────────────────
   async getRegistry(type) {
     return this.getJson(`${this.base}/admin/registry/${encodeURIComponent(type)}`);

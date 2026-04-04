@@ -261,7 +261,8 @@
 
       <section id="workspace-admin" class="workspace hidden">
         <nav class="admin-toolbar">
-          <button class="admin-tab active" data-admin-tab="overview" type="button">Overview</button>
+          <button class="admin-tab active" data-admin-tab="dm-console" type="button">DM Console</button>
+          <button class="admin-tab" data-admin-tab="overview" type="button">Overview</button>
           <button class="admin-tab" data-admin-tab="llm" type="button">LLM</button>
           <button class="admin-tab" data-admin-tab="commands" type="button">Commands</button>
           <button class="admin-tab" data-admin-tab="mutations" type="button">Mutations</button>
@@ -273,8 +274,44 @@
           <button class="btn btn-secondary btn-sm" id="btn-seed-demo-admin" type="button">Seed Demo</button>
         </nav>
 
+        <!-- ═══ DM CONSOLE TAB ═══ -->
+        <div class="admin-tab-content active" data-admin-panel="dm-console">
+          <div class="admin-tab-body">
+            <div class="dm-console-layout">
+              <!-- Search + Chat column -->
+              <div class="dm-console-main">
+                <div class="dm-search-bar">
+                  <input type="text" id="dm-search-input" placeholder="Search anything... items, spells, NPCs, rooms, players, or describe what to create" autocomplete="off" />
+                  <button class="btn btn-primary btn-sm" id="btn-dm-search" type="button">Search</button>
+                </div>
+                <div class="dm-results" id="dm-results">
+                  <div class="dm-welcome">
+                    <h3>DM Console</h3>
+                    <p>Search for anything in the game world, or describe something new to create.</p>
+                    <div class="dm-quick-links">
+                      <button class="dm-quick-btn" data-dm-quick="spells" type="button">All Spells</button>
+                      <button class="dm-quick-btn" data-dm-quick="items" type="button">All Items</button>
+                      <button class="dm-quick-btn" data-dm-quick="classes" type="button">All Classes</button>
+                      <button class="dm-quick-btn" data-dm-quick="races" type="button">All Races</button>
+                      <button class="dm-quick-btn" data-dm-quick="rooms" type="button">All Rooms</button>
+                      <button class="dm-quick-btn" data-dm-quick="players" type="button">All Players</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Detail / Editor panel -->
+              <div class="dm-detail-panel" id="dm-detail-panel">
+                <div class="dm-detail-empty">
+                  <p>Select an item from search results to inspect and edit.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- ═══ OVERVIEW TAB ═══ -->
-        <div class="admin-tab-content active" data-admin-panel="overview">
+        <div class="admin-tab-content" data-admin-panel="overview">
           <div class="admin-tab-body">
             <div id="summary-cards" class="summary-cards"></div>
             <div id="admin-health" class="system-health"></div>

@@ -1401,6 +1401,480 @@ const UI = {
   },
 
   // ═══════════════════════════════════════════════════════════
+  //  DM CONSOLE
+  // ═══════════════════════════════════════════════════════════
+
+  _dmSelectedItem: null,
+  _dmSelectedType: null,
+  _dmJsonMode: false,
+
+  async dmSearch(query) {
+    const results = this.$('dm-results');
+    if (!results) return;
+    if (!query.trim()) {
+      this._dmShowWelcome();
+      return;
+    }
+
+    results.innerHTML = '<div class="dm-result-count">Searching...</div>';
+    try {
+      const data = await API.dmSearch(query);
+      this._dmRenderResults(data.results, query);
+    } catch (err) {
+      results.innerHTML = `<div class="dm-no-results">Error: ${this.esc(err.message)}</div>`;
+    }
+  },
+
+  async dmBrowse(type) {
+    const results = this.$('dm-results');
+    const input = this.$('dm-search-input');
+    if (!results) return;
+    if (input) input.value = '';
+
+    results.innerHTML = '<div class="dm-result-count">Loading...</div>';
+    try {
+      const data = await API.dmBrowse(type);
+      this._dmRenderResults(data.results, null, type);
+    } catch (err) {
+      results.innerHTML = `<div class="dm-no-results">Error: ${this.esc(err.message)}</div>`;
+    }
+  },
+
+  _dmRenderResults(items, query, browseType) {
+    const results = this.$('dm-results');
+    if (!items.length) {
+      let html = `<div class="dm-no-results">No results found${query ? ` for "${this.esc(query)}"` : ''}.</div>`;
+      if (query) {
+        html += `
+          <div class="dm-create-prompt">
+            <p>Would you like to create something new?</p>
+            <button class="btn btn-primary btn-sm" data-dm-create="spell" type="button">New Spell</button>
+            <button class="btn btn-primary btn-sm" data-dm-create="item" type="button">New Item</button>
+            <button class="btn btn-primary btn-sm" data-dm-create="room" type="button">New Room</button>
+            <button class="btn btn-primary btn-sm" data-dm-create="npc" type="button">New NPC</button>
+            <button class="btn btn-primary btn-sm" data-dm-create="class" type="button">New Class</button>
+            <button class="btn btn-primary btn-sm" data-dm-create="race" type="button">New Race</button>
+          </div>`;
+      }
+      results.innerHTML = html;
+      return;
+    }
+
+    const countLabel = browseType
+      ? `${items.length} ${browseType}`
+      : `${items.length} result${items.length !== 1 ? 's' : ''}`;
+
+    results.innerHTML = `<div class="dm-result-count">${countLabel}</div>` +
+      items.map(item => `
+        <div class="dm-result-card" data-dm-id="${this.esc(item.id)}" data-dm-type="${this.esc(item.type)}">
+          <div class="dm-result-header">
+            <span class="dm-result-name">${this.esc(item.name)}</span>
+            <span class="dm-result-type">${this.esc(item.type)}</span>
+          </div>
+          <div class="dm-result-meta">${this.esc(item.meta || '')}</div>
+          ${item.description ? `<div class="dm-result-desc">${this.esc(item.description)}</div>` : ''}
+        </div>
+      `).join('');
+  },
+
+  _dmShowWelcome() {
+    const results = this.$('dm-results');
+    if (results) results.innerHTML = `
+      <div class="dm-welcome">
+        <h3>DM Console</h3>
+        <p>Search for anything in the game world, or describe something new to create.</p>
+        <div class="dm-quick-links">
+          <button class="dm-quick-btn" data-dm-quick="spells" type="button">All Spells</button>
+          <button class="dm-quick-btn" data-dm-quick="items" type="button">All Items</button>
+          <button class="dm-quick-btn" data-dm-quick="classes" type="button">All Classes</button>
+          <button class="dm-quick-btn" data-dm-quick="races" type="button">All Races</button>
+          <button class="dm-quick-btn" data-dm-quick="rooms" type="button">All Rooms</button>
+          <button class="dm-quick-btn" data-dm-quick="players" type="button">All Players</button>
+        </div>
+      </div>`;
+  },
+
+  dmSelectItem(item, type) {
+    this._dmSelectedItem = item;
+    this._dmSelectedType = type;
+    this._dmJsonMode = false;
+
+    const panel = this.$('dm-detail-panel');
+    if (!panel) return;
+
+    // Highlight selected card
+    document.querySelectorAll('.dm-result-card').forEach(c => c.classList.remove('selected'));
+    const card = document.querySelector(`[data-dm-id="${item.id}"][data-dm-type="${type}"]`);
+    if (card) card.classList.add('selected');
+
+    const displayType = type.charAt(0).toUpperCase() + type.slice(1);
+    const cardRows = this._dmBuildCardRows(item, type);
+
+    panel.innerHTML = `
+      <div class="dm-detail-header">
+        <span class="dm-detail-title">${this.esc(item.name || item.id)}</span>
+        <span class="dm-detail-type-badge">${displayType}</span>
+      </div>
+      <div class="dm-detail-card">
+        <table>${cardRows}</table>
+      </div>
+      <div class="dm-detail-chat">
+        <div class="dm-detail-chat-messages" id="dm-chat-messages">
+          <div class="chat-msg system">Ask the AI to make changes, or edit the JSON directly.</div>
+        </div>
+        <div class="dm-detail-chat-input-row">
+          <input type="text" id="dm-chat-input" placeholder="e.g. Change the damage to 3d8, make it require level 5..." autocomplete="off" />
+          <button class="btn btn-primary btn-sm" id="btn-dm-chat-send" type="button">Send</button>
+        </div>
+      </div>
+      <div class="dm-detail-json" id="dm-json-section">
+        <textarea id="dm-json-textarea" spellcheck="false">${this.esc(JSON.stringify(item, null, 2))}</textarea>
+      </div>
+      <div class="dm-detail-actions">
+        <button class="btn btn-primary btn-sm" id="btn-dm-save" type="button">Save</button>
+        <button class="btn btn-secondary btn-sm" id="btn-dm-toggle-json" type="button">Show JSON</button>
+        <button class="btn btn-danger btn-sm" id="btn-dm-delete" type="button" style="margin-left:auto">Delete</button>
+      </div>
+    `;
+
+    // Wire chat
+    const chatInput = this.$('dm-chat-input');
+    if (chatInput) {
+      chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') this.dmSendChat(); });
+    }
+    const sendBtn = this.$('btn-dm-chat-send');
+    if (sendBtn) sendBtn.addEventListener('click', () => this.dmSendChat());
+
+    // Wire actions
+    this.$('btn-dm-save')?.addEventListener('click', () => this.dmSave());
+    this.$('btn-dm-toggle-json')?.addEventListener('click', () => this.dmToggleJson());
+    this.$('btn-dm-delete')?.addEventListener('click', () => this.dmDelete());
+  },
+
+  _dmBuildCardRows(item, type) {
+    const row = (label, value) => value != null && value !== '' ? `<tr><td>${this.esc(label)}</td><td>${this.esc(String(value))}</td></tr>` : '';
+
+    switch (type) {
+      case 'spell':
+        return row('School', item.school) + row('Mana Cost', item.manaCost) + row('Power Level', item.powerLevel)
+          + row('Damage', item.damageDice) + row('Healing', item.healDice) + row('Range', item.range)
+          + row('Required Level', item.requiredLevel) + row('Classes', (item.requiredClasses || []).join(', ') || 'All')
+          + row('Duration', item.duration) + row('Status Effect', item.statusEffect)
+          + row('Tags', (item.tags || []).join(', '));
+      case 'item':
+        return row('Type', item.type) + row('Rarity', item.rarity) + row('Value', `${item.value}g`)
+          + row('Damage', item.damageDice) + row('Armor', item.armorValue) + row('Effect', item.effect)
+          + row('Equippable', item.isEquippable ? 'Yes' : 'No') + row('Consumable', item.isConsumable ? 'Yes' : 'No')
+          + row('Tags', (item.tags || []).join(', '));
+      case 'class':
+        return row('Hit Die', item.hitDie) + row('Primary Stat', item.primaryStat) + row('Caster', item.canCastSpells ? 'Yes' : 'No')
+          + row('MP Bonus', item.baseMpBonus) + row('Spells', (item.spellList || []).length + ' available')
+          + row('Tags', (item.tags || []).join(', '));
+      case 'race':
+        return row('Traits', (item.traits || []).join(', '))
+          + row('Stat Bonuses', Object.entries(item.statBonuses || {}).map(([k,v]) => `${k.toUpperCase()}+${v}`).join(', '))
+          + row('Tags', (item.tags || []).join(', '));
+      case 'room':
+        return row('ID', item.id) + row('Exits', Object.entries(item.exits || {}).map(([d,t]) => `${d} -> ${t}`).join(', '))
+          + row('NPCs', (item.npcs || []).map(n => n.name).join(', '))
+          + row('Items', (item.items || []).map(i => i.name).join(', '))
+          + row('Tags', (item.environmentTags || []).join(', '));
+      case 'player':
+        return row('ID', item.id) + row('Race', item.race) + row('Class', item.class)
+          + row('Level', item.level) + row('HP', `${item.hp}/${item.maxHp}`) + row('MP', `${item.mp}/${item.maxMp}`)
+          + row('Gold', item.gold) + row('XP', item.xp) + row('Room', item.currentRoomId)
+          + row('STR', item.str) + row('DEX', item.dex) + row('CON', item.con) + row('INT', item.int) + row('WIS', item.wis) + row('CHA', item.cha);
+      case 'npc':
+        return row('Faction', item.faction) + row('Level', item.level) + row('HP', `${item.hp || '?'}/${item.maxHp || '?'}`)
+          + row('Hostile', item.isHostile ? 'Yes' : 'No') + row('Shopkeeper', item.isShopkeeper ? 'Yes' : 'No')
+          + row('Personality', item.personality);
+      default:
+        return row('ID', item.id);
+    }
+  },
+
+  dmToggleJson() {
+    const section = this.$('dm-json-section');
+    const btn = this.$('btn-dm-toggle-json');
+    if (!section) return;
+    this._dmJsonMode = !this._dmJsonMode;
+    section.classList.toggle('visible', this._dmJsonMode);
+    if (btn) btn.textContent = this._dmJsonMode ? 'Hide JSON' : 'Show JSON';
+
+    // Sync current data into textarea
+    if (this._dmJsonMode && this._dmSelectedItem) {
+      const ta = this.$('dm-json-textarea');
+      if (ta) ta.value = JSON.stringify(this._dmSelectedItem, null, 2);
+    }
+  },
+
+  async dmSendChat() {
+    const input = this.$('dm-chat-input');
+    const messages = this.$('dm-chat-messages');
+    if (!input || !input.value.trim() || !this._dmSelectedItem) return;
+
+    const userMsg = input.value.trim();
+    input.value = '';
+
+    messages.innerHTML += `<div class="chat-msg user">${this.esc(userMsg)}</div>`;
+    messages.innerHTML += `<div class="chat-msg ai loading" id="dm-chat-loading">Thinking...</div>`;
+    messages.scrollTop = messages.scrollHeight;
+
+    try {
+      const type = this._dmSelectedType;
+      // For registry types, use content generator; for rooms/players/npcs, also use it
+      const singularType = type === 'class' ? 'class' : type;
+      const existingJson = JSON.stringify(this._dmSelectedItem);
+      const result = await API.generateContent(singularType, userMsg, existingJson);
+
+      const loadingEl = this.$('dm-chat-loading');
+      if (loadingEl) loadingEl.remove();
+
+      if (result.json) {
+        try {
+          const updated = JSON.parse(result.json);
+          this._dmSelectedItem = updated;
+
+          // Refresh the card display
+          const cardSection = document.querySelector('.dm-detail-card');
+          if (cardSection) {
+            cardSection.innerHTML = `<table>${this._dmBuildCardRows(updated, type)}</table>`;
+          }
+          // Refresh JSON textarea if visible
+          const ta = this.$('dm-json-textarea');
+          if (ta) ta.value = JSON.stringify(updated, null, 2);
+
+          messages.innerHTML += `<div class="chat-msg ai">Updated! Review the changes above, then Save when ready.</div>`;
+        } catch {
+          messages.innerHTML += `<div class="chat-msg ai">Got a response but couldn't parse it. Try again?</div>`;
+        }
+      }
+      messages.scrollTop = messages.scrollHeight;
+    } catch (err) {
+      const loadingEl = this.$('dm-chat-loading');
+      if (loadingEl) loadingEl.remove();
+      messages.innerHTML += `<div class="chat-msg system">Error: ${this.esc(err.message)}</div>`;
+      messages.scrollTop = messages.scrollHeight;
+    }
+  },
+
+  async dmSave() {
+    if (!this._dmSelectedItem || !this._dmSelectedType) return;
+
+    // If JSON mode, read from textarea
+    if (this._dmJsonMode) {
+      const ta = this.$('dm-json-textarea');
+      if (ta) {
+        try {
+          this._dmSelectedItem = JSON.parse(ta.value);
+        } catch (err) {
+          alert('Invalid JSON: ' + err.message);
+          return;
+        }
+      }
+    }
+
+    const type = this._dmSelectedType;
+    const registryTypes = ['spell', 'item', 'class', 'race'];
+
+    try {
+      if (registryTypes.includes(type)) {
+        // Save to registry
+        const pluralType = type + 's';
+        await API.upsertRegistryEntry(pluralType === 'classs' ? 'classes' : pluralType, this._dmSelectedItem);
+      } else if (type === 'player') {
+        // Save player via edit endpoint
+        await API.editPlayer({ playerId: this._dmSelectedItem.id, ...this._dmSelectedItem });
+      } else if (type === 'room') {
+        await API.upsertRoomFixture(this._dmSelectedItem);
+      }
+
+      const messages = this.$('dm-chat-messages');
+      if (messages) {
+        messages.innerHTML += `<div class="chat-msg system">Saved successfully!</div>`;
+        messages.scrollTop = messages.scrollHeight;
+      }
+    } catch (err) {
+      alert('Save failed: ' + err.message);
+    }
+  },
+
+  async dmDelete() {
+    if (!this._dmSelectedItem || !this._dmSelectedType) return;
+    if (!confirm(`Delete "${this._dmSelectedItem.name || this._dmSelectedItem.id}"?`)) return;
+
+    const type = this._dmSelectedType;
+    try {
+      if (['spell', 'item', 'class', 'race'].includes(type)) {
+        const plural = type + 's';
+        await API.deleteRegistryEntry(plural === 'classs' ? 'classes' : plural, this._dmSelectedItem.id);
+      }
+      // Clear detail panel
+      const panel = this.$('dm-detail-panel');
+      if (panel) panel.innerHTML = '<div class="dm-detail-empty"><p>Item deleted.</p></div>';
+      this._dmSelectedItem = null;
+    } catch (err) {
+      alert('Delete failed: ' + err.message);
+    }
+  },
+
+  dmStartCreate(type, seedDescription) {
+    this._dmSelectedItem = { id: '', name: '' };
+    this._dmSelectedType = type;
+    this._dmJsonMode = false;
+
+    const displayType = type.charAt(0).toUpperCase() + type.slice(1);
+    const panel = this.$('dm-detail-panel');
+    if (!panel) return;
+
+    panel.innerHTML = `
+      <div class="dm-detail-header">
+        <span class="dm-detail-title">New ${displayType}</span>
+        <span class="dm-detail-type-badge">${displayType}</span>
+      </div>
+      <div class="dm-detail-card">
+        <table><tr><td colspan="2" style="color:var(--dim)">Describe what you want below and the AI will generate it.</td></tr></table>
+      </div>
+      <div class="dm-detail-chat">
+        <div class="dm-detail-chat-messages" id="dm-chat-messages">
+          <div class="chat-msg system">Describe the ${type} you want to create. Be as detailed or brief as you like.</div>
+          ${seedDescription ? `<div class="chat-msg user">${this.esc(seedDescription)}</div><div class="chat-msg ai loading" id="dm-chat-loading">Generating...</div>` : ''}
+        </div>
+        <div class="dm-detail-chat-input-row">
+          <input type="text" id="dm-chat-input" placeholder="e.g. A frost spell that slows enemies..." autocomplete="off" />
+          <button class="btn btn-primary btn-sm" id="btn-dm-chat-send" type="button">Send</button>
+        </div>
+      </div>
+      <div class="dm-detail-json" id="dm-json-section">
+        <textarea id="dm-json-textarea" spellcheck="false"></textarea>
+      </div>
+      <div class="dm-detail-actions">
+        <button class="btn btn-primary btn-sm" id="btn-dm-save" type="button">Save</button>
+        <button class="btn btn-secondary btn-sm" id="btn-dm-toggle-json" type="button">Show JSON</button>
+      </div>
+    `;
+
+    // Wire events
+    const chatInput = this.$('dm-chat-input');
+    if (chatInput) chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') this.dmSendChat(); });
+    this.$('btn-dm-chat-send')?.addEventListener('click', () => this.dmSendChat());
+    this.$('btn-dm-save')?.addEventListener('click', () => this.dmSave());
+    this.$('btn-dm-toggle-json')?.addEventListener('click', () => this.dmToggleJson());
+
+    // If we have a seed description, fire it immediately
+    if (seedDescription) {
+      this._dmAutoGenerate(type, seedDescription);
+    }
+  },
+
+  async _dmAutoGenerate(type, description) {
+    try {
+      const result = await API.generateContent(type, description, null);
+      const loadingEl = this.$('dm-chat-loading');
+      if (loadingEl) loadingEl.remove();
+
+      if (result.json) {
+        const generated = JSON.parse(result.json);
+        this._dmSelectedItem = generated;
+
+        const cardSection = document.querySelector('.dm-detail-card');
+        if (cardSection) cardSection.innerHTML = `<table>${this._dmBuildCardRows(generated, type)}</table>`;
+        const ta = this.$('dm-json-textarea');
+        if (ta) ta.value = JSON.stringify(generated, null, 2);
+
+        const messages = this.$('dm-chat-messages');
+        if (messages) {
+          messages.innerHTML += `<div class="chat-msg ai">Generated! Review above, send more messages to refine, or Save when ready.</div>`;
+          messages.scrollTop = messages.scrollHeight;
+        }
+      }
+    } catch (err) {
+      const loadingEl = this.$('dm-chat-loading');
+      if (loadingEl) loadingEl.remove();
+      const messages = this.$('dm-chat-messages');
+      if (messages) {
+        messages.innerHTML += `<div class="chat-msg system">Error: ${this.esc(err.message)}</div>`;
+      }
+    }
+  },
+
+  wireDmConsole() {
+    const searchInput = this.$('dm-search-input');
+    const searchBtn = this.$('btn-dm-search');
+    const resultsEl = this.$('dm-results');
+
+    // Search on enter or button click
+    if (searchInput) {
+      searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') this.dmSearch(searchInput.value);
+      });
+    }
+    if (searchBtn) {
+      searchBtn.addEventListener('click', () => this.dmSearch(this.$('dm-search-input')?.value || ''));
+    }
+
+    // Delegated click handlers for results
+    if (resultsEl) {
+      resultsEl.addEventListener('click', (e) => {
+        // Quick browse buttons
+        const quickBtn = e.target.closest('[data-dm-quick]');
+        if (quickBtn) {
+          this.dmBrowse(quickBtn.dataset.dmQuick);
+          return;
+        }
+
+        // Create buttons
+        const createBtn = e.target.closest('[data-dm-create]');
+        if (createBtn) {
+          const searchVal = this.$('dm-search-input')?.value || '';
+          this.dmStartCreate(createBtn.dataset.dmCreate, searchVal);
+          return;
+        }
+
+        // Result card click
+        const card = e.target.closest('.dm-result-card');
+        if (card) {
+          const id = card.dataset.dmId;
+          const type = card.dataset.dmType;
+          // Find the item data from the results list
+          const allCards = document.querySelectorAll('.dm-result-card');
+          let idx = 0;
+          for (const c of allCards) {
+            if (c === card) break;
+            idx++;
+          }
+          // Re-fetch to get full data — or find from rendered items
+          this._dmFetchAndSelect(id, type);
+        }
+      });
+    }
+  },
+
+  async _dmFetchAndSelect(id, type) {
+    try {
+      let item;
+      const registryTypes = { spell: 'spells', item: 'items', class: 'classes', race: 'races' };
+      if (registryTypes[type]) {
+        item = await API.getRegistryEntry(registryTypes[type], id);
+      } else if (type === 'player') {
+        item = await API.getPlayer(id);
+      } else if (type === 'room') {
+        item = await API.getRoom(id);
+      } else if (type === 'npc') {
+        // NPCs are nested in rooms — search for it
+        const rooms = await API.getRooms();
+        for (const rm of rooms) {
+          const npc = (rm.npcs || []).find(n => n.id === id);
+          if (npc) { item = npc; item._roomId = rm.id; break; }
+        }
+      }
+      if (item) this.dmSelectItem(item, type);
+    } catch (err) {
+      console.error('Failed to fetch item', err);
+    }
+  },
+
+  // ═══════════════════════════════════════════════════════════
   //  CONTENT REGISTRY TAB
   // ═══════════════════════════════════════════════════════════
 

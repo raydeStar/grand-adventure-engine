@@ -142,6 +142,9 @@
     // Wire up AI logs tab events
     UI.wireLogsTab();
 
+    // Wire up DM Console
+    UI.wireDmConsole();
+
     // Wire up content registry tab
     UI.wireRegistryTab();
 
