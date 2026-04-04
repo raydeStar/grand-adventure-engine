@@ -422,7 +422,18 @@ public class GameEngine : IGameEngine
         if (item is not null)
             return new ActionResult { ActionId = action.Id, Success = true, MechanicalSummary = string.Empty };
 
-        return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"Look target '{action.Target}' was not found in the current room." };
+        // Check player's inventory
+        var invItem = FindNamedEntity(player.Inventory, candidate => candidate.Name, action.Target);
+        if (invItem is not null)
+            return new ActionResult { ActionId = action.Id, Success = true, MechanicalSummary = string.Empty };
+
+        // Check player's equipped items
+        var equippedItems = player.Equipment.AllEquipped();
+        var eqItem = FindNamedEntity(equippedItems, candidate => candidate.Name, action.Target);
+        if (eqItem is not null)
+            return new ActionResult { ActionId = action.Id, Success = true, MechanicalSummary = string.Empty };
+
+        return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"'{action.Target}' was not found in the room or your inventory." };
     }
 
     private async Task<ActionResult> ProcessAttackAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
