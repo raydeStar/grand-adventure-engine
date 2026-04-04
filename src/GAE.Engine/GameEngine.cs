@@ -47,6 +47,18 @@ public class GameEngine : IGameEngine
         if (player is null)
             return new ActionResult { ActionId = action.Id, RawInput = action.RawInput, Success = false, MechanicalSummary = "Player not found." };
 
+        // Dead players can't do anything — they need to be revived first
+        if (!player.IsAlive)
+        {
+            return new ActionResult
+            {
+                ActionId = action.Id,
+                RawInput = action.RawInput,
+                Success = false,
+                MechanicalSummary = $"{player.Name} is dead! You cannot take any actions while dead. An admin must revive you, or another player must use a resurrection ability."
+            };
+        }
+
         // --- Interaction mode routing ---
         // When the player is in a non-explore mode, route through the interaction handler first.
         if (player.Interaction.Mode != InteractionMode.Explore)
@@ -463,7 +475,11 @@ public class GameEngine : IGameEngine
             }
         }
 
-        var attackRoll = _dice.RollAttack(attackMod);
+        // Add level-based proficiency bonus to attack rolls
+        int proficiencyBonus = _rules.Combat.ProficiencyBaseBonus + (player.Level / _rules.Combat.ProficiencyScaleLevel);
+        int totalAttackMod = attackMod + proficiencyBonus;
+
+        var attackRoll = _dice.RollAttack(totalAttackMod);
         int targetDefense = target.Defense ?? _rules.Combat.BaseDefense;
 
         // Determine outcome tier
@@ -1362,20 +1378,41 @@ public class GameEngine : IGameEngine
             }
         }
 
-        // Apply inventory changes — only allow items that exist in the room or a shopkeeper's inventory
+        // Apply inventory changes — prefer known items from room/shop, allow RP-created items if level-appropriate
         foreach (var change in freeForm.InventoryChanges)
         {
             if (string.Equals(change.Action, "add", StringComparison.OrdinalIgnoreCase))
             {
-                // Anti-cheat: only allow adding items that exist in a known source
+                // First try to resolve from a known source (room floor, shopkeeper)
                 var resolved = TryResolveKnownItem(change.ItemName, room);
-                if (resolved is null)
+                if (resolved is not null)
                 {
-                    _logger.LogWarning("Anti-cheat: blocked item addition '{ItemName}' — not found in room or shop inventory for player {PlayerId}",
-                        change.ItemName, player.Id);
-                    continue; // Skip this item — it doesn't exist in a legitimate source
+                    // Known item — use it as-is
+                    resolved.Quantity = Math.Max(1, change.Quantity);
                 }
-                resolved.Quantity = Math.Max(1, change.Quantity);
+                else
+                {
+                    // RP-created item — allow it but level-gate to player level + 1
+                    resolved = new InventoryItem
+                    {
+                        Name = change.ItemName,
+                        Type = ItemType.Misc,
+                        Quantity = Math.Max(1, change.Quantity),
+                        Level = player.Level, // RP items default to current player level
+                        Description = $"Acquired through roleplay interaction."
+                    };
+                    _logger.LogInformation("RP item created: '{ItemName}' (Level {Level}) for player {PlayerId}",
+                        change.ItemName, resolved.Level, player.Id);
+                }
+
+                // Level gate: block items more than 1 level above the player
+                if (resolved.Level > player.Level + 1)
+                {
+                    _logger.LogWarning("Anti-cheat: blocked item '{ItemName}' (Level {ItemLevel}) — too high for player level {PlayerLevel}",
+                        resolved.Name, resolved.Level, player.Level);
+                    continue;
+                }
+
                 player.Inventory.Add(resolved);
                 result.ItemsGained.Add(resolved);
             }
@@ -2118,7 +2155,12 @@ public class GameEngine : IGameEngine
         var weapon = player.Equipment.Weapon;
         string attackStat = weapon?.DamageStat ?? _rules.Combat.MeleeStat;
         int attackMod = player.GetModifier(attackStat);
-        var attackRoll = _dice.RollAttack(attackMod);
+
+        // Add level-based proficiency bonus to attack rolls
+        int proficiencyBonus = _rules.Combat.ProficiencyBaseBonus + (player.Level / _rules.Combat.ProficiencyScaleLevel);
+        int totalAttackMod = attackMod + proficiencyBonus;
+
+        var attackRoll = _dice.RollAttack(totalAttackMod);
         int targetDefense = target.Defense ?? _rules.Combat.BaseDefense;
 
         // Determine outcome tier
@@ -2982,9 +3024,10 @@ public class GameEngine : IGameEngine
 
     // --- P1: Mechanical Use / Consume ---
 
-    private static readonly System.Text.RegularExpressions.Regex EffectHpRegex = new(@"[Rr]estores?\s+(\d+)\s*(?:HP|hit\s*points?|health)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-    private static readonly System.Text.RegularExpressions.Regex EffectMpRegex = new(@"[Rr]estores?\s+(\d+)\s*(?:MP|mana|magic)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-    private static readonly System.Text.RegularExpressions.Regex EffectDamageRegex = new(@"[Dd]eals?\s+(\d+)\s*(?:damage|HP\s*damage)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    // Matches both flat numbers ("Restores 25 HP") and dice expressions ("Restores 2d4+2 HP")
+    private static readonly System.Text.RegularExpressions.Regex EffectHpRegex = new(@"[Rr]estores?\s+((?:\d+d\d+(?:[+\-]\d+)?|\d+))\s*(?:HP|hit\s*points?|health)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    private static readonly System.Text.RegularExpressions.Regex EffectMpRegex = new(@"[Rr]estores?\s+((?:\d+d\d+(?:[+\-]\d+)?|\d+))\s*(?:MP|mana|magic)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    private static readonly System.Text.RegularExpressions.Regex EffectDamageRegex = new(@"[Dd]eals?\s+((?:\d+d\d+(?:[+\-]\d+)?|\d+))\s*(?:damage|HP\s*damage)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
     /// <summary>
     /// Handles the "use" command mechanically for consumable items.
@@ -3054,8 +3097,12 @@ public class GameEngine : IGameEngine
         };
     }
 
-    /// <summary>Parses an item's Effect string into mechanical HP/MP deltas.</summary>
-    private static (int HpDelta, int MpDelta) ParseItemEffect(string? effect)
+    /// <summary>
+    /// Parses an item's Effect string into mechanical HP/MP deltas.
+    /// Supports both flat numbers ("Restores 25 HP") and dice expressions ("Restores 2d4+2 HP").
+    /// Dice expressions are rolled via the dice service; flat numbers are used directly.
+    /// </summary>
+    private (int HpDelta, int MpDelta) ParseItemEffect(string? effect)
     {
         if (string.IsNullOrWhiteSpace(effect))
             return (0, 0);
@@ -3063,18 +3110,30 @@ public class GameEngine : IGameEngine
         int hp = 0, mp = 0;
 
         var hpMatch = EffectHpRegex.Match(effect);
-        if (hpMatch.Success && int.TryParse(hpMatch.Groups[1].Value, out var hpVal))
-            hp = hpVal;
+        if (hpMatch.Success)
+            hp = ResolveEffectValue(hpMatch.Groups[1].Value);
 
         var mpMatch = EffectMpRegex.Match(effect);
-        if (mpMatch.Success && int.TryParse(mpMatch.Groups[1].Value, out var mpVal))
-            mp = mpVal;
+        if (mpMatch.Success)
+            mp = ResolveEffectValue(mpMatch.Groups[1].Value);
 
         var dmgMatch = EffectDamageRegex.Match(effect);
-        if (dmgMatch.Success && int.TryParse(dmgMatch.Groups[1].Value, out var dmgVal))
-            hp = -dmgVal;
+        if (dmgMatch.Success)
+            hp = -ResolveEffectValue(dmgMatch.Groups[1].Value);
 
         return (hp, mp);
+    }
+
+    /// <summary>Resolves a value that may be a flat integer or a dice expression like "2d4+2".</summary>
+    private int ResolveEffectValue(string value)
+    {
+        if (int.TryParse(value, out var flat))
+            return flat;
+
+        // It's a dice expression — roll it
+        var roll = _dice.Roll(value, "Item effect");
+        _logger.LogInformation("Rolled item effect '{Expression}' = {Total}", value, roll.Total);
+        return Math.Max(1, roll.Total);
     }
 
     // --- P3: Buy / Sell System ---
@@ -3096,6 +3155,10 @@ public class GameEngine : IGameEngine
         var shopItem = FindNamedEntity(shopkeeper.ShopInventory, i => i.Name, action.Target);
         if (shopItem is null)
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"The shop doesn't have any '{action.Target}' for sale." };
+
+        // Level gate: block items more than 1 level above the player
+        if (shopItem.Level > player.Level + 1)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"{shopItem.Name} requires level {shopItem.Level - 1} to purchase, but you're only level {player.Level}." };
 
         int price = shopItem.Value;
         if (price <= 0) price = 1;

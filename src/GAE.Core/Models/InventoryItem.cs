@@ -18,6 +18,12 @@ public class InventoryItem
     public string? Effect { get; set; }
 
     /// <summary>
+    /// The item's level, used for level-gating. Players can only acquire items
+    /// up to (their level + 1). Items without an explicit level default to 1.
+    /// </summary>
+    public int Level { get; set; } = 1;
+
+    /// <summary>
     /// Stat bonuses granted while this item is equipped.
     /// Keys are lowercase stat names (str, dex, con, int, wis, cha, luck).
     /// Values are the flat bonus (e.g. +2).

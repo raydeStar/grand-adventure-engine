@@ -45,6 +45,14 @@ public class CombatConfig
     public int BaseDefense { get; set; } = 10;
     public string DefenseFormula { get; set; } = "base_defense + dex_mod + {armor_value}";
     public string InitiativeFormula { get; set; } = "d20 + dex_mod";
+
+    /// <summary>
+    /// Level-based proficiency bonus added to attack rolls.
+    /// Formula: floor(Level / ProficiencyScaleLevel) + ProficiencyBaseBonus.
+    /// Default: +2 base, +1 per 4 levels (Level 5 = +3, Level 9 = +4).
+    /// </summary>
+    public int ProficiencyBaseBonus { get; set; } = 2;
+    public int ProficiencyScaleLevel { get; set; } = 4;
 }
 
 public class SkillCheckConfig
