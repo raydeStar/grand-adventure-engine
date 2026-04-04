@@ -7,7 +7,14 @@ character_creation:
   flat_value: 10
   starting_hp_formula: "base + con_mod"
   starting_mp_formula: "base + int_mod"
-  starting_gold: 50
+  starting_gold: 150
+  starting_level: 5
+  starting_items:
+    - "Iron Sword"
+    - "Leather Armor"
+    - "Minor Healing Potion"
+    - "Minor Healing Potion"
+    - "Torch"
 
 stats:
   hp:

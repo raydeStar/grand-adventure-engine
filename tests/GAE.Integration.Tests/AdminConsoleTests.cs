@@ -170,7 +170,8 @@ public class AdminConsoleTests : IClassFixture<GaeWebApplicationFactory>
 
         Assert.Equal(25, player.GetProperty("gold").GetInt32());
         Assert.Equal(30, player.GetProperty("xp").GetInt32());
-        Assert.Equal("Debug Blade", player.GetProperty("equipment").GetProperty("weapon").GetProperty("name").GetString());
+        // Debug Blade goes to off-hand because starting Iron Sword occupies main hand
+        Assert.Equal("Debug Blade", player.GetProperty("equipment").GetProperty("offHand").GetProperty("name").GetString());
         Assert.Contains(player.GetProperty("statusEffects").EnumerateArray(), effect => effect.GetProperty("name").GetString() == "Inspired");
     }
 

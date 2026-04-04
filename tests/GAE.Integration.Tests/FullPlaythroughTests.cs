@@ -326,8 +326,8 @@ public class FullPlaythroughTests : IClassFixture<GaeWebApplicationFactory>
         Assert.Equal(15, player.Str);
         Assert.Equal(13, player.Dex);
 
-        // Base defense: 10 + 1 (DEX) = 11
-        Assert.Equal(11, player.Defense);
+        // Base defense: 10 + 1 (DEX) + 2 (starting Leather Armor) = 13
+        Assert.Equal(13, player.Defense);
 
         // Grant OP gear via admin and equip
         var adminClient = _factory.CreateAdminClient();

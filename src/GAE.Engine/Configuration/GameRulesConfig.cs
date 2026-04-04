@@ -19,6 +19,8 @@ public class CharacterCreationConfig
     public string StartingHpFormula { get; set; } = "base + con_mod";
     public string StartingMpFormula { get; set; } = "base + int_mod";
     public int StartingGold { get; set; } = 50;
+    public int StartingLevel { get; set; } = 5;
+    public List<string> StartingItems { get; set; } = [];
 }
 
 public class StatConfig

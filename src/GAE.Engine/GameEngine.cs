@@ -17,9 +17,6 @@ public class GameEngine : IGameEngine
     private readonly IWikiService? _wiki;
     private readonly IContentRegistryService? _registry;
 
-    // Anti-cheat: maximum stat gains allowed from free-form LLM actions per turn
-    private const int MaxFreeFormGoldGain = 10;
-    private const int MaxFreeFormXpGain = 25;
 
     public GameEngine(
         IStateManager stateManager,
@@ -203,13 +200,23 @@ public class GameEngine : IGameEngine
         player.Cha = statMap.GetValueOrDefault("cha", 10);
         player.Luck = statMap.GetValueOrDefault("luck", 10);
 
-        // Calculate HP/MP from rules
+        // Set starting level
+        player.Level = _rules.CharacterCreation.StartingLevel;
+
+        // Calculate HP/MP from rules — scale with level
         int hpBase = _rules.Stats.GetValueOrDefault("hp")?.Base ?? 20;
         int mpBase = _rules.Stats.GetValueOrDefault("mp")?.Base ?? 10;
-        player.MaxHp = hpBase + PlayerCharacter.GetStatModifier(player.Con);
+        int conMod = PlayerCharacter.GetStatModifier(player.Con);
+        int intMod = PlayerCharacter.GetStatModifier(player.Int);
+        // Each level above 1 adds (5 + CON mod) HP and (3 + INT mod) MP
+        int bonusLevels = Math.Max(0, player.Level - 1);
+        player.MaxHp = hpBase + conMod + bonusLevels * (5 + Math.Max(0, conMod));
         player.Hp = player.MaxHp;
-        player.MaxMp = mpBase + PlayerCharacter.GetStatModifier(player.Int);
+        player.MaxMp = mpBase + intMod + bonusLevels * (3 + Math.Max(0, intMod));
         player.Mp = player.MaxMp;
+
+        // Grant starting items from the registry / lore seed
+        await GrantStartingItemsAsync(player, ct);
 
         // Generate backstory if narrator is available
         try
@@ -225,6 +232,91 @@ public class GameEngine : IGameEngine
         await _stateManager.SavePlayerAsync(player, ct);
         _logger.LogInformation("Created character {Name} ({Race} {Class}) for {Id}", player.Name, player.Race, player.Class, player.Id);
         return player;
+    }
+
+    /// <summary>
+    /// Grants starting items to a new character by looking them up in the item registry
+    /// or shop inventories from the starting room. Auto-equips weapons and armor.
+    /// </summary>
+    private async Task GrantStartingItemsAsync(PlayerCharacter player, CancellationToken ct)
+    {
+        if (_rules.CharacterCreation.StartingItems.Count == 0) return;
+
+        // Try to resolve items from the registry first
+        foreach (var itemName in _rules.CharacterCreation.StartingItems)
+        {
+            InventoryItem? item = null;
+
+            // Check registry
+            if (_registry is not null)
+            {
+                var template = _registry.Items.GetAll()
+                    .FirstOrDefault(t => t.Name.Equals(itemName, StringComparison.OrdinalIgnoreCase));
+                if (template is not null)
+                    item = template.ToInventoryItem();
+            }
+
+            // Fallback: check starting room's shop inventories
+            if (item is null)
+            {
+                var spawnRoom = await _stateManager.GetPlayerRoomAsync(player.Id, "spawn", ct);
+                if (spawnRoom is not null)
+                    item = TryResolveKnownItem(itemName, spawnRoom);
+
+                // Also check all connected rooms' shops (blacksmith, general store, etc.)
+                if (item is null && spawnRoom is not null)
+                {
+                    foreach (var exitRoomId in spawnRoom.Exits.Values)
+                    {
+                        var exitRoom = await _stateManager.GetPlayerRoomAsync(player.Id, exitRoomId, ct);
+                        if (exitRoom is not null)
+                        {
+                            item = TryResolveKnownItem(itemName, exitRoom);
+                            if (item is not null) break;
+
+                            // Check rooms one more level deep (e.g., town_square -> blacksmith)
+                            foreach (var deepExitId in exitRoom.Exits.Values)
+                            {
+                                var deepRoom = await _stateManager.GetPlayerRoomAsync(player.Id, deepExitId, ct);
+                                if (deepRoom is not null)
+                                {
+                                    item = TryResolveKnownItem(itemName, deepRoom);
+                                    if (item is not null) break;
+                                }
+                            }
+                            if (item is not null) break;
+                        }
+                    }
+                }
+            }
+
+            if (item is not null)
+            {
+                // Auto-equip weapons and armor, put everything else in inventory
+                if (item.IsEquippable)
+                {
+                    var slotName = player.Equipment.Equip(item, out _);
+                    if (slotName is null)
+                        player.Inventory.Add(item); // Slot taken, put in backpack
+                }
+                else
+                {
+                    // Stack consumables
+                    var existing = player.Inventory.FirstOrDefault(i =>
+                        string.Equals(i.Name, item.Name, StringComparison.OrdinalIgnoreCase));
+                    if (existing is not null)
+                        existing.Quantity++;
+                    else
+                        player.Inventory.Add(item);
+                }
+
+                _logger.LogInformation("Granted starting item '{ItemName}' to {PlayerId}", itemName, player.Id);
+            }
+            else
+            {
+                _logger.LogWarning("Could not resolve starting item '{ItemName}' from registry or shops", itemName);
+            }
+        }
     }
 
     public async Task<CombatState?> GetActiveCombatAsync(string roomId, CancellationToken ct = default)
@@ -1208,7 +1300,9 @@ public class GameEngine : IGameEngine
             Narration = freeForm.Narration
         };
 
-        // Apply stat changes — with anti-cheat guardrails
+        // Apply stat changes — only HP, MP, gold, XP are allowed from free-form.
+        // Gold and XP gains are passed through (the LLM prompt handles legitimacy),
+        // but we log large values for monitoring.
         foreach (var (stat, delta) in freeForm.StatChanges)
         {
             switch (stat.ToLowerInvariant())
@@ -1224,29 +1318,23 @@ public class GameEngine : IGameEngine
                     result.StateChanges.Add(new StateChange { EntityType = "player", EntityId = player.Id, Property = "mp", OldValue = oldMp.ToString(), NewValue = player.Mp.ToString() });
                     break;
                 case "gold":
-                    // Anti-cheat: cap gold gains from free-form at 10 per action.
-                    // Legitimate gold comes from buy/sell/loot mechanics, not free-form narration.
-                    var clampedGoldDelta = delta > 0 ? Math.Min(delta, MaxFreeFormGoldGain) : delta;
-                    if (delta > MaxFreeFormGoldGain)
-                        _logger.LogWarning("Anti-cheat: clamped gold gain from {Requested} to {Max} for player {PlayerId} (action: {Action})",
-                            delta, MaxFreeFormGoldGain, player.Id, action.RawInput);
                     var oldGold = player.Gold;
-                    player.Gold = Math.Max(0, player.Gold + clampedGoldDelta);
-                    result.GoldChange += clampedGoldDelta;
+                    player.Gold = Math.Max(0, player.Gold + delta);
+                    result.GoldChange += delta;
+                    if (delta > 50)
+                        _logger.LogWarning("Large gold change from free-form: {Delta} for player {PlayerId} (action: {Action})", delta, player.Id, action.RawInput);
                     result.StateChanges.Add(new StateChange { EntityType = "player", EntityId = player.Id, Property = "gold", OldValue = oldGold.ToString(), NewValue = player.Gold.ToString() });
                     break;
                 case "xp":
-                    // Anti-cheat: cap XP gains from free-form at 25 per action.
-                    var clampedXpDelta = delta > 0 ? Math.Min(delta, MaxFreeFormXpGain) : delta;
-                    if (delta > MaxFreeFormXpGain)
-                        _logger.LogWarning("Anti-cheat: clamped XP gain from {Requested} to {Max} for player {PlayerId}", delta, MaxFreeFormXpGain, player.Id);
                     var oldXp = player.Xp;
-                    player.Xp = Math.Max(0, player.Xp + clampedXpDelta);
-                    result.XpGained += Math.Max(0, clampedXpDelta);
+                    player.Xp = Math.Max(0, player.Xp + delta);
+                    result.XpGained += Math.Max(0, delta);
+                    if (delta > 100)
+                        _logger.LogWarning("Large XP change from free-form: {Delta} for player {PlayerId}", delta, player.Id);
                     result.StateChanges.Add(new StateChange { EntityType = "player", EntityId = player.Id, Property = "xp", OldValue = oldXp.ToString(), NewValue = player.Xp.ToString() });
                     break;
                 default:
-                    // Anti-cheat: block all other stat modifications from free-form
+                    // Block arbitrary stat modifications (str, dex, etc.) from free-form
                     _logger.LogWarning("Anti-cheat: blocked stat change '{Stat}' = {Delta} from free-form for player {PlayerId}", stat, delta, player.Id);
                     break;
             }

@@ -665,19 +665,21 @@ public class NarratorService : INarratorService
             ANTI-CHEAT — ABSOLUTE RULES (NEVER BREAK THESE):
             - Players CANNOT conjure, create, duplicate, wish for, or manifest gold, items, or resources
               from nothing. No magic, no tricks, no loopholes. Gold is ONLY gained by: finding it on the
-              ground (room items), looting enemies, selling items to shopkeepers, or receiving quest rewards.
+              ground (room items), looting enemies, selling items to shopkeepers, or receiving quest rewards
+              from NPCs. The gold must EXIST somewhere — it cannot be invented.
             - Players CANNOT grant themselves stat boosts, heal themselves for free, or modify their own
-              character sheet through narration alone.
+              character sheet through narration alone. No "I cast a spell to boost my strength." No "I
+              meditate and gain 1000 XP." These are not real game actions.
             - If a player tries to cheat (creating gold, spawning items, self-buffing), narrate a FUNNY
               failure. The universe rejects their attempt in an entertaining way. Set "success": false and
-              leave statChanges/inventoryChanges EMPTY.
-            - Gold changes from free-form actions should be TINY (1-10 gold) and only from legitimate
-              sources like finding coins in a drawer, not conjuring wealth.
-            - Players can only receive items that ALREADY EXIST in the room or from a shopkeeper's
-              inventory. Never create new items just because the player asked.
-            - The LLM DOES NOT have authority to add items or gold. Only the game engine does, through
-              legitimate game mechanics (buy, take, loot). If the player wants to buy something, tell them
-              to use "shop" and "buy <item>" commands.
+              leave statChanges/inventoryChanges EMPTY. Be creative — maybe the gold turns to ash, the
+              spell backfires comically, or a cosmic auditor appears to revoke the transaction.
+            - Players can only receive items that ALREADY EXIST in the room items list or from a
+              shopkeeper's inventory. Never create new items just because the player asked. The engine
+              will reject items it cannot verify.
+            - If the player wants to buy something, tell them to use "shop" and "buy <item>" commands.
+              Do NOT add items via inventoryChanges for purchases — the buy system handles gold deduction
+              and proper item stats.
 
             Respond with ONLY valid JSON in this exact shape (no markdown, no code fences):
             {
