@@ -954,7 +954,13 @@ public class DashboardController : ControllerBase
                 Name = npcName,
                 Personality = npcRequest.Personality?.Trim() ?? "Test fixture",
                 Faction = string.IsNullOrWhiteSpace(npcRequest.Faction) ? "neutral" : npcRequest.Faction.Trim(),
-                IsHostile = npcRequest.IsHostile
+                IsHostile = npcRequest.IsHostile,
+                Hp = npcRequest.Hp,
+                MaxHp = npcRequest.MaxHp ?? npcRequest.Hp,
+                AttackBonus = npcRequest.AttackBonus,
+                DamageDice = npcRequest.DamageDice,
+                Defense = npcRequest.Defense,
+                Level = npcRequest.Level
             });
         }
 
@@ -1598,4 +1604,10 @@ public class RoomFixtureNpcRequest
     public string? Personality { get; set; }
     public string? Faction { get; set; }
     public bool IsHostile { get; set; }
+    public int? Hp { get; set; }
+    public int? MaxHp { get; set; }
+    public int? AttackBonus { get; set; }
+    public string? DamageDice { get; set; }
+    public int? Defense { get; set; }
+    public int Level { get; set; } = 1;
 }
