@@ -547,7 +547,13 @@ public class GameEngine : IGameEngine
         {
             result.MechanicalSummary += $"\n{target.Name} has been defeated!";
 
-            // Loot drop
+            // XP reward
+            int xpGain = target.Level * 10;
+            player.Xp += xpGain;
+            result.XpGained = xpGain;
+            result.MechanicalSummary += $"\nYou gain {xpGain} XP!";
+
+            // Gold loot drop
             if (_dice.Roll("1d100", "Loot check").Total <= (int)(_rules.Loot.EnemyDropChance * 100))
             {
                 var goldDrop = _dice.Roll("1d20", "Gold drop");
@@ -555,6 +561,15 @@ public class GameEngine : IGameEngine
                 player.Gold += goldAmount;
                 result.GoldChange = goldAmount;
                 result.MechanicalSummary += $"\nYou find {goldAmount} gold!";
+            }
+
+            // Drop NPC loot table items
+            foreach (var lootItem in target.LootTable)
+            {
+                var clone = CloneInventoryItem(lootItem, Math.Max(1, lootItem.Quantity));
+                player.Inventory.Add(clone);
+                result.ItemsGained.Add(clone);
+                result.MechanicalSummary += $"\nYou receive {lootItem.Name}!";
             }
 
             room.Npcs.Remove(target);
@@ -2297,6 +2312,15 @@ public class GameEngine : IGameEngine
                     totalGold += goldAmount;
                 }
 
+                // Drop NPC loot table items
+                foreach (var lootItem in target.LootTable)
+                {
+                    var clone = CloneInventoryItem(lootItem, Math.Max(1, lootItem.Quantity));
+                    player.Inventory.Add(clone);
+                    totalLoot.Add(clone);
+                    mechanicalParts.Add($"You receive {lootItem.Name}!");
+                }
+
                 room.Npcs.Remove(target);
                 combat?.TurnOrder.RemoveAll(t => t.Id == target.Id);
                 PublishEventToWikiInBackground(target.Id, "npc", $"{target.Name} Defeated",
@@ -2392,6 +2416,7 @@ public class GameEngine : IGameEngine
             StateChanges = allStateChanges,
             XpGained = totalXp,
             GoldChange = totalGold,
+            ItemsGained = totalLoot,
             InteractionUpdate = new InteractionUpdate
             {
                 Mode = combatStatus == "ongoing" ? InteractionMode.Combat : InteractionMode.Explore,
