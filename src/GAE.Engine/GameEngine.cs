@@ -447,10 +447,21 @@ public class GameEngine : IGameEngine
         if (target is null)
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"Attack target '{action.Target}' was not found in the current room." };
 
-        // Determine attack stat
+        // Determine attack stat — caster classes use the higher of melee stat or magic stat
         var weapon = player.Equipment.Weapon;
         string attackStat = weapon?.DamageStat ?? _rules.Combat.MeleeStat;
         int attackMod = player.GetModifier(attackStat);
+
+        // If the player's class is a caster and using default melee stat, let them use magic stat if it's better
+        if (weapon?.DamageStat is null && IsCasterClass(player.Class))
+        {
+            int magicMod = player.GetModifier(_rules.Combat.MagicStat);
+            if (magicMod > attackMod)
+            {
+                attackStat = _rules.Combat.MagicStat;
+                attackMod = magicMod;
+            }
+        }
 
         var attackRoll = _dice.RollAttack(attackMod);
         int targetDefense = target.Defense ?? _rules.Combat.BaseDefense;
@@ -1697,6 +1708,14 @@ public class GameEngine : IGameEngine
 
         return sorted;
     }
+
+    private static readonly HashSet<string> CasterClasses = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Mage", "Wizard", "Sorcerer", "Warlock", "Druid", "Cleric", "Necromancer", "Bard"
+    };
+
+    private static bool IsCasterClass(string? className) =>
+        !string.IsNullOrEmpty(className) && CasterClasses.Contains(className);
 
     private static string NormalizeLookupText(string? value)
     {

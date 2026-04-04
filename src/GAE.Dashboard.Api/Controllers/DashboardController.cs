@@ -22,6 +22,7 @@ public class DashboardController : ControllerBase
     private readonly IConfiguration _configuration;
     private readonly WorldSeedConfig _worldSeedConfig;
     private readonly IContentRegistryService _registry;
+    private readonly IDiscordNotifier? _discordNotifier;
 
     private static readonly TimeSpan NarratorCacheDuration = TimeSpan.FromSeconds(60);
     private static object? _narratorCachedResult;
@@ -37,7 +38,8 @@ public class DashboardController : ControllerBase
         IHttpClientFactory httpClientFactory,
         IConfiguration configuration,
         WorldSeedConfig worldSeedConfig,
-        IContentRegistryService registry)
+        IContentRegistryService registry,
+        IDiscordNotifier? discordNotifier = null)
     {
         _stateManager = stateManager;
         _engine = engine;
@@ -49,6 +51,7 @@ public class DashboardController : ControllerBase
         _configuration = configuration;
         _worldSeedConfig = worldSeedConfig;
         _registry = registry;
+        _discordNotifier = discordNotifier;
     }
 
     [HttpGet("players")]
@@ -183,7 +186,69 @@ public class DashboardController : ControllerBase
 
         var action = _engine.ParseCommand(request.PlayerId, request.Command);
         var result = await _engine.ProcessActionAsync(request.PlayerId, action, ct);
+
+        // Mirror the result to the player's Discord thread (if they have one)
+        if (_discordNotifier is not null)
+        {
+            try
+            {
+                var discordMsg = FormatActionForDiscord(request.Command, result);
+                if (!string.IsNullOrEmpty(discordMsg))
+                    await _discordNotifier.PostToPlayerThreadAsync(request.PlayerId, discordMsg, ct);
+            }
+            catch { /* Discord notification is best-effort */ }
+        }
+
         return Ok(result);
+    }
+
+    private static string FormatActionForDiscord(string command, Core.Models.ActionResult result)
+    {
+        var sb = new System.Text.StringBuilder();
+
+        // Header — show what command was run (from dashboard)
+        sb.AppendLine($"📋 **[Dashboard]** `{command}`");
+
+        // Mechanical outcome
+        if (!string.IsNullOrWhiteSpace(result.MechanicalSummary))
+        {
+            var icon = result.Success ? "✅" : "❌";
+            var summary = result.MechanicalSummary;
+            // Truncate shop listings to keep Discord tidy
+            if (summary.Length > 300)
+                summary = summary[..297] + "...";
+            sb.AppendLine($"{icon} {summary}");
+        }
+
+        // Dice rolls
+        foreach (var roll in result.DiceRolls)
+        {
+            if (!string.IsNullOrWhiteSpace(roll.Purpose))
+                sb.AppendLine($"🎲 {roll.Purpose} = {roll.Total} ({roll.Outcome})");
+            else if (roll.Total > 0)
+                sb.AppendLine($"🎲 Roll: {roll.Total} ({roll.Outcome})");
+        }
+
+        // Rewards
+        if (result.GoldChange != 0)
+            sb.AppendLine($"💰 Gold: {result.GoldChange:+#;-#}");
+        if (result.XpGained > 0)
+            sb.AppendLine($"⭐ XP: +{result.XpGained}");
+        foreach (var item in result.ItemsGained)
+            sb.AppendLine($"📦 Gained: {item.Name}");
+        foreach (var item in result.ItemsLost)
+            sb.AppendLine($"📤 Lost: {item.Name}");
+
+        // Narration
+        if (!string.IsNullOrWhiteSpace(result.Narration))
+        {
+            var narration = result.Narration.Length > 500
+                ? result.Narration[..497] + "..."
+                : result.Narration;
+            sb.AppendLine($"\n*{narration}*");
+        }
+
+        return sb.ToString().TrimEnd();
     }
 
     [HttpPost("characters")]

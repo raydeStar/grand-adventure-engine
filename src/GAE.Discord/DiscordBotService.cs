@@ -13,7 +13,7 @@ namespace GAE.Discord;
 /// Discord bot service — manages player threads, embeds, slash commands,
 /// AI character creation, conversation mode, admin commands, and narrator fallback.
 /// </summary>
-public class DiscordBotService : IHostedService
+public class DiscordBotService : IHostedService, IDiscordNotifier
 {
     private readonly DiscordSocketClient _client;
     private readonly IGameEngine _engine;
@@ -1374,6 +1374,35 @@ public class DiscordBotService : IHostedService
         {
             _logger.LogWarning(ex, "Failed to post to admin channel");
         }
+    }
+
+    // ==================== IDiscordNotifier ====================
+
+    async Task IDiscordNotifier.PostToPlayerThreadAsync(string playerId, string message, CancellationToken ct)
+    {
+        try
+        {
+            var player = await _stateManager.GetPlayerAsync(playerId, ct);
+            if (player?.ThreadId is null) return;
+
+            foreach (var guild in _client.Guilds)
+            {
+                if (guild.GetChannel(player.ThreadId.Value) is SocketThreadChannel thread)
+                {
+                    await thread.SendMessageAsync(message);
+                    return;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to post to player thread for {PlayerId}", playerId);
+        }
+    }
+
+    async Task IDiscordNotifier.PostToAdminChannelAsync(string message, CancellationToken ct)
+    {
+        await PostToAdminChannelAsync(message);
     }
 
     private static async Task SendChunkedAsync(IMessageChannel channel, string text)

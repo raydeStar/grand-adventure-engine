@@ -97,26 +97,17 @@ public class EquipmentLoadout
                 }
                 else
                 {
-                    // One-handed: main hand first, then off-hand if main is full
+                    // One-handed: always goes to main hand — the new weapon is what the player wants to wield
                     if (MainHand is null)
                     {
                         MainHand = item;
                     }
-                    else if (MainHand.IsTwoHanded)
-                    {
-                        // Replacing a two-handed weapon
-                        displaced.Add(MainHand);
-                        MainHand = item;
-                    }
-                    else if (OffHand is null)
-                    {
-                        OffHand = item;
-                    }
                     else
                     {
-                        // Both hands full — replace main hand
+                        // Displace current main hand (whether one-handed or two-handed)
                         displaced.Add(MainHand);
                         MainHand = item;
+                        // If old weapon was two-handed, off-hand is already null; nothing extra to do
                     }
                 }
                 return "Weapon";

@@ -133,13 +133,15 @@ builder.Services.AddSingleton(new DiscordSocketConfig { GatewayIntents = Discord
 builder.Services.AddSingleton<DiscordSocketClient>();
 if (!string.IsNullOrEmpty(discordToken) && discordToken != "YOUR_DISCORD_BOT_TOKEN_HERE")
 {
-    builder.Services.AddHostedService(sp => new DiscordBotService(
+    builder.Services.AddSingleton<DiscordBotService>(sp => new DiscordBotService(
         sp.GetRequiredService<DiscordSocketClient>(),
         sp.GetRequiredService<IGameEngine>(),
         sp.GetRequiredService<IStateManager>(),
         sp.GetRequiredService<INarratorService>(),
         sp.GetRequiredService<ILogger<DiscordBotService>>(),
         discordToken));
+    builder.Services.AddHostedService(sp => sp.GetRequiredService<DiscordBotService>());
+    builder.Services.AddSingleton<IDiscordNotifier>(sp => sp.GetRequiredService<DiscordBotService>());
 }
 
 // SignalR + Controllers
