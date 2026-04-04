@@ -105,29 +105,59 @@ rooms:
         personality: "Blunt, loud, and proud of her work. An orc blacksmith who settled in Thornwall after retiring from mercenary life. Respects fighters. Finds rogues amusing. Will give discounts to people who impress her."
         faction: "merchants_guild"
         knowledge_scopes: ["weapons", "armor", "combat", "mercenary_life"]
-    items:
-      - id: "thunderstrike_blade"
-        name: "Thunderstrike Blade"
-        description: "A longsword that crackles with blue lightning. Korga's masterwork — she's been looking for someone worthy to carry it."
-        type: "Weapon"
-        damage_dice: "3d8+5"
-        damage_stat: "str"
-        value: 500
-        is_equippable: true
-      - id: "ironbark_plate"
-        name: "Ironbark Plate Armor"
-        description: "Armor forged from ironwood and tempered steel. Light enough to move in, tough enough to stop a troll's claw."
-        type: "Armor"
-        armor_value: 6
-        value: 400
-        is_equippable: true
-      - id: "starfall_shield"
-        name: "Starfall Shield"
-        description: "A round shield inlaid with a meteor fragment. Glows faintly in the dark."
-        type: "Shield"
-        armor_value: 4
-        value: 250
-        is_equippable: true
+        is_shopkeeper: true
+        shop_inventory:
+          - id: "thunderstrike_blade"
+            name: "Thunderstrike Blade"
+            description: "A longsword that crackles with blue lightning. Korga's masterwork — she's been looking for someone worthy to carry it."
+            type: "Weapon"
+            damage_dice: "3d8+5"
+            damage_stat: "str"
+            value: 500
+            is_equippable: true
+          - id: "ironbark_plate"
+            name: "Ironbark Plate Armor"
+            description: "Armor forged from ironwood and tempered steel. Light enough to move in, tough enough to stop a troll's claw."
+            type: "Armor"
+            armor_value: 6
+            value: 400
+            is_equippable: true
+          - id: "starfall_shield"
+            name: "Starfall Shield"
+            description: "A round shield inlaid with a meteor fragment. Glows faintly in the dark."
+            type: "Shield"
+            armor_value: 4
+            value: 250
+            is_equippable: true
+          - id: "iron_sword"
+            name: "Iron Sword"
+            description: "A simple but reliable blade. Good for beginners."
+            type: "Weapon"
+            damage_dice: "1d6+1"
+            damage_stat: "str"
+            value: 25
+            is_equippable: true
+          - id: "leather_armor"
+            name: "Leather Armor"
+            description: "Sturdy leather armor. Won't stop a giant, but it's better than nothing."
+            type: "Armor"
+            armor_value: 2
+            value: 15
+            is_equippable: true
+          - id: "wooden_shield"
+            name: "Wooden Shield"
+            description: "A basic wooden shield, reinforced with iron bands."
+            type: "Shield"
+            armor_value: 1
+            value: 10
+            is_equippable: true
+          - id: "iron_helmet"
+            name: "Iron Helmet"
+            description: "A plain iron helmet. Protects the important bits."
+            type: "Helmet"
+            armor_value: 1
+            value: 20
+            is_equippable: true
     environment_tags: ["indoor", "safe", "lit", "forge", "hot"]
 
   - id: "general_store"
@@ -145,28 +175,55 @@ rooms:
         personality: "Cheerful, fast-talking, and a shameless haggler. A halfling with big dreams and bigger prices. Friendly to everyone because everyone is a potential customer. Secretly terrified of the forest."
         faction: "merchants_guild"
         knowledge_scopes: ["trade", "supplies", "rumors", "town"]
-    items:
-      - id: "healing_potion_1"
-        name: "Greater Healing Potion"
-        description: "A thick red liquid that tastes like cherries and regret. Restores a massive amount of health."
-        type: "Potion"
-        value: 50
-        is_consumable: true
-        effect: "Restores 30 HP"
-        quantity: 3
-      - id: "mana_potion_1"
-        name: "Azure Mana Draught"
-        description: "A shimmering blue potion. Tastes like a thunderstorm."
-        type: "Potion"
-        value: 40
-        is_consumable: true
-        effect: "Restores 20 MP"
-        quantity: 2
-      - id: "dungeon_key_hint"
-        name: "Old Journal Page"
-        description: "A torn page from an explorer's journal. It mentions a hidden passage in the dungeon depths, behind a statue of a boar."
-        type: "QuestItem"
-        value: 5
+        is_shopkeeper: true
+        shop_inventory:
+          - id: "healing_potion_1"
+            name: "Greater Healing Potion"
+            description: "A thick red liquid that tastes like cherries and regret. Restores a massive amount of health."
+            type: "Potion"
+            value: 50
+            is_consumable: true
+            effect: "Restores 30 HP"
+            quantity: 3
+          - id: "torch_1"
+            name: "Torch"
+            description: "A simple torch. Lights the way in dark places."
+            type: "Misc"
+            value: 2
+            quantity: 5
+          - id: "minor_healing_potion"
+            name: "Minor Healing Potion"
+            description: "A small vial of red liquid. Not as strong as the good stuff, but it'll do in a pinch."
+            type: "Potion"
+            value: 15
+            is_consumable: true
+            effect: "Restores 2d4+2 HP"
+            quantity: 5
+          - id: "antidote_1"
+            name: "Antidote"
+            description: "A bitter green liquid that neutralizes most common poisons."
+            type: "Potion"
+            value: 10
+            is_consumable: true
+            effect: "Cures poison"
+            quantity: 3
+          - id: "rope_1"
+            name: "Rope"
+            description: "Fifty feet of sturdy hemp rope. Every adventurer needs one."
+            type: "Misc"
+            value: 5
+          - id: "rations_1"
+            name: "Rations"
+            description: "Dried meat, hardtack, and a questionable cheese. Keeps you alive."
+            type: "Misc"
+            value: 3
+            is_consumable: true
+            quantity: 10
+          - id: "lockpick_set"
+            name: "Lockpick Set"
+            description: "A leather case containing picks and tension wrenches. For 'legitimate' use only."
+            type: "Misc"
+            value: 20
     environment_tags: ["indoor", "safe", "lit", "shop"]
 
   - id: "back_alley"
@@ -184,15 +241,43 @@ rooms:
         personality: "Quiet, calculating, and amoral. Buys and sells anything with no questions asked. Loyal only to coin. Secretly a member of a thieves' network. Very hard to deceive — he's heard every con."
         faction: "neutral"
         knowledge_scopes: ["black_market", "rumors", "dread_hollow", "hollow_cult"]
-    items:
-      - id: "shadow_dagger"
-        name: "Nightfang Dagger"
-        description: "A wickedly curved dagger that seems to drink the light. Impossibly sharp. Previous owner didn't need it anymore — on account of being dead."
-        type: "Weapon"
-        damage_dice: "2d8+4"
-        damage_stat: "dex"
-        value: 300
-        is_equippable: true
+        is_shopkeeper: true
+        shop_inventory:
+          - id: "shadow_dagger"
+            name: "Nightfang Dagger"
+            description: "A wickedly curved dagger that seems to drink the light. Impossibly sharp. Previous owner didn't need it anymore — on account of being dead."
+            type: "Weapon"
+            damage_dice: "2d8+4"
+            damage_stat: "dex"
+            value: 300
+            is_equippable: true
+          - id: "poison_vial"
+            name: "Poison Vial"
+            description: "A small vial of viscous purple liquid. Coat a weapon to add poison damage."
+            type: "Misc"
+            value: 30
+            is_consumable: true
+            effect: "Coat weapon with poison"
+          - id: "smoke_bomb"
+            name: "Smoke Bomb"
+            description: "A clay sphere filled with alchemical powder. Breaks on impact, filling the area with thick smoke."
+            type: "Misc"
+            value: 25
+            is_consumable: true
+            effect: "Escape combat"
+          - id: "thieves_tools"
+            name: "Thieves' Tools"
+            description: "A professional set of lockpicks, files, and prybars. For the discerning rogue."
+            type: "Misc"
+            value: 35
+          - id: "cloak_of_shadows"
+            name: "Cloak of Shadows"
+            description: "A dark cloak that seems to shift and blend with the shadows. Light as silk, but surprisingly protective."
+            type: "Armor"
+            armor_value: 1
+            damage_stat: "dex"
+            value: 100
+            is_equippable: true
     environment_tags: ["outdoor", "dark", "shady", "alley"]
 
   - id: "town_gate"

@@ -367,6 +367,7 @@ static GAE.Core.Models.Npc ConvertLoreNpc(LoreNpc n)
         Personality = n.Personality ?? "",
         Faction = n.Faction ?? "neutral",
         IsHostile = n.IsHostile,
+        IsShopkeeper = n.IsShopkeeper,
         Level = n.Level ?? 1,
         Hp = n.Hp,
         MaxHp = n.MaxHp,
@@ -380,6 +381,9 @@ static GAE.Core.Models.Npc ConvertLoreNpc(LoreNpc n)
 
     if (n.Loot is not null)
         npc.LootTable.AddRange(n.Loot.Select(ConvertLoreItem));
+
+    if (n.ShopInventory is not null)
+        npc.ShopInventory.AddRange(n.ShopInventory.Select(ConvertLoreItem));
 
     return npc;
 }
@@ -451,6 +455,8 @@ public class LoreNpc
     public string? DamageDice { get; set; }
     public int? Defense { get; set; }
     public List<LoreItem>? Loot { get; set; }
+    public bool IsShopkeeper { get; set; }
+    public List<LoreItem>? ShopInventory { get; set; }
 }
 public class LoreItem
 {
