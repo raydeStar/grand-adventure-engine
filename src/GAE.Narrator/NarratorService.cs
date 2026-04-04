@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
@@ -13,14 +14,16 @@ public class NarratorService : INarratorService
     private readonly HttpClient _httpClient;
     private readonly ILogger<NarratorService> _logger;
     private readonly WorldKnowledgeBuilder? _knowledge;
+    private readonly IConversationLogger? _conversationLogger;
     private string _model;
     private bool _modelResolved;
 
-    public NarratorService(HttpClient httpClient, ILogger<NarratorService> logger, string model = "default", WorldKnowledgeBuilder? knowledge = null)
+    public NarratorService(HttpClient httpClient, ILogger<NarratorService> logger, string model = "default", WorldKnowledgeBuilder? knowledge = null, IConversationLogger? conversationLogger = null)
     {
         _httpClient = httpClient;
         _logger = logger;
         _knowledge = knowledge;
+        _conversationLogger = conversationLogger;
         _model = model;
         _modelResolved = !string.Equals(model, "default", StringComparison.OrdinalIgnoreCase);
     }
@@ -87,7 +90,8 @@ public class NarratorService : INarratorService
 
         try
         {
-            return await CompletionOrThrowAsync(systemPrompt, userPrompt, ct, maxTokens: 512);
+            return await CompletionOrThrowAsync(systemPrompt, userPrompt, ct, maxTokens: 512,
+                playerId: context.Player.Id, roomId: context.CurrentRoom.Id);
         }
         catch (Exception ex)
         {
@@ -158,7 +162,8 @@ public class NarratorService : INarratorService
 
         try
         {
-            return await CompletionOrThrowAsync(systemPrompt, userPrompt, ct);
+            return await CompletionOrThrowAsync(systemPrompt, userPrompt, ct,
+                playerId: context.Player.Id, roomId: context.CurrentRoom.Id);
         }
         catch (Exception ex)
         {
@@ -230,7 +235,7 @@ public class NarratorService : INarratorService
 
         try
         {
-            var json = await CompletionAsync(systemPrompt, userPrompt, ct, maxTokens: 768);
+            var json = await CompletionAsync(systemPrompt, userPrompt, ct, maxTokens: 768, operation: "generate-room", roomId: roomId);
             var generated = JsonSerializer.Deserialize<GeneratedRoom>(json, _jsonOptions);
             if (generated is not null)
             {
@@ -287,7 +292,7 @@ public class NarratorService : INarratorService
 
         try
         {
-            var json = await CompletionAsync(systemPrompt, userPrompt, ct, maxTokens: 256);
+            var json = await CompletionAsync(systemPrompt, userPrompt, ct, maxTokens: 256, operation: "generate-npc", roomId: room.Id);
             var generated = JsonSerializer.Deserialize<GeneratedNpc>(json, _jsonOptions);
             if (generated is not null)
             {
@@ -316,14 +321,14 @@ public class NarratorService : INarratorService
     public async Task<string> GenerateAsciiArtAsync(string subject, CancellationToken ct = default)
     {
         var systemPrompt = "Generate simple ASCII art (max 10 lines, max 40 chars wide) for the given subject. Return ONLY the ASCII art, no explanation.";
-        return await CompletionAsync(systemPrompt, subject, ct, maxTokens: 256);
+        return await CompletionAsync(systemPrompt, subject, ct, maxTokens: 256, operation: "ascii-art");
     }
 
     public async Task<string> GenerateBackstoryAsync(CharacterConcept concept, CancellationToken ct = default)
     {
         var systemPrompt = "Generate a 2-3 sentence backstory for a dark fantasy RPG character. Be dramatic but concise. Include one colorful detail that hints at personality — a quirk, a regret, or a dubious accomplishment.";
         var userPrompt = $"Character: {concept.Name}, a {concept.Race} {concept.Class}. Additional context: {concept.Backstory}";
-        return await CompletionAsync(systemPrompt, userPrompt, ct, maxTokens: 256);
+        return await CompletionAsync(systemPrompt, userPrompt, ct, maxTokens: 256, operation: "backstory");
     }
 
     /// <inheritdoc/>
@@ -366,7 +371,7 @@ public class NarratorService : INarratorService
 
         try
         {
-            var json = await CompletionAsync(systemPrompt, userPrompt, ct);
+            var json = await CompletionAsync(systemPrompt, userPrompt, ct, operation: "character-creation");
             json = SanitizeLmCompletion(json);
             return System.Text.Json.JsonSerializer.Deserialize<CharacterCreationAiResponse>(json,
                 new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
@@ -406,7 +411,7 @@ public class NarratorService : INarratorService
 
         try
         {
-            var result = await CompletionAsync(systemPrompt, rawInput, ct, maxTokens: 64);
+            var result = await CompletionAsync(systemPrompt, rawInput, ct, maxTokens: 64, operation: "parse-intent");
             var command = result.Trim().Trim('"', '\'', '`', '.');
 
             if (string.IsNullOrWhiteSpace(command)
@@ -540,7 +545,8 @@ public class NarratorService : INarratorService
         try
         {
             _logger.LogInformation("Dispatching free-form narrator request for {PlayerId} in room {RoomId}: {RawInput}", player.Id, room.Id, rawInput);
-            rawCompletion = await CompletionOrThrowAsync(systemPrompt, userPrompt, ct, operation: "free-form", logPayload: true);
+            rawCompletion = await CompletionOrThrowAsync(systemPrompt, userPrompt, ct, operation: "free-form", logPayload: true,
+                playerId: player.Id, roomId: room.Id);
 
             if (TryParseFreeFormResponse(rawCompletion, out var response))
             {
@@ -659,7 +665,8 @@ public class NarratorService : INarratorService
         string? rawCompletion = null;
         try
         {
-            rawCompletion = await CompletionOrThrowAsync(systemPrompt, userPrompt, ct, operation: "conversation");
+            rawCompletion = await CompletionOrThrowAsync(systemPrompt, userPrompt, ct, operation: "conversation",
+                playerId: player.Id, roomId: room.Id);
             if (TryParseFreeFormResponse(rawCompletion, out var response))
                 return response;
 
@@ -757,7 +764,8 @@ public class NarratorService : INarratorService
         string? rawCompletion = null;
         try
         {
-            rawCompletion = await CompletionOrThrowAsync(systemPrompt, userPrompt, ct, operation: "combat", logPayload: true);
+            rawCompletion = await CompletionOrThrowAsync(systemPrompt, userPrompt, ct, operation: "combat", logPayload: true,
+                playerId: player.Id, roomId: room.Id);
             if (TryParseFreeFormResponse(rawCompletion, out var response))
                 return response;
         }
@@ -1065,11 +1073,11 @@ public class NarratorService : INarratorService
             }
             .Any(prefix => actionPhrase.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
 
-    private async Task<string> CompletionAsync(string systemPrompt, string userPrompt, CancellationToken ct, int maxTokens = 2048)
+    private async Task<string> CompletionAsync(string systemPrompt, string userPrompt, CancellationToken ct, int maxTokens = 2048, string? operation = null, string? playerId = null, string? roomId = null)
     {
         try
         {
-            return await CompletionOrThrowAsync(systemPrompt, userPrompt, ct, maxTokens: maxTokens);
+            return await CompletionOrThrowAsync(systemPrompt, userPrompt, ct, operation: operation ?? "completion", maxTokens: maxTokens, playerId: playerId, roomId: roomId);
         }
         catch (Exception ex)
         {
@@ -1129,9 +1137,10 @@ public class NarratorService : INarratorService
         _modelResolved = true;
     }
 
-    private async Task<string> CompletionOrThrowAsync(string systemPrompt, string userPrompt, CancellationToken ct, string operation = "completion", bool logPayload = false, int maxTokens = 2048)
+    private async Task<string> CompletionOrThrowAsync(string systemPrompt, string userPrompt, CancellationToken ct, string operation = "completion", bool logPayload = false, int maxTokens = 2048, string? playerId = null, string? roomId = null)
     {
         await ResolveModelAsync(ct);
+        var sw = Stopwatch.StartNew();
 
         var request = new LmStudioRequest
         {
@@ -1163,6 +1172,8 @@ public class NarratorService : INarratorService
 
         var contentType = response.Content.Headers.ContentType?.MediaType ?? "";
 
+        string completionContent;
+
         // If the server doesn't support streaming, fall back to reading the full response
         if (!contentType.Contains("text/event-stream", StringComparison.OrdinalIgnoreCase))
         {
@@ -1172,56 +1183,94 @@ public class NarratorService : INarratorService
 
             var result = JsonSerializer.Deserialize<LmStudioResponse>(responseBody, _jsonOptions);
             var msg = result?.Choices?.FirstOrDefault()?.Message?.Content;
-            return !string.IsNullOrWhiteSpace(msg)
+            completionContent = !string.IsNullOrWhiteSpace(msg)
                 ? msg
                 : throw new InvalidOperationException($"LM Studio {operation} response did not contain a message body.");
         }
-
-        // Read SSE stream and accumulate content deltas
-        var accumulated = new StringBuilder();
-        using var stream = await response.Content.ReadAsStreamAsync(ct);
-        using var reader = new StreamReader(stream, Encoding.UTF8);
-
-        string? line;
-        while ((line = await reader.ReadLineAsync(ct)) is not null)
+        else
         {
-            ct.ThrowIfCancellationRequested();
+            // Read SSE stream and accumulate content deltas
+            var accumulated = new StringBuilder();
+            using var stream = await response.Content.ReadAsStreamAsync(ct);
+            using var reader = new StreamReader(stream, Encoding.UTF8);
 
-            if (string.IsNullOrEmpty(line))
-                continue;
-
-            if (!line.StartsWith("data: ", StringComparison.Ordinal))
-                continue;
-
-            var data = line["data: ".Length..];
-
-            if (data == "[DONE]")
-                break;
-
-            try
+            string? line;
+            while ((line = await reader.ReadLineAsync(ct)) is not null)
             {
-                var chunk = JsonSerializer.Deserialize<LmStudioResponse>(data, _jsonOptions);
-                var delta = chunk?.Choices?.FirstOrDefault()?.Delta?.Content;
-                if (!string.IsNullOrEmpty(delta))
-                    accumulated.Append(delta);
+                ct.ThrowIfCancellationRequested();
+
+                if (string.IsNullOrEmpty(line))
+                    continue;
+
+                if (!line.StartsWith("data: ", StringComparison.Ordinal))
+                    continue;
+
+                var data = line["data: ".Length..];
+
+                if (data == "[DONE]")
+                    break;
+
+                try
+                {
+                    var chunk = JsonSerializer.Deserialize<LmStudioResponse>(data, _jsonOptions);
+                    var delta = chunk?.Choices?.FirstOrDefault()?.Delta?.Content;
+                    if (!string.IsNullOrEmpty(delta))
+                        accumulated.Append(delta);
+                }
+                catch (JsonException)
+                {
+                    // Malformed SSE chunk — skip and continue
+                }
             }
-            catch (JsonException)
+
+            completionContent = accumulated.ToString();
+
+            if (logPayload)
             {
-                // Malformed SSE chunk — skip and continue
+                _logger.LogInformation("LM Studio {Operation} streamed response ({Length} chars): {Body}", operation, completionContent.Length,
+                    completionContent.Length > 500 ? completionContent[..500] + "..." : completionContent);
             }
+
+            if (string.IsNullOrWhiteSpace(completionContent))
+                throw new InvalidOperationException($"LM Studio {operation} streamed response was empty.");
         }
 
-        var content = accumulated.ToString();
+        // Log the full exchange for training-data collection
+        sw.Stop();
+        await LogConversationAsync(operation, systemPrompt, userPrompt, completionContent,
+            maxTokens, sw.ElapsedMilliseconds, success: true, playerId: playerId, roomId: roomId);
 
-        if (logPayload)
+        return completionContent;
+    }
+
+    private async Task LogConversationAsync(string operation, string systemPrompt, string userPrompt,
+        string response, int maxTokens, long latencyMs, bool success,
+        string? errorMessage = null, string? playerId = null, string? roomId = null)
+    {
+        if (_conversationLogger is null) return;
+
+        try
         {
-            _logger.LogInformation("LM Studio {Operation} streamed response ({Length} chars): {Body}", operation, content.Length,
-                content.Length > 500 ? content[..500] + "..." : content);
+            await _conversationLogger.LogAsync(new ConversationLog
+            {
+                Operation = operation,
+                PlayerId = playerId,
+                RoomId = roomId,
+                Model = _model,
+                SystemPrompt = systemPrompt,
+                UserPrompt = userPrompt,
+                Response = response,
+                Temperature = 0.8,
+                MaxTokens = maxTokens,
+                LatencyMs = latencyMs,
+                Success = success,
+                ErrorMessage = errorMessage
+            });
         }
-
-        return !string.IsNullOrWhiteSpace(content)
-            ? content
-            : throw new InvalidOperationException($"LM Studio {operation} streamed response was empty.");
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to log conversation for {Operation}", operation);
+        }
     }
 
     private static List<string> InferKnowledgeScopes(string faction, List<string> environmentTags)

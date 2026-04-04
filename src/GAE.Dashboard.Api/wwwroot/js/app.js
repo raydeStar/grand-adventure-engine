@@ -139,6 +139,9 @@
     const savedTab = localStorage.getItem('gae.admin.tab');
     if (savedTab) switchAdminTab(savedTab);
 
+    // Wire up AI logs tab events
+    UI.wireLogsTab();
+
     UI.$('existing-players').addEventListener('click', handlePortalPlayerClick);
     UI.$('admin-players-table').addEventListener('click', handleAdminRegistryClick);
 
@@ -286,6 +289,11 @@
       panel.classList.toggle('active', panel.dataset.adminPanel === tabName);
     });
     localStorage.setItem('gae.admin.tab', tabName);
+
+    // Auto-load conversation logs when switching to the logs tab
+    if (tabName === 'logs') {
+      UI.loadConversationLogs();
+    }
   }
 
   async function refreshAll() {

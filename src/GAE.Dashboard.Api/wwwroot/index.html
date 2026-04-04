@@ -79,6 +79,10 @@
             <h3>Characters</h3>
             <button class="btn btn-primary" id="btn-new-char" type="button">Create New Character</button>
           </div>
+          <div class="search-bar">
+            <input type="text" id="player-search" placeholder="Search by name, race, class, or ID..." autocomplete="off" />
+            <span id="player-count" class="search-count"></span>
+          </div>
           <div id="existing-players" class="portal-player-list"></div>
         </div>
 
@@ -263,6 +267,7 @@
           <button class="admin-tab" data-admin-tab="mutations" type="button">Mutations</button>
           <button class="admin-tab" data-admin-tab="players" type="button">Players</button>
           <button class="admin-tab" data-admin-tab="world" type="button">World</button>
+          <button class="admin-tab" data-admin-tab="logs" type="button">AI Logs</button>
           <span class="admin-toolbar-spacer"></span>
           <button class="btn btn-secondary btn-sm" id="btn-seed-demo-admin" type="button">Seed Demo</button>
         </nav>
@@ -669,6 +674,45 @@
                   <div class="payload-title">Current room payload</div>
                   <pre id="room-payload" class="payload-view">Select a character to inspect the current room payload.</pre>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══ AI LOGS TAB ═══ -->
+        <div class="admin-tab-content" data-admin-panel="logs">
+          <div class="admin-tab-body">
+            <div class="panel">
+              <h3>AI Conversation Logs</h3>
+              <p class="panel-hint">Every prompt and response sent to LM Studio. Use the export button to download all logs as JSONL for training data.</p>
+
+              <div class="logs-toolbar">
+                <div class="logs-filters">
+                  <select id="logs-operation-filter">
+                    <option value="">All operations</option>
+                    <option value="completion">Narration</option>
+                    <option value="generate-room">Room Generation</option>
+                    <option value="generate-npc">NPC Generation</option>
+                    <option value="free-form">Free-form</option>
+                    <option value="conversation">Conversation</option>
+                    <option value="combat">Combat</option>
+                    <option value="parse-intent">Intent Parsing</option>
+                    <option value="backstory">Backstory</option>
+                    <option value="character-creation">Character Creation</option>
+                    <option value="ascii-art">ASCII Art</option>
+                  </select>
+                  <input type="text" id="logs-player-filter" placeholder="Player ID filter..." />
+                  <button class="btn btn-secondary btn-sm" id="btn-logs-refresh" type="button">Refresh</button>
+                </div>
+                <div class="logs-actions">
+                  <span class="logs-count" id="logs-count"></span>
+                  <a class="btn btn-primary btn-sm" id="btn-logs-export" href="/api/dashboard/admin/conversations/export" download="conversations.jsonl">Export JSONL</a>
+                </div>
+              </div>
+
+              <div class="logs-stats" id="logs-stats"></div>
+              <div class="logs-list" id="logs-list">
+                <div class="empty-state">Click Refresh to load conversation logs.</div>
               </div>
             </div>
           </div>

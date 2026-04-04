@@ -191,17 +191,65 @@ const UI = {
 
   renderPortalPlayers(players, currentPlayerId, session) {
     const container = this.$('existing-players');
+    const countEl = this.$('player-count');
+    const searchInput = this.$('player-search');
+
+    // Store full list for filtering
+    this._portalPlayers = players;
+    this._portalCurrentPlayerId = currentPlayerId;
+    this._portalSession = session;
+
     if (!session) {
       container.innerHTML = '<div class="empty-state">Sign in to view characters and open a protected play session.</div>';
+      if (countEl) countEl.textContent = '';
       return;
     }
 
     if (!players.length) {
       container.innerHTML = '<div class="empty-state">No characters yet. Create one or seed the demo user and admin personas.</div>';
+      if (countEl) countEl.textContent = '0 characters';
       return;
     }
 
-    container.innerHTML = players.map((player) => {
+    // Wire up search (once)
+    if (searchInput && !searchInput._wired) {
+      searchInput._wired = true;
+      searchInput.addEventListener('input', () => this._filterPortalPlayers());
+    }
+
+    this._filterPortalPlayers();
+  },
+
+  _filterPortalPlayers() {
+    const container = this.$('existing-players');
+    const countEl = this.$('player-count');
+    const searchInput = this.$('player-search');
+    const players = this._portalPlayers || [];
+    const currentPlayerId = this._portalCurrentPlayerId || '';
+    const session = this._portalSession;
+    const query = (searchInput?.value || '').toLowerCase().trim();
+
+    const filtered = query
+      ? players.filter(p =>
+          (p.name || '').toLowerCase().includes(query) ||
+          (p.id || '').toLowerCase().includes(query) ||
+          (p.race || '').toLowerCase().includes(query) ||
+          (p.class || '').toLowerCase().includes(query) ||
+          (p.currentRoomId || '').toLowerCase().includes(query))
+      : players;
+
+    if (countEl) {
+      countEl.textContent = query
+        ? `${filtered.length} / ${players.length}`
+        : `${players.length} character${players.length !== 1 ? 's' : ''}`;
+    }
+
+    if (!filtered.length) {
+      container.innerHTML = `<div class="empty-state">No characters matching "${this.esc(query)}".</div>`;
+      return;
+    }
+
+    container.innerHTML = filtered.map((player) => {
       const isActive = player.id === currentPlayerId;
       return `
         <div class="player-card">
@@ -214,7 +262,7 @@ const UI = {
           </div>
           <div class="player-card-actions">
             <button class="btn btn-primary btn-sm" data-portal-action="user" data-player-id="${this.esc(player.id)}" type="button">User Flow</button>
-            ${session.isAdmin ? `<button class="btn btn-secondary btn-sm" data-portal-action="admin" data-player-id="${this.esc(player.id)}" type="button">Admin Console</button>` : ''}
+            ${session?.isAdmin ? `<button class="btn btn-secondary btn-sm" data-portal-action="admin" data-player-id="${this.esc(player.id)}" type="button">Admin Console</button>` : ''}
           </div>
         </div>
       `;
@@ -1183,5 +1231,132 @@ const UI = {
     safe = safe.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
     safe = safe.replace(/`(.+?)`/g, '<code>$1</code>');
     return safe;
+  },
+
+  // ── AI Conversation Logs ──
+
+  async loadConversationLogs() {
+    const opFilter = this.$('logs-operation-filter')?.value || '';
+    const playerFilter = this.$('logs-player-filter')?.value?.trim() || '';
+
+    try {
+      const [logsData, stats] = await Promise.all([
+        API.getConversationLogs(opFilter, playerFilter, 100, 0),
+        API.getConversationStats()
+      ]);
+
+      this.renderLogsStats(stats);
+      this.renderLogsList(logsData);
+    } catch (err) {
+      const list = this.$('logs-list');
+      if (list) list.innerHTML = `<div class="empty-state">Failed to load logs: ${this.esc(err.message)}</div>`;
+    }
+  },
+
+  renderLogsStats(stats) {
+    const container = this.$('logs-stats');
+    if (!container) return;
+
+    container.innerHTML = `
+      <div class="logs-stat-card">
+        <span class="stat-value">${stats.totalExchanges}</span>
+        <span class="stat-label">Total Exchanges</span>
+      </div>
+      <div class="logs-stat-card">
+        <span class="stat-value">${stats.uniquePlayers}</span>
+        <span class="stat-label">Unique Players</span>
+      </div>
+      <div class="logs-stat-card">
+        <span class="stat-value">${stats.avgLatencyMs}ms</span>
+        <span class="stat-label">Avg Latency</span>
+      </div>
+      <div class="logs-stat-card">
+        <span class="stat-value">${stats.errorRate}%</span>
+        <span class="stat-label">Error Rate</span>
+      </div>
+      ${stats.byOperation.map(op => `
+        <div class="logs-stat-card">
+          <span class="stat-value">${op.count}</span>
+          <span class="stat-label">${this.esc(op.operation)}</span>
+        </div>
+      `).join('')}
+    `;
+  },
+
+  renderLogsList(data) {
+    const container = this.$('logs-list');
+    const countEl = this.$('logs-count');
+    if (!container) return;
+
+    if (countEl) {
+      countEl.textContent = `${data.logs.length} of ${data.total} entries`;
+    }
+
+    if (!data.logs.length) {
+      container.innerHTML = '<div class="empty-state">No conversation logs yet. Play the game to generate AI exchanges.</div>';
+      return;
+    }
+
+    container.innerHTML = data.logs.map(log => {
+      const time = new Date(log.timestamp).toLocaleString();
+      const preview = (log.response || '').substring(0, 120);
+      const latencyClass = log.latencyMs > 10000 ? 'log-error' : '';
+
+      return `
+        <div class="log-entry" onclick="this.classList.toggle('expanded')">
+          <div class="log-header">
+            <span class="log-operation">${this.esc(log.operation)}</span>
+            <div class="log-meta">
+              ${log.playerId ? `<span>Player: ${this.esc(log.playerId).substring(0, 12)}...</span>` : ''}
+              <span class="${latencyClass}">${log.latencyMs}ms</span>
+              <span>${this.esc(log.model)}</span>
+              ${!log.success ? '<span class="log-error">FAILED</span>' : ''}
+              <span>${time}</span>
+            </div>
+          </div>
+          <div class="log-preview">${this.esc(preview)}${preview.length >= 120 ? '...' : ''}</div>
+          <div class="log-detail">
+            <div class="log-prompt-section">
+              <h4>System Prompt</h4>
+              <pre>${this.esc(log.systemPrompt)}</pre>
+            </div>
+            <div class="log-prompt-section">
+              <h4>User Prompt</h4>
+              <pre>${this.esc(log.userPrompt)}</pre>
+            </div>
+            <div class="log-prompt-section">
+              <h4>Response</h4>
+              <pre>${this.esc(log.response)}</pre>
+            </div>
+            ${log.errorMessage ? `
+              <div class="log-prompt-section">
+                <h4>Error</h4>
+                <pre>${this.esc(log.errorMessage)}</pre>
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+  },
+
+  wireLogsTab() {
+    const refreshBtn = this.$('btn-logs-refresh');
+    const opFilter = this.$('logs-operation-filter');
+    const playerFilter = this.$('logs-player-filter');
+
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', () => this.loadConversationLogs());
+    }
+    if (opFilter) {
+      opFilter.addEventListener('change', () => this.loadConversationLogs());
+    }
+    if (playerFilter) {
+      let debounce;
+      playerFilter.addEventListener('input', () => {
+        clearTimeout(debounce);
+        debounce = setTimeout(() => this.loadConversationLogs(), 400);
+      });
+    }
   }
 };

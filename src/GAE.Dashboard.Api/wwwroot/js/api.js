@@ -114,6 +114,17 @@ const API = {
     return this.postJson(`${this.base}/admin/llm/model`, { model });
   },
 
+  async getConversationLogs(operation, playerId, limit = 50, offset = 0) {
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    if (operation) params.set('operation', operation);
+    if (playerId) params.set('playerId', playerId);
+    return this.getJson(`${this.base}/admin/conversations?${params}`);
+  },
+
+  async getConversationStats() {
+    return this.getJson(`${this.base}/admin/conversations/stats`);
+  },
+
   async getJson(url) {
     const res = await fetch(url, { credentials: 'same-origin' });
     if (!res.ok) throw this.createHttpError(res, await this.readError(res));

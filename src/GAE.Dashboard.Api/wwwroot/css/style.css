@@ -262,7 +262,40 @@ body::before {
   margin-bottom: 0.5rem;
 }
 
-.portal-player-list { display: grid; gap: 0.6rem; }
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+.search-bar input {
+  flex: 1;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 0.45rem 0.6rem;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+}
+.search-bar input:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 4px var(--glow);
+}
+.search-bar input::placeholder { color: var(--dim); }
+.search-count {
+  color: var(--dim);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.portal-player-list {
+  display: grid;
+  gap: 0.6rem;
+  max-height: 60vh;
+  overflow-y: auto;
+}
 
 .player-card {
   background: var(--bg-input);
@@ -1516,4 +1549,181 @@ textarea { resize: vertical; min-height: 80px; }
   .info-drawer { display: none !important; }
   .admin-toolbar { flex-wrap: wrap; gap: 0; padding: 0 0.3rem; }
   .admin-toolbar .admin-tab { padding: 0.4rem 0.5rem; font-size: 10px; }
+  .logs-toolbar { flex-direction: column; }
+}
+
+/* ───────────────────────── AI LOGS TAB ───────────────────────── */
+
+.logs-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.logs-filters {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.logs-filters select,
+.logs-filters input {
+  font-family: var(--font);
+  font-size: 12px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 0.35rem 0.6rem;
+  border-radius: 3px;
+}
+
+.logs-filters select:focus,
+.logs-filters input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.logs-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.logs-count {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.logs-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.logs-stat-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.6rem 0.8rem;
+  text-align: center;
+}
+
+.logs-stat-card .stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--accent);
+  display: block;
+}
+
+.logs-stat-card .stat-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.logs-list {
+  max-height: 70vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.log-entry {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.75rem;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.log-entry:hover {
+  border-color: var(--accent);
+}
+
+.log-entry.expanded {
+  border-color: var(--accent);
+}
+
+.log-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.log-operation {
+  font-weight: 700;
+  color: var(--accent);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.log-meta {
+  display: flex;
+  gap: 0.75rem;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.log-meta .log-error {
+  color: #f44;
+}
+
+.log-preview {
+  margin-top: 0.4rem;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.log-detail {
+  display: none;
+  margin-top: 0.75rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+}
+
+.log-entry.expanded .log-detail {
+  display: block;
+}
+
+.log-entry.expanded .log-preview {
+  display: none;
+}
+
+.log-prompt-section {
+  margin-bottom: 0.75rem;
+}
+
+.log-prompt-section h4 {
+  font-size: 11px;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.3rem;
+}
+
+.log-prompt-section pre {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0.5rem;
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 300px;
+  overflow-y: auto;
+  color: var(--text);
 }

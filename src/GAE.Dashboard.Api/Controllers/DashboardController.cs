@@ -16,6 +16,7 @@ public class DashboardController : ControllerBase
     private readonly IGameEventBroadcaster _broadcaster;
     private readonly IWikiService _wikiService;
     private readonly INarratorService _narrator;
+    private readonly IConversationLogger _conversationLogger;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _configuration;
     private readonly WorldSeedConfig _worldSeedConfig;
@@ -30,6 +31,7 @@ public class DashboardController : ControllerBase
         IGameEventBroadcaster broadcaster,
         IWikiService wikiService,
         INarratorService narrator,
+        IConversationLogger conversationLogger,
         IHttpClientFactory httpClientFactory,
         IConfiguration configuration,
         WorldSeedConfig worldSeedConfig)
@@ -39,6 +41,7 @@ public class DashboardController : ControllerBase
         _broadcaster = broadcaster;
         _wikiService = wikiService;
         _narrator = narrator;
+        _conversationLogger = conversationLogger;
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
         _worldSeedConfig = worldSeedConfig;
@@ -853,6 +856,58 @@ public class DashboardController : ControllerBase
                 ? method
                 : StatAllocationMethod.StandardArray
         };
+    }
+
+    // ── Conversation logs (training data) ──
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpGet("admin/conversations")]
+    public async Task<IActionResult> GetConversationLogs(
+        [FromQuery] string? operation = null,
+        [FromQuery] string? playerId = null,
+        [FromQuery] int limit = 50,
+        [FromQuery] int offset = 0,
+        CancellationToken ct = default)
+    {
+        var logs = await _conversationLogger.GetLogsAsync(operation, playerId, limit, offset, ct);
+        var total = await _conversationLogger.CountAsync(operation, playerId, ct);
+        return Ok(new { total, offset, limit, logs });
+    }
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpGet("admin/conversations/export")]
+    public async Task ExportConversationLogs(CancellationToken ct)
+    {
+        Response.ContentType = "application/x-ndjson";
+        Response.Headers["Content-Disposition"] = "attachment; filename=\"conversations.jsonl\"";
+        await _conversationLogger.ExportJsonlAsync(Response.Body, ct);
+    }
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpGet("admin/conversations/stats")]
+    public async Task<IActionResult> GetConversationStats(CancellationToken ct)
+    {
+        var all = await _conversationLogger.GetLogsAsync(limit: 10000, ct: ct);
+        var byOperation = all
+            .GroupBy(l => l.Operation)
+            .Select(g => new
+            {
+                operation = g.Key,
+                count = g.Count(),
+                avgLatencyMs = (int)g.Average(l => l.LatencyMs),
+                errorCount = g.Count(l => !l.Success)
+            })
+            .OrderByDescending(x => x.count)
+            .ToList();
+
+        return Ok(new
+        {
+            totalExchanges = all.Count,
+            byOperation,
+            uniquePlayers = all.Where(l => l.PlayerId != null).Select(l => l.PlayerId).Distinct().Count(),
+            avgLatencyMs = all.Count > 0 ? (int)all.Average(l => l.LatencyMs) : 0,
+            errorRate = all.Count > 0 ? Math.Round(100.0 * all.Count(l => !l.Success) / all.Count, 1) : 0
+        });
     }
 
     private async Task<PlayerCharacter?> RequirePlayerAsync(string playerId, CancellationToken ct)

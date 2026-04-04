@@ -55,6 +55,12 @@ var dataDir = builder.Environment.IsProduction() && Directory.Exists("/app/data"
     : Path.Combine(builder.Environment.ContentRootPath, "..", "..", "data");
 Directory.CreateDirectory(dataDir);
 
+// Conversation logger — append-only JSONL for training-data export
+builder.Services.AddSingleton<IConversationLogger>(sp =>
+    new FileConversationLogger(
+        Path.Combine(dataDir, "conversations.jsonl"),
+        sp.GetRequiredService<ILogger<FileConversationLogger>>()));
+
 builder.Services.AddSingleton<InMemoryStateManager>();
 builder.Services.AddSingleton<IStateJournal>(sp =>
     new FileStateJournal(
@@ -94,7 +100,8 @@ builder.Services.AddSingleton<INarratorService>(sp =>
     var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("LmStudio");
     var logger = sp.GetRequiredService<ILogger<NarratorService>>();
     var knowledge = sp.GetRequiredService<WorldKnowledgeBuilder>();
-    return new NarratorService(httpClient, logger, lmStudioModel, knowledge);
+    var conversationLogger = sp.GetRequiredService<IConversationLogger>();
+    return new NarratorService(httpClient, logger, lmStudioModel, knowledge, conversationLogger);
 });
 builder.Services.AddSingleton<WorldKnowledgeBuilder>();
 
