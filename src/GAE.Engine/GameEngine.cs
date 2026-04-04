@@ -493,17 +493,21 @@ public class GameEngine : IGameEngine
             DiceRolls = [attackRoll]
         };
 
-        if (outcome == RollOutcome.CriticalMiss)
+        if (outcome == RollOutcome.CriticalMiss || outcome == RollOutcome.Miss)
         {
             result.Success = true;
-            result.MechanicalSummary = $"You fumble your attack against {target.Name}! Critical miss!";
-            return result;
-        }
+            result.MechanicalSummary = outcome == RollOutcome.CriticalMiss
+                ? $"You fumble your attack against {target.Name}! Critical miss!"
+                : $"You attack {target.Name} (rolled {attackRoll.Total} vs defense {targetDefense}) and miss!";
 
-        if (outcome == RollOutcome.Miss)
-        {
-            result.Success = true;
-            result.MechanicalSummary = $"You attack {target.Name} (rolled {attackRoll.Total} vs defense {targetDefense}) and miss!";
+            // Even on a miss, enter combat so the enemy can fight back
+            if (target.IsHostile || (target.Hp.HasValue && target.Hp.Value > 0))
+            {
+                var hostiles = room.Npcs.Where(n => n.IsHostile || n == target).Distinct().ToList();
+                await EnterCombatAsync(player, room, hostiles, ct);
+                result.InteractionUpdate = new InteractionUpdate { Mode = InteractionMode.Combat, CombatStatus = "ongoing" };
+                await _stateManager.SavePlayerAsync(player, ct);
+            }
             return result;
         }
 
