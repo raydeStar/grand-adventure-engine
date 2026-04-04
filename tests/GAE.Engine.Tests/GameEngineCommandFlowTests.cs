@@ -653,6 +653,9 @@ public class GameEngineCommandFlowTests
         public Task<Room> GenerateRoomAsync(string roomId, string direction, Room sourceRoom, CancellationToken ct = default)
             => throw new NotSupportedException();
 
+        public Task<Room> GenerateDungeonEntranceAsync(string dungeonId, int playerLevel, Room sourceRoom, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
         public Task<Npc> GenerateNpcAsync(Room room, string? faction = null, CancellationToken ct = default)
             => throw new NotSupportedException();
 

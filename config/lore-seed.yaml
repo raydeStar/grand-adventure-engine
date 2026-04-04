@@ -55,6 +55,7 @@ starting_room:
   exits:
     east: "town_square"
     south: "back_alley"
+    down: "tavern_cellar"
   npcs:
     - id: "innkeeper_mara"
       name: "Mara the Barkeep"
@@ -66,6 +67,23 @@ starting_room:
       personality: "Town drunk. Cowardly, gullible, and desperate for coin. Claims he saw the dungeon boss once. Nobody believes him. Surprisingly honest when sober, which is never."
       faction: "neutral"
       knowledge_scopes: ["rumors", "dread_hollow"]
+  items:
+    - id: "chipped_mug"
+      name: "Chipped Mug"
+      description: "A ceramic mug with a crack running down the side. Someone left it on the table half-full of flat ale."
+      type: "Misc"
+      value: 1
+    - id: "half_eaten_bread"
+      name: "Half-Eaten Bread"
+      description: "A crusty hunk of bread with a bite taken out of it. Still edible, probably."
+      type: "Misc"
+      value: 1
+      is_consumable: true
+    - id: "worn_playing_cards"
+      name: "Worn Playing Cards"
+      description: "A dog-eared deck of playing cards. Several are missing, and the rest are sticky with ale."
+      type: "Misc"
+      value: 2
   environment_tags: ["indoor", "safe", "lit", "tavern"]
 
 rooms:
@@ -82,12 +100,32 @@ rooms:
       north: "blacksmith"
       south: "general_store"
       east: "town_gate"
+      southeast: "church"
+      northeast: "market_stalls"
+      southwest: "town_well"
     npcs:
       - id: "guard_bram"
         name: "Bram the Gate Guard"
         personality: "Stern, gruff, and suspicious. Devoted to his post. Extremely hard to charm or bribe. Respects strength and directness. Hates adventurers who cause trouble."
         faction: "thornwall_militia"
         knowledge_scopes: ["town", "militia", "whisperwood", "security"]
+      - id: "dungeon_master_garrick"
+        name: "Garrick the Dungeoneer"
+        personality: "A weathered old adventurer with a patch over one eye and a scarred grin. Claims he knows the location of every lost dungeon in the realm. For a price, he'll tell you where to find one suited to your skill level. Dramatic storyteller, loves embellishing danger."
+        faction: "neutral"
+        knowledge_scopes: ["dungeons", "monsters", "treasure", "adventure", "lore"]
+        level: 5
+    items:
+      - id: "loose_cobblestone"
+        name: "Loose Cobblestone"
+        description: "A cobblestone that's worked itself free from the square. Heavy and rough-edged."
+        type: "Misc"
+        value: 1
+      - id: "wilted_flower"
+        name: "Wilted Flower"
+        description: "A sad little wildflower dropped by some passerby. Its petals are brown at the edges."
+        type: "Misc"
+        value: 1
     environment_tags: ["outdoor", "safe", "lit", "town_center"]
 
   - id: "blacksmith"
@@ -157,6 +195,14 @@ rooms:
             type: "Helmet"
             armor_value: 1
             value: 20
+            is_equippable: true
+          - id: "steel_longsword"
+            name: "Steel Longsword"
+            description: "A well-forged steel blade with a leather-wrapped grip. A reliable weapon for the serious adventurer."
+            type: "Weapon"
+            damage_dice: "2d6+2"
+            damage_stat: "str"
+            value: 100
             is_equippable: true
           - id: "iron_greatsword"
             name: "Iron Greatsword"
@@ -338,6 +384,22 @@ rooms:
             stat_bonuses:
               dex: 1
               luck: 2
+    items:
+      - id: "discarded_bottle"
+        name: "Discarded Bottle"
+        description: "An empty glass bottle tossed into the gutter. Smells faintly of cheap whiskey."
+        type: "Misc"
+        value: 1
+      - id: "torn_wanted_poster"
+        name: "Torn Wanted Poster"
+        description: "A rain-smeared wanted poster ripped from the notice board. Only the word 'DANGEROUS' is still legible."
+        type: "Misc"
+        value: 1
+      - id: "bent_nail"
+        name: "Bent Nail"
+        description: "A rusty iron nail bent at an awkward angle. Could poke an eye out if you tried hard enough."
+        type: "Misc"
+        value: 1
     environment_tags: ["outdoor", "dark", "shady", "alley"]
 
   - id: "town_gate"
@@ -352,10 +414,200 @@ rooms:
     npcs:
       - id: "gate_guard_lena"
         name: "Lena the Gate Guard"
-        personality: "Young, nervous, and eager to prove herself. Recently joined the militia after her brother went missing in the Whisperwood. Brave but inexperienced. Easy to talk to, hard to intimidate because she's already scared of everything."
+        personality: "Young, nervous, and eager to prove herself. Recently joined the militia after her brother went missing in the Whisperwood. Brave but inexperienced. Easy to talk to, hard to intimidate because she's already scared of everything. Will ask the player to look for her brother's journal if they're heading into the forest."
         faction: "thornwall_militia"
         knowledge_scopes: ["militia", "whisperwood", "monsters", "missing_people"]
+    items:
+      - id: "discarded_torch"
+        name: "Discarded Torch"
+        description: "A half-burned torch dropped by a previous patrol. Still has some life left in it."
+        type: "Misc"
+        value: 1
+      - id: "militia_notice"
+        name: "Militia Notice"
+        description: "A posted warning about increased wolf activity in the Whisperwood. 'Report all sightings to Captain Holt. Do NOT engage alone.' Someone has written 'too late' in the margin."
+        type: "Misc"
+        value: 1
+      - id: "broken_arrow"
+        name: "Broken Arrow"
+        description: "A snapped arrow shaft with dark stains on the tip. Found wedged between the gate's iron bands."
+        type: "Misc"
+        value: 1
     environment_tags: ["outdoor", "lit", "fortified", "gate"]
+
+  - id: "church"
+    name: "Chapel of the Silver Light"
+    description: >-
+      A small stone chapel tucked behind the town square, its steeple topped with
+      a tarnished silver crescent. Inside, stained glass windows cast colored light
+      across worn wooden pews. The air smells of incense and old candle wax. A
+      priest potters about near the altar, muttering prayers to himself and
+      occasionally arguing with someone who isn't there.
+    exits:
+      northwest: "town_square"
+    npcs:
+      - id: "priest_aldric"
+        name: "Father Aldric"
+        personality: "A kindly but slightly unhinged priest who claims to hear the voice of the Silver Light directly. Blesses items for adventurers with genuine enthusiasm. Tends to trail off mid-sentence to listen to 'guidance' no one else can hear. Harmless, generous, and deeply convinced the apocalypse is next Tuesday."
+        faction: "neutral"
+        knowledge_scopes: ["religion", "blessings", "undead", "holy_relics", "town"]
+    items:
+      - id: "prayer_candle"
+        name: "Prayer Candle"
+        description: "A stubby white candle inscribed with a tiny prayer. It smells of lavender and hope."
+        type: "Misc"
+        value: 1
+      - id: "dusty_hymnal"
+        name: "Dusty Hymnal"
+        description: "A leather-bound book of hymns. Most of the pages are stuck together, and someone has doodled in the margins."
+        type: "Misc"
+        value: 2
+      - id: "silver_holy_symbol"
+        name: "Silver Holy Symbol"
+        description: "A polished silver pendant in the shape of a radiant sun. Warm to the touch and faintly luminous. Grants clarity of mind to the wearer."
+        type: "Amulet"
+        value: 15
+        is_equippable: true
+        stat_bonuses:
+          wis: 1
+    environment_tags: ["indoor", "safe", "lit", "holy", "chapel"]
+
+  - id: "tavern_cellar"
+    name: "The Flagon's Cellar"
+    description: >-
+      A damp, musty cellar beneath the Rusted Flagon. Barrels of ale and crates
+      of supplies line the rough stone walls. Cobwebs hang thick from the low
+      ceiling, and something skitters in the shadows between the barrels. The
+      only light comes from the trapdoor above and the faint glow of rat eyes
+      watching from the dark corners.
+    exits:
+      up: "spawn"
+    npcs:
+      - id: "giant_rat"
+        name: "Giant Rat"
+        personality: "A bloated, aggressive rat the size of a small dog. Its fur is matted and its teeth are yellow. Fiercely territorial over its barrel kingdom. Hisses and lunges at anything that gets too close."
+        faction: "neutral"
+        knowledge_scopes: []
+        is_hostile: true
+        level: 1
+        hp: 8
+        max_hp: 8
+        attack_bonus: 1
+        damage_dice: "1d4"
+        defense: 9
+        loot:
+          - id: "rat_tail"
+            name: "Giant Rat Tail"
+            description: "A thick, greasy rat tail. Disgusting, but some alchemists pay for these."
+            type: "Misc"
+            value: 2
+            quantity: 1
+    items:
+      - id: "aged_wine_bottle"
+        name: "Aged Wine Bottle"
+        description: "A dusty bottle of wine from a vintage that predates the tavern itself. Mara probably doesn't know it's down here."
+        type: "Misc"
+        value: 8
+      - id: "rat_chewed_coin_pouch"
+        name: "Rat-Chewed Coin Pouch"
+        description: "A small leather pouch gnawed open by rats. A few tarnished coins still jingle inside."
+        type: "Misc"
+        value: 3
+      - id: "rusty_key"
+        name: "Rusty Key"
+        description: "An old iron key coated in rust. It must open something, but what? The teeth are worn but still intact."
+        type: "Misc"
+        value: 5
+    environment_tags: ["indoor", "dark", "damp", "cellar", "dangerous"]
+
+  - id: "market_stalls"
+    name: "Morning Market"
+    description: >-
+      A cluster of colorful canvas stalls and rickety wooden tables spread out
+      in an open clearing northeast of the town square. Merchants hawk their wares
+      with varying degrees of enthusiasm and honesty. The smell of fresh bread
+      mingles with dried herbs, old leather, and something frying in a pan.
+      A weathered old woman tends the largest stall with a knowing smile.
+    exits:
+      southwest: "town_square"
+    npcs:
+      - id: "merchant_bess"
+        name: "Old Bess"
+        personality: "A sharp-eyed old woman who has been selling produce and gossip at the morning market for decades. Knows everyone's business and isn't shy about sharing it — for a customer, anyway. Warm to those who buy, frosty to those who browse. Sells cheap food and cheaper advice."
+        faction: "merchants_guild"
+        knowledge_scopes: ["rumors", "town", "food", "gossip", "merchants_guild"]
+        is_shopkeeper: true
+        shop_inventory:
+          - id: "fresh_bread"
+            name: "Fresh Bread"
+            description: "A warm loaf of crusty bread. Simple but satisfying."
+            type: "Misc"
+            value: 2
+            is_consumable: true
+            effect: "Restores 1 HP"
+            quantity: 5
+          - id: "meat_pie"
+            name: "Meat Pie"
+            description: "A flaky pastry filled with mystery meat and gravy. Don't ask what's in it."
+            type: "Misc"
+            value: 3
+            is_consumable: true
+            effect: "Restores 3 HP"
+            quantity: 3
+          - id: "dried_herbs"
+            name: "Dried Herbs"
+            description: "A bundle of dried herbs tied with twine. Useful for cooking or basic remedies."
+            type: "Misc"
+            value: 2
+            quantity: 5
+    items:
+      - id: "bruised_apple"
+        name: "Bruised Apple"
+        description: "A red apple with a large brown bruise on one side. Fell off a cart, probably. Still edible."
+        type: "Misc"
+        value: 1
+        is_consumable: true
+      - id: "torn_silk_scarf"
+        name: "Torn Silk Scarf"
+        description: "A once-fine silk scarf with a tear along one edge. The colors are still vibrant — purple and gold."
+        type: "Misc"
+        value: 3
+      - id: "cracked_mirror"
+        name: "Cracked Mirror"
+        description: "A small hand mirror with a crack running through the glass. Seven years of bad luck, or a handy signaling tool."
+        type: "Misc"
+        value: 2
+    environment_tags: ["outdoor", "safe", "lit", "market", "busy"]
+
+  - id: "town_well"
+    name: "The Old Well"
+    description: >-
+      A weathered stone well tucked in a quiet corner southwest of the town square.
+      The well is old — older than the town, some say. Its stones are covered in
+      moss and faded carvings that nobody can read anymore. A frayed rope hangs
+      over the edge into impenetrable darkness below. If you lean over and look
+      down, you can't see the bottom. But you get the feeling something down
+      there can see you.
+    exits:
+      northeast: "town_square"
+    npcs:
+      - id: "stray_cat_whiskers"
+        name: "Whiskers"
+        personality: "A scruffy orange tabby cat who has claimed the well as his personal territory. Supremely unbothered by everything. Will rub against your legs if you have food, ignore you completely if you don't. Occasionally stares into the well with an intensity that is deeply unsettling. Meows at inappropriate moments. Cannot be recruited, reasoned with, or impressed."
+        faction: "neutral"
+        knowledge_scopes: []
+    items:
+      - id: "mossy_coin"
+        name: "Mossy Coin"
+        description: "An old copper coin fished out of the well, covered in green moss. Might be lucky. Might be cursed."
+        type: "Misc"
+        value: 1
+      - id: "frayed_rope"
+        name: "Frayed Rope"
+        description: "A short length of rope cut from the well's bucket line. Worn thin and fraying, but still has some use."
+        type: "Misc"
+        value: 2
+    environment_tags: ["outdoor", "safe", "dim", "mysterious", "well"]
 
 # ──────────────────────────────────────────────────────────
 #  FOREST: THE WHISPERWOOD
@@ -378,6 +630,23 @@ rooms:
         personality: "Quiet, weathered, and world-weary. A retired adventurer who patrols the forest edge to keep Thornwall safe. Respects nature and anyone who doesn't waste his time. Will warn about dangers ahead honestly."
         faction: "neutral"
         knowledge_scopes: ["whisperwood", "monsters", "dread_hollow", "survival", "herbs"]
+    items:
+      - id: "odd_mushroom"
+        name: "Odd Mushroom"
+        description: "A plump mushroom with a spotted purple cap. It smells earthy and slightly sweet. Probably safe to eat. Probably."
+        type: "Misc"
+        value: 2
+        is_consumable: true
+      - id: "bird_feather"
+        name: "Bird Feather"
+        description: "A long iridescent feather from some forest bird. It catches the light with flashes of blue and green."
+        type: "Misc"
+        value: 1
+      - id: "smooth_river_stone"
+        name: "Smooth River Stone"
+        description: "A flat, perfectly smooth stone from a nearby stream. Ideal for skipping or throwing at things."
+        type: "Misc"
+        value: 1
     environment_tags: ["outdoor", "forest", "dim", "wilderness"]
 
   - id: "fairy_grove"
@@ -387,8 +656,28 @@ rooms:
       Tiny luminous shapes dart between mushroom rings, leaving trails of
       sparkling dust. It's beautiful and deeply unsettling. A massive ancient
       tree stands in the center, its trunk carved with faces that seem to watch you.
+      A shimmering figure perches on a low branch, watching you with amused malice.
     exits:
       south: "forest_edge"
+    npcs:
+      - id: "fae_trickster"
+        name: "Thornweave the Trickster"
+        personality: "A mercurial fae spirit who guards the grove's treasures. Speaks in riddles and half-truths. Will not let anyone take items from the grove without first answering a riddle or besting them in a contest of wits (CHA or INT check). If insulted, becomes a dangerous opponent. If charmed, might offer a bonus item. Loves wordplay and despises boring people."
+        faction: "neutral"
+        knowledge_scopes: ["fae", "forest", "riddles", "ancient_secrets"]
+        level: 4
+        hp: 30
+        max_hp: 30
+        attack_bonus: 6
+        damage_dice: "2d6+3"
+        defense: 14
+        loot:
+          - id: "fae_dust"
+            name: "Handful of Fae Dust"
+            description: "Glittering motes of crystallized magic. Could be sold for a tidy sum, or used to enchant something."
+            type: "Misc"
+            value: 50
+            quantity: 1
     items:
       - id: "fairy_crown"
         name: "Crown of the Fae"
@@ -398,6 +687,9 @@ rooms:
         value: 600
         is_equippable: true
         effect: "+5 to INT and WIS while worn"
+        stat_bonuses:
+          int: 5
+          wis: 5
       - id: "healing_mushroom"
         name: "Glowcap Mushroom"
         description: "A luminous mushroom that pulses with warm light. Eating it restores health and cures poison."
@@ -405,7 +697,7 @@ rooms:
         value: 25
         is_consumable: true
         effect: "Restores 20 HP and cures poison"
-        quantity: 5
+        quantity: 3
     environment_tags: ["outdoor", "forest", "magical", "lit", "fae"]
 
   - id: "deep_forest"
@@ -454,6 +746,22 @@ rooms:
     exits:
       north: "deep_forest"
       down: "dungeon_hall"
+    items:
+      - id: "crumbling_brick"
+        name: "Crumbling Brick"
+        description: "A chunk of ancient masonry that broke free from the archway. Covered in a thin layer of dried blood."
+        type: "Misc"
+        value: 1
+      - id: "faded_map_fragment"
+        name: "Faded Map Fragment"
+        description: "A torn piece of parchment showing what might be a rough layout of tunnels below. Most of the ink has faded, but a few passages are still visible."
+        type: "Misc"
+        value: 5
+      - id: "adventurer_journal"
+        name: "Adventurer's Journal"
+        description: "A water-stained journal from a previous explorer. The last entry reads: 'The cultists worship something in the deep. If you fight the priestess, destroy the staff first — it heals the beast.' The rest is unreadable."
+        type: "Misc"
+        value: 3
     environment_tags: ["outdoor", "ruins", "dark", "dangerous", "dungeon_entrance"]
 
   - id: "dungeon_hall"
@@ -470,16 +778,16 @@ rooms:
     npcs:
       - id: "skeleton_guard_1"
         name: "Hollow Skeleton"
-        personality: "An animated skeleton in rusted armor. Mindless but relentless. Attacks any living creature on sight."
+        personality: "An animated skeleton in rusted armor. Mindless but relentless. Attacks any living creature on sight. Its empty eye sockets glow with a faint crimson light."
         faction: "hollow_cult"
         knowledge_scopes: []
         is_hostile: true
-        level: 2
-        hp: 20
-        max_hp: 20
-        attack_bonus: 3
-        damage_dice: "1d8+1"
-        defense: 12
+        level: 3
+        hp: 28
+        max_hp: 28
+        attack_bonus: 5
+        damage_dice: "1d8+2"
+        defense: 13
         loot:
           - id: "rusted_sword"
             name: "Rusted Longsword"
@@ -573,7 +881,7 @@ rooms:
         max_hp: 80
         attack_bonus: 8
         damage_dice: "2d8+4"
-        defense: 15
+        defense: 14
         loot:
           - id: "goretusk_tusk"
             name: "Tusk of the Undying"

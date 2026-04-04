@@ -206,27 +206,50 @@ public class NarratorService : INarratorService
 
     public async Task<Room> GenerateRoomAsync(string roomId, string direction, Room sourceRoom, CancellationToken ct = default)
     {
-        var systemPrompt = """
+        var isDungeon = sourceRoom.EnvironmentTags.Any(t =>
+            t.Equals("dungeon", StringComparison.OrdinalIgnoreCase) ||
+            t.Equals("generated_dungeon", StringComparison.OrdinalIgnoreCase));
+
+        var difficultyTag = sourceRoom.EnvironmentTags
+            .FirstOrDefault(t => t.StartsWith("difficulty_", StringComparison.OrdinalIgnoreCase));
+
+        var dungeonRules = isDungeon ? $"""
+
+            DUNGEON-SPECIFIC RULES:
+            - This room is INSIDE a dungeon. Maintain the dungeon theme from the source room.
+            - Include "dungeon" and "generated_dungeon" in environmentTags.
+            {(difficultyTag is not null ? $"- Carry over the difficulty tag: \"{difficultyTag}\"." : "")}
+            - Dungeon rooms should have: monsters (hostile NPCs with combat stats), traps, puzzles, treasure.
+            - NPCs in dungeons should include "level", "hp", "attack", "defense" fields for combat.
+            - Include locked doors (hint at keys), riddles on walls, treasure chests, or environmental hazards.
+            - Some rooms should have NO monsters — just atmosphere, puzzles, or loot.
+            - Vary between: combat rooms, puzzle rooms, treasure rooms, and atmospheric corridors.
+            - Every 3-4 rooms, include a "boss" room with a tougher enemy and better loot.
+            """ : "";
+
+        var systemPrompt = $$"""
             You are a world-building engine for a dark fantasy RPG with the flavor of classic Sierra adventures.
             Generate a room/location as JSON with these exact fields:
             {
               "name": "Short Evocative Name",
               "description": "2-3 atmospheric sentences. Hint at things worth interacting with.",
               "environmentTags": ["tag1", "tag2"],
-              "npcs": [{ "id": "unique_id", "name": "NPC Name", "personality": "one-line personality with attitude", "isHostile": false }],
-              "items": [{ "name": "Item Name", "description": "brief flavor text", "type": "Misc", "quantity": 1 }]
+              "npcs": [{ "id": "unique_id", "name": "NPC Name", "personality": "one-line personality with attitude", "isHostile": false, "level": 1, "hp": 20, "attack": 4, "defense": 10 }],
+              "items": [{ "name": "Item Name", "description": "brief flavor text", "type": "Misc", "quantity": 1, "value": 5 }]
             }
 
             RULES:
             - Keep it consistent with the source location's theme and direction of travel.
             - Include 0-2 NPCs with distinct, memorable personalities (grumpy, paranoid, flirty, etc.)
             - Include 1-3 items that make sense for the location (weapons, potions, gold, curiosities, junk)
-            - Each item must have a "type" field: one of "Weapon", "Armor", "Shield", "Helmet", "Potion", "Scroll", "Key", "QuestItem", or "Misc"
+            - Each item must have a "type" field: one of "Weapon", "Armor", "Shield", "Helmet", "Potion", "Scroll", "Key", "QuestItem", "Misc", "Ring", "Amulet", "Bracelet", "Cloak", "Boots", "Gloves"
+            - Items should have a "value" field (gold piece worth, even junk is worth 1gp)
             - Descriptions should hint at interactive elements: things to search, people to talk to, paths to explore.
             - Add 2-4 environment tags for mood/theme (e.g. "dark", "tavern", "forest", "ruins", "marketplace").
             - Name should be evocative, not generic ("The Butcher's Alley" not "Alley").
             - Vary between indoor/outdoor, populated/desolate, safe/dangerous.
             - Return ONLY valid JSON, no markdown, no code fences.
+            {{dungeonRules}}
             """;
 
         var userPrompt = $"""
@@ -252,7 +275,12 @@ public class NarratorService : INarratorService
                         Id = n.Id ?? Guid.NewGuid().ToString(),
                         Name = n.Name ?? "Unknown",
                         Personality = n.Personality ?? "",
-                        IsHostile = n.IsHostile
+                        IsHostile = n.IsHostile,
+                        Level = n.Level > 0 ? n.Level : 1,
+                        Hp = n.Hp > 0 ? n.Hp : (n.IsHostile ? 15 : null),
+                        MaxHp = n.Hp > 0 ? n.Hp : (n.IsHostile ? 15 : null),
+                        AttackBonus = n.Attack > 0 ? n.Attack : (n.IsHostile ? 3 : null),
+                        Defense = n.Defense > 0 ? n.Defense : (n.IsHostile ? 10 : null)
                     }).ToList() ?? [],
                     Items = generated.Items?.Select(i =>
                     {
@@ -264,7 +292,8 @@ public class NarratorService : INarratorService
                             Description = i.Description ?? "",
                             Quantity = Math.Max(1, i.Quantity),
                             Type = itemType,
-                            IsEquippable = InventoryItem.IsEquippableType(itemType)
+                            IsEquippable = InventoryItem.IsEquippableType(itemType),
+                            Value = i.Value > 0 ? i.Value : 1
                         };
                     }).ToList() ?? [],
                     Exits = new Dictionary<string, string>
@@ -285,6 +314,165 @@ public class NarratorService : INarratorService
             Name = $"Unexplored Area ({roomId})",
             Description = "A dimly lit area stretches before you.",
             Exits = new Dictionary<string, string> { [OppositeDirection(direction)] = sourceRoom.Id }
+        };
+    }
+
+    public async Task<Room> GenerateDungeonEntranceAsync(string dungeonId, int playerLevel, Room sourceRoom, CancellationToken ct = default)
+    {
+        // Scale difficulty: easy (1-3), medium (4-6), hard (7-9), deadly (10+)
+        var difficultyTier = playerLevel switch
+        {
+            <= 3 => "easy",
+            <= 6 => "medium",
+            <= 9 => "hard",
+            _ => "deadly"
+        };
+
+        var systemPrompt = $$"""
+            You are a dungeon master designing the ENTRANCE to a procedurally generated dungeon
+            for a dark fantasy RPG with classic Sierra adventure game humor.
+
+            DIFFICULTY: {{difficultyTier}} (player level {{playerLevel}})
+
+            Design a compelling dungeon entrance room. This is the first room — it sets the tone
+            for everything deeper. It should feel dangerous, mysterious, and make the player want
+            to explore further.
+
+            Generate JSON with these exact fields:
+            {
+              "name": "Evocative Dungeon Entrance Name",
+              "description": "3-4 atmospheric sentences. Set the mood. Hint at dangers ahead. Include sensory details — sounds echoing from deeper in, the smell, the temperature. Make it feel ALIVE and threatening.",
+              "environmentTags": ["dungeon", "generated_dungeon", "difficulty_{{difficultyTier}}", "tag3", "tag4"],
+              "npcs": [{ "id": "unique_id", "name": "Monster/NPC Name", "personality": "behavior description", "isHostile": true/false, "level": number, "hp": number, "attack": number, "defense": number }],
+              "items": [{ "name": "Item Name", "description": "flavor text", "type": "TypeHere", "quantity": 1, "value": number }],
+              "exits": { "direction": "room_id_hint" }
+            }
+
+            RULES:
+            - ALWAYS include "dungeon" and "generated_dungeon" in environmentTags.
+            - Include the difficulty tier as a tag: "difficulty_{{difficultyTier}}".
+            - For {{difficultyTier}} difficulty:
+              {{(difficultyTier == "easy" ? "- 0-1 weak monsters (level 1-2, 10-20 HP, attack 2-4). Simple traps or puzzles. Modest loot (5-20gp items).\n              - Good for learning the ropes. Maybe a skeleton, a giant rat, or a goblin." : difficultyTier == "medium" ? "- 1-2 moderate monsters (level 3-5, 20-40 HP, attack 4-8). Interesting traps or riddles. Decent loot (20-50gp items).\n              - Think animated armor, dire wolves, bandit captains, or cursed spirits." : difficultyTier == "hard" ? "- 1-2 tough monsters (level 6-8, 40-70 HP, attack 8-12). Complex puzzles. Valuable loot (50-150gp items, magical gear).\n              - Think trolls, wraiths, dark knights, or minor demons." : "- 1-2 deadly monsters (level 9+, 70-120 HP, attack 12-18). Devious traps. Epic loot (100-500gp items, rare magical gear).\n              - Think dragons, liches, demon lords, or ancient guardians.")}}
+            - Include 1-3 items on the ground: weapons, potions, gold, curiosities, or keys.
+            - Each item needs a "type": one of "Weapon", "Armor", "Shield", "Helmet", "Potion", "Scroll", "Key", "QuestItem", "Misc", "Ring", "Amulet", "Bracelet", "Cloak", "Boots", "Gloves"
+            - Include 2-4 exits. One should go "deeper" (forward/down/north), others can be side passages.
+              Use descriptive room IDs like "{{dungeonId}}_hallway", "{{dungeonId}}_pit", "{{dungeonId}}_chamber".
+              Do NOT include a "back" exit — that will be added automatically.
+            - Make it interesting! A locked gate with a riddle, a collapsed passage, a mysterious altar,
+              bones of previous adventurers, ominous sounds from deeper within.
+            - NPCs should have level, hp, attack, and defense stats appropriate for their difficulty.
+            - Return ONLY valid JSON, no markdown, no code fences.
+            """;
+
+        var userPrompt = $"""
+            The player (level {playerLevel}) was directed to this dungeon from "{sourceRoom.Name}".
+            Generate a dungeon entrance with ID base "{dungeonId}".
+            Make it unique, dangerous, and rewarding. Give the player a reason to push deeper.
+            """;
+
+        try
+        {
+            var json = await CompletionAsync(systemPrompt, userPrompt, ct, maxTokens: 1024, operation: "generate-dungeon", roomId: dungeonId);
+            var generated = JsonSerializer.Deserialize<GeneratedDungeonRoom>(json, _jsonOptions);
+            if (generated is not null)
+            {
+                var room = new Room
+                {
+                    Id = dungeonId,
+                    Name = generated.Name ?? "Dungeon Entrance",
+                    Description = generated.Description ?? "A dark passage yawns before you.",
+                    EnvironmentTags = generated.EnvironmentTags ?? ["dungeon", "generated_dungeon", $"difficulty_{difficultyTier}"],
+                    IsDiscovered = true,
+                    DiscoveredAt = DateTimeOffset.UtcNow,
+                    Npcs = generated.Npcs?.Select(n => new Npc
+                    {
+                        Id = n.Id ?? Guid.NewGuid().ToString(),
+                        Name = n.Name ?? "Dungeon Creature",
+                        Personality = n.Personality ?? "Hostile and territorial.",
+                        IsHostile = n.IsHostile,
+                        Level = n.Level > 0 ? n.Level : playerLevel,
+                        Hp = n.Hp > 0 ? n.Hp : 15 + playerLevel * 5,
+                        MaxHp = n.Hp > 0 ? n.Hp : 15 + playerLevel * 5,
+                        AttackBonus = n.Attack > 0 ? n.Attack : 2 + playerLevel,
+                        Defense = n.Defense > 0 ? n.Defense : 8 + playerLevel
+                    }).ToList() ?? [],
+                    Items = generated.Items?.Select(i =>
+                    {
+                        var itemType = Enum.TryParse<ItemType>(i.Type, ignoreCase: true, out var parsed) ? parsed : ItemType.Misc;
+                        return new InventoryItem
+                        {
+                            Id = Guid.NewGuid().ToString("N"),
+                            Name = i.Name ?? "Mysterious Object",
+                            Description = i.Description ?? "",
+                            Quantity = Math.Max(1, i.Quantity),
+                            Type = itemType,
+                            IsEquippable = InventoryItem.IsEquippableType(itemType),
+                            Value = i.Value > 0 ? i.Value : 1
+                        };
+                    }).ToList() ?? [],
+                    Exits = new Dictionary<string, string>()
+                };
+
+                // Ensure dungeon tags are present
+                if (!room.EnvironmentTags.Contains("dungeon"))
+                    room.EnvironmentTags.Add("dungeon");
+                if (!room.EnvironmentTags.Contains("generated_dungeon"))
+                    room.EnvironmentTags.Add("generated_dungeon");
+
+                // Add the exits from the LLM (deeper into dungeon)
+                if (generated.Exits is not null)
+                {
+                    foreach (var (dir, targetId) in generated.Exits)
+                        room.Exits[dir.ToLowerInvariant()] = targetId;
+                }
+
+                return room;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to generate dungeon entrance, using fallback");
+        }
+
+        // Fallback dungeon entrance
+        return new Room
+        {
+            Id = dungeonId,
+            Name = "Crumbling Dungeon Entrance",
+            Description = "Rough-hewn stone steps descend into darkness. The air is cold and stale, carrying the faint scent of mildew and something worse. Scratching sounds echo from somewhere below.",
+            EnvironmentTags = ["dungeon", "generated_dungeon", $"difficulty_{difficultyTier}", "underground", "dark"],
+            IsDiscovered = true,
+            DiscoveredAt = DateTimeOffset.UtcNow,
+            Npcs =
+            [
+                new Npc
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Name = "Giant Rat",
+                    Personality = "Aggressive and territorial. Hisses at anything that moves.",
+                    IsHostile = true,
+                    Level = Math.Max(1, playerLevel - 1),
+                    Hp = 10 + playerLevel * 3,
+                    MaxHp = 10 + playerLevel * 3,
+                    AttackBonus = 2 + playerLevel,
+                    Defense = 8 + playerLevel
+                }
+            ],
+            Items =
+            [
+                new InventoryItem
+                {
+                    Id = Guid.NewGuid().ToString("N"),
+                    Name = "Rusty Key",
+                    Description = "A corroded iron key with an ornate head. It might open something deeper in.",
+                    Type = ItemType.Key,
+                    Value = 5
+                }
+            ],
+            Exits = new Dictionary<string, string>
+            {
+                ["north"] = $"{dungeonId}_corridor"
+            }
         };
     }
 
@@ -1823,6 +2011,16 @@ public class NarratorService : INarratorService
         public List<GeneratedItem>? Items { get; set; }
     }
 
+    private class GeneratedDungeonRoom
+    {
+        public string? Name { get; set; }
+        public string? Description { get; set; }
+        public List<string>? EnvironmentTags { get; set; }
+        public List<GeneratedNpc>? Npcs { get; set; }
+        public List<GeneratedItem>? Items { get; set; }
+        public Dictionary<string, string>? Exits { get; set; }
+    }
+
     private class GeneratedNpc
     {
         public string? Id { get; set; }
@@ -1831,6 +2029,9 @@ public class NarratorService : INarratorService
         public string? Faction { get; set; }
         public bool IsHostile { get; set; }
         public int Level { get; set; } = 1;
+        public int Hp { get; set; }
+        public int Attack { get; set; }
+        public int Defense { get; set; }
     }
 
     private class GeneratedItem
@@ -1839,6 +2040,7 @@ public class NarratorService : INarratorService
         public string? Description { get; set; }
         public string? Type { get; set; }
         public int Quantity { get; set; } = 1;
+        public int Value { get; set; }
     }
 
     // ═══════════════════════════════════════════════════════════════

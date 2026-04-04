@@ -15,6 +15,12 @@ public interface INarratorService
     Task<FreeFormResponse> ProcessConversationTurnAsync(PlayerCharacter player, Room room, Npc npc, InteractionState interaction, string rawInput, CancellationToken ct = default);
     Task<FreeFormResponse> ProcessCombatTurnAsync(PlayerCharacter player, Room room, Npc enemy, InteractionState interaction, string rawInput, CancellationToken ct = default);
 
+    /// <summary>
+    /// Generates a dungeon entrance room scaled to the player's level.
+    /// The room will have environment tags like "dungeon", "generated_dungeon", "difficulty_X"
+    /// so that subsequent GenerateRoomAsync calls maintain dungeon theming.
+    /// </summary>
+    Task<Room> GenerateDungeonEntranceAsync(string dungeonId, int playerLevel, Room sourceRoom, CancellationToken ct = default);
 
     /// <summary>Evaluate an improvised (unregistered) spell attempt using the power-budget system.</summary>
     Task<ImprovisedSpellResult> EvaluateImprovisedSpellAsync(

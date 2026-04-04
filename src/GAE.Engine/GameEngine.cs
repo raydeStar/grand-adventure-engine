@@ -1615,6 +1615,67 @@ public class GameEngine : IGameEngine
         return false;
     }
 
+    private static readonly HashSet<string> DungeonRequestKeywords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "dungeon", "adventure", "quest", "challenge", "explore", "delve",
+        "expedition", "cave", "crypt", "tomb", "lair", "ruins"
+    };
+
+    private static bool IsDungeonRequestPhrase(string input)
+    {
+        var lower = input.ToLowerInvariant();
+        return DungeonRequestKeywords.Any(kw => lower.Contains(kw));
+    }
+
+    /// <summary>
+    /// Creates a dungeon entrance room connected to the current room.
+    /// Returns a message describing the new dungeon exit, or null if creation failed.
+    /// </summary>
+    private async Task<string?> TryCreateDungeonAsync(PlayerCharacter player, Room room, Npc npc, CancellationToken ct)
+    {
+        try
+        {
+            var dungeonId = $"generated_dungeon_{Guid.NewGuid().ToString("N")[..8]}";
+            var entrance = await _narrator.GenerateDungeonEntranceAsync(dungeonId, player.Level, room, ct);
+
+            // Wire the entrance back to the source room
+            entrance.Exits["back"] = room.Id;
+            await _stateManager.SaveRoomAsync(entrance, ct);
+
+            // Add exit from current room to the dungeon
+            var exitDirection = PickDungeonExitDirection(room);
+            room.Exits[exitDirection] = dungeonId;
+            await _stateManager.SaveRoomAsync(room, ct);
+
+            _logger.LogInformation(
+                "Dungeon '{DungeonName}' ({DungeonId}) created by {NpcName} for player {PlayerId} (level {Level}). Exit: {Direction}",
+                entrance.Name, dungeonId, npc.Name, player.Id, player.Level, exitDirection);
+
+            PublishToWikiInBackground(entrance);
+
+            return $"⚔️ A new dungeon has appeared! **{entrance.Name}** — go **{exitDirection}** to enter.";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to create dungeon for player {PlayerId}", player.Id);
+            return null;
+        }
+    }
+
+    /// <summary>Picks an exit direction for the dungeon that doesn't conflict with existing exits.</summary>
+    private static string PickDungeonExitDirection(Room room)
+    {
+        // Preferred directions for dungeon entrances
+        string[] preferred = ["down", "underground", "north", "east", "west", "south"];
+        foreach (var dir in preferred)
+        {
+            if (!room.Exits.ContainsKey(dir))
+                return dir;
+        }
+        // Fallback: use a unique descriptive name
+        return "dungeon entrance";
+    }
+
     /// <summary>
     /// Routes a player turn through the active interaction mode (conversation, combat, etc.).
     /// Returns null if the interaction ended and normal processing should continue.
@@ -1723,7 +1784,7 @@ public class GameEngine : IGameEngine
             return result;
         }
 
-        // Normal conversation turn  -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚Â  -- Æ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚Â everything the player says goes to the AI as dialogue
+        // Normal conversation turn —  everything the player says goes to the AI as dialogue
         {
             // Check for social skill intent and roll if detected
             var socialCheck = TryRollSocialCheck(player, npc, action.RawInput);
@@ -1731,8 +1792,8 @@ public class GameEngine : IGameEngine
             if (socialCheck is not null)
             {
                 // Prepend the roll result so the LLM knows the mechanical outcome
-                promptInput = $"{action.RawInput}\n[Social check: {socialCheck.SkillName} ({socialCheck.StatUsed.ToUpperInvariant()} {socialCheck.Roll.Modifier:+0;-0})  -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚Â  -- Æ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚Â  -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ --  rolled {socialCheck.Roll.Total} vs DC {socialCheck.DC} = {(socialCheck.Succeeded ? "SUCCESS" : "FAILURE")}]";
-                player.Interaction.AppendContext($"[{socialCheck.SkillName} check: {socialCheck.Roll.Total} vs DC {socialCheck.DC}  -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚Â  -- Æ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚Â  -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ --  {(socialCheck.Succeeded ? "success" : "failure")}]");
+                promptInput = $"{action.RawInput}\n[Social check: {socialCheck.SkillName} ({socialCheck.StatUsed.ToUpperInvariant()} {socialCheck.Roll.Modifier:+0;-0}) — rolled {socialCheck.Roll.Total} vs DC {socialCheck.DC} = {(socialCheck.Succeeded ? "SUCCESS" : "FAILURE")}]";
+                player.Interaction.AppendContext($"[{socialCheck.SkillName} check: {socialCheck.Roll.Total} vs DC {socialCheck.DC} — {(socialCheck.Succeeded ? "success" : "failure")}]");
             }
 
             var freeForm = await _narrator.ProcessConversationTurnAsync(player, room, npc, player.Interaction, promptInput, ct);
@@ -1750,9 +1811,24 @@ public class GameEngine : IGameEngine
             await _stateManager.SavePlayerAsync(player, ct);
             await _stateManager.SaveRoomAsync(room, ct);
 
+            // --- Dungeon generation: if an NPC with dungeon knowledge agrees to create one ---
+            string? dungeonCreatedMessage = null;
+            if (npc.KnowledgeScopes.Any(k => k.Equals("dungeons", StringComparison.OrdinalIgnoreCase))
+                && IsDungeonRequestPhrase(action.RawInput)
+                && !room.Exits.Values.Any(v => v.Contains("_dungeon_", StringComparison.OrdinalIgnoreCase)))
+            {
+                dungeonCreatedMessage = await TryCreateDungeonAsync(player, room, npc, ct);
+            }
+
             var mechanicalLine = $"[Conversation with {npc.Name}, turn {player.Interaction.TurnCount}]";
             if (socialCheck is not null)
-                mechanicalLine = $"[{socialCheck.SkillName} check: {socialCheck.Roll.Total} vs DC {socialCheck.DC}  -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚Â  -- Æ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚Â  -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ --  {(socialCheck.Succeeded ? "SUCCESS" : "FAILURE")}]";
+                mechanicalLine = $"[{socialCheck.SkillName} check: {socialCheck.Roll.Total} vs DC {socialCheck.DC} — {(socialCheck.Succeeded ? "SUCCESS" : "FAILURE")}]";
+            if (dungeonCreatedMessage is not null)
+                mechanicalLine += $" {dungeonCreatedMessage}";
+
+            var narration = freeForm.Narration;
+            if (dungeonCreatedMessage is not null)
+                narration += $"\n\n{dungeonCreatedMessage}";
 
             var result = new ActionResult
             {
@@ -1760,7 +1836,7 @@ public class GameEngine : IGameEngine
                 RawInput = action.RawInput,
                 Success = freeForm.Success,
                 MechanicalSummary = mechanicalLine,
-                Narration = freeForm.Narration,
+                Narration = narration,
                 DiceRolls = socialCheck is not null ? [socialCheck.Roll] : [],
                 InteractionUpdate = freeForm.InteractionUpdate ?? new InteractionUpdate
                 {
@@ -2148,7 +2224,7 @@ public class GameEngine : IGameEngine
         var update = freeForm.InteractionUpdate;
         if (update is null) return;
 
-        // Rich disposition takes priority  -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚Â  -- Æ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚Â sync flat string from it
+        // Rich disposition takes priority —  sync flat string from it
         if (update.DispositionState is not null)
         {
             npc.DispositionState = update.DispositionState;
@@ -2160,7 +2236,7 @@ public class GameEngine : IGameEngine
             npc.Disposition = update.NpcDisposition;
         }
 
-        // Apply memory flags from the LLM (additive  -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚Â  -- Æ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚Â never remove via this path)
+        // Apply memory flags from the LLM (additive —  never remove via this path)
         foreach (var flag in update.MemoryFlags)
         {
             if (!string.IsNullOrWhiteSpace(flag) && !npc.DispositionState.MemoryFlags.Contains(flag, StringComparer.OrdinalIgnoreCase))
@@ -2262,7 +2338,7 @@ public class GameEngine : IGameEngine
                 continue;
 
             // Pick the better stat if an alt is available (e.g. intimidate: STR or CHA)
-            // GetModifier returns +0 for unknown stats  -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚Â  -- Æ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚Â equivalent to stat value 10 (average)
+            // GetModifier returns +0 for unknown stats —  equivalent to stat value 10 (average)
             int statMod = player.GetModifier(config.Stat);
             string statUsed = config.Stat;
             if (config.AltStat is not null)
@@ -2422,11 +2498,11 @@ public class GameEngine : IGameEngine
         foreach (var flag in memoryFlags)
         {
             var f = flag.ToLowerInvariant();
-            if (f.Contains("insult")) mod += 3;        // offended  -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚Â  -- Æ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚Â  -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ --  harder to influence
+            if (f.Contains("insult")) mod += 3;        // offended — harder to influence
             if (f.Contains("betrayal")) mod += 5;       // deep grudge
-            if (f.Contains("crime")) mod += 4;          // witnessed crime  -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚Â  -- Æ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚Â  -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ --  distrustful
-            if (f.Contains("romance")) mod -= 4;        // in love  -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚Â  -- Æ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚Â  -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ --  very receptive
-            if (f.Contains("friendship")) mod -= 2;     // friends  -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚Â  -- Æ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚Â  -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ --  easier
+            if (f.Contains("crime")) mod += 4;          // witnessed crime — distrustful
+            if (f.Contains("romance")) mod -= 4;        // in love — very receptive
+            if (f.Contains("friendship")) mod -= 2;     // friends — easier
             if (f.Contains("helped")) mod -= 2;         // gratitude
             if (f.Contains("flirted")) mod -= 1;        // some rapport established
         }
@@ -2762,7 +2838,7 @@ public class GameEngine : IGameEngine
 
         if (!item.IsConsumable)
         {
-            // Not consumable  -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚Â  -- Æ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚Â fall through to free-form
+            // Not consumable —  fall through to free-form
             _logger.LogInformation("Item '{ItemName}' is not consumable, routing to free-form.", item.Name);
             return await ProcessFreeFormActionAsync(player, action, ct);
         }
@@ -2772,7 +2848,7 @@ public class GameEngine : IGameEngine
 
         if (hpDelta == 0 && mpDelta == 0)
         {
-            // Can't parse effect  -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚Â  -- Æ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚Â fall through to free-form
+            // Can't parse effect —  fall through to free-form
             _logger.LogInformation("Could not parse effect for '{ItemName}' (Effect: '{Effect}'), routing to free-form.", item.Name, item.Effect);
             return await ProcessFreeFormActionAsync(player, action, ct);
         }

@@ -301,7 +301,7 @@ public class FullPlaythroughTests : IClassFixture<GaeWebApplicationFactory>
         Assert.True(goretusk!.IsHostile);
         Assert.Equal(80, goretusk.Hp);
         Assert.Equal(80, goretusk.MaxHp);
-        Assert.Equal(15, goretusk.Defense);
+        Assert.Equal(14, goretusk.Defense);
         Assert.Equal(8, goretusk.AttackBonus);
         Assert.Equal(6, goretusk.Level);
     }

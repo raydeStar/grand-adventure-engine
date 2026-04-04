@@ -106,6 +106,16 @@ public class StubNarratorService : INarratorService
             Exits = new Dictionary<string, string> { [OppositeDir(direction)] = sourceRoom.Id }
         });
 
+    public Task<Room> GenerateDungeonEntranceAsync(string dungeonId, int playerLevel, Room sourceRoom, CancellationToken ct = default)
+        => Task.FromResult(new Room
+        {
+            Id = dungeonId,
+            Name = $"Test Dungeon ({dungeonId})",
+            Description = "A test dungeon entrance.",
+            EnvironmentTags = ["dungeon", "generated_dungeon"],
+            Exits = new Dictionary<string, string> { ["back"] = sourceRoom.Id }
+        });
+
     public Task<Npc> GenerateNpcAsync(Room room, string? hint = null, CancellationToken ct = default)
         => Task.FromResult(new Npc { Id = Guid.NewGuid().ToString(), Name = "Test NPC", Personality = "Friendly" });
 
