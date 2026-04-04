@@ -658,6 +658,18 @@ public class DiscordBotService : IHostedService
             return;
         }
 
+        // Map — send as a code block embed
+        if (action.Type == Core.Models.ActionType.Map)
+        {
+            var mapEmbed = new EmbedBuilder()
+                .WithTitle("World Map")
+                .WithDescription(result.MechanicalSummary ?? "No map data available.")
+                .WithColor(Color.Orange)
+                .WithFooter(FormatStatusBar(player));
+            await thread.SendMessageAsync(embed: mapEmbed.Build());
+            return;
+        }
+
         // Combat result
         if (result.InteractionUpdate?.CombatStatus is not null)
         {

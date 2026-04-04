@@ -73,6 +73,10 @@ const API = {
     return this.postJson(`${this.base}/admin/seed-demo`, { replaceExisting });
   },
 
+  async editPlayer(data) {
+    return this.postJson(`${this.base}/admin/mutations/edit-player`, data);
+  },
+
   async adjustResources(data) {
     return this.postJson(`${this.base}/admin/mutations/resources`, data);
   },

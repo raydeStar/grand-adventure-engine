@@ -142,6 +142,76 @@
     // Wire up AI logs tab events
     UI.wireLogsTab();
 
+    // Admin character edit form
+    UI.$('btn-admin-edit-char').addEventListener('click', () => {
+      if (!state.currentPlayer) return;
+      const p = state.currentPlayer;
+      UI.$('edit-name').value = p.name || '';
+      UI.$('edit-race').value = p.race || '';
+      UI.$('edit-class').value = p.class || '';
+      UI.$('edit-room').value = p.currentRoomId || '';
+      UI.$('edit-hp').value = p.hp ?? 0;
+      UI.$('edit-maxhp').value = p.maxHp ?? 0;
+      UI.$('edit-mp').value = p.mp ?? 0;
+      UI.$('edit-maxmp').value = p.maxMp ?? 0;
+      UI.$('edit-gold').value = p.gold ?? 0;
+      UI.$('edit-xp').value = p.xp ?? 0;
+      UI.$('edit-level').value = p.level ?? 1;
+      UI.$('edit-str').value = p.str ?? 10;
+      UI.$('edit-dex').value = p.dex ?? 10;
+      UI.$('edit-con').value = p.con ?? 10;
+      UI.$('edit-int').value = p.int ?? 10;
+      UI.$('edit-wis').value = p.wis ?? 10;
+      UI.$('edit-cha').value = p.cha ?? 10;
+      UI.$('edit-luck').value = p.luck ?? 10;
+      UI.$('admin-edit-form').classList.remove('hidden');
+    });
+
+    UI.$('btn-admin-cancel-edit').addEventListener('click', () => {
+      UI.$('admin-edit-form').classList.add('hidden');
+    });
+
+    UI.$('btn-admin-save-char').addEventListener('click', async () => {
+      if (!state.currentPlayerId) return;
+      try {
+        const payload = { playerId: state.currentPlayerId };
+        const p = state.currentPlayer;
+
+        // Only send changed fields
+        const fields = [
+          ['name', 'edit-name', 'string'], ['race', 'edit-race', 'string'],
+          ['class', 'edit-class', 'string'], ['currentRoomId', 'edit-room', 'string'],
+          ['hp', 'edit-hp', 'int'], ['maxHp', 'edit-maxhp', 'int'],
+          ['mp', 'edit-mp', 'int'], ['maxMp', 'edit-maxmp', 'int'],
+          ['gold', 'edit-gold', 'int'], ['xp', 'edit-xp', 'int'], ['level', 'edit-level', 'int'],
+          ['str', 'edit-str', 'int'], ['dex', 'edit-dex', 'int'], ['con', 'edit-con', 'int'],
+          ['int', 'edit-int', 'int'], ['wis', 'edit-wis', 'int'], ['cha', 'edit-cha', 'int'],
+          ['luck', 'edit-luck', 'int']
+        ];
+
+        for (const [key, elId, type] of fields) {
+          const val = type === 'int' ? parseInt(UI.$(elId).value) : UI.$(elId).value;
+          const current = p[key];
+          if (val !== current && val !== '' && !Number.isNaN(val)) {
+            payload[key] = val;
+          }
+        }
+
+        if (Object.keys(payload).length <= 1) {
+          UI.appendActivity('admin-edit-log', 'No changes detected.', 'info');
+          return;
+        }
+
+        const result = await API.editPlayer(payload);
+        UI.appendActivity('admin-edit-log', result.summary, 'success');
+        UI.$('admin-edit-form').classList.add('hidden');
+        await refreshCurrentPlayer();
+        await refreshPlayers();
+      } catch (err) {
+        UI.appendActivity('admin-edit-log', `Error: ${err.message}`, 'error');
+      }
+    });
+
     UI.$('existing-players').addEventListener('click', handlePortalPlayerClick);
     UI.$('admin-players-table').addEventListener('click', handleAdminRegistryClick);
 

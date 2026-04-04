@@ -32,5 +32,6 @@ public enum ActionType
     Inventory,
     Stats,
     Help,
+    Map,
     Unknown
 }

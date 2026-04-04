@@ -799,12 +799,54 @@ const UI = {
       return;
     }
 
-    if (!players.length) {
-      container.innerHTML = '<div class="empty-state">No players seeded yet.</div>';
+    this._adminPlayers = players;
+    this._adminCurrentPlayerId = currentPlayerId;
+
+    // Build search bar + list wrapper if not present
+    if (!container.querySelector('.admin-search-bar')) {
+      container.innerHTML = `
+        <div class="admin-search-bar search-bar">
+          <input type="text" id="admin-player-search" placeholder="Search players by name, id, race, class..." />
+          <span class="search-count" id="admin-player-count"></span>
+        </div>
+        <div id="admin-players-list" class="portal-player-list"></div>
+      `;
+      const searchInput = this.$('admin-player-search');
+      if (searchInput) {
+        searchInput.addEventListener('input', () => this._filterAdminPlayers());
+      }
+    }
+
+    this._filterAdminPlayers();
+  },
+
+  _filterAdminPlayers() {
+    const list = this.$('admin-players-list');
+    const countEl = this.$('admin-player-count');
+    const searchInput = this.$('admin-player-search');
+    const players = this._adminPlayers || [];
+    const currentPlayerId = this._adminCurrentPlayerId || '';
+    const query = (searchInput?.value || '').toLowerCase().trim();
+
+    const filtered = query
+      ? players.filter(p => {
+          const hay = `${p.name} ${p.id} ${p.race} ${p.class} ${p.currentRoomId}`.toLowerCase();
+          return hay.includes(query);
+        })
+      : players;
+
+    if (countEl) {
+      countEl.textContent = query
+        ? `${filtered.length} / ${players.length}`
+        : `${players.length} characters`;
+    }
+
+    if (!filtered.length) {
+      list.innerHTML = '<div class="empty-state">No players match your search.</div>';
       return;
     }
 
-    container.innerHTML = players.map((player) => `
+    list.innerHTML = filtered.map((player) => `
       <div class="registry-row">
         <div class="registry-meta">
           <div>

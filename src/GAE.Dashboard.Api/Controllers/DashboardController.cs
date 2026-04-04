@@ -514,6 +514,51 @@ public class DashboardController : ControllerBase
     }
 
     [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpPost("admin/mutations/edit-player")]
+    public async Task<IActionResult> EditPlayer([FromBody] EditPlayerRequest request, CancellationToken ct)
+    {
+        var player = await RequirePlayerAsync(request.PlayerId, ct);
+        if (player is null)
+            return NotFound(new { error = $"Player '{request.PlayerId}' was not found." });
+
+        var changes = new List<string>();
+
+        if (request.Name is not null) { player.Name = request.Name.Trim(); changes.Add("name"); }
+        if (request.Race is not null) { player.Race = request.Race.Trim(); changes.Add("race"); }
+        if (request.Class is not null) { player.Class = request.Class.Trim(); changes.Add("class"); }
+        if (request.Backstory is not null) { player.Backstory = request.Backstory.Trim(); changes.Add("backstory"); }
+
+        if (request.Hp.HasValue) { player.Hp = Math.Max(0, request.Hp.Value); changes.Add("hp"); }
+        if (request.MaxHp.HasValue) { player.MaxHp = Math.Max(1, request.MaxHp.Value); changes.Add("maxHp"); }
+        if (request.Mp.HasValue) { player.Mp = Math.Max(0, request.Mp.Value); changes.Add("mp"); }
+        if (request.MaxMp.HasValue) { player.MaxMp = Math.Max(0, request.MaxMp.Value); changes.Add("maxMp"); }
+        if (request.Gold.HasValue) { player.Gold = Math.Max(0, request.Gold.Value); changes.Add("gold"); }
+        if (request.Xp.HasValue) { player.Xp = Math.Max(0, request.Xp.Value); changes.Add("xp"); }
+        if (request.Level.HasValue) { player.Level = Math.Max(1, request.Level.Value); changes.Add("level"); }
+
+        if (request.Str.HasValue) { player.Str = Math.Clamp(request.Str.Value, 1, 30); changes.Add("str"); }
+        if (request.Dex.HasValue) { player.Dex = Math.Clamp(request.Dex.Value, 1, 30); changes.Add("dex"); }
+        if (request.Con.HasValue) { player.Con = Math.Clamp(request.Con.Value, 1, 30); changes.Add("con"); }
+        if (request.Int.HasValue) { player.Int = Math.Clamp(request.Int.Value, 1, 30); changes.Add("int"); }
+        if (request.Wis.HasValue) { player.Wis = Math.Clamp(request.Wis.Value, 1, 30); changes.Add("wis"); }
+        if (request.Cha.HasValue) { player.Cha = Math.Clamp(request.Cha.Value, 1, 30); changes.Add("cha"); }
+        if (request.Luck.HasValue) { player.Luck = Math.Clamp(request.Luck.Value, 1, 30); changes.Add("luck"); }
+
+        if (request.CurrentRoomId is not null) { player.CurrentRoomId = request.CurrentRoomId.Trim(); changes.Add("room"); }
+
+        player.Hp = Math.Clamp(player.Hp, 0, Math.Max(1, player.MaxHp));
+        player.Mp = Math.Clamp(player.Mp, 0, Math.Max(0, player.MaxMp));
+        player.LastActiveAt = DateTimeOffset.UtcNow;
+
+        await _stateManager.SavePlayerAsync(player, ct);
+        var summary = $"Edited {player.Name}: {string.Join(", ", changes)}.";
+        await BroadcastAdminMutationAsync(summary, playerId: player.Id, roomId: player.CurrentRoomId,
+            data: new Dictionary<string, object?> { ["player"] = player, ["mutation"] = "edit-player", ["fields"] = changes }, ct: ct);
+
+        return Ok(new { summary, player });
+    }
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
     [HttpPost("admin/mutations/teleport")]
     public async Task<IActionResult> TeleportPlayer([FromBody] TeleportPlayerRequest request, CancellationToken ct)
     {
@@ -1089,6 +1134,30 @@ public class ResetWorldRequest
     /// If false, deletes all players too.
     /// </summary>
     public bool KeepPlayers { get; set; } = true;
+}
+
+public class EditPlayerRequest
+{
+    public string PlayerId { get; set; } = string.Empty;
+    public string? Name { get; set; }
+    public string? Race { get; set; }
+    public string? Class { get; set; }
+    public string? Backstory { get; set; }
+    public string? CurrentRoomId { get; set; }
+    public int? Hp { get; set; }
+    public int? MaxHp { get; set; }
+    public int? Mp { get; set; }
+    public int? MaxMp { get; set; }
+    public int? Gold { get; set; }
+    public int? Xp { get; set; }
+    public int? Level { get; set; }
+    public int? Str { get; set; }
+    public int? Dex { get; set; }
+    public int? Con { get; set; }
+    public int? Int { get; set; }
+    public int? Wis { get; set; }
+    public int? Cha { get; set; }
+    public int? Luck { get; set; }
 }
 
 public class AdjustResourcesRequest

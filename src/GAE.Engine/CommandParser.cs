@@ -181,6 +181,13 @@ public partial class CommandParser
             return action;
         }
 
+        // Map
+        if (MapRegex().IsMatch(input))
+        {
+            action.Type = ActionType.Map;
+            return action;
+        }
+
         // Help
         if (HelpRegex().IsMatch(input))
         {
@@ -266,6 +273,9 @@ public partial class CommandParser
 
     [GeneratedRegex(@"^(?:stats|status|character|char|me)$", RegexOptions.IgnoreCase)]
     private static partial Regex StatsRegex();
+
+    [GeneratedRegex(@"^(?:map|look\s+(?:at\s+)?map|show\s+map|view\s+map|world\s+map|check\s+map)$", RegexOptions.IgnoreCase)]
+    private static partial Regex MapRegex();
 
     [GeneratedRegex(@"^(?:help|h|\?)$", RegexOptions.IgnoreCase)]
     private static partial Regex HelpRegex();

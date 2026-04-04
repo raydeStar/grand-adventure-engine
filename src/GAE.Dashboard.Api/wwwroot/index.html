@@ -651,6 +651,43 @@
                   <div id="status-effects" class="status-effects"></div>
                 </div>
               </div>
+
+              <div class="admin-edit-actions" style="margin-top: 0.75rem;">
+                <button class="btn btn-secondary btn-sm" id="btn-admin-edit-char" type="button">Edit Character</button>
+              </div>
+
+              <div id="admin-edit-form" class="panel admin-edit-form hidden" style="margin-top: 0.75rem;">
+                <h3>Edit Character</h3>
+                <div class="mutation-grid">
+                  <div class="form-group"><label>Name</label><input type="text" id="edit-name" /></div>
+                  <div class="form-group"><label>Race</label><input type="text" id="edit-race" /></div>
+                  <div class="form-group"><label>Class</label><input type="text" id="edit-class" /></div>
+                  <div class="form-group"><label>Room ID</label><input type="text" id="edit-room" /></div>
+                </div>
+                <div class="mutation-grid" style="margin-top: 0.5rem;">
+                  <div class="form-group"><label>HP</label><input type="number" id="edit-hp" /></div>
+                  <div class="form-group"><label>Max HP</label><input type="number" id="edit-maxhp" /></div>
+                  <div class="form-group"><label>MP</label><input type="number" id="edit-mp" /></div>
+                  <div class="form-group"><label>Max MP</label><input type="number" id="edit-maxmp" /></div>
+                  <div class="form-group"><label>Gold</label><input type="number" id="edit-gold" /></div>
+                  <div class="form-group"><label>XP</label><input type="number" id="edit-xp" /></div>
+                  <div class="form-group"><label>Level</label><input type="number" id="edit-level" /></div>
+                </div>
+                <div class="mutation-grid" style="margin-top: 0.5rem;">
+                  <div class="form-group"><label>STR</label><input type="number" id="edit-str" min="1" max="30" /></div>
+                  <div class="form-group"><label>DEX</label><input type="number" id="edit-dex" min="1" max="30" /></div>
+                  <div class="form-group"><label>CON</label><input type="number" id="edit-con" min="1" max="30" /></div>
+                  <div class="form-group"><label>INT</label><input type="number" id="edit-int" min="1" max="30" /></div>
+                  <div class="form-group"><label>WIS</label><input type="number" id="edit-wis" min="1" max="30" /></div>
+                  <div class="form-group"><label>CHA</label><input type="number" id="edit-cha" min="1" max="30" /></div>
+                  <div class="form-group"><label>LUCK</label><input type="number" id="edit-luck" min="1" max="30" /></div>
+                </div>
+                <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem;">
+                  <button class="btn btn-primary btn-sm" id="btn-admin-save-char" type="button">Save Changes</button>
+                  <button class="btn btn-secondary btn-sm" id="btn-admin-cancel-edit" type="button">Cancel</button>
+                </div>
+                <div id="admin-edit-log" class="activity-log" style="margin-top: 0.5rem;"></div>
+              </div>
             </div>
           </div>
         </div>
