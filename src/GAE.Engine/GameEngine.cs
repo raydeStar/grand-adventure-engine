@@ -573,29 +573,28 @@ public class GameEngine : IGameEngine
         }
 
 
-        // Auto-equip if the item is equippable and the slot is empty
+        // Auto-equip if the item is equippable and the relevant slot is empty
         string? autoEquipNote = null;
         var itemToEquip = existingStack ?? takenItem;
         if (itemToEquip.IsEquippable && actualQuantity == 1)
         {
+            // Only auto-equip into single-slot types when that slot is empty
+            // Don't auto-equip stackable accessories (rings/amulets/bracelets)
             bool slotEmpty = itemToEquip.Type switch
             {
-                ItemType.Weapon => player.Equipment.Weapon is null,
+                ItemType.Weapon => player.Equipment.MainHand is null,
+                ItemType.Shield => player.Equipment.OffHand is null,
                 ItemType.Armor => player.Equipment.Armor is null,
-                ItemType.Shield => player.Equipment.Shield is null,
                 ItemType.Helmet => player.Equipment.Helmet is null,
+                ItemType.Cloak => player.Equipment.Cloak is null,
+                ItemType.Boots => player.Equipment.Boots is null,
+                ItemType.Gloves => player.Equipment.Gloves is null,
                 _ => false
             };
 
             if (slotEmpty)
             {
-                switch (itemToEquip.Type)
-                {
-                    case ItemType.Weapon: player.Equipment.Weapon = itemToEquip; break;
-                    case ItemType.Armor: player.Equipment.Armor = itemToEquip; break;
-                    case ItemType.Shield: player.Equipment.Shield = itemToEquip; break;
-                    case ItemType.Helmet: player.Equipment.Helmet = itemToEquip; break;
-                }
+                player.Equipment.Equip(itemToEquip, out _);
                 player.Inventory.Remove(itemToEquip);
                 autoEquipNote = $" Equipped {itemToEquip.Name}.";
             }
@@ -807,37 +806,21 @@ public class GameEngine : IGameEngine
         if (!takenFromRoom)
             player.Inventory.Remove(item);
 
-        // Swap into equipment slot, returning old item to inventory
-        switch (item.Type)
+        // Equip into the correct slot(s), returning displaced items to inventory
+        var slotName = player.Equipment.Equip(item, out var displaced);
+        if (slotName is null)
         {
-            case ItemType.Weapon:
-                if (player.Equipment.Weapon is not null)
-                    player.Inventory.Add(player.Equipment.Weapon);
-                player.Equipment.Weapon = item;
-                break;
-            case ItemType.Armor:
-                if (player.Equipment.Armor is not null)
-                    player.Inventory.Add(player.Equipment.Armor);
-                player.Equipment.Armor = item;
-                break;
-            case ItemType.Shield:
-                if (player.Equipment.Shield is not null)
-                    player.Inventory.Add(player.Equipment.Shield);
-                player.Equipment.Shield = item;
-                break;
-            case ItemType.Helmet:
-                if (player.Equipment.Helmet is not null)
-                    player.Inventory.Add(player.Equipment.Helmet);
-                player.Equipment.Helmet = item;
-                break;
-            default:
-                // Put it back where it came from
-                if (takenFromRoom && room is not null)
-                    room.Items.Add(item);
-                else
-                    player.Inventory.Add(item);
-                return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"{item.Name} is not equippable." };
+            // Not equippable — put it back
+            if (takenFromRoom && room is not null)
+                room.Items.Add(item);
+            else
+                player.Inventory.Add(item);
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"{item.Name} is not equippable." };
         }
+
+        // Return displaced items to inventory
+        foreach (var old in displaced)
+            player.Inventory.Add(old);
 
         if (takenFromRoom && room is not null)
             await _stateManager.SaveRoomAsync(room, ct);
@@ -862,27 +845,13 @@ public class GameEngine : IGameEngine
 
     private ActionResult ProcessUnequip(PlayerCharacter player, GameAction action)
     {
-        var equippedItems = new[]
-        {
-            player.Equipment.Weapon,
-            player.Equipment.Armor,
-            player.Equipment.Shield,
-            player.Equipment.Helmet
-        }.Where(item => item is not null).Cast<InventoryItem>();
-
-        var item = FindNamedEntity(equippedItems, inventoryItem => inventoryItem.Name, action.Target);
-
-        if (ReferenceEquals(item, player.Equipment.Weapon))
-            player.Equipment.Weapon = null;
-        else if (ReferenceEquals(item, player.Equipment.Armor))
-            player.Equipment.Armor = null;
-        else if (ReferenceEquals(item, player.Equipment.Shield))
-            player.Equipment.Shield = null;
-        else if (ReferenceEquals(item, player.Equipment.Helmet))
-            player.Equipment.Helmet = null;
+        var item = FindNamedEntity(player.Equipment.AllEquipped(), i => i.Name, action.Target);
 
         if (item is null)
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"Unequip target '{action.Target}' was not found among your equipped items." };
+
+        player.Equipment.Unequip(item);
+        player.Inventory.Add(item);
 
         return new ActionResult
         {
@@ -948,11 +917,9 @@ public class GameEngine : IGameEngine
             ? string.Join("\n", player.Inventory.Select(i => $"  - {i.Name} (x{i.Quantity}) -- {i.Description}"))
             : "  Your inventory is empty.";
 
-        var equipped = new List<string>();
-        if (player.Equipment.Weapon is not null) equipped.Add($"Weapon: {player.Equipment.Weapon.Name}");
-        if (player.Equipment.Armor is not null) equipped.Add($"Armor: {player.Equipment.Armor.Name}");
-        if (player.Equipment.Shield is not null) equipped.Add($"Shield: {player.Equipment.Shield.Name}");
-        if (player.Equipment.Helmet is not null) equipped.Add($"Helmet: {player.Equipment.Helmet.Name}");
+        var equipped = player.Equipment.AllEquipped()
+            .Select(e => FormatEquippedItem(e))
+            .ToList();
         var equippedStr = equipped.Count > 0 ? string.Join(", ", equipped) : "Nothing equipped";
 
         return new ActionResult
@@ -1452,7 +1419,9 @@ public class GameEngine : IGameEngine
             ArmorValue = item.ArmorValue,
             IsEquippable = item.IsEquippable,
             IsConsumable = item.IsConsumable,
-            Effect = item.Effect
+            IsTwoHanded = item.IsTwoHanded,
+            Effect = item.Effect,
+            StatBonuses = new Dictionary<string, int>(item.StatBonuses)
         };
 
     private static void AddRoomItem(Room room, InventoryItem item)
@@ -1479,6 +1448,15 @@ public class GameEngine : IGameEngine
             return $"{quantity} gold coins";
 
         return $"{normalizedName} (x{quantity})";
+    }
+
+    private static string FormatEquippedItem(InventoryItem item)
+    {
+        var label = item.Type.ToString();
+        var bonuses = item.StatBonuses.Count > 0
+            ? " (" + string.Join(", ", item.StatBonuses.Select(kv => $"{kv.Key.ToUpper()} {kv.Value:+0;-0}")) + ")"
+            : "";
+        return $"{label}: {item.Name}{bonuses}";
     }
 
     private static T? FindNamedEntity<T>(IEnumerable<T> entities, Func<T, string?> getName, string? rawQuery) where T : class

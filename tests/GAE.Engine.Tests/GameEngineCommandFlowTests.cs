@@ -495,7 +495,7 @@ public class GameEngineCommandFlowTests
         };
         var stateManager = await CreateStateAsync(room);
         var player = await stateManager.GetPlayerAsync(PlayerId);
-        player!.Equipment.Weapon = new InventoryItem { Name = "Old Sword", Type = ItemType.Weapon, IsEquippable = true };
+        player!.Equipment.MainHand = new InventoryItem { Name = "Old Sword", Type = ItemType.Weapon, IsEquippable = true };
         await stateManager.SavePlayerAsync(player);
 
         var narrator = new PerpetualFallbackNarrator();

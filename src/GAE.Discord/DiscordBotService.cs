@@ -1218,10 +1218,27 @@ public class DiscordBotService : IHostedService
 
         // Equipment
         var eqParts = new List<string>();
-        if (player.Equipment.Weapon is not null) eqParts.Add($"\u2694\uFE0F Weapon: {player.Equipment.Weapon.Name}");
-        if (player.Equipment.Armor is not null) eqParts.Add($"\U0001F6E1\uFE0F Armor: {player.Equipment.Armor.Name}");
-        if (player.Equipment.Shield is not null) eqParts.Add($"\U0001F6E1\uFE0F Shield: {player.Equipment.Shield.Name}");
-        if (player.Equipment.Helmet is not null) eqParts.Add($"\u26D1\uFE0F Helmet: {player.Equipment.Helmet.Name}");
+        foreach (var item in player.Equipment.AllEquipped())
+        {
+            var emoji = item.Type switch
+            {
+                ItemType.Weapon => "\u2694\uFE0F",
+                ItemType.Shield => "\U0001F6E1\uFE0F",
+                ItemType.Armor => "\U0001F6E1\uFE0F",
+                ItemType.Helmet => "\u26D1\uFE0F",
+                ItemType.Cloak => "\U0001F9E5",
+                ItemType.Boots => "\U0001F97E",
+                ItemType.Gloves => "\U0001F9E4",
+                ItemType.Ring => "\U0001F48D",
+                ItemType.Amulet => "\U0001F4FF",
+                ItemType.Bracelet => "\u2728",
+                _ => "\U0001F4E6"
+            };
+            var bonusStr = item.StatBonuses.Count > 0
+                ? " " + string.Join(" ", item.StatBonuses.Select(kv => $"{kv.Key.ToUpper()}{kv.Value:+0;-0}"))
+                : "";
+            eqParts.Add($"{emoji} {item.Type}: {item.Name}{bonusStr}");
+        }
         embed.AddField("Equipment", eqParts.Count > 0 ? string.Join("\n", eqParts) : "Nothing equipped");
 
         // Inventory

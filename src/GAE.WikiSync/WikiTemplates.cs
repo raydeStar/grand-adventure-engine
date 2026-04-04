@@ -6,11 +6,15 @@ public static class WikiTemplates
 {
     public static string PlayerPage(PlayerCharacter player)
     {
-        var equipment = new List<string>();
-        if (player.Equipment.Weapon is not null) equipment.Add($"- **Weapon:** {player.Equipment.Weapon.Name}");
-        if (player.Equipment.Armor is not null) equipment.Add($"- **Armor:** {player.Equipment.Armor.Name}");
-        if (player.Equipment.Shield is not null) equipment.Add($"- **Shield:** {player.Equipment.Shield.Name}");
-        if (player.Equipment.Helmet is not null) equipment.Add($"- **Helmet:** {player.Equipment.Helmet.Name}");
+        var equipment = player.Equipment.AllEquipped()
+            .Select(e =>
+            {
+                var bonuses = e.StatBonuses.Count > 0
+                    ? " (" + string.Join(", ", e.StatBonuses.Select(kv => $"{kv.Key.ToUpper()} {kv.Value:+0;-0}")) + ")"
+                    : "";
+                return $"- **{e.Type}:** {e.Name}{bonuses}";
+            })
+            .ToList();
         var equipStr = equipment.Count > 0 ? string.Join("\n", equipment) : "- None";
 
         var inventory = player.Inventory.Count > 0

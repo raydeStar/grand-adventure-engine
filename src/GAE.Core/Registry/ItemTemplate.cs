@@ -18,8 +18,12 @@ public class ItemTemplate : IRegistryEntry
     public int ArmorValue { get; set; }
     public bool IsEquippable { get; set; }
     public bool IsConsumable { get; set; }
+    public bool IsTwoHanded { get; set; }
     public string? Effect { get; set; }
     public int Value { get; set; }
+
+    /// <summary>Stat bonuses when equipped (e.g. "cha": 2).</summary>
+    public Dictionary<string, int> StatBonuses { get; set; } = new();
 
     /// <summary>Rarity tier: common, uncommon, rare, epic, legendary.</summary>
     public string Rarity { get; set; } = "common";
@@ -47,6 +51,8 @@ public class ItemTemplate : IRegistryEntry
         ArmorValue = ArmorValue,
         IsEquippable = IsEquippable,
         IsConsumable = IsConsumable,
-        Effect = Effect
+        IsTwoHanded = IsTwoHanded,
+        Effect = Effect,
+        StatBonuses = new Dictionary<string, int>(StatBonuses)
     };
 }

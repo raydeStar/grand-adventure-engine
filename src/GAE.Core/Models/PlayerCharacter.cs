@@ -44,7 +44,27 @@ public class PlayerCharacter
 
     public static int GetStatModifier(int statValue) => (statValue - 10) / 2;
 
-    public int GetModifier(string stat) => stat.ToLowerInvariant() switch
+    /// <summary>
+    /// Returns the total modifier for a stat: base stat modifier + equipment bonuses.
+    /// </summary>
+    public int GetModifier(string stat)
+    {
+        int baseMod = stat.ToLowerInvariant() switch
+        {
+            "str" => GetStatModifier(Str),
+            "dex" => GetStatModifier(Dex),
+            "con" => GetStatModifier(Con),
+            "int" => GetStatModifier(Int),
+            "wis" => GetStatModifier(Wis),
+            "cha" => GetStatModifier(Cha),
+            "luck" => GetStatModifier(Luck),
+            _ => 0
+        };
+        return baseMod + Equipment.GetStatBonus(stat);
+    }
+
+    /// <summary>Returns the raw base modifier without equipment bonuses.</summary>
+    public int GetBaseModifier(string stat) => stat.ToLowerInvariant() switch
     {
         "str" => GetStatModifier(Str),
         "dex" => GetStatModifier(Dex),
@@ -81,8 +101,6 @@ public class PlayerCharacter
     public bool IsConscious => Hp > 0;
 
     public int Defense => 10
-        + GetStatModifier(Dex)
-        + (Equipment.Armor?.ArmorValue ?? 0)
-        + (Equipment.Shield?.ArmorValue ?? 0)
-        + (Equipment.Helmet?.ArmorValue ?? 0);
+        + GetModifier("dex")
+        + Equipment.TotalArmorValue();
 }

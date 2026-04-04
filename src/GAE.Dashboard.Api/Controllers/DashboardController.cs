@@ -493,9 +493,11 @@ public class DashboardController : ControllerBase
             DamageDice = li.DamageDice,
             DamageStat = li.DamageStat,
             ArmorValue = Math.Max(0, li.ArmorValue),
-            IsEquippable = li.IsEquippable ?? itemType is ItemType.Weapon or ItemType.Armor or ItemType.Shield or ItemType.Helmet,
+            IsEquippable = li.IsEquippable ?? InventoryItem.IsEquippableType(itemType),
             IsConsumable = li.IsConsumable ?? itemType is ItemType.Potion or ItemType.Scroll,
-            Effect = li.Effect
+            IsTwoHanded = li.IsTwoHanded,
+            Effect = li.Effect,
+            StatBonuses = li.StatBonuses ?? new()
         };
     }
 
@@ -704,8 +706,10 @@ public class DashboardController : ControllerBase
             DamageStat = string.IsNullOrWhiteSpace(request.DamageStat) ? null : request.DamageStat.Trim(),
             ArmorValue = Math.Max(0, request.ArmorValue),
             IsConsumable = request.IsConsumable ?? itemType is ItemType.Potion or ItemType.Scroll,
-            IsEquippable = request.IsEquippable ?? itemType is ItemType.Weapon or ItemType.Armor or ItemType.Shield or ItemType.Helmet,
-            Effect = string.IsNullOrWhiteSpace(request.Effect) ? null : request.Effect.Trim()
+            IsEquippable = request.IsEquippable ?? InventoryItem.IsEquippableType(itemType),
+            IsTwoHanded = request.IsTwoHanded,
+            Effect = string.IsNullOrWhiteSpace(request.Effect) ? null : request.Effect.Trim(),
+            StatBonuses = request.StatBonuses ?? new()
         };
 
         string? equippedSlot = null;
@@ -1028,7 +1032,7 @@ public class DashboardController : ControllerBase
             Quantity = Math.Max(1, request.Quantity),
             Value = Math.Max(0, request.Value),
             IsConsumable = request.IsConsumable ?? itemType is ItemType.Potion or ItemType.Scroll,
-            IsEquippable = request.IsEquippable ?? itemType is ItemType.Weapon or ItemType.Armor or ItemType.Shield or ItemType.Helmet
+            IsEquippable = request.IsEquippable ?? InventoryItem.IsEquippableType(itemType)
         };
     }
 
@@ -1088,31 +1092,10 @@ public class DashboardController : ControllerBase
 
     private static string? TryEquipItem(PlayerCharacter player, InventoryItem item)
     {
-        switch (item.Type)
-        {
-            case ItemType.Weapon:
-                if (player.Equipment.Weapon is not null)
-                    player.Inventory.Add(player.Equipment.Weapon);
-                player.Equipment.Weapon = item;
-                return "Weapon";
-            case ItemType.Armor:
-                if (player.Equipment.Armor is not null)
-                    player.Inventory.Add(player.Equipment.Armor);
-                player.Equipment.Armor = item;
-                return "Armor";
-            case ItemType.Shield:
-                if (player.Equipment.Shield is not null)
-                    player.Inventory.Add(player.Equipment.Shield);
-                player.Equipment.Shield = item;
-                return "Shield";
-            case ItemType.Helmet:
-                if (player.Equipment.Helmet is not null)
-                    player.Inventory.Add(player.Equipment.Helmet);
-                player.Equipment.Helmet = item;
-                return "Helmet";
-            default:
-                return null;
-        }
+        var slotName = player.Equipment.Equip(item, out var displaced);
+        foreach (var old in displaced)
+            player.Inventory.Add(old);
+        return slotName;
     }
 
     private static IEnumerable<CreateCharacterRequest> GetDemoCharacterTemplates()
@@ -1495,7 +1478,9 @@ public class GrantItemRequest
     public int ArmorValue { get; set; }
     public bool? IsEquippable { get; set; }
     public bool? IsConsumable { get; set; }
+    public bool IsTwoHanded { get; set; }
     public string? Effect { get; set; }
+    public Dictionary<string, int>? StatBonuses { get; set; }
     public bool AutoEquip { get; set; }
 }
 

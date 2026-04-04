@@ -71,10 +71,12 @@ public static class RegistrySeedLoader
                     DamageDice = item.DamageDice,
                     DamageStat = item.DamageStat,
                     ArmorValue = item.ArmorValue,
-                    IsEquippable = item.IsEquippable ?? false,
+                    IsEquippable = item.IsEquippable ?? InventoryItem.IsEquippableType(ParseItemType(item.Type)),
                     IsConsumable = item.IsConsumable ?? false,
+                    IsTwoHanded = item.IsTwoHanded ?? false,
                     Effect = item.Effect,
                     Value = item.Value,
+                    StatBonuses = item.StatBonuses ?? new(),
                     Tags = []
                 });
                 count++;
@@ -97,10 +99,12 @@ public static class RegistrySeedLoader
                         DamageDice = loot.DamageDice,
                         DamageStat = loot.DamageStat,
                         ArmorValue = loot.ArmorValue,
-                        IsEquippable = loot.IsEquippable ?? false,
+                        IsEquippable = loot.IsEquippable ?? InventoryItem.IsEquippableType(ParseItemType(loot.Type)),
                         IsConsumable = loot.IsConsumable ?? false,
+                        IsTwoHanded = loot.IsTwoHanded ?? false,
                         Effect = loot.Effect,
                         Value = loot.Value,
+                        StatBonuses = loot.StatBonuses ?? new(),
                         Tags = []
                     });
                     count++;
@@ -117,6 +121,12 @@ public static class RegistrySeedLoader
         "armor" => ItemType.Armor,
         "shield" => ItemType.Shield,
         "helmet" => ItemType.Helmet,
+        "cloak" => ItemType.Cloak,
+        "boots" => ItemType.Boots,
+        "gloves" => ItemType.Gloves,
+        "ring" => ItemType.Ring,
+        "amulet" => ItemType.Amulet,
+        "bracelet" => ItemType.Bracelet,
         "potion" => ItemType.Potion,
         "scroll" => ItemType.Scroll,
         "key" => ItemType.Key,
@@ -166,6 +176,8 @@ public static class RegistrySeedLoader
         public int ArmorValue { get; set; }
         public bool? IsEquippable { get; set; }
         public bool? IsConsumable { get; set; }
+        public bool? IsTwoHanded { get; set; }
         public string? Effect { get; set; }
+        public Dictionary<string, int>? StatBonuses { get; set; }
     }
 }

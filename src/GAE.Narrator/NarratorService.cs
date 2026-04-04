@@ -264,7 +264,7 @@ public class NarratorService : INarratorService
                             Description = i.Description ?? "",
                             Quantity = Math.Max(1, i.Quantity),
                             Type = itemType,
-                            IsEquippable = itemType is ItemType.Weapon or ItemType.Armor or ItemType.Shield or ItemType.Helmet
+                            IsEquippable = InventoryItem.IsEquippableType(itemType)
                         };
                     }).ToList() ?? [],
                     Exits = new Dictionary<string, string>
@@ -773,7 +773,7 @@ public class NarratorService : INarratorService
             Player: {{player.Name}} (Lv.{{player.Level}} {{player.Race}} {{player.Class}})
             HP: {{player.Hp}}/{{player.MaxHp}} | MP: {{player.Mp}}/{{player.MaxMp}}
             {{player.FormatStatsCompact()}}
-            Weapon: {{player.Equipment.Weapon?.Name ?? "Fists"}} ({{player.Equipment.Weapon?.DamageDice ?? "1d4"}})
+            Weapon: {{player.Equipment.MainHand?.Name ?? "Fists"}} ({{player.Equipment.MainHand?.DamageDice ?? "1d4"}})
             Location: {{room.Name}}
             Combat turn {{interaction.TurnCount + 1}} vs {{enemy.Name}} (HP: {{enemy.Hp ?? 0}}/{{enemy.MaxHp ?? 0}}, Defense: {{enemy.Defense ?? 10}})
             Player action: "{{rawInput}}"
@@ -1677,19 +1677,7 @@ public class NarratorService : INarratorService
     }
 
     private static IEnumerable<InventoryItem> GetEquippedItems(PlayerCharacter player)
-    {
-        if (player.Equipment.Weapon is not null)
-            yield return player.Equipment.Weapon;
-
-        if (player.Equipment.Armor is not null)
-            yield return player.Equipment.Armor;
-
-        if (player.Equipment.Shield is not null)
-            yield return player.Equipment.Shield;
-
-        if (player.Equipment.Helmet is not null)
-            yield return player.Equipment.Helmet;
-    }
+        => player.Equipment.AllEquipped();
 
     /// <summary>Formats an NPC's name + disposition + memory for prompt context.</summary>
     private static string FormatNpcForPrompt(Npc npc)

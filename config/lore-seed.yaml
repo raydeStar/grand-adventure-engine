@@ -158,6 +158,23 @@ rooms:
             armor_value: 1
             value: 20
             is_equippable: true
+          - id: "iron_greatsword"
+            name: "Iron Greatsword"
+            description: "A massive two-handed sword. Slow but devastating. Requires both hands to wield."
+            type: "Weapon"
+            damage_dice: "2d6"
+            damage_stat: "str"
+            value: 45
+            is_equippable: true
+            is_two_handed: true
+          - id: "str_amulet"
+            name: "Amulet of Might"
+            description: "A bronze amulet shaped like a clenched fist. Grants the wearer increased physical power."
+            type: "Amulet"
+            value: 30
+            is_equippable: true
+            stat_bonuses:
+              str: 2
     environment_tags: ["indoor", "safe", "lit", "forge", "hot"]
 
   - id: "general_store"
@@ -224,6 +241,30 @@ rooms:
             description: "A leather case containing picks and tension wrenches. For 'legitimate' use only."
             type: "Misc"
             value: 20
+          - id: "copper_ring"
+            name: "Copper Ring of Fortitude"
+            description: "A simple copper band etched with protective runes. Warms slightly to the touch."
+            type: "Ring"
+            value: 15
+            is_equippable: true
+            stat_bonuses:
+              con: 1
+          - id: "leather_gloves"
+            name: "Leather Gloves"
+            description: "Sturdy leather gloves that improve grip and protect the hands. Every adventurer needs a pair."
+            type: "Gloves"
+            armor_value: 1
+            value: 8
+            is_equippable: true
+          - id: "traveler_boots"
+            name: "Traveler's Boots"
+            description: "Well-worn boots with thick soles. They make long journeys far more bearable."
+            type: "Boots"
+            armor_value: 1
+            value: 12
+            is_equippable: true
+            stat_bonuses:
+              dex: 1
     environment_tags: ["indoor", "safe", "lit", "shop"]
 
   - id: "back_alley"
@@ -273,11 +314,30 @@ rooms:
           - id: "cloak_of_shadows"
             name: "Cloak of Shadows"
             description: "A dark cloak that seems to shift and blend with the shadows. Light as silk, but surprisingly protective."
-            type: "Armor"
+            type: "Cloak"
             armor_value: 1
-            damage_stat: "dex"
             value: 100
             is_equippable: true
+            stat_bonuses:
+              dex: 2
+          - id: "ring_of_cunning"
+            name: "Ring of Cunning"
+            description: "A thin silver band inscribed with tiny runes. It sharpens the wearer's wit and tongue."
+            type: "Ring"
+            value: 75
+            is_equippable: true
+            stat_bonuses:
+              cha: 2
+              int: 1
+          - id: "shadow_bracelet"
+            name: "Shadow Bracelet"
+            description: "A braided leather bracelet with obsidian beads. Grants the wearer uncanny reflexes."
+            type: "Bracelet"
+            value: 60
+            is_equippable: true
+            stat_bonuses:
+              dex: 1
+              luck: 2
     environment_tags: ["outdoor", "dark", "shady", "alley"]
 
   - id: "town_gate"
@@ -528,4 +588,8 @@ rooms:
             damage_stat: "str"
             value: 2000
             is_equippable: true
+            is_two_handed: true
+            stat_bonuses:
+              str: 3
+              con: 2
     environment_tags: ["indoor", "underground", "dark", "boss_arena", "hellfire", "dangerous"]

@@ -441,9 +441,11 @@ static GAE.Core.Models.InventoryItem ConvertLoreItem(LoreItem li)
         DamageDice = li.DamageDice,
         DamageStat = li.DamageStat,
         ArmorValue = Math.Max(0, li.ArmorValue),
-        IsEquippable = li.IsEquippable ?? itemType is GAE.Core.Models.ItemType.Weapon or GAE.Core.Models.ItemType.Armor or GAE.Core.Models.ItemType.Shield or GAE.Core.Models.ItemType.Helmet,
+        IsEquippable = li.IsEquippable ?? GAE.Core.Models.InventoryItem.IsEquippableType(itemType),
         IsConsumable = li.IsConsumable ?? itemType is GAE.Core.Models.ItemType.Potion or GAE.Core.Models.ItemType.Scroll,
-        Effect = li.Effect
+        IsTwoHanded = li.IsTwoHanded,
+        Effect = li.Effect,
+        StatBonuses = li.StatBonuses ?? new()
     };
 }
 
@@ -507,7 +509,9 @@ public class LoreItem
     public int ArmorValue { get; set; }
     public bool? IsEquippable { get; set; }
     public bool? IsConsumable { get; set; }
+    public bool IsTwoHanded { get; set; }
     public string? Effect { get; set; }
+    public Dictionary<string, int>? StatBonuses { get; set; }
 }
 public class LoreFaction { public string? Id { get; set; } public string? Name { get; set; } public string? Description { get; set; } }
 
