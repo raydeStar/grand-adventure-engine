@@ -38,7 +38,7 @@ public class FileConversationLogger : IConversationLogger
         lock (_writeLock)
         {
             var line = JsonSerializer.Serialize(entry, JsonOptions);
-            File.AppendAllText(_logPath, line + Environment.NewLine);
+            File.AppendAllText(_logPath, line + Environment.NewLine, Encoding.UTF8);
         }
 
         _logger.LogDebug("Logged conversation {Id} op={Operation} latency={LatencyMs}ms",
@@ -101,7 +101,7 @@ public class FileConversationLogger : IConversationLogger
         if (!File.Exists(_logPath))
             return entries;
 
-        foreach (var line in File.ReadLines(_logPath))
+        foreach (var line in File.ReadLines(_logPath, Encoding.UTF8))
         {
             if (string.IsNullOrWhiteSpace(line)) continue;
             try

@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using GAE.Core.Interfaces;
 using Microsoft.Extensions.Logging;
@@ -33,7 +34,7 @@ public class FileStateJournal : IStateJournal
         {
             gameEvent.SequenceNumber = ++_currentSequence;
             var line = JsonSerializer.Serialize(gameEvent);
-            File.AppendAllText(_journalPath, line + Environment.NewLine);
+            File.AppendAllText(_journalPath, line + Environment.NewLine, Encoding.UTF8);
         }
 
         _logger.LogDebug("Journaled event {EventId} seq={Seq}", gameEvent.EventId, gameEvent.SequenceNumber);
@@ -47,7 +48,7 @@ public class FileStateJournal : IStateJournal
         if (!File.Exists(_journalPath))
             return Task.FromResult<IReadOnlyList<Core.Models.GameEvent>>(events);
 
-        foreach (var line in File.ReadLines(_journalPath))
+        foreach (var line in File.ReadLines(_journalPath, Encoding.UTF8))
         {
             if (string.IsNullOrWhiteSpace(line)) continue;
             var evt = JsonSerializer.Deserialize<Core.Models.GameEvent>(line);
@@ -66,7 +67,7 @@ public class FileStateJournal : IStateJournal
         if (!File.Exists(_journalPath)) return 0;
 
         long max = 0;
-        foreach (var line in File.ReadLines(_journalPath))
+        foreach (var line in File.ReadLines(_journalPath, Encoding.UTF8))
         {
             if (string.IsNullOrWhiteSpace(line)) continue;
             var evt = JsonSerializer.Deserialize<Core.Models.GameEvent>(line);

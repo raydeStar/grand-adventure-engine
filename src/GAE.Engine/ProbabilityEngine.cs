@@ -100,6 +100,60 @@ public partial class ProbabilityEngine : IProbabilityEngine
         return roll;
     }
 
+    /// <summary>
+    /// Determines the outcome tier for an attack roll vs a target defense.
+    /// Tiers: CriticalMiss (nat 1), Miss (below DC), GlancingHit (within 2 of DC), Hit (above DC), CriticalHit (nat 20 or 10+ over DC).
+    /// </summary>
+    public static RollOutcome DetermineOutcome(DiceRoll roll, int targetDefense)
+    {
+        if (roll.IsFumble)
+            return RollOutcome.CriticalMiss;
+
+        if (roll.IsCritical)
+            return RollOutcome.CriticalHit;
+
+        int margin = roll.Total - targetDefense;
+
+        if (margin < 0)
+            return RollOutcome.Miss;
+
+        if (margin <= 2)
+            return RollOutcome.GlancingHit;
+
+        if (margin >= 10)
+            return RollOutcome.CriticalHit;
+
+        return RollOutcome.Hit;
+    }
+
+    /// <summary>
+    /// Determines the outcome tier for a skill check vs a DC.
+    /// </summary>
+    public static RollOutcome DetermineSkillOutcome(DiceRoll roll, int dc)
+    {
+        if (roll.IsFumble)
+            return RollOutcome.CriticalMiss;
+
+        if (roll.IsCritical)
+            return RollOutcome.CriticalHit;
+
+        int margin = roll.Total - dc;
+
+        if (margin < -5)
+            return RollOutcome.CriticalMiss;
+
+        if (margin < 0)
+            return RollOutcome.Miss;
+
+        if (margin <= 2)
+            return RollOutcome.GlancingHit;
+
+        if (margin >= 10)
+            return RollOutcome.CriticalHit;
+
+        return RollOutcome.Hit;
+    }
+
     [GeneratedRegex(@"^(?<count>\d+)?d(?<sides>\d+)(?:\s*(?<mod>[+-]\s*\d+))?$", RegexOptions.IgnoreCase)]
     private static partial Regex DiceRegex();
 }

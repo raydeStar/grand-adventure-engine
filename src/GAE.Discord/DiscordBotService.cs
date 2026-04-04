@@ -731,9 +731,11 @@ public class DiscordBotService : IHostedService
                 var rollStr = $"🎲 [{string.Join(", ", roll.IndividualRolls)}]";
                 if (roll.Modifier != 0)
                     rollStr += $" {(roll.Modifier > 0 ? "+" : "")}{roll.Modifier}";
-                rollStr += $" = **{roll.Total}** ({roll.Purpose})";
-                if (roll.IsCritical) rollStr += " 💥 **CRITICAL!**";
-                if (roll.IsFumble) rollStr += " 💀 **FUMBLE!**";
+                rollStr += $" = **{roll.Total}**";
+                if (roll.TargetNumber.HasValue)
+                    rollStr += $" vs {roll.TargetNumber}";
+                rollStr += $" ({roll.Purpose})";
+                rollStr += FormatOutcomeBadge(roll);
                 return rollStr;
             });
             embed.AddField("Rolls", string.Join("\n", rollLines));
@@ -851,9 +853,11 @@ public class DiscordBotService : IHostedService
                 var rollStr = $"🎲 [{string.Join(", ", roll.IndividualRolls)}]";
                 if (roll.Modifier != 0)
                     rollStr += $" {(roll.Modifier > 0 ? "+" : "")}{roll.Modifier}";
-                rollStr += $" = **{roll.Total}** ({roll.Purpose})";
-                if (roll.IsCritical) rollStr += " 💥 **CRITICAL!**";
-                if (roll.IsFumble) rollStr += " 💀 **FUMBLE!**";
+                rollStr += $" = **{roll.Total}**";
+                if (roll.TargetNumber.HasValue)
+                    rollStr += $" vs {roll.TargetNumber}";
+                rollStr += $" ({roll.Purpose})";
+                rollStr += FormatOutcomeBadge(roll);
                 return rollStr;
             });
             embed.AddField("Rolls", string.Join("\n", rollLines));
@@ -1265,6 +1269,16 @@ public class DiscordBotService : IHostedService
 
     private static string FormatStatusBar(PlayerCharacter player) =>
         $"❤️ {player.Hp}/{player.MaxHp}  ✨ {player.Mp}/{player.MaxMp}  💰 {player.Gold}g  ⭐ Lv.{player.Level} ({player.Xp} XP)";
+
+    private static string FormatOutcomeBadge(DiceRoll roll) => roll.Outcome switch
+    {
+        RollOutcome.CriticalHit => " 💥 **CRITICAL HIT!**",
+        RollOutcome.Hit => " ✅ **Hit!**",
+        RollOutcome.GlancingHit => " 🔶 **Glancing Blow**",
+        RollOutcome.Miss => " ❌ **Miss**",
+        RollOutcome.CriticalMiss => " 💀 **FUMBLE!**",
+        _ => ""
+    };
 
     private static bool IsExitKeyword(string text)
     {

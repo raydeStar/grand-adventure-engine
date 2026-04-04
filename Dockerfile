@@ -39,6 +39,8 @@ RUN mkdir -p /app/data && chown -R gae:gae /app/data
 
 USER gae
 
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
 ENV ASPNETCORE_URLS=http://+:8080
 ENV ASPNETCORE_ENVIRONMENT=Production
 EXPOSE 8080

@@ -348,49 +348,65 @@ public class GameEngine : IGameEngine
         var attackRoll = _dice.RollAttack(attackMod);
         int targetDefense = target.Defense ?? _rules.Combat.BaseDefense;
 
+        // Determine outcome tier
+        var outcome = ProbabilityEngine.DetermineOutcome(attackRoll, targetDefense);
+        attackRoll.Outcome = outcome;
+        attackRoll.TargetNumber = targetDefense;
+
         var result = new ActionResult
         {
             ActionId = action.Id,
             DiceRolls = [attackRoll]
         };
 
-        if (attackRoll.IsFumble)
+        if (outcome == RollOutcome.CriticalMiss)
         {
             result.Success = true;
             result.MechanicalSummary = $"You fumble your attack against {target.Name}! Critical miss!";
             return result;
         }
 
-        if (attackRoll.Total < targetDefense && !attackRoll.IsCritical)
+        if (outcome == RollOutcome.Miss)
         {
             result.Success = true;
             result.MechanicalSummary = $"You attack {target.Name} (rolled {attackRoll.Total} vs defense {targetDefense}) and miss!";
             return result;
         }
 
-        // Hit  -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚Â  -- Æ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚Â roll damage
+        // Hit (GlancingHit, Hit, or CriticalHit) — roll damage
         string damageDice = weapon?.DamageDice ?? "1d4";
         int damageMod = player.GetModifier(attackStat);
         var damageRoll = _dice.RollDamage(damageDice, damageMod);
 
-        int totalDamage = attackRoll.IsCritical ? damageRoll.Total * _rules.Combat.CriticalMultiplier : damageRoll.Total;
+        int totalDamage = outcome switch
+        {
+            RollOutcome.CriticalHit => damageRoll.Total * _rules.Combat.CriticalMultiplier,
+            RollOutcome.GlancingHit => Math.Max(1, damageRoll.Total / 2),
+            _ => damageRoll.Total
+        };
         totalDamage = Math.Max(1, totalDamage);
 
         result.DiceRolls.Add(damageRoll);
 
         if (target.Hp.HasValue)
         {
+            var oldHp = target.Hp.Value;
             target.Hp = Math.Max(0, target.Hp.Value - totalDamage);
             result.StateChanges.Add(new StateChange
             {
                 EntityType = "Npc", EntityId = target.Id,
-                Property = "Hp", OldValue = (target.Hp.Value + totalDamage).ToString(), NewValue = target.Hp.Value.ToString()
+                Property = "Hp", OldValue = oldHp.ToString(), NewValue = target.Hp.Value.ToString()
             });
         }
 
-        string critText = attackRoll.IsCritical ? " **CRITICAL HIT!**" : "";
+        string outcomeText = outcome switch
+        {
+            RollOutcome.CriticalHit => " **CRITICAL HIT!**",
+            RollOutcome.GlancingHit => " (glancing blow)",
+            _ => ""
+        };
         result.Success = true;
-        result.MechanicalSummary = $"You attack {target.Name} (rolled {attackRoll.Total} vs defense {targetDefense}) and deal {totalDamage} damage!{critText}";
+        result.MechanicalSummary = $"You attack {target.Name} (rolled {attackRoll.Total} vs defense {targetDefense}) and deal {totalDamage} damage!{outcomeText}";
 
         // Check if NPC is dead
         if (target.Hp.HasValue && target.Hp.Value <= 0)
@@ -416,7 +432,7 @@ public class GameEngine : IGameEngine
         }
         else if (target.Hp.HasValue && target.Hp.Value > 0)
         {
-            // NPC survived  -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚Â  -- Æ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚Â enter combat mode
+            // NPC survived — enter combat mode
             var hostiles = room.Npcs.Where(n => n.IsHostile || n == target).Distinct().ToList();
             await EnterCombatAsync(player, room, hostiles, ct);
             result.InteractionUpdate = new InteractionUpdate { Mode = InteractionMode.Combat, CombatStatus = "ongoing" };
@@ -1602,8 +1618,24 @@ public class GameEngine : IGameEngine
 
     private static readonly HashSet<string> ConversationExitPhrases = new(StringComparer.OrdinalIgnoreCase)
     {
-        "goodbye", "bye", "farewell", "leave", "walk away", "end conversation", "nevermind", "never mind"
+        "goodbye", "bye", "farewell", "leave", "walk away", "end conversation", "nevermind", "never mind",
+        "leave conversation", "stop talking", "done talking", "go away", "i'm done", "im done"
     };
+
+    private static bool IsExitPhrase(string input)
+    {
+        var trimmed = input.Trim();
+        // Exact match first
+        if (ConversationExitPhrases.Contains(trimmed))
+            return true;
+        // Also check if the input starts with any exit phrase (e.g. "leave conversation with")
+        foreach (var phrase in ConversationExitPhrases)
+        {
+            if (trimmed.StartsWith(phrase, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
+    }
 
     /// <summary>
     /// Routes a player turn through the active interaction mode (conversation, combat, etc.).
@@ -1690,7 +1722,7 @@ public class GameEngine : IGameEngine
         }
 
         // Explicit goodbye / leave
-        if (ConversationExitPhrases.Contains(action.RawInput.Trim()))
+        if (IsExitPhrase(action.RawInput))
         {
             var freeForm = await _narrator.ProcessConversationTurnAsync(player, room, npc, player.Interaction, action.RawInput, ct);
             ApplyInteractionUpdate(player, room, npc, freeForm);
@@ -1848,7 +1880,7 @@ public class GameEngine : IGameEngine
 
         if (target is null)
         {
-            // All enemies already dead  -- Æ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚Â victory
+            // All enemies already dead — victory
             player.Interaction.Reset();
             if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, ct);
             await _stateManager.SavePlayerAsync(player, ct);
@@ -1873,13 +1905,18 @@ public class GameEngine : IGameEngine
         int attackMod = player.GetModifier(attackStat);
         var attackRoll = _dice.RollAttack(attackMod);
         int targetDefense = target.Defense ?? _rules.Combat.BaseDefense;
+
+        // Determine outcome tier
+        var outcome = ProbabilityEngine.DetermineOutcome(attackRoll, targetDefense);
+        attackRoll.Outcome = outcome;
+        attackRoll.TargetNumber = targetDefense;
         allDiceRolls.Add(attackRoll);
 
-        if (attackRoll.IsFumble)
+        if (outcome == RollOutcome.CriticalMiss)
         {
             mechanicalParts.Add($"You fumble your attack against {target.Name}! Critical miss!");
         }
-        else if (attackRoll.Total < targetDefense && !attackRoll.IsCritical)
+        else if (outcome == RollOutcome.Miss)
         {
             mechanicalParts.Add($"You attack {target.Name} (rolled {attackRoll.Total} vs defense {targetDefense}) and miss!");
         }
@@ -1888,7 +1925,12 @@ public class GameEngine : IGameEngine
             string damageDice = weapon?.DamageDice ?? "1d4";
             int damageMod = player.GetModifier(attackStat);
             var damageRoll = _dice.RollDamage(damageDice, damageMod);
-            int totalDamage = attackRoll.IsCritical ? damageRoll.Total * _rules.Combat.CriticalMultiplier : damageRoll.Total;
+            int totalDamage = outcome switch
+            {
+                RollOutcome.CriticalHit => damageRoll.Total * _rules.Combat.CriticalMultiplier,
+                RollOutcome.GlancingHit => Math.Max(1, damageRoll.Total / 2),
+                _ => damageRoll.Total
+            };
             totalDamage = Math.Max(1, totalDamage);
             allDiceRolls.Add(damageRoll);
 
@@ -1899,8 +1941,13 @@ public class GameEngine : IGameEngine
                 allStateChanges.Add(new StateChange { EntityType = "Npc", EntityId = target.Id, Property = "Hp", OldValue = oldHp.ToString(), NewValue = target.Hp.Value.ToString() });
             }
 
-            string critText = attackRoll.IsCritical ? " **CRITICAL HIT!**" : "";
-            mechanicalParts.Add($"You hit {target.Name} for {totalDamage} damage!{critText}");
+            string outcomeText = outcome switch
+            {
+                RollOutcome.CriticalHit => " **CRITICAL HIT!**",
+                RollOutcome.GlancingHit => " (glancing blow)",
+                _ => ""
+            };
+            mechanicalParts.Add($"You hit {target.Name} for {totalDamage} damage!{outcomeText}");
 
             // Check if target died
             if (target.Hp.HasValue && target.Hp.Value <= 0)
@@ -2253,7 +2300,12 @@ public class GameEngine : IGameEngine
             var roll = _dice.RollSkillCheck(skillName, statMod);
             int dc = CalculateSocialDC(npc, skillName);
 
-            bool succeeded = roll.IsCritical || (!roll.IsFumble && roll.Total >= dc);
+            // Determine outcome tier for skill checks
+            var skillOutcome = ProbabilityEngine.DetermineSkillOutcome(roll, dc);
+            roll.Outcome = skillOutcome;
+            roll.TargetNumber = dc;
+
+            bool succeeded = skillOutcome >= RollOutcome.GlancingHit;
             return new SocialCheckResult(skillName, statUsed, roll, dc, succeeded);
         }
 
@@ -2922,7 +2974,7 @@ public class GameEngine : IGameEngine
     private async Task<ActionResult?> ProcessTradingTurnAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
     {
         // Exit trading on farewell
-        if (ConversationExitPhrases.Contains(action.RawInput.Trim()))
+        if (IsExitPhrase(action.RawInput))
         {
             player.Interaction.Reset();
             await _stateManager.SavePlayerAsync(player, ct);

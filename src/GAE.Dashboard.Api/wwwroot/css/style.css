@@ -722,9 +722,42 @@ textarea { resize: vertical; min-height: 80px; }
 
 .story-dice {
   color: var(--gold);
-  font-size: 11px;
-  margin-top: 0.15rem;
+  font-size: 12px;
+  margin-top: 0.25rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
 }
+
+.dice-roll {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: rgba(255,255,255,0.04);
+  border-radius: 6px;
+  padding: 2px 8px;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.dice-roll.outcome-criticalhit { border-color: #f59e0b; background: rgba(245,158,11,0.1); }
+.dice-roll.outcome-hit { border-color: #22c55e; background: rgba(34,197,94,0.08); }
+.dice-roll.outcome-glancinghit { border-color: #f97316; background: rgba(249,115,22,0.08); }
+.dice-roll.outcome-miss { border-color: #ef4444; background: rgba(239,68,68,0.08); }
+.dice-roll.outcome-criticalmiss { border-color: #dc2626; background: rgba(220,38,38,0.15); }
+
+.outcome-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.outcome-badge.crit { color: #f59e0b; }
+.outcome-badge.hit { color: #22c55e; }
+.outcome-badge.glancing { color: #f97316; }
+.outcome-badge.miss { color: #ef4444; }
+.outcome-badge.fumble { color: #dc2626; }
 
 /* ── Stat bar (block characters) ── */
 

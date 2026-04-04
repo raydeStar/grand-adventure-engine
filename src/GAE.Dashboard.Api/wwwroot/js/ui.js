@@ -547,7 +547,7 @@ const UI = {
     }
 
     if (entry.diceRolls?.length && !streamNarration) {
-      html += `<div class="story-dice">${entry.diceRolls.map((roll) => this.esc(`[${roll.purpose || roll.expression || 'Roll'}: ${roll.total ?? '?'}]`)).join(' ')}</div>`;
+      html += `<div class="story-dice">${entry.diceRolls.map((roll) => this._formatDiceRoll(roll)).join(' ')}</div>`;
     }
 
     if (!html && !streamNarration) {
@@ -564,7 +564,7 @@ const UI = {
         ? this._formatMechanicalParsed(cleanedMechanicalSummary)
         : '';
       const diceHtml = entry.diceRolls?.length
-        ? `<div class="story-dice">${entry.diceRolls.map((roll) => this.esc(`[${roll.purpose || roll.expression || 'Roll'}: ${roll.total ?? '?'}]`)).join(' ')}</div>`
+        ? `<div class="story-dice">${entry.diceRolls.map((roll) => this._formatDiceRoll(roll)).join(' ')}</div>`
         : '';
       this._startStreaming(node, cleanedNarration, mechanicalHtml + diceHtml);
     }
@@ -574,6 +574,29 @@ const UI = {
     }
 
     log.scrollTop = log.scrollHeight;
+  },
+
+  /* ── Dice roll formatting ── */
+
+  _formatDiceRoll(roll) {
+    const label = this.esc(roll.purpose || roll.expression || 'Roll');
+    const rolls = (roll.individualRolls || []).join(', ');
+    const mod = roll.modifier ? (roll.modifier > 0 ? `+${roll.modifier}` : `${roll.modifier}`) : '';
+    const vs = roll.targetNumber != null ? ` vs ${roll.targetNumber}` : '';
+    const badge = this._outcomeBadge(roll.outcome);
+    return `<span class="dice-roll outcome-${(roll.outcome || 'none').toLowerCase()}">`
+      + `🎲 [${rolls}]${mod} = <strong>${roll.total ?? '?'}</strong>${vs} (${label})${badge}</span>`;
+  },
+
+  _outcomeBadge(outcome) {
+    switch ((outcome || '').toLowerCase()) {
+      case 'criticalhit': return ' <span class="outcome-badge crit">💥 CRITICAL!</span>';
+      case 'hit': return ' <span class="outcome-badge hit">✅ Hit</span>';
+      case 'glancinghit': return ' <span class="outcome-badge glancing">🔶 Glancing</span>';
+      case 'miss': return ' <span class="outcome-badge miss">❌ Miss</span>';
+      case 'criticalmiss': return ' <span class="outcome-badge fumble">💀 Fumble</span>';
+      default: return '';
+    }
   },
 
   /* ── Streaming text reveal ── */
