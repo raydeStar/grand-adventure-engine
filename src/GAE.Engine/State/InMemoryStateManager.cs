@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text.Json;
 using GAE.Core.Interfaces;
 using GAE.Core.Models;
 
@@ -69,7 +70,12 @@ public class InMemoryStateManager : IStateManager
     {
         var key = $"{playerId}:{roomId}";
         if (_playerRooms.TryGetValue(key, out var existing))
+        {
+            // Sync shopkeeper data from template — fixes stale per-player rooms created before shop data existed
+            if (_rooms.TryGetValue(roomId, out var tmpl))
+                SyncShopkeeperData(existing, tmpl);
             return Task.FromResult<Room?>(existing);
+        }
 
         // Clone from template
         if (!_rooms.TryGetValue(roomId, out var template))
@@ -80,6 +86,35 @@ public class InMemoryStateManager : IStateManager
         clone.DiscoveredAt = DateTimeOffset.UtcNow;
         _playerRooms[key] = clone;
         return Task.FromResult<Room?>(clone);
+    }
+
+    /// <summary>
+    /// Ensures shopkeeper NPCs in a player's room copy stay in sync with the template.
+    /// If the template has a shopkeeper NPC (by name) but the player's copy doesn't have
+    /// IsShopkeeper=true for that NPC, update the player's copy.
+    /// </summary>
+    private static void SyncShopkeeperData(Room playerRoom, Room template)
+    {
+        foreach (var templateNpc in template.Npcs.Where(n => n.IsShopkeeper))
+        {
+            var playerNpc = playerRoom.Npcs.FirstOrDefault(n =>
+                string.Equals(n.Name, templateNpc.Name, StringComparison.OrdinalIgnoreCase));
+            if (playerNpc is null) continue;
+
+            if (!playerNpc.IsShopkeeper)
+                playerNpc.IsShopkeeper = true;
+
+            // Refresh shop inventory from template if player's copy is empty
+            if (playerNpc.ShopInventory.Count == 0 && templateNpc.ShopInventory.Count > 0)
+            {
+                playerNpc.ShopInventory.Clear();
+                foreach (var item in templateNpc.ShopInventory)
+                {
+                    var cloned = JsonSerializer.Deserialize<InventoryItem>(JsonSerializer.Serialize(item))!;
+                    playerNpc.ShopInventory.Add(cloned);
+                }
+            }
+        }
     }
 
     public Task RemovePlayerRoomsAsync(string playerId, CancellationToken ct = default)

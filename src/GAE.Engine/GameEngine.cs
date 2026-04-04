@@ -2122,6 +2122,83 @@ public class GameEngine : IGameEngine
             return fleeResult;
         }
 
+        // --- Use item during combat (potions, scrolls, etc.) ---
+        if (action.Type == ActionType.Use)
+        {
+            var useResult = await ProcessUseAsync(player, action, ct);
+            if (useResult.Success)
+            {
+                // Item was used successfully — enemies still get their turn
+                var useMechanical = new List<string> { useResult.MechanicalSummary };
+                var useDice = new List<DiceRoll>(useResult.DiceRolls);
+                var useStateChanges = new List<StateChange>(useResult.StateChanges);
+
+                // Enemy turns after item use
+                foreach (var enemy in enemies.Where(e => e.Hp.HasValue && e.Hp.Value > 0 && room.Npcs.Contains(e)))
+                {
+                    int enemyAttackBonus = enemy.AttackBonus ?? 0;
+                    var enemyAttackRoll = _dice.RollAttack(enemyAttackBonus);
+                    useDice.Add(enemyAttackRoll);
+
+                    if (enemyAttackRoll.IsFumble)
+                    {
+                        useMechanical.Add($"{enemy.Name} fumbles their attack!");
+                        continue;
+                    }
+
+                    if (enemyAttackRoll.Total < player.Defense && !enemyAttackRoll.IsCritical)
+                    {
+                        useMechanical.Add($"{enemy.Name} attacks you (rolled {enemyAttackRoll.Total} vs {player.Defense}) and misses!");
+                        continue;
+                    }
+
+                    string enemyDmgDice = enemy.DamageDice ?? "1d4";
+                    var enemyDmgRoll = _dice.Roll(enemyDmgDice, $"{enemy.Name} damage");
+                    int enemyDmg = enemyAttackRoll.IsCritical ? enemyDmgRoll.Total * _rules.Combat.CriticalMultiplier : enemyDmgRoll.Total;
+                    enemyDmg = Math.Max(1, enemyDmg);
+                    useDice.Add(enemyDmgRoll);
+
+                    var oldHp = player.Hp;
+                    player.Hp = Math.Max(0, player.Hp - enemyDmg);
+                    useStateChanges.Add(new StateChange { EntityType = "Player", EntityId = player.Id, Property = "Hp", OldValue = oldHp.ToString(), NewValue = player.Hp.ToString() });
+                    useMechanical.Add($"{enemy.Name} hits you for {enemyDmg} damage!{(enemyAttackRoll.IsCritical ? " **CRITICAL!**" : "")}");
+
+                    if (player.Hp <= 0)
+                    {
+                        useMechanical.Add("You have been defeated!");
+                        break;
+                    }
+                }
+
+                string useCombatStatus = player.Hp <= 0 ? "defeat" : "ongoing";
+                if (player.Hp <= 0)
+                {
+                    player.Interaction.Reset();
+                    if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, ct);
+                }
+
+                await _stateManager.SavePlayerAsync(player, ct);
+                await _stateManager.SaveRoomAsync(room, ct);
+
+                var combatUseResult = new ActionResult
+                {
+                    ActionId = action.Id, RawInput = action.RawInput, Success = true,
+                    MechanicalSummary = string.Join("\n", useMechanical),
+                    DiceRolls = useDice,
+                    StateChanges = useStateChanges,
+                    ItemsLost = useResult.ItemsLost,
+                    InteractionUpdate = new InteractionUpdate
+                    {
+                        Mode = useCombatStatus == "ongoing" ? InteractionMode.Combat : InteractionMode.Explore,
+                        CombatStatus = useCombatStatus
+                    }
+                };
+                await PersistInteractionStoryEntry(player, action, combatUseResult, ct);
+                return combatUseResult;
+            }
+            // If use failed (item not found, not consumable), fall through to normal combat
+        }
+
         // --- Player's attack turn ---
         // Determine target: explicit from input, or first living enemy
         var targetName = action.Target;

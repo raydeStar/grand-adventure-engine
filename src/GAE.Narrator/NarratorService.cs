@@ -1606,7 +1606,20 @@ public class NarratorService : INarratorService
         var focalDetail = BuildRoomFocalDetail(room);
         var exitDetail = BuildExitDetail(room);
 
-        narration = $"{context.Player.Name} slows and lets {room.Name} resolve around them. {roomAtmosphere}";
+        var openingTemplates = new[]
+        {
+            $"{context.Player.Name} takes stock of {room.Name}.",
+            $"{context.Player.Name} surveys {room.Name} with a practiced eye.",
+            $"{context.Player.Name} pauses to absorb the details of {room.Name}.",
+            $"The details of {room.Name} sharpen as {context.Player.Name} looks around.",
+            $"{context.Player.Name} gives {room.Name} a thorough once-over.",
+            $"{room.Name} unfolds before {context.Player.Name}'s careful gaze.",
+            $"{context.Player.Name} scans {room.Name}, cataloguing threats and exits alike.",
+            $"A practiced eye sweeps across {room.Name}."
+        };
+        var opening = openingTemplates[Math.Abs(room.Id.GetHashCode() + context.Player.Name.Length) % openingTemplates.Length];
+
+        narration = $"{opening} {roomAtmosphere}";
         if (!string.IsNullOrWhiteSpace(focalDetail))
             narration += $" {focalDetail}";
         if (!string.IsNullOrWhiteSpace(exitDetail))
@@ -1653,7 +1666,15 @@ public class NarratorService : INarratorService
             return "The place keeps its details close, revealing itself through echo, shadow, and the pressure of the air more than any easy explanation.";
         }
 
-        return $"The place carries the character of {description.TrimEnd('.').ToLowerInvariant()}, with every sound lingering just long enough to make the stillness feel deliberate.";
+        var atmosphereTemplates = new[]
+        {
+            $"The air here speaks of {description.TrimEnd('.').ToLowerInvariant()}.",
+            $"Everything about this place says {description.TrimEnd('.').ToLowerInvariant()}.",
+            $"{char.ToUpperInvariant(description[0])}{description[1..].TrimEnd('.')} — the room wears its purpose plainly.",
+            $"The smell of dust and purpose mingles in a space defined by {description.TrimEnd('.').ToLowerInvariant()}.",
+            $"This is unmistakably a place of {description.TrimEnd('.').ToLowerInvariant()}, and it makes no effort to pretend otherwise."
+        };
+        return atmosphereTemplates[Math.Abs(room.Id.GetHashCode()) % atmosphereTemplates.Length];
     }
 
     private static string BuildRoomFocalDetail(Room room)
