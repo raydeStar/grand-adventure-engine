@@ -720,7 +720,7 @@ public class DiscordBotService : IHostedService
         // Narration or mechanical summary as description
         var narration = result.Narration ?? result.MechanicalSummary;
         if (!result.Success)
-            narration = $"❌ {narration}";
+            narration = $"❌ **Failed!** {narration}";
         embed.WithDescription(narration);
 
         // Dice rolls as a field

@@ -17,6 +17,10 @@ public class GameEngine : IGameEngine
     private readonly IWikiService? _wiki;
     private readonly IContentRegistryService? _registry;
 
+    // Anti-cheat: maximum stat gains allowed from free-form LLM actions per turn
+    private const int MaxFreeFormGoldGain = 10;
+    private const int MaxFreeFormXpGain = 25;
+
     public GameEngine(
         IStateManager stateManager,
         IProbabilityEngine dice,
@@ -1204,7 +1208,7 @@ public class GameEngine : IGameEngine
             Narration = freeForm.Narration
         };
 
-        // Apply stat changes
+        // Apply stat changes — with anti-cheat guardrails
         foreach (var (stat, delta) in freeForm.StatChanges)
         {
             switch (stat.ToLowerInvariant())
@@ -1220,34 +1224,50 @@ public class GameEngine : IGameEngine
                     result.StateChanges.Add(new StateChange { EntityType = "player", EntityId = player.Id, Property = "mp", OldValue = oldMp.ToString(), NewValue = player.Mp.ToString() });
                     break;
                 case "gold":
+                    // Anti-cheat: cap gold gains from free-form at 10 per action.
+                    // Legitimate gold comes from buy/sell/loot mechanics, not free-form narration.
+                    var clampedGoldDelta = delta > 0 ? Math.Min(delta, MaxFreeFormGoldGain) : delta;
+                    if (delta > MaxFreeFormGoldGain)
+                        _logger.LogWarning("Anti-cheat: clamped gold gain from {Requested} to {Max} for player {PlayerId} (action: {Action})",
+                            delta, MaxFreeFormGoldGain, player.Id, action.RawInput);
                     var oldGold = player.Gold;
-                    player.Gold = Math.Max(0, player.Gold + delta);
-                    result.GoldChange += delta;
+                    player.Gold = Math.Max(0, player.Gold + clampedGoldDelta);
+                    result.GoldChange += clampedGoldDelta;
                     result.StateChanges.Add(new StateChange { EntityType = "player", EntityId = player.Id, Property = "gold", OldValue = oldGold.ToString(), NewValue = player.Gold.ToString() });
                     break;
                 case "xp":
+                    // Anti-cheat: cap XP gains from free-form at 25 per action.
+                    var clampedXpDelta = delta > 0 ? Math.Min(delta, MaxFreeFormXpGain) : delta;
+                    if (delta > MaxFreeFormXpGain)
+                        _logger.LogWarning("Anti-cheat: clamped XP gain from {Requested} to {Max} for player {PlayerId}", delta, MaxFreeFormXpGain, player.Id);
                     var oldXp = player.Xp;
-                    player.Xp = Math.Max(0, player.Xp + delta);
-                    result.XpGained += Math.Max(0, delta);
+                    player.Xp = Math.Max(0, player.Xp + clampedXpDelta);
+                    result.XpGained += Math.Max(0, clampedXpDelta);
                     result.StateChanges.Add(new StateChange { EntityType = "player", EntityId = player.Id, Property = "xp", OldValue = oldXp.ToString(), NewValue = player.Xp.ToString() });
+                    break;
+                default:
+                    // Anti-cheat: block all other stat modifications from free-form
+                    _logger.LogWarning("Anti-cheat: blocked stat change '{Stat}' = {Delta} from free-form for player {PlayerId}", stat, delta, player.Id);
                     break;
             }
         }
 
-        // Apply inventory changes
+        // Apply inventory changes — only allow items that exist in the room or a shopkeeper's inventory
         foreach (var change in freeForm.InventoryChanges)
         {
             if (string.Equals(change.Action, "add", StringComparison.OrdinalIgnoreCase))
             {
-                var item = new InventoryItem
+                // Anti-cheat: only allow adding items that exist in a known source
+                var resolved = TryResolveKnownItem(change.ItemName, room);
+                if (resolved is null)
                 {
-                    Id = Guid.NewGuid().ToString("N"),
-                    Name = change.ItemName,
-                    Quantity = Math.Max(1, change.Quantity),
-                    Type = ItemType.Misc
-                };
-                player.Inventory.Add(item);
-                result.ItemsGained.Add(item);
+                    _logger.LogWarning("Anti-cheat: blocked item addition '{ItemName}' — not found in room or shop inventory for player {PlayerId}",
+                        change.ItemName, player.Id);
+                    continue; // Skip this item — it doesn't exist in a legitimate source
+                }
+                resolved.Quantity = Math.Max(1, change.Quantity);
+                player.Inventory.Add(resolved);
+                result.ItemsGained.Add(resolved);
             }
             else if (string.Equals(change.Action, "remove", StringComparison.OrdinalIgnoreCase))
             {
@@ -1423,6 +1443,29 @@ public class GameEngine : IGameEngine
             Effect = item.Effect,
             StatBonuses = new Dictionary<string, int>(item.StatBonuses)
         };
+
+    /// <summary>
+    /// Tries to find a matching item in the room's items or any shopkeeper's inventory.
+    /// Returns a cloned copy with full stats if found, or null if not found.
+    /// This prevents the LLM from creating items out of thin air.
+    /// </summary>
+    private static InventoryItem? TryResolveKnownItem(string itemName, Room room)
+    {
+        // Check room floor items
+        var roomItem = FindNamedEntity(room.Items, i => i.Name, itemName);
+        if (roomItem is not null)
+            return CloneInventoryItem(roomItem, 1);
+
+        // Check shopkeeper inventories in the room
+        foreach (var npc in room.Npcs.Where(n => n.IsShopkeeper))
+        {
+            var shopItem = FindNamedEntity(npc.ShopInventory, i => i.Name, itemName);
+            if (shopItem is not null)
+                return CloneInventoryItem(shopItem, 1);
+        }
+
+        return null;
+    }
 
     private static void AddRoomItem(Room room, InventoryItem item)
     {
