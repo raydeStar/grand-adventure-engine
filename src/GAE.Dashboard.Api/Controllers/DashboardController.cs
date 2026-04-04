@@ -455,6 +455,7 @@ public class DashboardController : ControllerBase
             Personality = n.Personality ?? "",
             Faction = n.Faction ?? "neutral",
             IsHostile = n.IsHostile,
+            IsShopkeeper = n.IsShopkeeper,
             Level = n.Level ?? 1,
             Hp = n.Hp,
             MaxHp = n.MaxHp,
@@ -468,6 +469,9 @@ public class DashboardController : ControllerBase
 
         if (n.Loot is not null)
             npc.LootTable.AddRange(n.Loot.Select(ConvertLoreItem));
+
+        if (n.ShopInventory is not null)
+            npc.ShopInventory.AddRange(n.ShopInventory.Select(ConvertLoreItem));
 
         return npc;
     }

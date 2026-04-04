@@ -86,6 +86,7 @@ public class GameEngine : IGameEngine
             ActionType.Use => await ProcessUseAsync(player, action, ct),
             ActionType.Buy => await ProcessBuyAsync(player, action, ct),
             ActionType.Sell => await ProcessSellAsync(player, action, ct),
+            ActionType.Shop => await ProcessShopAsync(player, action, ct),
             ActionType.Equip => await ProcessEquipAsync(player, action, ct),
             ActionType.Unequip => ProcessUnequip(player, action),
             ActionType.Rest or ActionType.ShortRest => ProcessShortRest(player, action),
@@ -113,6 +114,7 @@ public class GameEngine : IGameEngine
             && action.Type != ActionType.Inventory
             && action.Type != ActionType.Map
             && action.Type != ActionType.Cast
+            && action.Type != ActionType.Shop
             && action.Type != ActionType.Unknown;
 
         if (shouldNarrate)
@@ -484,6 +486,16 @@ public class GameEngine : IGameEngine
 
         var (requestedQuantity, rawTarget) = ParseQuantityTarget(action.Target);
 
+        // Check if the item belongs to a shopkeeper — can't just take it
+        var shopkeeper = room.Npcs.FirstOrDefault(n => n.IsShopkeeper);
+        if (shopkeeper is not null)
+        {
+            var shopItem = FindNamedEntity(shopkeeper.ShopInventory, i => i.Name, rawTarget);
+            if (shopItem is not null)
+                return new ActionResult { ActionId = action.Id, Success = false,
+                    MechanicalSummary = $"{shopItem.Name} belongs to {shopkeeper.Name} and costs {shopItem.Value} gold. Use `buy {shopItem.Name.ToLowerInvariant()}` to purchase it." };
+        }
+
         // Try gold pickup first ("take gold", "pick up 10 gold")
         if (TryResolveGoldPickup(player, room, requestedQuantity, rawTarget, out var goldResult))
         {
@@ -707,6 +719,42 @@ public class GameEngine : IGameEngine
         };
     }
 
+    private async Task<ActionResult> ProcessShopAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
+    {
+        var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
+        if (room is null)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "There's no shop here." };
+
+        var shopkeeper = room.Npcs.FirstOrDefault(n => n.IsShopkeeper);
+        if (shopkeeper is null)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "There's no shopkeeper here." };
+
+        if (shopkeeper.ShopInventory.Count == 0)
+            return new ActionResult { ActionId = action.Id, Success = true, MechanicalSummary = $"{shopkeeper.Name} has nothing for sale right now." };
+
+        var lines = new List<string> { $"**{shopkeeper.Name}'s Wares:**", "" };
+        foreach (var item in shopkeeper.ShopInventory)
+        {
+            var details = new List<string>();
+            if (!string.IsNullOrEmpty(item.DamageDice)) details.Add($"Dmg: {item.DamageDice}");
+            if (item.ArmorValue > 0) details.Add($"AC: +{item.ArmorValue}");
+            if (!string.IsNullOrEmpty(item.Effect)) details.Add(item.Effect);
+            var detailStr = details.Count > 0 ? $" ({string.Join(", ", details)})" : "";
+            lines.Add($"  {item.Name} -- {item.Value}g{detailStr}");
+            if (!string.IsNullOrEmpty(item.Description))
+                lines.Add($"    *{item.Description}*");
+        }
+        lines.Add("");
+        lines.Add($"You have **{player.Gold} gold**. Use `buy <item>` to purchase or `sell <item>` to sell.");
+
+        return new ActionResult
+        {
+            ActionId = action.Id,
+            Success = true,
+            MechanicalSummary = string.Join("\n", lines)
+        };
+    }
+
     private async Task<ActionResult> ProcessEquipAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
     {
         var item = FindNamedEntity(player.Inventory.Where(i => i.IsEquippable), inventoryItem => inventoryItem.Name, action.Target);
@@ -731,7 +779,13 @@ public class GameEngine : IGameEngine
         }
 
         if (item is null)
+        {
+            // Check if the item exists but isn't equippable (better error message)
+            var nonEquippable = FindNamedEntity(player.Inventory, i => i.Name, action.Target);
+            if (nonEquippable is not null)
+                return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"{nonEquippable.Name} cannot be equipped." };
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"Equip target '{action.Target}' was not found in your inventory or the current room." };
+        }
 
         // Remove from inventory if it was there (not if just taken from room)
         if (!takenFromRoom)
@@ -2543,26 +2597,26 @@ public class GameEngine : IGameEngine
             Success = true,
             MechanicalSummary = """
                 **Available Commands:**
-                `go <direction>` - Move north/south/east/west/up/down
-                `look` / `look at <target>` - Examine surroundings or a specific thing
-                `attack <target>` - Attack an NPC
-                `talk to <target>` - Talk to an NPC
-                `take <item>` - Pick up an item
-                `drop <item>` - Drop an item from inventory
-                `use <item>` - Use a consumable item
-                `buy <item>` - Buy from a shopkeeper
-                `sell <item>` - Sell an item to a shopkeeper
-                `equip <item>` - Equip an item
-                `unequip <item>` - Unequip an item
-                `cast <spell>` / `cast <spell> at <target>` - Cast a registered or improvised spell
-                `rest` / `short rest` / `long rest` - Rest and recover
-                `inventory` - View your inventory
-                `stats` - View your character stats
-                `map` - View ASCII world map of discovered rooms
-                `help` - Show this help message
+                `go <direction>` -- Move north/south/east/west/up/down
+                `look` / `look at <target>` -- Examine surroundings or a specific thing
+                `attack <target>` -- Attack an NPC
+                `talk to <target>` -- Talk to an NPC
+                `take <item>` -- Pick up an item
+                `drop <item>` -- Drop an item from inventory
+                `use <item>` -- Use a consumable item
+                `shop` / `browse` -- View a shopkeeper's wares and prices
+                `buy <item>` -- Buy from a shopkeeper
+                `sell <item>` -- Sell an item to a shopkeeper
+                `equip <item>` -- Equip an item
+                `unequip <item>` -- Unequip an item
+                `cast <spell>` / `cast <spell> at <target>` -- Cast a spell
+                `rest` / `short rest` / `long rest` -- Rest and recover
+                `inventory` -- View your inventory
+                `stats` -- View your character stats
+                `map` -- View ASCII world map of discovered rooms
+                `help` -- Show this help message
 
                 You can also type anything in natural language and the narrator will try to interpret it!
-                Improvised spells are welcome - but beware, too much power may fizzle spectacularly!
                 """
         };
     }
@@ -2786,7 +2840,7 @@ public class GameEngine : IGameEngine
         var oldGold = player.Gold;
         player.Gold -= price;
 
-        // Transfer item to player (clone, don't remove from shop  -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚Â  -- Æ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚Â  -- Æ’ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ƒÆ’ -- ƒ -- ‚ -- Æ’ -- … -- ‚ -- Æ’ -- ‚ -- Æ’ -- ƒ -- Æ’ -- ‚ -- Æ’ -- ƒ -- … -- Æ’ -- ‚Â shops restock)
+        // Transfer item to player (clone, dont remove from shop -- shops restock)
         var boughtItem = CloneInventoryItem(shopItem, 1);
         var existingStack = player.Inventory.FirstOrDefault(i =>
             string.Equals(i.Name, shopItem.Name, StringComparison.OrdinalIgnoreCase));

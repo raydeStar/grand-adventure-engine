@@ -114,6 +114,13 @@ public partial class CommandParser
             return action;
         }
 
+        // Shop / browse
+        if (ShopRegex().IsMatch(input))
+        {
+            action.Type = ActionType.Shop;
+            return action;
+        }
+
         // Buy
         var buyMatch = BuyRegex().Match(input);
         if (buyMatch.Success)
@@ -257,6 +264,9 @@ public partial class CommandParser
 
     [GeneratedRegex(@"^(?:use|consume|drink|eat)\s+(?<target>.+)$", RegexOptions.IgnoreCase)]
     private static partial Regex UseRegex();
+
+    [GeneratedRegex(@"^(?:shop|browse|wares|merchandise|what(?:'s| is) for sale|show me (?:your |the )?(?:wares|goods|inventory|merchandise|stock|shop))$", RegexOptions.IgnoreCase)]
+    private static partial Regex ShopRegex();
 
     [GeneratedRegex(@"^(?:buy|purchase)\s+(?<target>.+)$", RegexOptions.IgnoreCase)]
     private static partial Regex BuyRegex();

@@ -33,5 +33,6 @@ public enum ActionType
     Stats,
     Help,
     Map,
+    Shop,
     Unknown
 }

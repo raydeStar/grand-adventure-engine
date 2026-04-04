@@ -156,31 +156,37 @@ public class FullPlaythroughTests : IClassFixture<GaeWebApplicationFactory>
         player = await GetPlayer();
         Assert.Equal("blacksmith", player.CurrentRoomId);
 
-        // Verify blacksmith has items
+        // Verify blacksmith has shopkeeper with items in shop inventory
         var smith = await GetRoom("blacksmith");
-        Assert.Contains(smith.Items, i => i.Name.Contains("Thunderstrike"));
-        Assert.Contains(smith.Items, i => i.Name.Contains("Ironbark"));
-        Assert.Contains(smith.Items, i => i.Name.Contains("Starfall"));
         Assert.Contains(smith.Npcs, n => n.Name.Contains("Korga"));
+        var korga = smith.Npcs.First(n => n.Name.Contains("Korga"));
+        Assert.True(korga.IsShopkeeper);
+        Assert.Contains(korga.ShopInventory, i => i.Name.Contains("Thunderstrike"));
+        Assert.Contains(korga.ShopInventory, i => i.Name.Contains("Ironbark"));
+        Assert.Contains(korga.ShopInventory, i => i.Name.Contains("Starfall"));
 
-        // ── TAKE: Pick up the Thunderstrike Blade ──
+        // ── SHOP: Browse wares ──
+        var shopResult = await Act("shop");
+        Assert.True(shopResult.GetProperty("success").GetBoolean());
+        Assert.Contains("Thunderstrike", shopResult.GetProperty("mechanicalSummary").GetString());
+
+        // ── TAKE should be blocked for shop items ──
         var takeSword = await Act("take thunderstrike blade");
-        Assert.True(takeSword.GetProperty("success").GetBoolean());
+        Assert.False(takeSword.GetProperty("success").GetBoolean());
+        Assert.Contains("buy", takeSword.GetProperty("mechanicalSummary").GetString()!.ToLowerInvariant());
+
+        // ── BUY: Buy an affordable item (Iron Sword 25g) ──
+        var buySword = await Act("buy iron sword");
+        Assert.True(buySword.GetProperty("success").GetBoolean());
+        player = await GetPlayer();
+        Assert.Contains(player.Inventory, i => i.Name.Contains("Iron Sword"));
+
+        // ── EQUIP: Equip the purchased sword ──
+        var equipSword = await Act("equip iron sword");
+        Assert.True(equipSword.GetProperty("success").GetBoolean());
         player = await GetPlayer();
         Assert.NotNull(player.Equipment.Weapon);
-        Assert.Contains("Thunderstrike", player.Equipment.Weapon!.Name);
-
-        // Verify it was removed from room
-        smith = await GetRoom("blacksmith");
-        Assert.DoesNotContain(smith.Items, i => i.Name.Contains("Thunderstrike"));
-
-        // ── TAKE: Pick up armor ──
-        var takeArmor = await Act("take ironbark plate armor");
-        Assert.True(takeArmor.GetProperty("success").GetBoolean());
-
-        // ── TAKE: Pick up shield ──
-        var takeShield = await Act("take starfall shield");
-        Assert.True(takeShield.GetProperty("success").GetBoolean());
+        Assert.Contains("Iron Sword", player.Equipment.Weapon!.Name);
 
         // ── Navigate back and check all routes ──
         await Act("go south"); // back to town square
@@ -193,10 +199,12 @@ public class FullPlaythroughTests : IClassFixture<GaeWebApplicationFactory>
         Assert.Equal("general_store", player.CurrentRoomId);
         var store = await GetRoom("general_store");
         Assert.Contains(store.Npcs, n => n.Name.Contains("Pip"));
-        Assert.Contains(store.Items, i => i.Name.Contains("Healing Potion"));
+        var pip = store.Npcs.First(n => n.Name.Contains("Pip"));
+        Assert.True(pip.IsShopkeeper);
+        Assert.Contains(pip.ShopInventory, i => i.Name.Contains("Healing Potion"));
 
-        // ── Take potions ──
-        await Act("take greater healing potion");
+        // ── BUY: Buy a minor healing potion (15g, within remaining gold) ──
+        await Act("buy minor healing potion");
 
         // ── Back to square, then to back alley ──
         await Act("go north"); // town_square
@@ -206,7 +214,9 @@ public class FullPlaythroughTests : IClassFixture<GaeWebApplicationFactory>
         Assert.Equal("back_alley", player.CurrentRoomId);
         var alley = await GetRoom("back_alley");
         Assert.Contains(alley.Npcs, n => n.Name.Contains("Silas"));
-        Assert.Contains(alley.Items, i => i.Name.Contains("Nightfang"));
+        var silas = alley.Npcs.First(n => n.Name.Contains("Silas"));
+        Assert.True(silas.IsShopkeeper);
+        Assert.Contains(silas.ShopInventory, i => i.Name.Contains("Nightfang"));
 
         // ── Head to gate ──
         await Teleport("town_square");
@@ -538,5 +548,13 @@ public class FullPlaythroughTests : IClassFixture<GaeWebApplicationFactory>
         var depths = await state.GetRoomAsync("dungeon_depths");
         Assert.NotNull(depths);
         Assert.Contains(depths!.Npcs, n => n.Name.Contains("Goretusk"));
+
+        // Verify shopkeeper data survived re-seed
+        var smithRoom = await state.GetRoomAsync("blacksmith");
+        Assert.NotNull(smithRoom);
+        var korgaNpc = smithRoom!.Npcs.FirstOrDefault(n => n.Name.Contains("Korga"));
+        Assert.NotNull(korgaNpc);
+        Assert.True(korgaNpc!.IsShopkeeper);
+        Assert.NotEmpty(korgaNpc.ShopInventory);
     }
 }
