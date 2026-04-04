@@ -214,13 +214,14 @@ public class NarratorService : INarratorService
               "description": "2-3 atmospheric sentences. Hint at things worth interacting with.",
               "environmentTags": ["tag1", "tag2"],
               "npcs": [{ "id": "unique_id", "name": "NPC Name", "personality": "one-line personality with attitude", "isHostile": false }],
-              "items": [{ "name": "Item Name", "description": "brief flavor text", "quantity": 1 }]
+              "items": [{ "name": "Item Name", "description": "brief flavor text", "type": "Misc", "quantity": 1 }]
             }
 
             RULES:
             - Keep it consistent with the source location's theme and direction of travel.
             - Include 0-2 NPCs with distinct, memorable personalities (grumpy, paranoid, flirty, etc.)
             - Include 1-3 items that make sense for the location (weapons, potions, gold, curiosities, junk)
+            - Each item must have a "type" field: one of "Weapon", "Armor", "Shield", "Helmet", "Potion", "Scroll", "Key", "QuestItem", or "Misc"
             - Descriptions should hint at interactive elements: things to search, people to talk to, paths to explore.
             - Add 2-4 environment tags for mood/theme (e.g. "dark", "tavern", "forest", "ruins", "marketplace").
             - Name should be evocative, not generic ("The Butcher's Alley" not "Alley").
@@ -253,13 +254,18 @@ public class NarratorService : INarratorService
                         Personality = n.Personality ?? "",
                         IsHostile = n.IsHostile
                     }).ToList() ?? [],
-                    Items = generated.Items?.Select(i => new InventoryItem
+                    Items = generated.Items?.Select(i =>
                     {
-                        Id = Guid.NewGuid().ToString("N"),
-                        Name = i.Name ?? "Mysterious Object",
-                        Description = i.Description ?? "",
-                        Quantity = Math.Max(1, i.Quantity),
-                        Type = ItemType.Misc
+                        var itemType = Enum.TryParse<ItemType>(i.Type, ignoreCase: true, out var parsed) ? parsed : ItemType.Misc;
+                        return new InventoryItem
+                        {
+                            Id = Guid.NewGuid().ToString("N"),
+                            Name = i.Name ?? "Mysterious Object",
+                            Description = i.Description ?? "",
+                            Quantity = Math.Max(1, i.Quantity),
+                            Type = itemType,
+                            IsEquippable = itemType is ItemType.Weapon or ItemType.Armor or ItemType.Shield or ItemType.Helmet
+                        };
                     }).ToList() ?? [],
                     Exits = new Dictionary<string, string>
                     {
@@ -456,6 +462,9 @@ public class NarratorService : INarratorService
             - Keep continuity. Do not invent items, exits, or NPCs that aren't in the context.
             - Use attributes naturally: STR for force, DEX for agility, CON for endurance, INT for spellcraft,
               WIS for perception, CHA for social pressure, LUCK for chance.
+            - CHA IS CRITICAL for any NPC interaction. High-CHA players (18+) should get noticeably
+              warmer, more helpful NPC reactions — even gruff NPCs soften. Low-CHA players (6-) get
+              dismissive or rude treatment. Never ignore CHA when narrating social outcomes.
             - Equipment slots: Weapon, Armor, Shield, Helmet.
             - Prefer small, credible state changes. Risky actions can fail or partially succeed.
             - Be fair — no free loot, no instant kills. But make the journey entertaining.
@@ -582,8 +591,15 @@ public class NarratorService : INarratorService
             - The NPC has a PERSONALITY. A gruff barmaid doesn't suddenly become helpful because the player asked
               nicely. A nervous merchant stutters more when intimidated. A flirty rogue enjoys the banter.
             - Humor is welcome. NPCs can be sarcastic, oblivious, self-important, or accidentally funny.
-            - CHA matters. A high-CHA player should find social interactions easier, a low-CHA player should
-              get worse reactions. Factor the player's CHA into how receptive the NPC is.
+            - CHA IS CRITICAL. Check the player's CHA stat carefully:
+              - CHA 18+: The player is extremely charismatic. NPCs are NOTICEABLY warmer, more helpful,
+                more willing to share secrets, give discounts, and bend rules. Even gruff or hostile NPCs
+                soften around this player. They may not love the player, but they can't help liking them.
+              - CHA 14-17: NPCs are generally friendly and cooperative.
+              - CHA 10-13: Normal reactions based on NPC personality.
+              - CHA 7-9: NPCs are slightly less patient and helpful.
+              - CHA 6 or below: NPCs are dismissive, rude, or uncooperative.
+              Never ignore CHA. A CHA 20+ player should feel like the most likeable person in the world.
 
             SOCIAL SKILL CHECKS:
             When the player's input includes a [Social check: ...] line, the ENGINE has already rolled dice.
@@ -608,7 +624,9 @@ public class NarratorService : INarratorService
             React accordingly — a romanced NPC is warm, a betrayed NPC is cold even if they're calm.
 
             RULES:
-            1. Track the NPC's emotional state. Shift based on what the player says and their CHA modifier.
+            1. Track the NPC's emotional state. Shift based on what the player says AND their CHA score.
+               High CHA (18+) should bias disposition shifts toward friendlier outcomes. The NPC's
+               starting intensity should effectively be +10-20 higher for very charismatic players.
             2. Return an updated disposition from: "friendly", "neutral", "annoyed", "angry", "hostile", "amused", "flirtatious", "scared", "sad", "suspicious".
             3. If the conversation ends naturally (dismissal, goodbye, storms off), return mode: "explore".
             4. If the player tries to LEAVE mid-conversation, narrate the NPC's reaction.
@@ -1831,6 +1849,7 @@ public class NarratorService : INarratorService
     {
         public string? Name { get; set; }
         public string? Description { get; set; }
+        public string? Type { get; set; }
         public int Quantity { get; set; } = 1;
     }
 

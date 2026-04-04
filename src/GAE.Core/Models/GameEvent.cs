@@ -38,6 +38,7 @@ public enum GameEventType
     CombatTurnAdvanced,
     RoomDiscovered,
     RoomUpdated,
+    RoomDeleted,
     NpcSpawned,
     NpcDied,
     PlayerDeleted,

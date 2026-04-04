@@ -15,6 +15,7 @@ public interface IStateManager
     Task<Room?> GetRoomAsync(string roomId, CancellationToken ct = default);
     Task<IReadOnlyList<Room>> GetAllRoomsAsync(CancellationToken ct = default);
     Task SaveRoomAsync(Room room, CancellationToken ct = default);
+    Task<bool> RemoveRoomAsync(string roomId, CancellationToken ct = default);
     Task RemoveAllRoomsAsync(CancellationToken ct = default);
 
     // Per-player room instances

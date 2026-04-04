@@ -221,6 +221,21 @@
     UI.$('existing-players').addEventListener('click', handlePortalPlayerClick);
     UI.$('admin-players-table').addEventListener('click', handleAdminRegistryClick);
 
+    UI.$('admin-rooms-list')?.addEventListener('click', async (e) => {
+      const delBtn = e.target.closest('[data-room-delete-id]');
+      if (!delBtn) return;
+      const roomId = delBtn.dataset.roomDeleteId;
+      const roomName = delBtn.dataset.roomDeleteName || roomId;
+      if (!confirm(`Delete room "${roomName}"?`)) return;
+      try {
+        await API.deleteRoom(roomId);
+        UI.appendActivity('admin-command-log', `Deleted room ${roomName}.`, 'success');
+        await refreshRooms();
+      } catch (err) {
+        UI.appendActivity('admin-command-log', `Error deleting room: ${err.message}`, 'error');
+      }
+    });
+
     document.addEventListener('click', (event) => {
       const exit = event.target.closest('[data-room-exit]');
       if (exit && state.currentPlayerId) {
@@ -621,6 +636,21 @@
     if (action === 'copy-id') {
       navigator.clipboard?.writeText(playerId);
       UI.appendActivity('admin-command-log', `Copied player id ${playerId}.`, 'info');
+      return;
+    }
+
+    if (action === 'delete-player') {
+      const playerName = button.dataset.playerName || playerId;
+      if (!confirm(`Delete player "${playerName}"?`)) return;
+      (async () => {
+        try {
+          await API.deletePlayer(playerId);
+          UI.appendActivity('admin-command-log', `Deleted player ${playerName}.`, 'success');
+          await refreshPlayers();
+        } catch (err) {
+          UI.appendActivity('admin-command-log', `Error deleting player: ${err.message}`, 'error');
+        }
+      })();
       return;
     }
 

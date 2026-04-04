@@ -54,6 +54,9 @@ public class InMemoryStateManager : IStateManager
         return Task.CompletedTask;
     }
 
+    public Task<bool> RemoveRoomAsync(string roomId, CancellationToken ct = default)
+        => Task.FromResult(_rooms.TryRemove(roomId, out _));
+
     public Task RemoveAllRoomsAsync(CancellationToken ct = default)
     {
         _rooms.Clear();

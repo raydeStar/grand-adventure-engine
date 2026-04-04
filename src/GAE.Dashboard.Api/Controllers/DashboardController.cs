@@ -273,6 +273,30 @@ public class DashboardController : ControllerBase
     }
 
     [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpDelete("admin/rooms/{roomId}")]
+    public async Task<IActionResult> DeleteRoom(string roomId, CancellationToken ct)
+    {
+        var room = await _stateManager.GetRoomAsync(roomId, ct);
+        if (room is null)
+            return NotFound(new { error = $"Room '{roomId}' was not found." });
+
+        await _stateManager.RemoveRoomAsync(roomId, ct);
+
+        await BroadcastAdminMutationAsync(
+            summary: $"Deleted room {room.Name} ({roomId}).",
+            playerId: null,
+            data: new Dictionary<string, object?>
+            {
+                ["roomId"] = roomId,
+                ["roomName"] = room.Name,
+                ["mutation"] = "delete-room"
+            },
+            ct: ct);
+
+        return Ok(new { summary = $"Deleted room {room.Name} ({roomId})." });
+    }
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
     [HttpPost("admin/seed-demo")]
     public async Task<IActionResult> SeedDemoCharacters([FromBody] SeedDemoCharactersRequest? request, CancellationToken ct)
     {

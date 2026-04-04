@@ -106,6 +106,15 @@ const API = {
     return res.json();
   },
 
+  async deleteRoom(roomId) {
+    const res = await fetch(`${this.base}/admin/rooms/${encodeURIComponent(roomId)}`, {
+      method: 'DELETE',
+      credentials: 'same-origin'
+    });
+    if (!res.ok) throw this.createHttpError(res, await this.readError(res));
+    return res.json();
+  },
+
   async getHealth() {
     return this.getJson(`${this.base}/health`);
   },

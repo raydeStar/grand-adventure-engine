@@ -856,6 +856,7 @@ const UI = {
           <button class="btn btn-primary btn-sm" data-admin-action="user" data-player-id="${this.esc(player.id)}" type="button">Play</button>
           <button class="btn btn-secondary btn-sm" data-admin-action="admin" data-player-id="${this.esc(player.id)}" type="button">Admin View</button>
           <button class="btn btn-secondary btn-sm" data-admin-action="copy-id" data-player-id="${this.esc(player.id)}" type="button">Copy Id</button>
+          <button class="admin-row-delete" data-admin-action="delete-player" data-player-id="${this.esc(player.id)}" data-player-name="${this.esc(player.name)}" type="button">Del</button>
         </div>
       </div>
     `).join('');
@@ -873,6 +874,7 @@ const UI = {
         <div class="room-card-top">
           <span class="room-card-title">${this.esc(room.name)}</span>
           <span class="role-chip ${room.isDiscovered ? 'active' : ''}">${room.isDiscovered ? 'Discovered' : 'Seeded only'}</span>
+          <button class="room-card-delete" data-room-delete-id="${this.esc(room.id)}" data-room-delete-name="${this.esc(room.name)}" type="button">Del</button>
         </div>
         <div class="room-card-meta">${this.esc(room.id)} | Exits ${room.exitCount ?? Object.keys(room.exits || {}).length} | NPCs ${room.npcCount ?? (room.npcs || []).length} | Items ${room.itemCount ?? (room.items || []).length}</div>
         <div class="room-card-description">${this.esc(room.description || 'No description available.')}</div>
@@ -1471,6 +1473,7 @@ const UI = {
           <div class="dm-result-header">
             <span class="dm-result-name">${this.esc(item.name)}</span>
             <span class="dm-result-type dm-type-${this.esc(item.type)}">${this.esc(item.type)}</span>
+            <button class="dm-result-delete" data-dm-delete-id="${this.esc(item.id)}" data-dm-delete-type="${this.esc(item.type)}" data-dm-delete-name="${this.esc(item.name)}" title="Delete">\u00d7</button>
           </div>
           <div class="dm-result-meta">${this.esc(item.meta || '')}</div>
           ${item.description ? `<div class="dm-result-desc">${this.esc(item.description)}</div>` : ''}
@@ -1849,6 +1852,32 @@ const UI = {
         if (createBtn) {
           const searchVal = this.$('dm-search-input')?.value || '';
           this.dmStartCreate(createBtn.dataset.dmCreate, searchVal);
+          return;
+        }
+
+        // Delete button on result card
+        const delBtn = e.target.closest('[data-dm-delete-id]');
+        if (delBtn) {
+          e.stopPropagation();
+          const id = delBtn.dataset.dmDeleteId;
+          const type = delBtn.dataset.dmDeleteType;
+          const name = delBtn.dataset.dmDeleteName || id;
+          if (!confirm(`Delete ${type} "${name}"?`)) return;
+          const registryTypes = { spell: 'spells', item: 'items', class: 'classes', race: 'races' };
+          (async () => {
+            try {
+              if (registryTypes[type]) {
+                await API.deleteRegistryEntry(registryTypes[type], id);
+              } else if (type === 'player') {
+                await API.deletePlayer(id);
+              } else if (type === 'room') {
+                await API.deleteRoom(id);
+              }
+              delBtn.closest('.dm-result-card')?.remove();
+            } catch (err) {
+              alert(`Delete failed: ${err.message}`);
+            }
+          })();
           return;
         }
 

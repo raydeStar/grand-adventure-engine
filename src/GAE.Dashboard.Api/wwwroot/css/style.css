@@ -2170,3 +2170,19 @@ textarea { resize: vertical; min-height: 80px; }
   border-color: rgba(255, 50, 50, 0.6);
 }
 .registry-editor-actions .btn-danger { margin-left: auto; }
+
+/* Inline delete buttons in list rows */
+.admin-row-delete, .dm-result-delete, .room-card-delete {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--dim);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0.1rem 0.4rem;
+  border-radius: var(--r);
+  transition: all 0.15s;
+}
+.admin-row-delete:hover, .dm-result-delete:hover, .room-card-delete:hover {
+  border-color: var(--bad);
+  color: var(--bad);
+}
