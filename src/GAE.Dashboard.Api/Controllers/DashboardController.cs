@@ -540,13 +540,14 @@ public class DashboardController : ControllerBase
         if (request.Xp.HasValue) { player.Xp = Math.Max(0, request.Xp.Value); changes.Add("xp"); }
         if (request.Level.HasValue) { player.Level = Math.Max(1, request.Level.Value); changes.Add("level"); }
 
-        if (request.Str.HasValue) { player.Str = Math.Clamp(request.Str.Value, 1, 30); changes.Add("str"); }
-        if (request.Dex.HasValue) { player.Dex = Math.Clamp(request.Dex.Value, 1, 30); changes.Add("dex"); }
-        if (request.Con.HasValue) { player.Con = Math.Clamp(request.Con.Value, 1, 30); changes.Add("con"); }
-        if (request.Int.HasValue) { player.Int = Math.Clamp(request.Int.Value, 1, 30); changes.Add("int"); }
-        if (request.Wis.HasValue) { player.Wis = Math.Clamp(request.Wis.Value, 1, 30); changes.Add("wis"); }
-        if (request.Cha.HasValue) { player.Cha = Math.Clamp(request.Cha.Value, 1, 30); changes.Add("cha"); }
-        if (request.Luck.HasValue) { player.Luck = Math.Clamp(request.Luck.Value, 1, 30); changes.Add("luck"); }
+        // No upper clamp — the DM should be able to set any stat value
+        if (request.Str.HasValue) { player.Str = Math.Max(1, request.Str.Value); changes.Add("str"); }
+        if (request.Dex.HasValue) { player.Dex = Math.Max(1, request.Dex.Value); changes.Add("dex"); }
+        if (request.Con.HasValue) { player.Con = Math.Max(1, request.Con.Value); changes.Add("con"); }
+        if (request.Int.HasValue) { player.Int = Math.Max(1, request.Int.Value); changes.Add("int"); }
+        if (request.Wis.HasValue) { player.Wis = Math.Max(1, request.Wis.Value); changes.Add("wis"); }
+        if (request.Cha.HasValue) { player.Cha = Math.Max(1, request.Cha.Value); changes.Add("cha"); }
+        if (request.Luck.HasValue) { player.Luck = Math.Max(1, request.Luck.Value); changes.Add("luck"); }
 
         if (request.CurrentRoomId is not null) { player.CurrentRoomId = request.CurrentRoomId.Trim(); changes.Add("room"); }
 
@@ -1119,64 +1120,77 @@ public class DashboardController : ControllerBase
 
     [Authorize(Policy = DashboardPolicies.AdminAccess)]
     [HttpGet("admin/dm/search")]
-    public async Task<IActionResult> DmSearch([FromQuery] string q, CancellationToken ct)
+    public async Task<IActionResult> DmSearch([FromQuery] string q, [FromQuery] string? type, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(q))
             return Ok(new { results = Array.Empty<object>() });
 
         var query = q.Trim().ToLowerInvariant();
+        var filter = type?.Trim().ToLowerInvariant();
         var results = new List<object>();
 
         // Search spells
-        foreach (var s in _registry.Spells.GetAll())
-            if (Matches(s.Id, s.Name, s.Description, s.School, s.Tags, query))
-                results.Add(new { type = "spell", s.Id, s.Name, s.Description, meta = $"{s.School} | Power {s.PowerLevel} | {s.ManaCost} MP", data = s });
+        if (filter is null or "spell")
+            foreach (var s in _registry.Spells.GetAll())
+                if (Matches(s.Id, s.Name, s.Description, s.School, s.Tags, query))
+                    results.Add(new { type = "spell", s.Id, s.Name, s.Description, meta = $"{s.School} | Power {s.PowerLevel} | {s.ManaCost} MP", data = s });
 
         // Search items
-        foreach (var i in _registry.Items.GetAll())
-            if (Matches(i.Id, i.Name, i.Description, i.Rarity, i.Tags, query))
-                results.Add(new { type = "item", i.Id, i.Name, i.Description, meta = $"{i.Type} | {i.Rarity} | {i.Value}g", data = i });
+        if (filter is null or "item")
+            foreach (var i in _registry.Items.GetAll())
+                if (Matches(i.Id, i.Name, i.Description, i.Rarity, i.Tags, query))
+                    results.Add(new { type = "item", i.Id, i.Name, i.Description, meta = $"{i.Type} | {i.Rarity} | {i.Value}g", data = i });
 
         // Search classes
-        foreach (var c in _registry.Classes.GetAll())
-            if (Matches(c.Id, c.Name, c.Description, null, c.Tags, query))
-                results.Add(new { type = "class", c.Id, c.Name, c.Description, meta = $"{c.HitDie} | {c.PrimaryStat}{(c.CanCastSpells ? " | Caster" : "")}", data = c });
+        if (filter is null or "class")
+            foreach (var c in _registry.Classes.GetAll())
+                if (Matches(c.Id, c.Name, c.Description, null, c.Tags, query))
+                    results.Add(new { type = "class", c.Id, c.Name, c.Description, meta = $"{c.HitDie} | {c.PrimaryStat}{(c.CanCastSpells ? " | Caster" : "")}", data = c });
 
         // Search races
-        foreach (var r in _registry.Races.GetAll())
-            if (Matches(r.Id, r.Name, r.Description, null, r.Tags, query))
-                results.Add(new { type = "race", r.Id, r.Name, r.Description, meta = string.Join(", ", r.Traits), data = r });
+        if (filter is null or "race")
+            foreach (var r in _registry.Races.GetAll())
+                if (Matches(r.Id, r.Name, r.Description, null, r.Tags, query))
+                    results.Add(new { type = "race", r.Id, r.Name, r.Description, meta = string.Join(", ", r.Traits), data = r });
+
+        // Fetch rooms once if needed for room or NPC search
+        var needRooms = filter is null or "room" or "npc";
+        var rooms = needRooms ? await _stateManager.GetAllRoomsAsync(ct) : [];
 
         // Search rooms
-        var rooms = await _stateManager.GetAllRoomsAsync(ct);
-        foreach (var rm in rooms)
-            if (rm.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                rm.Id.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                (rm.Description?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false))
-                results.Add(new { type = "room", id = rm.Id, name = rm.Name, description = rm.Description,
-                    meta = $"{rm.Npcs.Count} NPCs | {rm.Items.Count} items | {rm.Exits.Count} exits", data = rm });
+        if (filter is null or "room")
+            foreach (var rm in rooms)
+                if (rm.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                    rm.Id.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                    (rm.Description?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false))
+                    results.Add(new { type = "room", id = rm.Id, name = rm.Name, description = rm.Description,
+                        meta = $"{rm.Npcs.Count} NPCs | {rm.Items.Count} items | {rm.Exits.Count} exits", data = rm });
 
         // Search players
-        var players = await _stateManager.GetAllPlayersAsync(ct);
-        foreach (var p in players)
-            if (p.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                p.Id.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                p.Race.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                p.Class.Contains(query, StringComparison.OrdinalIgnoreCase))
-                results.Add(new { type = "player", id = p.Id, name = p.Name,
-                    description = $"Lv.{p.Level} {p.Race} {p.Class}",
-                    meta = $"HP: {p.Hp}/{p.MaxHp} | MP: {p.Mp}/{p.MaxMp} | Gold: {p.Gold}", data = p });
+        if (filter is null or "player")
+        {
+            var players = await _stateManager.GetAllPlayersAsync(ct);
+            foreach (var p in players)
+                if (p.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                    p.Id.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                    p.Race.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                    p.Class.Contains(query, StringComparison.OrdinalIgnoreCase))
+                    results.Add(new { type = "player", id = p.Id, name = p.Name,
+                        description = $"Lv.{p.Level} {p.Race} {p.Class}",
+                        meta = $"HP: {p.Hp}/{p.MaxHp} | MP: {p.Mp}/{p.MaxMp} | Gold: {p.Gold}", data = p });
+        }
 
         // Search NPCs (across all rooms)
-        foreach (var rm in rooms)
-            foreach (var npc in rm.Npcs)
-                if (npc.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                    npc.Id.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                    (npc.Personality?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false) ||
-                    npc.Faction.Contains(query, StringComparison.OrdinalIgnoreCase))
-                    results.Add(new { type = "npc", id = npc.Id, name = npc.Name,
-                        description = npc.Personality,
-                        meta = $"{npc.Faction} | Lv.{npc.Level}{(npc.IsHostile ? " | Hostile" : "")} | Room: {rm.Name}", data = npc, roomId = rm.Id });
+        if (filter is null or "npc")
+            foreach (var rm in rooms)
+                foreach (var npc in rm.Npcs)
+                    if (npc.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                        npc.Id.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                        (npc.Personality?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                        npc.Faction.Contains(query, StringComparison.OrdinalIgnoreCase))
+                        results.Add(new { type = "npc", id = npc.Id, name = npc.Name,
+                            description = npc.Personality,
+                            meta = $"{npc.Faction} | Lv.{npc.Level}{(npc.IsHostile ? " | Hostile" : "")} | Room: {rm.Name}", data = npc, roomId = rm.Id });
 
         return Ok(new { results, total = results.Count });
     }

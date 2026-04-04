@@ -1416,9 +1416,10 @@ const UI = {
       return;
     }
 
+    const typeFilter = this.$('dm-type-filter')?.value || '';
     results.innerHTML = '<div class="dm-result-count">Searching...</div>';
     try {
-      const data = await API.dmSearch(query);
+      const data = await API.dmSearch(query, typeFilter || undefined);
       this._dmRenderResults(data.results, query);
     } catch (err) {
       results.innerHTML = `<div class="dm-no-results">Error: ${this.esc(err.message)}</div>`;
@@ -1469,7 +1470,7 @@ const UI = {
         <div class="dm-result-card" data-dm-id="${this.esc(item.id)}" data-dm-type="${this.esc(item.type)}">
           <div class="dm-result-header">
             <span class="dm-result-name">${this.esc(item.name)}</span>
-            <span class="dm-result-type">${this.esc(item.type)}</span>
+            <span class="dm-result-type dm-type-${this.esc(item.type)}">${this.esc(item.type)}</span>
           </div>
           <div class="dm-result-meta">${this.esc(item.meta || '')}</div>
           ${item.description ? `<div class="dm-result-desc">${this.esc(item.description)}</div>` : ''}
@@ -1510,30 +1511,38 @@ const UI = {
     const displayType = type.charAt(0).toUpperCase() + type.slice(1);
     const cardRows = this._dmBuildCardRows(item, type);
 
+    const descHtml = item.description ? `<div class="dm-detail-desc">${this.esc(item.description)}</div>` : '';
+
     panel.innerHTML = `
       <div class="dm-detail-header">
-        <span class="dm-detail-title">${this.esc(item.name || item.id)}</span>
-        <span class="dm-detail-type-badge">${displayType}</span>
+        <div class="dm-detail-header-left">
+          <span class="dm-detail-title">${this.esc(item.name || item.id)}</span>
+          <span class="dm-detail-type-badge dm-type-${type}">${displayType}</span>
+        </div>
+        <div class="dm-detail-actions-top">
+          <button class="dm-icon-btn" id="btn-dm-toggle-json" title="Toggle JSON editor">{ }</button>
+          <button class="dm-icon-btn dm-icon-danger" id="btn-dm-delete" title="Delete">&#x2715;</button>
+        </div>
       </div>
+      ${descHtml}
       <div class="dm-detail-card">
         <table>${cardRows}</table>
       </div>
+      <div class="dm-detail-json" id="dm-json-section">
+        <textarea id="dm-json-textarea" spellcheck="false">${this.esc(JSON.stringify(item, null, 2))}</textarea>
+      </div>
       <div class="dm-detail-chat">
+        <div class="dm-detail-chat-label">AI Assistant</div>
         <div class="dm-detail-chat-messages" id="dm-chat-messages">
-          <div class="chat-msg system">Ask the AI to make changes, or edit the JSON directly.</div>
+          <div class="chat-msg system">Describe changes and the AI will update the data for you.</div>
         </div>
         <div class="dm-detail-chat-input-row">
           <input type="text" id="dm-chat-input" placeholder="e.g. Change the damage to 3d8, make it require level 5..." autocomplete="off" />
           <button class="btn btn-primary btn-sm" id="btn-dm-chat-send" type="button">Send</button>
         </div>
       </div>
-      <div class="dm-detail-json" id="dm-json-section">
-        <textarea id="dm-json-textarea" spellcheck="false">${this.esc(JSON.stringify(item, null, 2))}</textarea>
-      </div>
       <div class="dm-detail-actions">
-        <button class="btn btn-primary btn-sm" id="btn-dm-save" type="button">Save</button>
-        <button class="btn btn-secondary btn-sm" id="btn-dm-toggle-json" type="button">Show JSON</button>
-        <button class="btn btn-danger btn-sm" id="btn-dm-delete" type="button" style="margin-left:auto">Delete</button>
+        <button class="btn btn-primary" id="btn-dm-save" type="button">Save Changes</button>
       </div>
     `;
 
@@ -1552,41 +1561,48 @@ const UI = {
   },
 
   _dmBuildCardRows(item, type) {
-    const row = (label, value) => value != null && value !== '' ? `<tr><td>${this.esc(label)}</td><td>${this.esc(String(value))}</td></tr>` : '';
+    const row = (label, value, cls) => value != null && value !== ''
+      ? `<tr><td class="dm-card-label">${this.esc(label)}</td><td class="${cls || ''}">${this.esc(String(value))}</td></tr>` : '';
+    const statRow = (label, value, color) => value != null
+      ? `<td><span class="dm-stat-label">${this.esc(label)}</span><span class="dm-stat-val" style="color:${color || 'var(--text)'}">${this.esc(String(value))}</span></td>` : '';
 
     switch (type) {
       case 'spell':
-        return row('School', item.school) + row('Mana Cost', item.manaCost) + row('Power Level', item.powerLevel)
-          + row('Damage', item.damageDice) + row('Healing', item.healDice) + row('Range', item.range)
+        return row('School', item.school) + row('Mana Cost', item.manaCost, 'dm-val-mp') + row('Power Level', item.powerLevel, 'dm-val-accent')
+          + row('Damage', item.damageDice, 'dm-val-hp') + row('Healing', item.healDice, 'dm-val-heal') + row('Range', item.range)
           + row('Required Level', item.requiredLevel) + row('Classes', (item.requiredClasses || []).join(', ') || 'All')
           + row('Duration', item.duration) + row('Status Effect', item.statusEffect)
           + row('Tags', (item.tags || []).join(', '));
       case 'item':
-        return row('Type', item.type) + row('Rarity', item.rarity) + row('Value', `${item.value}g`)
-          + row('Damage', item.damageDice) + row('Armor', item.armorValue) + row('Effect', item.effect)
+        return row('Type', item.type) + row('Rarity', item.rarity, 'dm-val-accent') + row('Value', `${item.value}g`, 'dm-val-gold')
+          + row('Damage', item.damageDice, 'dm-val-hp') + row('Armor', item.armorValue) + row('Effect', item.effect)
           + row('Equippable', item.isEquippable ? 'Yes' : 'No') + row('Consumable', item.isConsumable ? 'Yes' : 'No')
           + row('Tags', (item.tags || []).join(', '));
       case 'class':
-        return row('Hit Die', item.hitDie) + row('Primary Stat', item.primaryStat) + row('Caster', item.canCastSpells ? 'Yes' : 'No')
-          + row('MP Bonus', item.baseMpBonus) + row('Spells', (item.spellList || []).length + ' available')
+        return row('Hit Die', item.hitDie, 'dm-val-accent') + row('Primary Stat', item.primaryStat) + row('Caster', item.canCastSpells ? 'Yes' : 'No')
+          + row('MP Bonus', item.baseMpBonus, 'dm-val-mp') + row('Spells', (item.spellList || []).length + ' available')
           + row('Tags', (item.tags || []).join(', '));
       case 'race':
         return row('Traits', (item.traits || []).join(', '))
-          + row('Stat Bonuses', Object.entries(item.statBonuses || {}).map(([k,v]) => `${k.toUpperCase()}+${v}`).join(', '))
+          + row('Stat Bonuses', Object.entries(item.statBonuses || {}).map(([k,v]) => `${k.toUpperCase()} +${v}`).join(', '), 'dm-val-accent')
           + row('Tags', (item.tags || []).join(', '));
       case 'room':
         return row('ID', item.id) + row('Exits', Object.entries(item.exits || {}).map(([d,t]) => `${d} -> ${t}`).join(', '))
           + row('NPCs', (item.npcs || []).map(n => n.name).join(', '))
           + row('Items', (item.items || []).map(i => i.name).join(', '))
           + row('Tags', (item.environmentTags || []).join(', '));
-      case 'player':
-        return row('ID', item.id) + row('Race', item.race) + row('Class', item.class)
-          + row('Level', item.level) + row('HP', `${item.hp}/${item.maxHp}`) + row('MP', `${item.mp}/${item.maxMp}`)
-          + row('Gold', item.gold) + row('XP', item.xp) + row('Room', item.currentRoomId)
-          + row('STR', item.str) + row('DEX', item.dex) + row('CON', item.con) + row('INT', item.int) + row('WIS', item.wis) + row('CHA', item.cha);
+      case 'player': {
+        const base = row('Race', item.race) + row('Class', item.class)
+          + row('Level', item.level, 'dm-val-accent') + row('HP', `${item.hp}/${item.maxHp}`, 'dm-val-hp') + row('MP', `${item.mp}/${item.maxMp}`, 'dm-val-mp')
+          + row('Gold', item.gold, 'dm-val-gold') + row('XP', item.xp, 'dm-val-xp') + row('Room', item.currentRoomId);
+        const stats = `<tr><td class="dm-card-label">Stats</td><td class="dm-stat-grid">` +
+          `<table class="dm-stats-inline"><tr>${statRow('STR', item.str)}${statRow('DEX', item.dex)}${statRow('CON', item.con)}</tr>` +
+          `<tr>${statRow('INT', item.int)}${statRow('WIS', item.wis)}${statRow('CHA', item.cha)}</tr></table></td></tr>`;
+        return base + stats;
+      }
       case 'npc':
-        return row('Faction', item.faction) + row('Level', item.level) + row('HP', `${item.hp || '?'}/${item.maxHp || '?'}`)
-          + row('Hostile', item.isHostile ? 'Yes' : 'No') + row('Shopkeeper', item.isShopkeeper ? 'Yes' : 'No')
+        return row('Faction', item.faction) + row('Level', item.level, 'dm-val-accent') + row('HP', `${item.hp || '?'}/${item.maxHp || '?'}`, 'dm-val-hp')
+          + row('Hostile', item.isHostile ? 'Yes' : 'No', item.isHostile ? 'dm-val-hp' : '') + row('Shopkeeper', item.isShopkeeper ? 'Yes' : 'No')
           + row('Personality', item.personality);
       default:
         return row('ID', item.id);
@@ -1729,13 +1745,22 @@ const UI = {
 
     panel.innerHTML = `
       <div class="dm-detail-header">
-        <span class="dm-detail-title">New ${displayType}</span>
-        <span class="dm-detail-type-badge">${displayType}</span>
+        <div class="dm-detail-header-left">
+          <span class="dm-detail-title">New ${displayType}</span>
+          <span class="dm-detail-type-badge dm-type-${type}">${displayType}</span>
+        </div>
+        <div class="dm-detail-actions-top">
+          <button class="dm-icon-btn" id="btn-dm-toggle-json" title="Toggle JSON editor">{ }</button>
+        </div>
       </div>
-      <div class="dm-detail-card">
-        <table><tr><td colspan="2" style="color:var(--dim)">Describe what you want below and the AI will generate it.</td></tr></table>
+      <div class="dm-detail-card dm-detail-card-empty">
+        <div class="dm-card-placeholder">Describe what you want below and the AI will generate it.</div>
+      </div>
+      <div class="dm-detail-json" id="dm-json-section">
+        <textarea id="dm-json-textarea" spellcheck="false"></textarea>
       </div>
       <div class="dm-detail-chat">
+        <div class="dm-detail-chat-label">AI Assistant</div>
         <div class="dm-detail-chat-messages" id="dm-chat-messages">
           <div class="chat-msg system">Describe the ${type} you want to create. Be as detailed or brief as you like.</div>
           ${seedDescription ? `<div class="chat-msg user">${this.esc(seedDescription)}</div><div class="chat-msg ai loading" id="dm-chat-loading">Generating...</div>` : ''}
@@ -1745,12 +1770,8 @@ const UI = {
           <button class="btn btn-primary btn-sm" id="btn-dm-chat-send" type="button">Send</button>
         </div>
       </div>
-      <div class="dm-detail-json" id="dm-json-section">
-        <textarea id="dm-json-textarea" spellcheck="false"></textarea>
-      </div>
       <div class="dm-detail-actions">
-        <button class="btn btn-primary btn-sm" id="btn-dm-save" type="button">Save</button>
-        <button class="btn btn-secondary btn-sm" id="btn-dm-toggle-json" type="button">Show JSON</button>
+        <button class="btn btn-primary" id="btn-dm-save" type="button">Save Changes</button>
       </div>
     `;
 

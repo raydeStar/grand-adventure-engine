@@ -130,8 +130,10 @@ const API = {
   },
 
   // ── DM Console ─────────────────────────────────────────
-  async dmSearch(query) {
-    return this.getJson(`${this.base}/admin/dm/search?q=${encodeURIComponent(query)}`);
+  async dmSearch(query, typeFilter) {
+    const params = new URLSearchParams({ q: query });
+    if (typeFilter) params.set('type', typeFilter);
+    return this.getJson(`${this.base}/admin/dm/search?${params}`);
   },
 
   async dmBrowse(type) {

@@ -2075,6 +2075,30 @@ public class NarratorService : INarratorService
                   "environment_tags": ["indoor", "dark", "dungeon"]
                 }
                 """,
+            "player" => """
+                {
+                  "id": "existing_player_id",
+                  "name": "Character Name",
+                  "race": "human",
+                  "class": "fighter",
+                  "backstory": "A brief character backstory.",
+                  "currentRoomId": "spawn",
+                  "hp": 20,
+                  "maxHp": 20,
+                  "mp": 10,
+                  "maxMp": 10,
+                  "gold": 50,
+                  "xp": 0,
+                  "level": 1,
+                  "str": 10,
+                  "dex": 10,
+                  "con": 10,
+                  "int": 10,
+                  "wis": 10,
+                  "cha": 10,
+                  "luck": 10
+                }
+                """,
             _ => """{"id": "snake_id", "name": "Name", "description": "Description"}"""
         };
 

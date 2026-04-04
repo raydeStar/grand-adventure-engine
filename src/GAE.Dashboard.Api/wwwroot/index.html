@@ -281,7 +281,17 @@
               <!-- Search + Chat column -->
               <div class="dm-console-main">
                 <div class="dm-search-bar">
-                  <input type="text" id="dm-search-input" placeholder="Search anything... items, spells, NPCs, rooms, players, or describe what to create" autocomplete="off" />
+                  <select id="dm-type-filter" title="Filter by type">
+                    <option value="">All Types</option>
+                    <option value="spell">Spells</option>
+                    <option value="item">Items</option>
+                    <option value="class">Classes</option>
+                    <option value="race">Races</option>
+                    <option value="room">Rooms</option>
+                    <option value="player">Players</option>
+                    <option value="npc">NPCs</option>
+                  </select>
+                  <input type="text" id="dm-search-input" placeholder="Search anything... items, spells, NPCs, rooms, players" autocomplete="off" />
                   <button class="btn btn-primary btn-sm" id="btn-dm-search" type="button">Search</button>
                 </div>
                 <div class="dm-results" id="dm-results">
