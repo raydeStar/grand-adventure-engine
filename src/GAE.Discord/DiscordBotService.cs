@@ -193,8 +193,7 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
             await command.FollowupAsync("You don't have a character. Use `/create` first.", ephemeral: true);
             return;
         }
-        var embed = BuildCharacterEmbed(player);
-        await command.FollowupAsync(embed: embed.Build(), ephemeral: true);
+        await command.FollowupAsync(BuildCharacterStatsText(player), ephemeral: true);
     }
 
     private async Task HandleInventorySlashAsync(SocketSlashCommand command, string discordId)
@@ -205,8 +204,7 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
             await command.FollowupAsync("You don't have a character. Use `/create` first.", ephemeral: true);
             return;
         }
-        var embed = BuildInventoryEmbed(player);
-        await command.FollowupAsync(embed: embed.Build(), ephemeral: true);
+        await command.FollowupAsync(BuildInventoryText(player), ephemeral: true);
     }
 
     private static async Task HandleHelpSlashAsync(SocketSlashCommand command)
@@ -674,17 +672,17 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
             return;
         }
 
-        // Inventory — show as proper embed
+        // Inventory — console-style text
         if (action.Type == Core.Models.ActionType.Inventory)
         {
-            await thread.SendMessageAsync(embed: BuildInventoryEmbed(player).Build());
+            await thread.SendMessageAsync(BuildInventoryText(player));
             return;
         }
 
-        // Stats — show as proper embed
+        // Stats — console-style text
         if (action.Type == Core.Models.ActionType.Stats)
         {
-            await thread.SendMessageAsync(embed: BuildCharacterEmbed(player).Build());
+            await thread.SendMessageAsync(BuildCharacterStatsText(player));
             return;
         }
 
@@ -1230,67 +1228,96 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
 
     // ==================== Embed Builders ====================
 
-    private static EmbedBuilder BuildCharacterEmbed(PlayerCharacter player)
+    private static string BuildCharacterStatsText(PlayerCharacter player)
     {
-        return new EmbedBuilder()
-            .WithTitle($"\u2694\uFE0F {player.Name}")
-            .WithColor(Color.Blue)
-            .AddField("Race", player.Race, inline: true)
-            .AddField("Class", player.Class, inline: true)
-            .AddField("Level", player.Level.ToString(), inline: true)
-            .AddField("Stats", player.FormatStatsDetailed("\n"))
-            .AddField("Resources",
-                $"\u2764\uFE0F HP: {player.Hp}/{player.MaxHp}\n" +
-                $"\u2728 MP: {player.Mp}/{player.MaxMp}\n" +
-                $"\U0001F4B0 Gold: {player.Gold}\n" +
-                $"\u2B50 XP: {player.Xp}")
-            .WithFooter(player.Backstory.Length > 200 ? player.Backstory[..200] + "..." : player.Backstory);
+        const int W = 34;
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("```");
+        sb.AppendLine($"\u2554{new string('\u2550', W)}\u2557");
+        sb.AppendLine($"\u2551  {player.Name,-32}\u2551");
+        sb.AppendLine($"\u2551  {player.Race} {player.Class,-20} Lv.{player.Level,2} \u2551");
+        sb.AppendLine($"\u2560{new string('\u2550', W)}\u2563");
+        sb.AppendLine($"\u2551  HP: {player.Hp,3}/{player.MaxHp,-3}   MP: {player.Mp,3}/{player.MaxMp,-3}     \u2551");
+        sb.AppendLine($"\u2551  Gold: {player.Gold,-6}   XP: {player.Xp,-6}     \u2551");
+        sb.AppendLine($"\u2560{new string('\u2550', W)}\u2563");
+
+        var stats = player.GetAttributeStats().ToList();
+        for (int i = 0; i < stats.Count; i += 2)
+        {
+            var s1 = stats[i];
+            var left = $"{s1.Name}: {s1.Value,2} ({PlayerCharacter.GetStatModifier(s1.Value):+0;-0})";
+            string right = "";
+            if (i + 1 < stats.Count)
+            {
+                var s2 = stats[i + 1];
+                right = $"{s2.Name}: {s2.Value,2} ({PlayerCharacter.GetStatModifier(s2.Value):+0;-0})";
+            }
+            sb.AppendLine($"\u2551  {left,-16} {right,-15} \u2551");
+        }
+
+        sb.AppendLine($"\u2560{new string('\u2550', W)}\u2563");
+        var wpn = player.Equipment.Weapon;
+        var arm = player.Equipment.Armor;
+        var shd = player.Equipment.Shield;
+        sb.AppendLine($"\u2551  Weapon: {(wpn?.Name ?? "none"),-23} \u2551");
+        sb.AppendLine($"\u2551  Armor:  {(arm?.Name ?? "none"),-23} \u2551");
+        sb.AppendLine($"\u2551  Shield: {(shd?.Name ?? "none"),-23} \u2551");
+        sb.AppendLine($"\u255A{new string('\u2550', W)}\u255D");
+        sb.Append("```");
+        return sb.ToString();
     }
 
-    private static EmbedBuilder BuildInventoryEmbed(PlayerCharacter player)
+    private static string BuildInventoryText(PlayerCharacter player)
     {
-        var embed = new EmbedBuilder()
-            .WithTitle($"\U0001F392 {player.Name}'s Inventory")
-            .WithColor(Color.Green);
+        const int W = 34;
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("```");
+        sb.AppendLine($"\u250C\u2500 INVENTORY {new string('\u2500', W - 11)}\u2510");
 
-        // Equipment
-        var eqParts = new List<string>();
-        foreach (var item in player.Equipment.AllEquipped())
+        // Equipped items
+        var equipped = player.Equipment.AllEquipped().ToList();
+        if (equipped.Count > 0)
         {
-            var emoji = item.Type switch
+            foreach (var item in equipped)
             {
-                ItemType.Weapon => "\u2694\uFE0F",
-                ItemType.Shield => "\U0001F6E1\uFE0F",
-                ItemType.Armor => "\U0001F6E1\uFE0F",
-                ItemType.Helmet => "\u26D1\uFE0F",
-                ItemType.Cloak => "\U0001F9E5",
-                ItemType.Boots => "\U0001F97E",
-                ItemType.Gloves => "\U0001F9E4",
-                ItemType.Ring => "\U0001F48D",
-                ItemType.Amulet => "\U0001F4FF",
-                ItemType.Bracelet => "\u2728",
-                _ => "\U0001F4E6"
-            };
-            var bonusStr = item.StatBonuses.Count > 0
-                ? " " + string.Join(" ", item.StatBonuses.Select(kv => $"{kv.Key.ToUpper()}{kv.Value:+0;-0}"))
-                : "";
-            eqParts.Add($"{emoji} {item.Type}: {item.Name}{bonusStr}");
+                var tag = item.Type switch
+                {
+                    ItemType.Weapon => "wpn",
+                    ItemType.Armor => "arm",
+                    ItemType.Shield => "shd",
+                    ItemType.Helmet => "hlm",
+                    ItemType.Cloak => "clk",
+                    ItemType.Boots => "bts",
+                    ItemType.Gloves => "glv",
+                    ItemType.Ring => "rng",
+                    ItemType.Amulet => "aml",
+                    _ => "   "
+                };
+                var name = item.Name.Length > 20 ? item.Name[..20] : item.Name;
+                sb.AppendLine($"\u2502 [E] {name,-20} ({tag}) \u2502");
+            }
         }
-        embed.AddField("Equipment", eqParts.Count > 0 ? string.Join("\n", eqParts) : "Nothing equipped");
 
-        // Inventory
+        // Backpack items
         if (player.Inventory.Count > 0)
         {
-            var items = player.Inventory.Select(i => i.Quantity > 1 ? $"{i.Name} (x{i.Quantity})" : i.Name);
-            embed.AddField("Backpack", string.Join("\n", items));
+            foreach (var item in player.Inventory)
+            {
+                var name = item.Name.Length > 20 ? item.Name[..20] : item.Name;
+                var qty = item.Quantity > 1 ? $"x{item.Quantity}" : "  ";
+                sb.AppendLine($"\u2502     {name,-20}  {qty,3} \u2502");
+            }
         }
-        else
+        else if (equipped.Count == 0)
         {
-            embed.AddField("Backpack", "Empty");
+            sb.AppendLine($"\u2502     (empty){new string(' ', W - 12)}\u2502");
         }
 
-        embed.WithFooter($"\U0001F4B0 {player.Gold}g");
-        return embed;
+        sb.AppendLine($"\u2502{new string(' ', W)}\u2502");
+        sb.AppendLine($"\u2502 Gold: {player.Gold,-27} \u2502");
+        sb.AppendLine($"\u2514{new string('\u2500', W)}\u2518");
+        sb.Append("```");
+        return sb.ToString();
     }
 
     private static EmbedBuilder BuildHelpEmbed()
@@ -1314,9 +1341,7 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
 
     private async Task SendCharacterCreatedEmbed(SocketThreadChannel thread, PlayerCharacter player)
     {
-        var embed = BuildCharacterEmbed(player)
-            .WithDescription("Your character has been created! Type `look` to see your surroundings.");
-        await thread.SendMessageAsync(embed: embed.Build());
+        await thread.SendMessageAsync($"**Your character has been created!** Type `look` to see your surroundings.\n{BuildCharacterStatsText(player)}");
     }
 
     // ==================== Helpers ====================

@@ -43,11 +43,11 @@ public class NarratorService : INarratorService
             classic Sierra point-and-click games (Quest for Glory, King's Quest, Space Quest).
 
             VOICE:
-            - First person ("I", "my", "me"). You ARE the player character experiencing this.
+            - Second person ("You", "your", "you"). You are the dungeon master narrating TO the player.
             - Dry, sardonic wit. Absurd observations and understated reactions.
-            - When you FAIL, make it entertaining — slapstick, ironic commentary, the universe conspiring.
+            - When the player FAILS, make it entertaining — slapstick, ironic commentary, the universe conspiring.
               Never just say "nothing happens." Make failures *memorable and funny.*
-            - When you SUCCEED, feel cool, but sneak in a wry aside.
+            - When the player SUCCEEDS, make them feel cool, but sneak in a wry aside.
             - Use concrete sensory detail and at least one vivid visual focal point.
             - Write 2-4 sentences. Be punchy, not flowery.
 
@@ -103,7 +103,7 @@ public class NarratorService : INarratorService
     }
 
     /// <summary>
-    /// Specialized narration for room arrivals. Produces atmospheric first impressions —
+    /// Specialized narration for room arrivals. Produces atmospheric second-person impressions —
     /// NPC reactions, sensory details, things that catch the eye — rather than repeating
     /// the room description (which is shown in the room panel).
     /// </summary>
@@ -115,21 +115,21 @@ public class NarratorService : INarratorService
 
             The player just walked into a new room. The room's NAME, DESCRIPTION, NPCs, ITEMS, and
             EXITS are already displayed in a separate info card — DO NOT repeat any of that.
-            Instead, narrate the ARRIVAL MOMENT from FIRST PERSON perspective:
+            Instead, narrate the ARRIVAL MOMENT from SECOND PERSON perspective:
 
             WHAT TO INCLUDE (pick 2-3, not all):
-            - A sensory hit: the first thing you smell, hear, or feel on your skin.
-            - NPC reactions: does anyone look up? Ignore you? Reach for a weapon? Offer a drink?
+            - A sensory hit: the first thing the player smells, hears, or feels on their skin.
+            - NPC reactions: does anyone look up? Ignore the player? Reach for a weapon? Offer a drink?
             - Something that catches the eye: a glint, a stain, something out of place.
-            - Atmosphere/mood: the vibe of the space as you step in. Tension, warmth, dread, boredom.
-            - Your personal state: are you tired, wounded, confident, nervous?
+            - Atmosphere/mood: the vibe of the space as the player steps in. Tension, warmth, dread, boredom.
+            - The player's personal state: are they tired, wounded, confident, nervous?
 
             VOICE:
-            - First person ("I", "my", "me"). You ARE the character.
+            - Second person ("You", "your", "you"). You are the dungeon master narrating TO the player.
             - Dry, sardonic Sierra wit. Vivid but concise.
             - Write 2-3 sentences. This is a quick establishing shot, not a novel paragraph.
             - NEVER name the room. NEVER list exits, NPCs, or items — the card handles that.
-            - NEVER say "I enter [room name]" or "I find myself in [description]."
+            - NEVER say "You enter [room name]" or "You find yourself in [description]."
             - Never ask questions or break the fourth wall.
             """;
 
@@ -175,7 +175,7 @@ public class NarratorService : INarratorService
         }
     }
 
-    /// <summary>Builds a reasonable offline fallback for room arrivals (first person).</summary>
+    /// <summary>Builds a reasonable offline fallback for room arrivals (second person).</summary>
     private static string BuildArrivalFallback(NarratorContext context)
     {
         var room = context.CurrentRoom;
@@ -186,24 +186,24 @@ public class NarratorService : INarratorService
         {
             var firstNpc = room.Npcs[0];
             string[] reactions = [
-                $"{firstNpc.Name} glances up as I step in.",
-                $"I catch {firstNpc.Name} watching me from the corner of my eye.",
-                $"{firstNpc.Name} doesn't look up. Either I'm not interesting enough, or they already know I'm here.",
-                $"The first thing I notice is {firstNpc.Name} — hard to miss."
+                $"{firstNpc.Name} glances up as you step in.",
+                $"You catch {firstNpc.Name} watching you from the corner of your eye.",
+                $"{firstNpc.Name} doesn't look up. Either you're not interesting enough, or they already know you're here.",
+                $"The first thing you notice is {firstNpc.Name} — hard to miss."
             ];
             parts.Add(reactions[Math.Abs(room.Id.GetHashCode()) % reactions.Length]);
         }
         else
         {
-            parts.Add("Empty — or at least, that's how it looks. I keep my guard up.");
+            parts.Add("Empty — or at least, that's how it looks. You keep your guard up.");
         }
 
         // Add a personal state beat based on HP
         double hpPct = player.MaxHp > 0 ? (double)player.Hp / player.MaxHp : 1.0;
         if (hpPct < 0.3)
-            parts.Add("Every step costs me. I need to rest soon.");
+            parts.Add("Every step costs you. You need to rest soon.");
         else if (hpPct < 0.6)
-            parts.Add("I've felt better, but I've also felt worse.");
+            parts.Add("You've felt better, but you've also felt worse.");
 
         return string.Join(" ", parts);
     }

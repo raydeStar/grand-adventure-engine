@@ -332,7 +332,7 @@ public partial class CommandParser
     [GeneratedRegex(@"^(?:inventory|inv|i|bag|backpack)$", RegexOptions.IgnoreCase)]
     private static partial Regex InventoryRegex();
 
-    [GeneratedRegex(@"^(?:stats|status|character|char|me)$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^(?:stats|status|character|char|me|whoami|who\s+am\s+i)$", RegexOptions.IgnoreCase)]
     private static partial Regex StatsRegex();
 
     [GeneratedRegex(@"^(?:cast|channel|invoke|conjure)\s+(?<spell>.+?)(?:\s+(?:at|on|toward|against)\s+(?<target>.+))?$", RegexOptions.IgnoreCase)]
