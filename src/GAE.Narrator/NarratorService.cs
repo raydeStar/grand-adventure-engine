@@ -43,20 +43,21 @@ public class NarratorService : INarratorService
             classic Sierra point-and-click games (Quest for Glory, King's Quest, Space Quest).
 
             VOICE:
-            - Dry, sardonic wit. You love absurd observations and understated reactions.
-            - When the player FAILS, make it entertaining — slapstick, ironic commentary, the universe conspiring.
+            - First person ("I", "my", "me"). You ARE the player character experiencing this.
+            - Dry, sardonic wit. Absurd observations and understated reactions.
+            - When you FAIL, make it entertaining — slapstick, ironic commentary, the universe conspiring.
               Never just say "nothing happens." Make failures *memorable and funny.*
-            - When the player SUCCEEDS, let them feel cool, but sneak in a wry aside.
+            - When you SUCCEED, feel cool, but sneak in a wry aside.
             - Use concrete sensory detail and at least one vivid visual focal point.
             - Write 2-4 sentences. Be punchy, not flowery.
 
             RULES:
             - Narrate what the engine decided. Never contradict the mechanical result.
-            - Always use the player's character name.
-            - Never ask the player questions or break the fourth wall about being a narrator/AI.
-            - For failed movement, describe the futile attempt with humor. The wall is unyielding, the cliff uninviting, etc.
+            - Never ask questions or break the fourth wall about being a narrator/AI.
+            - For failed movement, describe the futile attempt with humor.
             - For failed actions, honor the failure reason but translate it into something entertaining.
-            - NPCs should react to absurd actions with personality — annoyance, amusement, disgust, concern.
+            - NPCs should react with personality — annoyance, amusement, disgust, concern.
+            - NEVER list room contents, exits, or NPC names as information — the game UI handles that.
             """;
 
         var resolvedOutcome = string.IsNullOrWhiteSpace(context.MechanicalResult.MechanicalSummary)
@@ -112,22 +113,23 @@ public class NarratorService : INarratorService
             You are the narrator of a dark-fantasy text adventure with the comic sensibility of
             classic Sierra point-and-click games (Quest for Glory, King's Quest, Space Quest).
 
-            The player just walked into a new room. The room's NAME and DESCRIPTION are already
-            displayed in a separate panel — DO NOT repeat them. Instead, narrate the ARRIVAL MOMENT:
+            The player just walked into a new room. The room's NAME, DESCRIPTION, NPCs, ITEMS, and
+            EXITS are already displayed in a separate info card — DO NOT repeat any of that.
+            Instead, narrate the ARRIVAL MOMENT from FIRST PERSON perspective:
 
             WHAT TO INCLUDE (pick 2-3, not all):
-            - A sensory hit: the first thing the player smells, hears, or feels on their skin.
-            - NPC reactions: does anyone look up? Ignore them? Reach for a weapon? Offer a drink?
+            - A sensory hit: the first thing you smell, hear, or feel on your skin.
+            - NPC reactions: does anyone look up? Ignore you? Reach for a weapon? Offer a drink?
             - Something that catches the eye: a glint, a stain, something out of place.
             - Atmosphere/mood: the vibe of the space as you step in. Tension, warmth, dread, boredom.
-            - A brief transition beat: how the previous space gives way to this one.
+            - Your personal state: are you tired, wounded, confident, nervous?
 
             VOICE:
+            - First person ("I", "my", "me"). You ARE the character.
             - Dry, sardonic Sierra wit. Vivid but concise.
             - Write 2-3 sentences. This is a quick establishing shot, not a novel paragraph.
-            - Use the player's character name.
-            - Never say "You enter [room name]" or "You find yourself in [description]."
-              The player already knows where they are from the room panel.
+            - NEVER name the room. NEVER list exits, NPCs, or items — the card handles that.
+            - NEVER say "I enter [room name]" or "I find myself in [description]."
             - Never ask questions or break the fourth wall.
             """;
 
@@ -173,7 +175,7 @@ public class NarratorService : INarratorService
         }
     }
 
-    /// <summary>Builds a reasonable offline fallback for room arrivals.</summary>
+    /// <summary>Builds a reasonable offline fallback for room arrivals (first person).</summary>
     private static string BuildArrivalFallback(NarratorContext context)
     {
         var room = context.CurrentRoom;
@@ -183,23 +185,25 @@ public class NarratorService : INarratorService
         if (room.Npcs.Count > 0)
         {
             var firstNpc = room.Npcs[0];
-            parts.Add($"{firstNpc.Name} glances up as {player.Name} steps in.");
+            string[] reactions = [
+                $"{firstNpc.Name} glances up as I step in.",
+                $"I catch {firstNpc.Name} watching me from the corner of my eye.",
+                $"{firstNpc.Name} doesn't look up. Either I'm not interesting enough, or they already know I'm here.",
+                $"The first thing I notice is {firstNpc.Name} — hard to miss."
+            ];
+            parts.Add(reactions[Math.Abs(room.Id.GetHashCode()) % reactions.Length]);
         }
         else
         {
-            parts.Add($"{player.Name} arrives to find the place empty — or at least, that's how it looks.");
+            parts.Add("Empty — or at least, that's how it looks. I keep my guard up.");
         }
 
-        if (room.Items.Count > 0)
-        {
-            var item = room.Items[0];
-            parts.Add($"A {item.Name.ToLowerInvariant()} catches the eye.");
-        }
-
-        if (room.Exits.Count > 2)
-        {
-            parts.Add($"Paths lead {string.Join(", ", room.Exits.Keys)}.");
-        }
+        // Add a personal state beat based on HP
+        double hpPct = player.MaxHp > 0 ? (double)player.Hp / player.MaxHp : 1.0;
+        if (hpPct < 0.3)
+            parts.Add("Every step costs me. I need to rest soon.");
+        else if (hpPct < 0.6)
+            parts.Add("I've felt better, but I've also felt worse.");
 
         return string.Join(" ", parts);
     }
