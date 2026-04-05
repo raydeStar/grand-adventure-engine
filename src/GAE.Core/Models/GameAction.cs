@@ -38,5 +38,6 @@ public enum ActionType
     Defend,
     AimedStrike,
     Flee,
+    Spellbook,
     Unknown
 }

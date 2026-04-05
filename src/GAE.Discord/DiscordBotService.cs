@@ -588,14 +588,14 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         var embed = new EmbedBuilder()
             .WithTitle("\u2694\uFE0F CHARACTER SHEET")
             .WithColor(Color.Gold)
-            .AddField("Name", aiResponse.Name ?? "???", inline: true)
-            .AddField("Race", aiResponse.Race, inline: true)
-            .AddField("Class", aiResponse.Class, inline: true)
+            .AddField("Name", string.IsNullOrWhiteSpace(aiResponse.Name) ? "???" : aiResponse.Name, inline: true)
+            .AddField("Race", string.IsNullOrWhiteSpace(aiResponse.Race) ? "???" : aiResponse.Race, inline: true)
+            .AddField("Class", string.IsNullOrWhiteSpace(aiResponse.Class) ? "???" : aiResponse.Class, inline: true)
             .AddField("Stats",
                 $"STR: {stats["str"]} ({FormatMod(stats["str"])})  DEX: {stats["dex"]} ({FormatMod(stats["dex"])})\n" +
                 $"CON: {stats["con"]} ({FormatMod(stats["con"])})  INT: {stats["int"]} ({FormatMod(stats["int"])})\n" +
                 $"WIS: {stats["wis"]} ({FormatMod(stats["wis"])})  CHA: {stats["cha"]} ({FormatMod(stats["cha"])})")
-            .AddField("Backstory", aiResponse.Backstory)
+            .AddField("Backstory", string.IsNullOrWhiteSpace(aiResponse.Backstory) ? "A mysterious past yet to be revealed..." : aiResponse.Backstory)
             .WithFooter("Say \"looks good\" to start, or describe changes you want.");
 
         await thread.SendMessageAsync(embed: embed.Build());

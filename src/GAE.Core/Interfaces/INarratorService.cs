@@ -22,6 +22,9 @@ public interface INarratorService
     /// </summary>
     Task<Room> GenerateDungeonEntranceAsync(string dungeonId, int playerLevel, Room sourceRoom, CancellationToken ct = default);
 
+    /// <summary>Vet a player-invented spell for the spellbook system (Option A: AI creates, engine scales).</summary>
+    Task<SpellVetResponse?> VetSpellAsync(PlayerCharacter player, string spellDescription, Room room, CancellationToken ct = default);
+
     /// <summary>Evaluate an improvised (unregistered) spell attempt using the power-budget system.</summary>
     Task<ImprovisedSpellResult> EvaluateImprovisedSpellAsync(
         PlayerCharacter player, Room room, string spellName, string? target,

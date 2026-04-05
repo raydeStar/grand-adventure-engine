@@ -234,6 +234,13 @@ public partial class CommandParser
             return action;
         }
 
+        // Spellbook
+        if (SpellbookRegex().IsMatch(input))
+        {
+            action.Type = ActionType.Spellbook;
+            return action;
+        }
+
         // Help
         if (HelpRegex().IsMatch(input))
         {
@@ -340,6 +347,9 @@ public partial class CommandParser
 
     [GeneratedRegex(@"^(?:map|look\s+(?:at\s+)?map|show\s+map|view\s+map|world\s+map|check\s+map)$", RegexOptions.IgnoreCase)]
     private static partial Regex MapRegex();
+
+    [GeneratedRegex(@"^(?:spellbook|spells|known\s+spells|my\s+spells)$", RegexOptions.IgnoreCase)]
+    private static partial Regex SpellbookRegex();
 
     [GeneratedRegex(@"^(?:help|h|\?)$", RegexOptions.IgnoreCase)]
     private static partial Regex HelpRegex();

@@ -37,6 +37,7 @@ public class PlayerCharacter
     public EquipmentLoadout Equipment { get; set; } = new();
     public List<InventoryItem> Inventory { get; set; } = [];
     public List<StatusEffect> StatusEffects { get; set; } = [];
+    public List<LearnedSpell> Spellbook { get; set; } = [];
 
     // Timestamps
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
