@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=3" />
+  <link rel="stylesheet" href="css/style.css?v=6" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.7/signalr.min.js"
           crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="https://cdn.jsdelivr.net/npm/rot-js@2/dist/rot.min.js"
@@ -263,11 +263,12 @@
         <nav class="admin-toolbar">
           <button class="admin-tab active" data-admin-tab="dm-console" type="button">DM Console</button>
           <button class="admin-tab" data-admin-tab="overview" type="button">Overview</button>
+          <button class="admin-tab" data-admin-tab="world-actions" type="button">World</button>
           <button class="admin-tab" data-admin-tab="llm" type="button">LLM</button>
           <button class="admin-tab" data-admin-tab="commands" type="button">Commands</button>
           <button class="admin-tab" data-admin-tab="mutations" type="button">Mutations</button>
           <button class="admin-tab" data-admin-tab="players" type="button">Players</button>
-          <button class="admin-tab" data-admin-tab="world" type="button">World</button>
+          <button class="admin-tab" data-admin-tab="rooms" type="button">Rooms</button>
           <button class="admin-tab" data-admin-tab="registry" type="button">Registry</button>
           <button class="admin-tab" data-admin-tab="logs" type="button">AI Logs</button>
           <span class="admin-toolbar-spacer"></span>
@@ -361,6 +362,99 @@
                 <div id="workflow-log" class="activity-log"></div>
               </div>
             </div>
+          </div>
+        </div>
+
+        <!-- ═══ WORLD ACTIONS TAB ═══ -->
+        <div class="admin-tab-content" data-admin-panel="world-actions">
+          <div class="admin-tab-body">
+
+            <!-- Send Message / Announcement -->
+            <div class="panel">
+              <h3>Send Message / Announcement</h3>
+              <p class="panel-hint">Send a message directly to a player's Discord thread, or broadcast to everyone.</p>
+              <div class="world-action-form">
+                <div class="form-group">
+                  <label for="msg-player-select">Recipient</label>
+                  <select id="msg-player-select">
+                    <option value="">All Players (Broadcast)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="msg-text">Message</label>
+                  <textarea id="msg-text" rows="4" placeholder="Type the message to send to player threads..." required></textarea>
+                </div>
+                <div class="world-action-buttons">
+                  <button class="btn btn-primary" id="btn-send-msg" type="button">Broadcast to All Players</button>
+                </div>
+                <div id="send-message-result" class="world-action-result"></div>
+              </div>
+            </div>
+
+            <!-- Warp Players -->
+            <div class="world-action-grid">
+              <div class="panel">
+                <h3>Warp Player to Spawn</h3>
+                <p class="panel-hint">Teleport a player back to The Rusted Flagon (spawn). Resets their interaction state.</p>
+                <div class="world-action-form">
+                  <div class="form-group">
+                    <label for="warp-player-select">Target player</label>
+                    <select id="warp-player-select"></select>
+                  </div>
+                  <button class="btn btn-primary" id="btn-warp-to-spawn" type="button">Warp to Spawn</button>
+                  <div id="warp-result" class="world-action-result"></div>
+                </div>
+              </div>
+
+              <div class="panel">
+                <h3>Warp All Players to Spawn</h3>
+                <p class="panel-hint">Teleport every player back to The Rusted Flagon. Useful after updates or world resets.</p>
+                <div class="world-action-form">
+                  <button class="btn btn-warning" id="btn-warp-all-spawn" type="button">Warp All Players to Spawn</button>
+                  <div id="warp-all-result" class="world-action-result"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- World Management -->
+            <div class="world-action-grid">
+              <div class="panel">
+                <h3>Re-Seed World</h3>
+                <p class="panel-hint">Re-generate all world rooms from the lore seed. Existing rooms are refreshed to their original state.</p>
+                <div class="world-action-form">
+                  <button class="btn btn-primary" id="btn-reseed-world" type="button">Re-Seed Rooms</button>
+                  <div id="reseed-result" class="world-action-result"></div>
+                </div>
+              </div>
+
+              <div class="panel">
+                <h3>Seed Demo Characters</h3>
+                <p class="panel-hint">Create demo test characters (Ari Quickstep &amp; Marshal Vale) for smoke testing.</p>
+                <div class="world-action-form">
+                  <label class="remember-toggle">
+                    <input type="checkbox" id="seed-demo-replace" />
+                    <span>Replace existing demo characters</span>
+                  </label>
+                  <button class="btn btn-primary" id="btn-seed-demo-world" type="button">Seed Demo Characters</button>
+                  <div id="seed-demo-result" class="world-action-result"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Danger Zone -->
+            <div class="panel panel-danger">
+              <h3>Reset World</h3>
+              <p class="panel-hint">Nuke all rooms and re-seed from lore YAML. Players can optionally be kept (reset to spawn with full HP/MP) or deleted entirely.</p>
+              <div class="world-action-form">
+                <label class="remember-toggle">
+                  <input type="checkbox" id="reset-keep-players" checked />
+                  <span>Keep players (reset to spawn with full HP/MP)</span>
+                </label>
+                <button class="btn btn-danger" id="btn-reset-world" type="button">Reset World</button>
+                <div id="reset-world-result" class="world-action-result"></div>
+              </div>
+            </div>
+
           </div>
         </div>
 
@@ -640,6 +734,7 @@
                 </div>
                 <button class="btn btn-primary" type="submit">Upsert Room Fixture</button>
               </form>
+
             </div>
             <div id="mutation-log" class="activity-log"></div>
           </div>
@@ -711,6 +806,8 @@
                   <div class="form-group"><label>Race</label><input type="text" id="edit-race" /></div>
                   <div class="form-group"><label>Class</label><input type="text" id="edit-class" /></div>
                   <div class="form-group"><label>Room ID</label><input type="text" id="edit-room" /></div>
+                  <div class="form-group"><label>Discord ID</label><input type="text" id="edit-discordid" placeholder="Discord user ID" /></div>
+                  <div class="form-group"><label>Thread ID</label><input type="number" id="edit-threadid" placeholder="Discord thread ID" /></div>
                 </div>
                 <div class="mutation-grid" style="margin-top: 0.5rem;">
                   <div class="form-group"><label>HP</label><input type="number" id="edit-hp" /></div>
@@ -740,8 +837,8 @@
           </div>
         </div>
 
-        <!-- ═══ WORLD TAB ═══ -->
-        <div class="admin-tab-content" data-admin-panel="world">
+        <!-- ═══ ROOMS TAB (formerly World) ═══ -->
+        <div class="admin-tab-content" data-admin-panel="rooms">
           <div class="admin-tab-body">
             <div class="panel">
               <h3>Room Catalogue</h3>
@@ -859,7 +956,7 @@
   <script src="js/api.js?v=3"></script>
   <script src="js/signalr-client.js?v=3"></script>
   <script src="js/room-map.js?v=3"></script>
-  <script src="js/ui.js?v=3"></script>
-  <script src="js/app.js?v=3"></script>
+  <script src="js/ui.js?v=4"></script>
+  <script src="js/app.js?v=4"></script>
 </body>
 </html>

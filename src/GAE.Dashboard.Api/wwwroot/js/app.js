@@ -110,6 +110,13 @@
     UI.$('mutation-item-form').addEventListener('submit', handleItemMutation);
     UI.$('mutation-status-form').addEventListener('submit', handleStatusMutation);
     UI.$('room-fixture-form').addEventListener('submit', handleRoomFixtureMutation);
+    UI.$('btn-send-msg').addEventListener('click', () => void handleSendMessage());
+    UI.$('msg-player-select').addEventListener('change', updateSendButtonLabel);
+    UI.$('btn-warp-to-spawn')?.addEventListener('click', () => void handleWarpToSpawn());
+    UI.$('btn-warp-all-spawn')?.addEventListener('click', () => void handleWarpAllToSpawn());
+    UI.$('btn-reseed-world')?.addEventListener('click', () => void handleReseedWorld());
+    UI.$('btn-seed-demo-world')?.addEventListener('click', () => void handleSeedDemoWorld());
+    UI.$('btn-reset-world')?.addEventListener('click', () => void handleResetWorld());
 
     document.querySelectorAll('[data-role-choice]').forEach((button) => {
       button.addEventListener('click', () => openDashboard(button.dataset.roleChoice || 'user'));
@@ -156,6 +163,8 @@
       UI.$('edit-race').value = p.race || '';
       UI.$('edit-class').value = p.class || '';
       UI.$('edit-room').value = p.currentRoomId || '';
+      UI.$('edit-discordid').value = p.discordId || '';
+      UI.$('edit-threadid').value = p.threadId ?? '';
       UI.$('edit-hp').value = p.hp ?? 0;
       UI.$('edit-maxhp').value = p.maxHp ?? 0;
       UI.$('edit-mp').value = p.mp ?? 0;
@@ -187,6 +196,7 @@
         const fields = [
           ['name', 'edit-name', 'string'], ['race', 'edit-race', 'string'],
           ['class', 'edit-class', 'string'], ['currentRoomId', 'edit-room', 'string'],
+          ['discordId', 'edit-discordid', 'string'], ['threadId', 'edit-threadid', 'int'],
           ['hp', 'edit-hp', 'int'], ['maxHp', 'edit-maxhp', 'int'],
           ['mp', 'edit-mp', 'int'], ['maxMp', 'edit-maxmp', 'int'],
           ['gold', 'edit-gold', 'int'], ['xp', 'edit-xp', 'int'], ['level', 'edit-level', 'int'],
@@ -891,6 +901,120 @@
     } catch (error) {
       await handleError(error, { logId: 'mutation-log' });
     }
+  }
+
+  function updateSendButtonLabel() {
+    const btn = UI.$('btn-send-msg');
+    const playerId = UI.$('msg-player-select').value;
+    if (playerId) {
+      const sel = UI.$('msg-player-select');
+      const name = sel.options[sel.selectedIndex]?.text || 'Player';
+      btn.textContent = `Send to ${name.split(' (')[0]}`;
+    } else {
+      btn.textContent = 'Broadcast to All Players';
+    }
+  }
+
+  async function handleSendMessage() {
+    if (!ensureAuthenticated() || !ensureAdmin()) return;
+    const resultEl = UI.$('send-message-result');
+    const message = UI.$('msg-text').value.trim();
+    if (!message) {
+      resultEl.textContent = 'Message cannot be empty.';
+      resultEl.style.color = 'var(--bad)';
+      return;
+    }
+
+    const playerId = UI.$('msg-player-select').value;
+    const isBroadcast = !playerId;
+
+    if (isBroadcast && !confirm('Broadcast this message to ALL players?')) return;
+
+    resultEl.textContent = 'Sending...';
+    resultEl.style.color = 'var(--dim)';
+
+    try {
+      const result = await API.sendMessage({ playerId: playerId || undefined, message });
+      const label = playerId ? `Sent to 1 player.` : `Broadcast sent to ${result.sent} player(s).`;
+      resultEl.textContent = label;
+      resultEl.style.color = 'var(--ok)';
+      UI.appendActivity('mutation-log', label, 'success');
+      UI.$('msg-text').value = '';
+    } catch (error) {
+      resultEl.textContent = `Error: ${error.message}`;
+      resultEl.style.color = 'var(--bad)';
+      UI.appendActivity('mutation-log', `Send message failed: ${error.message}`, 'error');
+    }
+  }
+
+  // ── World Actions handlers ──
+
+  async function handleWarpToSpawn() {
+    if (!ensureAuthenticated() || !ensureAdmin()) return;
+    const resultEl = UI.$('warp-result');
+    const playerId = UI.$('warp-player-select').value;
+    if (!playerId) { resultEl.textContent = 'Select a player.'; resultEl.className = 'world-action-result error'; return; }
+    resultEl.textContent = 'Warping...'; resultEl.className = 'world-action-result';
+    try {
+      await API.teleportPlayer({ playerId, roomId: 'spawn' });
+      resultEl.textContent = 'Player warped to spawn!'; resultEl.className = 'world-action-result';
+    } catch (e) { resultEl.textContent = `Error: ${e.message}`; resultEl.className = 'world-action-result error'; }
+  }
+
+  async function handleWarpAllToSpawn() {
+    if (!ensureAuthenticated() || !ensureAdmin()) return;
+    if (!confirm('Warp ALL players back to spawn? This will interrupt any active encounters.')) return;
+    const resultEl = UI.$('warp-all-result');
+    resultEl.textContent = 'Warping all players...'; resultEl.className = 'world-action-result';
+    try {
+      const players = await API.getPlayers();
+      let count = 0;
+      for (const p of players) {
+        await API.teleportPlayer({ playerId: p.id, roomId: 'spawn' });
+        count++;
+      }
+      resultEl.textContent = `Warped ${count} player(s) to spawn.`; resultEl.className = 'world-action-result';
+    } catch (e) { resultEl.textContent = `Error: ${e.message}`; resultEl.className = 'world-action-result error'; }
+  }
+
+  async function handleReseedWorld() {
+    if (!ensureAuthenticated() || !ensureAdmin()) return;
+    if (!confirm('Re-seed all rooms from lore YAML? Existing room data will be overwritten.')) return;
+    const resultEl = UI.$('reseed-result');
+    resultEl.textContent = 'Re-seeding...'; resultEl.className = 'world-action-result';
+    try {
+      await API.resetWorld(true); // keep players, just reset rooms
+      resultEl.textContent = 'World re-seeded! Rooms restored from lore.'; resultEl.className = 'world-action-result';
+    } catch (e) { resultEl.textContent = `Error: ${e.message}`; resultEl.className = 'world-action-result error'; }
+  }
+
+  async function handleSeedDemoWorld() {
+    if (!ensureAuthenticated() || !ensureAdmin()) return;
+    const replace = UI.$('seed-demo-replace')?.checked || false;
+    const resultEl = UI.$('seed-demo-result');
+    resultEl.textContent = 'Seeding demo characters...'; resultEl.className = 'world-action-result';
+    try {
+      const result = await API.seedDemoCharacters(replace);
+      resultEl.textContent = `Seeded ${result.created ?? 0} demo character(s).`; resultEl.className = 'world-action-result';
+    } catch (e) { resultEl.textContent = `Error: ${e.message}`; resultEl.className = 'world-action-result error'; }
+  }
+
+  async function handleResetWorld() {
+    if (!ensureAuthenticated() || !ensureAdmin()) return;
+    const keepPlayers = UI.$('reset-keep-players')?.checked ?? true;
+    const warning = keepPlayers
+      ? 'Reset world? All rooms will be re-seeded. Players will be kept but moved to spawn with full HP/MP.'
+      : 'FULL RESET — All rooms AND all players will be DELETED. This cannot be undone!';
+    if (!confirm(warning)) return;
+    if (!keepPlayers && !confirm('Are you REALLY sure? All player data will be permanently lost.')) return;
+    const resultEl = UI.$('reset-world-result');
+    resultEl.textContent = 'Resetting world...'; resultEl.className = 'world-action-result';
+    try {
+      await API.resetWorld(keepPlayers);
+      resultEl.textContent = keepPlayers ? 'World reset! Players preserved at spawn.' : 'Full world reset complete.';
+      resultEl.className = 'world-action-result';
+      await refreshAll();
+    } catch (e) { resultEl.textContent = `Error: ${e.message}`; resultEl.className = 'world-action-result error'; }
   }
 
   async function afterMutation(result) {

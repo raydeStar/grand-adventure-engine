@@ -645,6 +645,8 @@ public class DashboardController : ControllerBase
         if (request.Luck.HasValue) { player.Luck = Math.Max(1, request.Luck.Value); changes.Add("luck"); }
 
         if (request.CurrentRoomId is not null) { player.CurrentRoomId = request.CurrentRoomId.Trim(); changes.Add("room"); }
+        if (request.DiscordId is not null) { player.DiscordId = request.DiscordId.Trim(); changes.Add("discordId"); }
+        if (request.ThreadId.HasValue) { player.ThreadId = request.ThreadId.Value == 0 ? null : request.ThreadId.Value; changes.Add("threadId"); }
 
         player.Hp = Math.Clamp(player.Hp, 0, Math.Max(1, player.MaxHp));
         player.Mp = Math.Clamp(player.Mp, 0, Math.Max(0, player.MaxMp));
@@ -656,6 +658,43 @@ public class DashboardController : ControllerBase
             data: new Dictionary<string, object?> { ["player"] = player, ["mutation"] = "edit-player", ["fields"] = changes }, ct: ct);
 
         return Ok(new { summary, player });
+    }
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpPost("admin/send-message")]
+    public async Task<IActionResult> SendPlayerMessage([FromBody] SendMessageRequest request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.Message))
+            return BadRequest(new { error = "message is required." });
+
+        if (_discordNotifier is null)
+            return BadRequest(new { error = "Discord is not configured." });
+
+        var msg = request.Message.Trim();
+        int sent = 0;
+
+        if (!string.IsNullOrWhiteSpace(request.PlayerId))
+        {
+            // Send to specific player
+            var player = await RequirePlayerAsync(request.PlayerId, ct);
+            if (player is null)
+                return NotFound(new { error = $"Player '{request.PlayerId}' was not found." });
+
+            await _discordNotifier.PostToPlayerThreadAsync(player.Id, msg, ct);
+            sent = 1;
+        }
+        else
+        {
+            // Broadcast to all players
+            var players = await _stateManager.GetAllPlayersAsync(ct);
+            foreach (var p in players.Where(p => p.ThreadId.HasValue))
+            {
+                await _discordNotifier.PostToPlayerThreadAsync(p.Id, msg, ct);
+                sent++;
+            }
+        }
+
+        return Ok(new { sent, message = msg });
     }
 
     [Authorize(Policy = DashboardPolicies.AdminAccess)]
@@ -1482,6 +1521,13 @@ public class ResetWorldRequest
     public bool KeepPlayers { get; set; } = true;
 }
 
+public class SendMessageRequest
+{
+    /// <summary>Player ID to send to. If null/empty, broadcasts to ALL players.</summary>
+    public string? PlayerId { get; set; }
+    public string Message { get; set; } = string.Empty;
+}
+
 public class EditPlayerRequest
 {
     public string PlayerId { get; set; } = string.Empty;
@@ -1490,6 +1536,8 @@ public class EditPlayerRequest
     public string? Class { get; set; }
     public string? Backstory { get; set; }
     public string? CurrentRoomId { get; set; }
+    public string? DiscordId { get; set; }
+    public ulong? ThreadId { get; set; }
     public int? Hp { get; set; }
     public int? MaxHp { get; set; }
     public int? Mp { get; set; }

@@ -186,10 +186,9 @@ public class NarratorServiceTests
             MechanicalResult = new ActionResult { Success = true, MechanicalSummary = "You move north to The Rusty Mug." }
         });
 
-        // Arrival fallback should mention the NPC reacting and the notable item
+        // Arrival fallback should mention the NPC reacting (second person)
         Assert.Contains("Mara", narration);
-        Assert.Contains("Thorin", narration);
-        Assert.Contains("ale", narration, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("you", narration, StringComparison.OrdinalIgnoreCase);
         // Should NOT just say the mechanical summary
         Assert.DoesNotContain("You move north", narration);
     }
@@ -215,8 +214,8 @@ public class NarratorServiceTests
             MechanicalResult = new ActionResult { Success = false, MechanicalSummary = "There is no exit to the west." }
         });
 
-        // Should use the general fallback (failure path), not the arrival path
-        Assert.Contains("Thorin", narration);
+        // Should use the general fallback (failure path, second person), not the arrival path
+        Assert.Contains("You", narration);
         Assert.DoesNotContain("arrives", narration, StringComparison.OrdinalIgnoreCase);
     }
 

@@ -909,11 +909,12 @@ public class NarratorService : INarratorService
                 rawInput, rawCompletion?[..Math.Min(rawCompletion?.Length ?? 0, 200)] ?? "(null)");
         }
 
-        // Deterministic fallback — NPC responds generically
+        // Deterministic fallback — personality-driven NPC greeting
+        var fallbackNarration = GenerateConversationFallback(npc, player.Name);
         return new FreeFormResponse
         {
             Success = true,
-            Narration = $"{npc.Name} regards {player.Name} thoughtfully for a moment, then offers a noncommittal response that neither invites nor discourages further conversation.",
+            Narration = fallbackNarration,
             InteractionUpdate = new InteractionUpdate
             {
                 Mode = InteractionMode.Conversation,
@@ -921,6 +922,127 @@ public class NarratorService : INarratorService
                 Context = [$"Player said: {rawInput}. {npc.Name} gave a guarded response."]
             }
         };
+    }
+
+    /// <summary>
+    /// Generates a personality-driven deterministic fallback greeting when the LLM fails to produce a conversation response.
+    /// Scans the NPC's Personality field for keywords and selects a themed template.
+    /// </summary>
+    private static string GenerateConversationFallback(Npc npc, string playerName)
+    {
+        var p = npc.Personality.ToLowerInvariant();
+        var name = npc.Name;
+
+        // Use a simple hash of the NPC name to pick among multiple templates per category
+        var pick = Math.Abs(name.GetHashCode());
+
+        // Check personality keywords in priority order — first match wins
+        if (ContainsAny(p, "warm", "friendly", "flirtat", "cheerful", "welcom", "kind", "soft spot"))
+        {
+            return (pick % 3) switch
+            {
+                0 => $"{name} looks up with a bright smile and waves you over. \"Well now, aren't you a sight for sore eyes! Come, come — sit down and tell me everything.\"",
+                1 => $"{name} sets aside what they were doing and gives you a warm, appraising look. \"Hey there, stranger. You look like you've got a story worth hearing. Pull up a chair.\"",
+                _ => $"{name} beams at you and gestures expansively. \"Welcome, welcome! You've got the look of someone interesting. What brings you my way?\""
+            };
+        }
+
+        if (ContainsAny(p, "drunk", "rowdy", "town drunk"))
+        {
+            return (pick % 3) switch
+            {
+                0 => $"{name} sways slightly, squinting at you through bloodshot eyes. \"Heyyy... you're new. Buy me a drink an' I'll tell you somethin' nobody else will.\"",
+                1 => $"{name} hiccups and sloshes their drink, peering at you with one eye closed. \"You... you look like someone who could use some *hic* good advice. Lucky for you, I'm full of it.\"",
+                _ => $"{name} raises a half-empty tankard in your direction and grins lopsidedly. \"Oi! Fresh face! Sit down before you fall down — that's my motto.\""
+            };
+        }
+
+        if (ContainsAny(p, "nervous", "scared", "coward", "anxious", "timid", "eager to prove"))
+        {
+            return (pick % 3) switch
+            {
+                0 => $"{name} startles at your approach, one hand flying to the hilt of their weapon before relaxing. \"Oh! S-sorry, you just... I didn't see you there. Can I help you with something?\"",
+                1 => $"{name} glances around nervously before meeting your eyes. \"You're not... you're not here to cause trouble, are you? No, no, of course not. What do you need?\"",
+                _ => $"{name} fidgets with a loose strap on their gear and manages a shaky smile. \"H-hello! I'm — yes, I'm supposed to be here. What can I do for you?\""
+            };
+        }
+
+        if (ContainsAny(p, "stern", "gruff", "suspicious", "hostile", "cold", "intimidat"))
+        {
+            return (pick % 3) switch
+            {
+                0 => $"{name} fixes you with a hard stare, arms folded across their chest. \"State your business. I haven't got all day.\"",
+                1 => $"{name} looks you up and down with undisguised suspicion. \"Another one. Alright, what do you want? And keep it short.\"",
+                _ => $"{name} narrows their eyes and shifts their weight, sizing you up. \"You've got ten seconds to tell me why I shouldn't send you on your way.\""
+            };
+        }
+
+        if (ContainsAny(p, "quiet", "calculating", "secretive", "mysterious", "amoral", "shadow"))
+        {
+            return (pick % 3) switch
+            {
+                0 => $"{name} watches you approach with an unreadable expression, eyes glinting in the dim light. \"...Interesting. You found me. That tells me something about you already.\"",
+                1 => $"{name} barely glances up, but you get the distinct feeling they noticed you long before you saw them. \"I know why you're here. The question is — can you afford what you're looking for?\"",
+                _ => $"{name} leans back into the shadows and studies you with a predator's patience. \"Speak. But choose your words carefully.\""
+            };
+        }
+
+        if (ContainsAny(p, "fanatical", "unhinged", "cult", "zealot", "mad", "insane"))
+        {
+            return (pick % 3) switch
+            {
+                0 => $"{name} turns to you with fever-bright eyes and a too-wide smile. \"Ah, another soul drawn to the truth! You feel it too, don't you? The pull?\"",
+                1 => $"{name} cackles softly and spreads their arms as if welcoming a long-lost friend. \"The spirits told me you would come. They tell me many things...\"",
+                _ => $"{name} stares through you with an intensity that makes your skin crawl. \"Yes... yes, you'll do nicely. The ritual requires willing participants, you see.\""
+            };
+        }
+
+        if (ContainsAny(p, "proud", "blunt", "loud", "mercenary", "fighter", "warrior", "blacksmith"))
+        {
+            return (pick % 3) switch
+            {
+                0 => $"{name} looks up from their work and gives you an appraising once-over. \"Hm. You've got some muscle on you at least. What do you need?\"",
+                1 => $"{name} cracks their knuckles and grins. \"Another adventurer, eh? Let me guess — you need something hit, fixed, or both.\"",
+                _ => $"{name} sets down their tools with a heavy clang and squares up to face you. \"Well? Spit it out. I don't bite — unless you give me reason to.\""
+            };
+        }
+
+        if (ContainsAny(p, "shopkeep", "merchant", "haggl", "sells", "buys", "trader", "customer", "prices"))
+        {
+            return (pick % 3) switch
+            {
+                0 => $"{name} perks up the moment you walk over, rubbing their hands together. \"Ah, a customer! You've come to the right place. Have a look around — I've got just the thing you need.\"",
+                1 => $"{name} flashes a practiced smile and gestures at their wares. \"Welcome, welcome! Everything you see is top quality and very reasonably priced. For you, I might even offer a discount.\"",
+                _ => $"{name} leans across the counter with a merchant's eager grin. \"Well well, what can I interest you in today? I just got some new stock in — very rare, very special.\""
+            };
+        }
+
+        if (ContainsAny(p, "weathered", "retired", "world-weary", "old", "wise", "patrol", "veteran"))
+        {
+            return (pick % 3) switch
+            {
+                0 => $"{name} regards you with tired but steady eyes, resting a hand on the pommel of a well-worn blade. \"You've got that look about you. The one that says you're headed somewhere dangerous.\"",
+                1 => $"{name} gives you a slow nod of acknowledgment, the kind earned through years of seeing people come and go. \"Something I can help you with? I know these parts better than most.\"",
+                _ => $"{name} looks you over with the quiet assessment of someone who's seen it all. \"Adventurer, right? Word of advice — listen more than you talk out here. What's on your mind?\""
+            };
+        }
+
+        // Generic fallback — still more interesting than the old version
+        return (pick % 4) switch
+        {
+            0 => $"{name} pauses and turns their attention to you. \"Hmm? Oh — you want to talk? Alright, I'm listening.\"",
+            1 => $"{name} glances your way and raises an eyebrow. \"Something I can do for you, stranger?\"",
+            2 => $"{name} stops what they were doing and looks at you expectantly. \"Go on then, I can see you've got something on your mind.\"",
+            _ => $"{name} meets your gaze and gives a slow nod. \"Alright. You've got my attention. What is it?\""
+        };
+    }
+
+    private static bool ContainsAny(string text, params string[] keywords)
+    {
+        foreach (var kw in keywords)
+            if (text.Contains(kw, StringComparison.Ordinal))
+                return true;
+        return false;
     }
 
     public async Task<FreeFormResponse> ProcessCombatTurnAsync(PlayerCharacter player, Room room, Npc enemy, InteractionState interaction, string rawInput, CancellationToken ct = default)
@@ -1574,8 +1696,8 @@ public class NarratorService : INarratorService
             {
                 var matchingCount = room.Npcs.Count(candidate => NormalizeLookupText(candidate.Name) == NormalizeLookupText(npc.Name));
                 var representativeLead = matchingCount > 1
-                    ? $"Though {matchingCount} figures answer to that same silhouette, {context.Player.Name} fixes on one representative {npc.Name.ToLowerInvariant()} at the edge of the room."
-                    : $"{context.Player.Name} fixes their attention on {npc.Name}.";
+                    ? $"Though {matchingCount} figures answer to that same silhouette, you fix on one representative {npc.Name.ToLowerInvariant()} at the edge of the room."
+                    : $"You fix your attention on {npc.Name}.";
                 var personalityDetail = HasUsefulPersonality(npc.Personality)
                     ? $"Their bearing suggests {TrimToSentence(npc.Personality).TrimEnd('.').ToLowerInvariant()}, a detail that sharpens rather than softens on closer inspection."
                     : $"Even standing still, {npc.Name} carries the kind of presence that makes the room feel more heavily watched.";
@@ -1590,8 +1712,8 @@ public class NarratorService : INarratorService
                     .Where(candidate => NormalizeLookupText(candidate.Name) == NormalizeLookupText(item.Name))
                     .Sum(candidate => Math.Max(1, candidate.Quantity));
                 var lead = totalQuantity > 1
-                    ? $"Among the {item.Name} scattered through the room, {context.Player.Name} picks one out for closer study."
-                    : $"{context.Player.Name} gives {item.Name} a closer look.";
+                    ? $"Among the {item.Name} scattered through the room, you pick one out for closer study."
+                    : $"You give {item.Name} a closer look.";
                 var detail = !string.IsNullOrWhiteSpace(item.Description)
                     ? item.Description.TrimEnd('.')
                     : "its shape suggests use before beauty, the kind of tool made to matter more in the hand than on display";
@@ -1601,7 +1723,7 @@ public class NarratorService : INarratorService
 
             if (!string.IsNullOrWhiteSpace(target))
             {
-                narration = $"{context.Player.Name} searches for {target}, but the name never quite lands on anything solid in {room.Name}. {BuildAmbientMissSentence(room)}";
+                narration = $"You search for {target}, but the name never quite lands on anything solid in {room.Name}. {BuildAmbientMissSentence(room)}";
                 return true;
             }
         }
@@ -1612,13 +1734,13 @@ public class NarratorService : INarratorService
 
         var openingTemplates = new[]
         {
-            $"{context.Player.Name} takes stock of {room.Name}.",
-            $"{context.Player.Name} surveys {room.Name} with a practiced eye.",
-            $"{context.Player.Name} pauses to absorb the details of {room.Name}.",
-            $"The details of {room.Name} sharpen as {context.Player.Name} looks around.",
-            $"{context.Player.Name} gives {room.Name} a thorough once-over.",
-            $"{room.Name} unfolds before {context.Player.Name}'s careful gaze.",
-            $"{context.Player.Name} scans {room.Name}, cataloguing threats and exits alike.",
+            $"You take stock of {room.Name}.",
+            $"You survey {room.Name} with a practiced eye.",
+            $"You pause to absorb the details of {room.Name}.",
+            $"The details of {room.Name} sharpen as you look around.",
+            $"You give {room.Name} a thorough once-over.",
+            $"{room.Name} unfolds before your careful gaze.",
+            $"You scan {room.Name}, cataloguing threats and exits alike.",
             $"A practiced eye sweeps across {room.Name}."
         };
         var opening = openingTemplates[Math.Abs(room.Id.GetHashCode() + context.Player.Name.Length) % openingTemplates.Length];
@@ -1641,13 +1763,13 @@ public class NarratorService : INarratorService
         if (!context.MechanicalResult.Success)
         {
             var failureReason = TrimToSentence(context.MechanicalResult.MechanicalSummary);
-            return $"{context.Player.Name} commits to the motion, but {roomName} gives nothing back except the hard truth of the attempt. {failureReason}";
+            return $"You commit to the motion, but {roomName} gives nothing back except the hard truth of the attempt. {failureReason}";
         }
 
         var resolvedOutcome = TrimToSentence(context.MechanicalResult.MechanicalSummary);
         return string.IsNullOrWhiteSpace(resolvedOutcome)
-            ? $"{context.Player.Name} shifts the scene in {roomName}, and the moment settles into a new shape without further ceremony."
-            : $"{context.Player.Name} acts, and {roomName} answers in kind. {resolvedOutcome}";
+            ? $"You shift the scene in {roomName}, and the moment settles into a new shape without further ceremony."
+            : $"You act, and {roomName} answers in kind. {resolvedOutcome}";
     }
 
     private static string BuildRoomAtmosphere(Room room)

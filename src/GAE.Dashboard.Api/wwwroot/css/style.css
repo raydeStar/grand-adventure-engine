@@ -270,13 +270,14 @@ body::before {
 }
 .search-bar input {
   flex: 1;
+  min-width: 0;
   background: var(--bg-input);
   border: 1px solid var(--border);
   border-radius: var(--r);
-  padding: 0.45rem 0.6rem;
+  padding: 0.6rem 0.8rem;
   color: var(--text);
   font-family: var(--font);
-  font-size: 12px;
+  font-size: 14px;
 }
 .search-bar input:focus {
   border-color: var(--accent);
@@ -286,7 +287,7 @@ body::before {
 .search-bar input::placeholder { color: var(--dim); }
 .search-count {
   color: var(--dim);
-  font-size: 11px;
+  font-size: 13px;
   white-space: nowrap;
 }
 
@@ -357,7 +358,7 @@ body::before {
 /* ───────────────────────── FORM ELEMENTS ───────────────────────── */
 
 .form-group { display: grid; gap: 0.25rem; margin-bottom: 0.6rem; }
-.form-group label, .field-label { font-size: 12px; }
+.form-group label, .field-label { font-size: 13px; }
 .optional { font-size: 11px; color: var(--dim); }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
 
@@ -373,7 +374,7 @@ textarea {
   color: var(--text);
   padding: 0.5rem 0.6rem;
   font: inherit;
-  font-size: 12px;
+  font-size: 14px;
   transition: border-color 0.15s;
 }
 
@@ -1470,7 +1471,7 @@ textarea { resize: vertical; min-height: 80px; }
 }
 
 .mutation-form h4 {
-  font-size: 11px;
+  font-size: 13px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--dim);
@@ -1479,6 +1480,54 @@ textarea { resize: vertical; min-height: 80px; }
 .mutation-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
 .mutation-row-4 { grid-template-columns: repeat(4, 1fr); }
 .mutation-form-wide { grid-column: span 2; }
+
+/* ── World Actions tab ── */
+.world-action-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+.world-action-form {
+  display: grid;
+  gap: 0.6rem;
+}
+.world-action-buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.world-action-result {
+  font-size: 13px;
+  color: var(--accent);
+  min-height: 1.4em;
+}
+.world-action-result.error { color: var(--danger, #f55); }
+.panel-danger {
+  border-color: #662222;
+}
+.panel-danger h3 { color: #f77; }
+.btn-warning {
+  background: transparent;
+  border: 1px solid #cc8800;
+  color: #cc8800;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 13px;
+  padding: 0.5rem 1rem;
+  border-radius: var(--r);
+}
+.btn-warning:hover { background: rgba(204,136,0,0.15); }
+.btn-danger {
+  background: transparent;
+  border: 1px solid #cc3333;
+  color: #cc3333;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 13px;
+  padding: 0.5rem 1rem;
+  border-radius: var(--r);
+}
+.btn-danger:hover { background: rgba(204,51,51,0.15); }
 
 .registry-table { display: grid; gap: 0.4rem; }
 
@@ -1780,23 +1829,26 @@ textarea { resize: vertical; min-height: 80px; }
   background: var(--bg-input);
   border: 1px solid var(--border);
   border-radius: var(--r);
-  padding: 0.45rem 0.5rem;
+  padding: 0.6rem 0.6rem;
   color: var(--dim);
   font-family: var(--font);
-  font-size: 11px;
+  font-size: 13px;
   cursor: pointer;
-  min-width: 90px;
+  min-width: 100px;
+  max-width: 160px;
+  flex-shrink: 0;
 }
 .dm-search-bar select:focus { border-color: var(--accent); outline: none; color: var(--accent); }
 .dm-search-bar input {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 200px;
   background: var(--bg-input);
   border: 1px solid var(--border);
   border-radius: var(--r);
-  padding: 0.55rem 0.75rem;
+  padding: 0.6rem 0.8rem;
   color: var(--text);
   font-family: var(--font);
-  font-size: 13px;
+  font-size: 14px;
 }
 .dm-search-bar input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 6px var(--glow); }
 .dm-search-bar input::placeholder { color: var(--dim); }

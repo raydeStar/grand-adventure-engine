@@ -139,7 +139,8 @@ if (!string.IsNullOrEmpty(discordToken) && discordToken != "YOUR_DISCORD_BOT_TOK
         sp.GetRequiredService<IStateManager>(),
         sp.GetRequiredService<INarratorService>(),
         sp.GetRequiredService<ILogger<DiscordBotService>>(),
-        discordToken));
+        discordToken,
+        dataDir));
     builder.Services.AddHostedService(sp => sp.GetRequiredService<DiscordBotService>());
     builder.Services.AddSingleton<IDiscordNotifier>(sp => sp.GetRequiredService<DiscordBotService>());
 }

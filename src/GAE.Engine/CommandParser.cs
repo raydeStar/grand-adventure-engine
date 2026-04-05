@@ -43,6 +43,13 @@ public partial class CommandParser
             action.Direction = NormalizeDirection(bareMove.Groups["dir"].Value);
             return action;
         }
+        // "leave", "exit", "leave tavern", "go outside", "depart", etc. — auto-resolve direction
+        if (LeaveRegex().IsMatch(input))
+        {
+            action.Type = ActionType.Move;
+            action.Direction = "auto";
+            return action;
+        }
 
         // Look / examine
         if (LookRegex().IsMatch(input))
@@ -258,6 +265,9 @@ public partial class CommandParser
 
     [GeneratedRegex(@"^(?<dir>north|south|east|west|up|down|n|s|e|w|u|d)$", RegexOptions.IgnoreCase)]
     private static partial Regex BareDirectionRegex();
+
+    [GeneratedRegex(@"^(?:leave|exit|depart|go\s+out(?:side)?|step\s+out(?:side)?|get\s+out)(?:\s+.*)?$", RegexOptions.IgnoreCase)]
+    private static partial Regex LeaveRegex();
 
     private static string NormalizeDirection(string dir) => dir.ToLowerInvariant() switch
     {

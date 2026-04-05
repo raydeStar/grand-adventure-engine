@@ -205,6 +205,7 @@ public class GameEngine : IGameEngine
         var player = new PlayerCharacter
         {
             Id = concept.PlayerDiscordId,
+            DiscordId = concept.PlayerDiscordId,
             Name = concept.Name,
             Race = concept.Race,
             Class = concept.Class,
@@ -236,6 +237,20 @@ public class GameEngine : IGameEngine
 
         // Grant starting items from the registry / lore seed
         await GrantStartingItemsAsync(player, ct);
+
+        // Grant default Heal spell
+        player.Spellbook.Add(new LearnedSpell
+        {
+            Name = "Heal",
+            Description = "Channel restorative magic to mend your wounds.",
+            DamageDice = "1d4+2",
+            DamageStat = "wis",
+            Category = SpellCategory.Healing,
+            MpCost = 2,
+            BasePower = 1,
+            LearnedAtLevel = 1,
+            TargetType = "self"
+        });
 
         // Generate backstory if narrator is available
         try
@@ -350,6 +365,23 @@ public class GameEngine : IGameEngine
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "You are in an unknown location." };
 
         var direction = NormalizeDirection(action.Direction ?? "");
+
+        // "leave" / "exit" — auto-resolve direction from available exits
+        if (direction == "auto")
+        {
+            if (room.Exits.Count == 0)
+                return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "There are no exits from this area." };
+            if (room.Exits.Count == 1)
+            {
+                direction = room.Exits.Keys.First();
+            }
+            else
+            {
+                var exitList = string.Join(", ", room.Exits.Keys.Select(d => $"**{d}**"));
+                return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"There are several ways out. Which direction? You can go: {exitList}" };
+            }
+        }
+
         if (!room.Exits.TryGetValue(direction, out var targetRoomId))
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"There is no exit to the {direction}." };
 
@@ -706,7 +738,7 @@ public class GameEngine : IGameEngine
         {
             ActionId = action.Id,
             Success = true,
-            MechanicalSummary = $"You begin speaking with {target.Name}.",
+            MechanicalSummary = $"You approach {target.Name}.",
             Narration = freeForm.Narration,
             InteractionUpdate = freeForm.InteractionUpdate
         };
@@ -1945,11 +1977,10 @@ public class GameEngine : IGameEngine
         try
         {
             var dungeonId = $"generated_dungeon_{Guid.NewGuid().ToString("N")[..8]}";
-            var entrance = await _narrator.GenerateDungeonEntranceAsync(dungeonId, player.Level, room, ct);
 
-            // Wire the entrance back to the source room
-            entrance.Exits["back"] = room.Id;
-            await _stateManager.SaveRoomAsync(entrance, ct);
+            // Use the procedural generator — creates entire multi-floor dungeon upfront
+            var entrance = await DungeonGenerator.GenerateFullDungeonAsync(
+                dungeonId, player.Level, room, _stateManager, ct);
 
             // Add exit from current room to the dungeon
             var exitDirection = PickDungeonExitDirection(room);
@@ -1957,8 +1988,8 @@ public class GameEngine : IGameEngine
             await _stateManager.SaveRoomAsync(room, ct);
 
             _logger.LogInformation(
-                "Dungeon '{DungeonName}' ({DungeonId}) created by {NpcName} for player {PlayerId} (level {Level}). Exit: {Direction}",
-                entrance.Name, dungeonId, npc.Name, player.Id, player.Level, exitDirection);
+                "Dungeon '{DungeonName}' ({DungeonId}) created for player {PlayerId} (level {Level}). Exit: {Direction}",
+                entrance.Name, dungeonId, player.Id, player.Level, exitDirection);
 
             PublishToWikiInBackground(entrance);
 
@@ -2500,22 +2531,17 @@ public class GameEngine : IGameEngine
         return combatResult;
     }
 
-    /// <summary>Handles player death: respawn at tavern with penalties.</summary>
+    /// <summary>Handles player death: respawn at tavern with full HP/MP, no penalties beyond the trip back.</summary>
     private async Task<(string summary, List<StateChange> changes)> HandlePlayerDeathAsync(
         PlayerCharacter player, Room room, string defeatedBy, CancellationToken ct)
     {
         var oldHp = player.Hp;
         var oldMp = player.Mp;
-        var oldGold = player.Gold;
         var oldRoom = player.CurrentRoomId;
 
-        // Respawn at 50% HP/MP
-        player.Hp = Math.Max(1, player.MaxHp / 2);
-        player.Mp = Math.Max(0, player.MaxMp / 2);
-
-        // Death tax: lose 25% gold
-        var goldLost = player.Gold / 4;
-        player.Gold = Math.Max(0, player.Gold - goldLost);
+        // Respawn at full HP/MP — death is a setback, not a punishment
+        player.Hp = player.MaxHp;
+        player.Mp = player.MaxMp;
 
         // Teleport to spawn
         player.CurrentRoomId = "spawn";
@@ -2529,13 +2555,13 @@ public class GameEngine : IGameEngine
         {
             new() { EntityType = "Player", EntityId = player.Id, Property = "Hp", OldValue = oldHp.ToString(), NewValue = player.Hp.ToString() },
             new() { EntityType = "Player", EntityId = player.Id, Property = "Mp", OldValue = oldMp.ToString(), NewValue = player.Mp.ToString() },
-            new() { EntityType = "Player", EntityId = player.Id, Property = "Gold", OldValue = oldGold.ToString(), NewValue = player.Gold.ToString() },
             new() { EntityType = "Player", EntityId = player.Id, Property = "CurrentRoomId", OldValue = oldRoom, NewValue = "spawn" }
         };
 
-        var summary = $"You have been defeated by {defeatedBy}! You wake up in The Rusted Flagon.\n" +
-            $"\U0001F480 You lost {goldLost} gold.\n" +
-            $"\u2764\uFE0F {player.Hp}/{player.MaxHp}  \u2728 {player.Mp}/{player.MaxMp}  \U0001F4B0 {player.Gold}g";
+        var summary = $"You have been defeated by {defeatedBy}! Everything goes dark...\n" +
+            $"You awaken in The Rusted Flagon, battered but alive. A kindly stranger must have dragged you to safety.\n" +
+            $"\u2764\uFE0F {player.Hp}/{player.MaxHp}  \u2728 {player.Mp}/{player.MaxMp}  \U0001F4B0 {player.Gold}g\n" +
+            $"Your gear and experience are intact — but that foe still lurks out there...";
 
         await _stateManager.SavePlayerAsync(player, ct);
         await _stateManager.SaveRoomAsync(room, ct);

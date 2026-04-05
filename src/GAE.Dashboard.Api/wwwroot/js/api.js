@@ -97,6 +97,14 @@ const API = {
     return this.postJson(`${this.base}/admin/mutations/room-fixture`, data);
   },
 
+  async sendMessage(data) {
+    return this.postJson(`${this.base}/admin/send-message`, data);
+  },
+
+  async resetWorld(keepPlayers = true) {
+    return this.postJson(`${this.base}/admin/reset-world`, { keepPlayers });
+  },
+
   async deletePlayer(playerId) {
     const res = await fetch(`${this.base}/admin/players/${encodeURIComponent(playerId)}`, {
       method: 'DELETE',

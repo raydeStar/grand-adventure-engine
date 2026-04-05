@@ -36,7 +36,9 @@ const PLAYER_SELECT_IDS = [
   'resource-player-select',
   'teleport-player-select',
   'item-player-select',
-  'status-player-select'
+  'status-player-select',
+  'msg-player-select',
+  'warp-player-select'
 ];
 
 const UI = {
@@ -792,26 +794,38 @@ const UI = {
   },
 
   renderSelectOptions(players, preferredPlayerId) {
+    const OPTIONAL_SELECTS = new Set(['msg-player-select']);
     PLAYER_SELECT_IDS.forEach((id) => {
       const select = this.$(id);
       if (!select) return;
 
+      const isOptional = OPTIONAL_SELECTS.has(id);
       const previousValue = select.value;
       if (!players.length) {
-        select.innerHTML = '<option value="">No players available</option>';
+        select.innerHTML = isOptional
+          ? '<option value="">All Players (Broadcast)</option>'
+          : '<option value="">No players available</option>';
         return;
       }
 
-      select.innerHTML = players.map((player) => `
+      const optionsHtml = players.map((player) => `
         <option value="${this.esc(player.id)}">${this.esc(player.name)} (${this.esc(player.id)})</option>
       `).join('');
 
-      const nextValue = players.some((player) => player.id === previousValue)
-        ? previousValue
-        : players.some((player) => player.id === preferredPlayerId)
-          ? preferredPlayerId
-          : players[0].id;
-      select.value = nextValue;
+      select.innerHTML = isOptional
+        ? `<option value="">All Players (Broadcast)</option>${optionsHtml}`
+        : optionsHtml;
+
+      if (!isOptional) {
+        const nextValue = players.some((player) => player.id === previousValue)
+          ? previousValue
+          : players.some((player) => player.id === preferredPlayerId)
+            ? preferredPlayerId
+            : players[0].id;
+        select.value = nextValue;
+      } else if (previousValue) {
+        select.value = players.some((player) => player.id === previousValue) ? previousValue : '';
+      }
     });
   },
 

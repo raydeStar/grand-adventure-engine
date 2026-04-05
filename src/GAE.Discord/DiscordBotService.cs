@@ -6,6 +6,7 @@ using GAE.Core.Models;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Text;
+using System.Text.Json;
 
 namespace GAE.Discord;
 
@@ -21,6 +22,7 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
     private readonly INarratorService _narrator;
     private readonly ILogger<DiscordBotService> _logger;
     private readonly string _token;
+    private readonly string _sessionsPath;
 
     // Creation sessions keyed by Discord user ID
     private readonly Dictionary<ulong, AiCreationSession> _creationSessions = [];
@@ -42,7 +44,8 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         IStateManager stateManager,
         INarratorService narrator,
         ILogger<DiscordBotService> logger,
-        string token)
+        string token,
+        string dataDir = "")
     {
         _client = client;
         _engine = engine;
@@ -50,6 +53,10 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         _narrator = narrator;
         _logger = logger;
         _token = token;
+        _sessionsPath = string.IsNullOrEmpty(dataDir) ? "" : Path.Combine(dataDir, "pending-creations.json");
+
+        // Restore any creation sessions that survived a container restart
+        RestoreCreationSessions();
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)
@@ -70,6 +77,8 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
+        _logger.LogInformation("Discord bot shutting down — persisting {Count} creation session(s)", _creationSessions.Count);
+        PersistCreationSessions();
         await _client.StopAsync();
     }
 
@@ -175,6 +184,7 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
             if (_creationSessions.ContainsKey(command.User.Id))
             {
                 _creationSessions.Remove(command.User.Id);
+                PersistCreationSessions();
                 await command.FollowupAsync("Character creation reset. Use `/create` to start fresh.", ephemeral: true);
                 return;
             }
@@ -183,6 +193,7 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         }
         await command.FollowupAsync("Are you sure? Type `yes` in your adventure thread to confirm. Your character will be wiped.", ephemeral: true);
         _creationSessions[command.User.Id] = new AiCreationSession(discordId) { AwaitingRestartConfirmation = true };
+        PersistCreationSessions();
     }
 
     private async Task HandleStatsSlashAsync(SocketSlashCommand command, string discordId)
@@ -329,8 +340,27 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         }
         if (!isCreating && ownerPlayer is null)
         {
-            // No owner yet and not in creation — ignore
-            return;
+            // Thread has no owner — check if this user has a player record we can re-link,
+            // or if the thread looks like an adventure thread we can recover.
+            var orphanPlayer = await _stateManager.GetPlayerByDiscordIdAsync(discordId);
+            if (orphanPlayer is not null)
+            {
+                // Re-link the player to this thread
+                orphanPlayer.ThreadId = thread.Id;
+                await _stateManager.SavePlayerAsync(orphanPlayer);
+                _logger.LogInformation("Re-linked player {Name} to thread {ThreadId} after state loss", orphanPlayer.Name, thread.Id);
+                // Fall through to normal game processing below
+            }
+            else
+            {
+                // No player record — server was restarted and state was lost.
+                // Auto-start character creation in this thread.
+                await thread.SendMessageAsync(
+                    "⚔️ Looks like the server was restarted and your character data was lost. " +
+                    "Let's get you back in the game — starting character creation!");
+                await StartAiCharacterCreation(thread, message.Author.Id, discordId);
+                return;
+            }
         }
 
         // Quick restart keywords — works anytime in thread
@@ -369,6 +399,7 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
                 else
                 {
                     _creationSessions.Remove(message.Author.Id);
+                    CleanupPersistedSessions();
                     await message.Channel.SendMessageAsync("Restart cancelled.");
                 }
                 return;
@@ -454,6 +485,7 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
     {
         var session = new AiCreationSession(discordId);
         _creationSessions[userId] = session;
+        PersistCreationSessions();
 
         await thread.SendMessageAsync("""
             Welcome, traveler. I am Sir Thaddeus, keeper of fates.
@@ -558,6 +590,7 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
                 player.ThreadId = thread.Id;
                 await _stateManager.SavePlayerAsync(player);
                 _creationSessions.Remove(message.Author.Id);
+                CleanupPersistedSessions();
 
                 await thread.ModifyAsync(props => props.Name = $"\u2694\uFE0F {player.Name}'s Adventure");
                 await SendCharacterCreatedEmbed(thread, player);
@@ -576,9 +609,10 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
             CharacterCreation.SheetOverrides.Apply(input, aiResponse, session.LastAiResponse);
         }
 
-        // Store the AI response
+        // Store the AI response and persist to disk so it survives container restarts
         session.LastAiResponse = aiResponse;
         session.HasSheet = true;
+        PersistCreationSessions();
 
         var standardArray = new[] { 15, 14, 13, 12, 10, 8 };
         var stats = AssignStatsFromOrder(aiResponse.StatOrder, standardArray);
@@ -627,6 +661,7 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         player.ThreadId = thread.Id;
         await _stateManager.SavePlayerAsync(player);
         _creationSessions.Remove(message.Author.Id);
+        CleanupPersistedSessions();
 
         await thread.ModifyAsync(props => props.Name = $"\u2694\uFE0F {player.Name}'s Adventure");
         await SendCharacterCreatedEmbed(thread, player);
@@ -641,6 +676,7 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
     private async Task HandleRestartConfirmedAsync(SocketUserMessage message, SocketThreadChannel thread, string discordId)
     {
         _creationSessions.Remove(message.Author.Id);
+        CleanupPersistedSessions();
 
         var player = await _stateManager.GetPlayerByDiscordIdAsync(discordId);
         if (player is not null)
@@ -712,26 +748,16 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
             return;
         }
 
-        // Cast — show spell result with mechanical details and narration
+        // Cast — plain text for consistency
         if (action.Type == Core.Models.ActionType.Cast)
         {
-            var spellColor = result.Success ? Color.Purple : Color.DarkRed;
-            var spellEmbed = new EmbedBuilder()
-                .WithTitle(result.Success ? "Spell Cast" : "Spell Fizzle")
-                .WithColor(spellColor)
-                .WithFooter(FormatStatusBar(player));
-
-            if (!string.IsNullOrEmpty(result.MechanicalSummary))
-                spellEmbed.AddField("Mechanics", result.MechanicalSummary.Length > 1024
-                    ? result.MechanicalSummary[..1020] + "..."
-                    : result.MechanicalSummary);
-
-            if (!string.IsNullOrEmpty(result.Narration))
-                spellEmbed.WithDescription(result.Narration.Length > 4096
-                    ? result.Narration[..4092] + "..."
-                    : result.Narration);
-
-            await thread.SendMessageAsync(embed: spellEmbed.Build());
+            var spellTitle = result.Success ? "✨ **Spell Cast!**" : "💨 **Spell Fizzle!**";
+            var spellNarration = result.Narration ?? result.MechanicalSummary ?? "";
+            var spellText = $"{spellTitle}\n{spellNarration}";
+            if (!string.IsNullOrEmpty(result.MechanicalSummary) && result.Narration is not null)
+                spellText += $"\n> {result.MechanicalSummary}";
+            spellText += $"\n> {FormatStatusBar(player)}";
+            await SendChunkedAsync(thread, spellText);
             return;
         }
 
@@ -748,24 +774,16 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
             await SendVictoryAnnouncementAsync(thread, player);
         }
 
-        // Build an embed for consistent styling
-        var embed = new EmbedBuilder();
+        // Plain text response — consistent with room/combat style
+        var narrationText = result.Narration ?? result.MechanicalSummary ?? "";
+        if (!result.Success && !string.IsNullOrWhiteSpace(narrationText))
+            narrationText = $"❌ **Failed!** {narrationText}";
+        else if (!result.Success)
+            narrationText = "❌ **Failed!** That didn't work.";
 
-        // Determine color based on result
-        if (!result.Success)
-            embed.WithColor(Color.Red);
-        else if (result.GoldChange != 0 || result.ItemsGained.Count > 0 || result.ItemsLost.Count > 0)
-            embed.WithColor(Color.Green);
-        else
-            embed.WithColor(new Color(0x2f, 0x31, 0x36)); // Dark grey — blends with Discord
+        var sb = new StringBuilder(narrationText);
 
-        // Narration or mechanical summary as description
-        var narration = result.Narration ?? result.MechanicalSummary;
-        if (!result.Success)
-            narration = $"❌ **Failed!** {narration}";
-        embed.WithDescription(narration);
-
-        // Dice rolls hidden in a spoiler to keep the output clean
+        // Dice rolls in spoiler
         if (result.DiceRolls.Count > 0)
         {
             var rollLines = result.DiceRolls.Select(roll =>
@@ -777,28 +795,26 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
                 rollStr += FormatOutcomeBadge(roll);
                 return rollStr;
             });
-            var rollText = string.Join("\n", rollLines);
-            if (rollText.Length <= 1024)
-                embed.AddField("Rolls", $"||{rollText}||");
+            sb.Append($"\n||{string.Join(" · ", rollLines)}||");
         }
 
-        // Rewards & changes inline
+        // Compact changes line
         var changes = new List<string>();
-        if (result.GoldChange > 0) changes.Add($"💰 +{result.GoldChange} gold");
-        if (result.GoldChange < 0) changes.Add($"💰 {result.GoldChange} gold");
+        if (result.GoldChange > 0) changes.Add($"💰 +{result.GoldChange}g");
+        if (result.GoldChange < 0) changes.Add($"💰 {result.GoldChange}g");
         if (result.XpGained > 0) changes.Add($"⭐ +{result.XpGained} XP");
         foreach (var item in result.ItemsGained)
-            changes.Add($"📥 +{item.Name}{(item.Quantity > 1 ? $" (x{item.Quantity})" : "")}");
+            changes.Add($"📥 +{item.Name}{(item.Quantity > 1 ? $" x{item.Quantity}" : "")}");
         foreach (var item in result.ItemsLost)
-            changes.Add($"📤 -{item.Name}{(item.Quantity > 1 ? $" (x{item.Quantity})" : "")}");
+            changes.Add($"📤 -{item.Name}{(item.Quantity > 1 ? $" x{item.Quantity}" : "")}");
 
         if (changes.Count > 0)
-            embed.AddField("Changes", string.Join("\n", changes), inline: true);
+            sb.Append($"\n> {string.Join("  ", changes)}");
 
-        // Status bar footer
-        embed.WithFooter(FormatStatusBar(player));
+        // Status footer
+        sb.Append($"\n> {FormatStatusBar(player)}");
 
-        await thread.SendMessageAsync(embed: embed.Build());
+        await SendChunkedAsync(thread, sb.ToString());
     }
 
     private async Task SendRoomEntryAsync(SocketThreadChannel thread, PlayerCharacter player, ActionResult? result = null)
@@ -806,60 +822,102 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId);
         if (room is null) return;
 
-        var embed = new EmbedBuilder()
-            .WithTitle($"📍 {room.Name}")
-            .WithDescription(room.Description)
-            .WithColor(Color.Orange);
+        // Send narration text first (above the room card)
+        var narration = result?.Narration ?? result?.MechanicalSummary ?? "";
+        if (!string.IsNullOrWhiteSpace(narration))
+            await SendChunkedAsync(thread, narration);
+
+        // Build console-style room card
+        await thread.SendMessageAsync(await BuildRoomCardText(player, room));
+    }
+
+    private async Task<string> BuildRoomCardText(PlayerCharacter player, Room room)
+    {
+        // Inner width = characters between │ and │ (not counting borders)
+        const int IW = 40;
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("```");
+
+        // Title bar:  ┌── Room Name ──────────────────────────┐
+        var titlePad = room.Name.Length > IW - 4 ? room.Name[..(IW - 4)] : room.Name;
+        var dashesAfter = Math.Max(1, IW - titlePad.Length - 3);
+        sb.AppendLine($"┌── {titlePad} {new string('─', dashesAfter)}┐");
+
+        // Room description — word-wrap
+        if (!string.IsNullOrWhiteSpace(room.Description))
+        {
+            foreach (var line in WordWrap(room.Description, IW - 2))
+                sb.AppendLine($"│ {Pad(line, IW)}│");
+        }
 
         // NPCs
         if (room.Npcs.Count > 0)
         {
-            var npcLines = room.Npcs.Select(n =>
+            sb.AppendLine($"├{new string('─', IW + 1)}┤");
+            sb.AppendLine($"│ {Pad("NPCs", IW)}│");
+            foreach (var npc in room.Npcs)
             {
-                var prefix = n.IsHostile ? "⚠️" : "🧑";
-                return $"{prefix} {n.Name}";
-            });
-            embed.AddField("NPCs", string.Join("\n", npcLines), inline: true);
+                var prefix = npc.IsHostile ? "!" : " ";
+                var npcStr = $" {prefix} {npc.Name}";
+                sb.AppendLine($"│ {Pad(npcStr, IW)}│");
+            }
         }
 
         // Items
         if (room.Items.Count > 0)
         {
-            var itemLines = room.Items.Select(i =>
-                i.Quantity > 1 ? $"📦 {i.Name} (x{i.Quantity})" : $"📦 {i.Name}");
-            embed.AddField("Items", string.Join("\n", itemLines), inline: true);
-        }
-
-        // Exits — resolve target room names where possible
-        var exitLines = new List<string>();
-        foreach (var e in room.Exits)
-        {
-            var dirEmoji = e.Key.ToLowerInvariant() switch
+            sb.AppendLine($"├{new string('─', IW + 1)}┤");
+            sb.AppendLine($"│ {Pad("Items", IW)}│");
+            foreach (var item in room.Items)
             {
-                "north" => "⬆️",
-                "south" => "⬇️",
-                "east" => "➡️",
-                "west" => "⬅️",
-                "up" => "🔼",
-                "down" => "🔽",
-                _ => "↪️"
-            };
-            // Try to resolve the target room name
-            var targetRoom = await _stateManager.GetPlayerRoomAsync(player.Id, e.Value);
-            var targetName = targetRoom?.Name ?? e.Value.Replace("_", " ");
-            exitLines.Add($"{dirEmoji} **{e.Key}** → {targetName}");
+                var qty = item.Quantity > 1 ? $" x{item.Quantity}" : "";
+                var itemStr = $"  {item.Name}{qty}";
+                sb.AppendLine($"│ {Pad(itemStr, IW)}│");
+            }
         }
-        if (exitLines.Count > 0)
-            embed.AddField("Exits", string.Join("\n", exitLines));
 
-        embed.WithFooter(FormatStatusBar(player));
+        // Exits
+        if (room.Exits.Count > 0)
+        {
+            sb.AppendLine($"├{new string('─', IW + 1)}┤");
+            foreach (var e in room.Exits)
+            {
+                var targetRoom = await _stateManager.GetPlayerRoomAsync(player.Id, e.Value);
+                var targetName = targetRoom?.Name ?? e.Value.Replace("_", " ");
+                var exitStr = $"{e.Key} -> {targetName}";
+                sb.AppendLine($"│ {Pad(exitStr, IW)}│");
+            }
+        }
 
-        // Send narration text above the embed (if there is any)
-        var narration = result?.Narration ?? result?.MechanicalSummary ?? "";
-        if (!string.IsNullOrWhiteSpace(narration))
-            await thread.SendMessageAsync(text: narration, embed: embed.Build());
-        else
-            await thread.SendMessageAsync(embed: embed.Build());
+        sb.AppendLine($"└{new string('─', IW + 1)}┘");
+
+        // Status bar below the box
+        sb.AppendLine($"  HP:{player.Hp}/{player.MaxHp}  MP:{player.Mp}/{player.MaxMp}  Gold:{player.Gold}");
+        sb.Append("```");
+        return sb.ToString();
+    }
+
+    /// <summary>Pad or truncate a string to exactly the given width.</summary>
+    private static string Pad(string text, int width) =>
+        text.Length >= width ? text[..width] : text.PadRight(width);
+
+    private static List<string> WordWrap(string text, int maxWidth)
+    {
+        var lines = new List<string>();
+        var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var current = new StringBuilder();
+        foreach (var word in words)
+        {
+            if (current.Length + word.Length + 1 > maxWidth && current.Length > 0)
+            {
+                lines.Add(current.ToString());
+                current.Clear();
+            }
+            if (current.Length > 0) current.Append(' ');
+            current.Append(word);
+        }
+        if (current.Length > 0) lines.Add(current.ToString());
+        return lines;
     }
 
     private async Task SendCombatResultAsync(SocketThreadChannel thread, PlayerCharacter player, ActionResult result)
@@ -874,41 +932,32 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
 
         if (combatStatus is "victory" or "defeat" or "fled")
         {
-            // Terminal states: send as an embed for visual pop
-            var embedColor = combatStatus switch
-            {
-                "victory" => Color.Gold,
-                "defeat" => Color.DarkRed,
-                "fled" => Color.LightGrey,
-                _ => new Color(0xcc, 0x33, 0x33)
-            };
             var title = combatStatus switch
             {
-                "victory" => "⚔️ Victory!",
-                "defeat" => "💀 Defeated...",
-                "fled" => "🏃 Fled!",
-                _ => "⚔️ Combat"
+                "victory" => "⚔️ **Victory!**",
+                "defeat" => "💀 **Defeated...**",
+                "fled" => "🏃 **Fled!**",
+                _ => "⚔️ **Combat**"
             };
 
-            // For terminal states, send the narrative as plain text first, then a small embed
+            // Build full combat summary as plain text
+            var combatSb = new StringBuilder();
             if (!string.IsNullOrWhiteSpace(text))
-                await SendChunkedAsync(thread, text);
+                combatSb.AppendLine(text);
+            combatSb.AppendLine();
+            combatSb.AppendLine(title);
 
-            var embed = new EmbedBuilder()
-                .WithTitle(title)
-                .WithColor(embedColor)
-                .WithFooter(FormatStatusBar(player));
-
-            // Rewards in the embed
+            // Rewards
             var rewards = new List<string>();
             if (result.XpGained > 0) rewards.Add($"⭐ +{result.XpGained} XP");
-            if (result.GoldChange > 0) rewards.Add($"💰 +{result.GoldChange} gold");
+            if (result.GoldChange > 0) rewards.Add($"💰 +{result.GoldChange}g");
             foreach (var item in result.ItemsGained)
                 rewards.Add($"🎁 {item.Name}");
             if (rewards.Count > 0)
-                embed.WithDescription(string.Join("\n", rewards));
+                combatSb.AppendLine($"> {string.Join("  ", rewards)}");
+            combatSb.AppendLine($"> {FormatStatusBar(player)}");
 
-            await thread.SendMessageAsync(embed: embed.Build());
+            await SendChunkedAsync(thread, combatSb.ToString());
 
             if (result.IsVictory)
                 await SendVictoryAnnouncementAsync(thread, player);
@@ -1178,7 +1227,138 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
             return;
         }
 
-        await message.Channel.SendMessageAsync("Unknown DM command. Available: `status`, `heal`, `teleport`, `grant`, `say`, `kill`, `spawn`, `reset-world`, `announce`");
+        // !dm msg @player "message" — send system message to a player's thread
+        if (cmd.StartsWith("msg ", StringComparison.OrdinalIgnoreCase) && !cmd.StartsWith("msg-all", StringComparison.OrdinalIgnoreCase))
+        {
+            var rest = cmd[4..].Trim();
+            var spaceIdx = rest.IndexOf(' ');
+            if (spaceIdx < 0) { await message.Channel.SendMessageAsync("Usage: `!dm msg @player \"message\"`"); return; }
+            var targetId = ExtractMentionId(rest[..spaceIdx]);
+            if (targetId is null) { await message.Channel.SendMessageAsync("Invalid player mention."); return; }
+            var player = await _stateManager.GetPlayerByDiscordIdAsync(targetId);
+            if (player is null) { await message.Channel.SendMessageAsync("Player not found."); return; }
+            if (!player.ThreadId.HasValue) { await message.Channel.SendMessageAsync("Player has no active thread."); return; }
+
+            var sysMsg = rest[(spaceIdx + 1)..].Trim().Trim('"');
+            var guild = (message.Channel as SocketGuildChannel)?.Guild;
+            var playerThread = guild?.GetChannel(player.ThreadId.Value) as SocketThreadChannel;
+            if (playerThread is not null)
+            {
+                await playerThread.SendMessageAsync($"\U0001F4DC **[System Message]** {sysMsg}");
+                await message.Channel.SendMessageAsync($"\u2705 Message sent to {player.Name}.");
+            }
+            else
+                await message.Channel.SendMessageAsync("Could not find player thread.");
+            return;
+        }
+
+        // !dm msg-all "message" — send system message to ALL adventure threads (including orphaned ones)
+        if (cmd.StartsWith("msg-all ", StringComparison.OrdinalIgnoreCase))
+        {
+            var sysMsg = cmd[8..].Trim().Trim('"');
+            var guild = (message.Channel as SocketGuildChannel)?.Guild;
+            if (guild is null) { await message.Channel.SendMessageAsync("Guild not found."); return; }
+
+            int sent = 0;
+
+            // First, send to all known player threads
+            var players = await _stateManager.GetAllPlayersAsync();
+            var knownThreadIds = new HashSet<ulong>();
+            foreach (var p in players.Where(p => p.ThreadId.HasValue))
+            {
+                knownThreadIds.Add(p.ThreadId!.Value);
+                var playerThread = guild.GetChannel(p.ThreadId!.Value) as SocketThreadChannel;
+                if (playerThread is not null)
+                {
+                    await playerThread.SendMessageAsync($"\U0001F4DC **[System Message]** {sysMsg}");
+                    sent++;
+                }
+            }
+
+            // Also scan for any adventure threads we don't have player records for
+            // (orphaned threads from server restart)
+            var mainChannel = guild.TextChannels.FirstOrDefault(c => c.Name == MainChannelName);
+            if (mainChannel is not null)
+            {
+                var activeThreads = mainChannel.Threads;
+                foreach (var t in activeThreads)
+                {
+                    if (!knownThreadIds.Contains(t.Id) && t.Name.Contains("Adventure"))
+                    {
+                        try
+                        {
+                            await t.SendMessageAsync($"\U0001F4DC **[System Message]** {sysMsg}");
+                            sent++;
+                        }
+                        catch { /* thread may be archived/inaccessible */ }
+                    }
+                }
+            }
+
+            await message.Channel.SendMessageAsync($"\u2705 System message sent to {sent} thread(s).");
+            return;
+        }
+
+        // !dm give-spell @player — give the default Heal spell to a player
+        if (cmd.StartsWith("give-spell ", StringComparison.OrdinalIgnoreCase))
+        {
+            var targetId = ExtractMentionId(cmd[11..].Trim());
+            if (targetId is null) { await message.Channel.SendMessageAsync("Usage: `!dm give-spell @player`"); return; }
+            var player = await _stateManager.GetPlayerByDiscordIdAsync(targetId);
+            if (player is null) { await message.Channel.SendMessageAsync("Player not found."); return; }
+
+            if (player.Spellbook.Any(s => s.Name.Equals("Heal", StringComparison.OrdinalIgnoreCase)))
+            {
+                await message.Channel.SendMessageAsync($"{player.Name} already knows Heal.");
+                return;
+            }
+
+            player.Spellbook.Add(new Core.Models.LearnedSpell
+            {
+                Name = "Heal",
+                Description = "Channel restorative magic to mend your wounds.",
+                DamageDice = "1d4+2",
+                DamageStat = "wis",
+                Category = Core.Models.SpellCategory.Healing,
+                MpCost = 2,
+                BasePower = 1,
+                LearnedAtLevel = 1,
+                TargetType = "self"
+            });
+            await _stateManager.SavePlayerAsync(player);
+            await message.Channel.SendMessageAsync($"\u2728 Granted Heal spell to {player.Name}.");
+            return;
+        }
+
+        // !dm give-spell-all — give default Heal to ALL players
+        if (cmd.Equals("give-spell-all", StringComparison.OrdinalIgnoreCase))
+        {
+            var players = await _stateManager.GetAllPlayersAsync();
+            int count = 0;
+            foreach (var p in players)
+            {
+                if (p.Spellbook.Any(s => s.Name.Equals("Heal", StringComparison.OrdinalIgnoreCase)))
+                    continue;
+                p.Spellbook.Add(new Core.Models.LearnedSpell
+                {
+                    Name = "Heal",
+                    Description = "Channel restorative magic to mend your wounds.",
+                    DamageDice = "1d4+2",
+                    DamageStat = "wis",
+                    Category = Core.Models.SpellCategory.Healing,
+                    MpCost = 2,
+                    BasePower = 1,
+                    LearnedAtLevel = 1,
+                    TargetType = "self"
+                });
+                await _stateManager.SavePlayerAsync(p);
+                count++;
+            }
+            await message.Channel.SendMessageAsync($"\u2728 Granted Heal spell to {count} player(s).");
+            return;
+        }
+
+        await message.Channel.SendMessageAsync("Unknown DM command. Available: `status`, `heal`, `teleport`, `grant`, `say`, `kill`, `spawn`, `reset-world`, `announce`, `msg`, `msg-all`, `give-spell`, `give-spell-all`");
     }
 
     // ==================== Map ====================
@@ -1237,16 +1417,30 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
 
     private static string BuildCharacterStatsText(PlayerCharacter player)
     {
-        const int W = 34;
+        // Each line: ║ (content padded to 36 chars) ║
+        const int W = 38;
         var sb = new System.Text.StringBuilder();
         sb.AppendLine("```");
-        sb.AppendLine($"\u2554{new string('\u2550', W)}\u2557");
-        sb.AppendLine($"\u2551  {player.Name,-32}\u2551");
-        sb.AppendLine($"\u2551  {player.Race} {player.Class,-20} Lv.{player.Level,2} \u2551");
-        sb.AppendLine($"\u2560{new string('\u2550', W)}\u2563");
-        sb.AppendLine($"\u2551  HP: {player.Hp,3}/{player.MaxHp,-3}   MP: {player.Mp,3}/{player.MaxMp,-3}     \u2551");
-        sb.AppendLine($"\u2551  Gold: {player.Gold,-6}   XP: {player.Xp,-6}     \u2551");
-        sb.AppendLine($"\u2560{new string('\u2550', W)}\u2563");
+        sb.AppendLine($"╔{new string('═', W)}╗");
+
+        var nameStr = player.Name ?? "Unknown";
+        sb.AppendLine($"║  {nameStr,-36}║");
+
+        var raceClass = $"{player.Race} {player.Class}";
+        var levelStr = $"Lv.{player.Level}";
+        sb.AppendLine($"║  {raceClass,-25} {levelStr,10}║");
+
+        sb.AppendLine($"╠{new string('═', W)}╣");
+
+        var hpStr = $"HP: {player.Hp}/{player.MaxHp}";
+        var mpStr = $"MP: {player.Mp}/{player.MaxMp}";
+        sb.AppendLine($"║  {hpStr,-18}{mpStr,-18}║");
+
+        var goldStr = $"Gold: {player.Gold}";
+        var xpStr = $"XP: {player.Xp}";
+        sb.AppendLine($"║  {goldStr,-18}{xpStr,-18}║");
+
+        sb.AppendLine($"╠{new string('═', W)}╣");
 
         var stats = player.GetAttributeStats().ToList();
         for (int i = 0; i < stats.Count; i += 2)
@@ -1259,17 +1453,17 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
                 var s2 = stats[i + 1];
                 right = $"{s2.Name}: {s2.Value,2} ({PlayerCharacter.GetStatModifier(s2.Value):+0;-0})";
             }
-            sb.AppendLine($"\u2551  {left,-16} {right,-15} \u2551");
+            sb.AppendLine($"║  {left,-18}{right,-18}║");
         }
 
-        sb.AppendLine($"\u2560{new string('\u2550', W)}\u2563");
+        sb.AppendLine($"╠{new string('═', W)}╣");
         var wpn = player.Equipment.Weapon;
         var arm = player.Equipment.Armor;
         var shd = player.Equipment.Shield;
-        sb.AppendLine($"\u2551  Weapon: {(wpn?.Name ?? "none"),-23} \u2551");
-        sb.AppendLine($"\u2551  Armor:  {(arm?.Name ?? "none"),-23} \u2551");
-        sb.AppendLine($"\u2551  Shield: {(shd?.Name ?? "none"),-23} \u2551");
-        sb.AppendLine($"\u255A{new string('\u2550', W)}\u255D");
+        sb.AppendLine($"║  Weapon: {(wpn?.Name ?? "none"),-28}║");
+        sb.AppendLine($"║  Armor:  {(arm?.Name ?? "none"),-28}║");
+        sb.AppendLine($"║  Shield: {(shd?.Name ?? "none"),-28}║");
+        sb.AppendLine($"╚{new string('═', W)}╝");
         sb.Append("```");
         return sb.ToString();
     }
@@ -1483,6 +1677,81 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
             await channel.SendMessageAsync(chunk);
         }
     }
+
+    // ==================== Creation Session Persistence ====================
+
+    /// <summary>
+    /// Persist all active creation sessions to disk so they survive container restarts.
+    /// Called whenever a session is added, updated, or removed.
+    /// </summary>
+    private void PersistCreationSessions()
+    {
+        if (string.IsNullOrEmpty(_sessionsPath)) return;
+        try
+        {
+            var data = _creationSessions.ToDictionary(
+                kvp => kvp.Key.ToString(),
+                kvp => new PersistedCreationSession
+                {
+                    DiscordId = kvp.Value.DiscordId,
+                    HasSheet = kvp.Value.HasSheet,
+                    LastAiResponse = kvp.Value.LastAiResponse,
+                    AwaitingRestartConfirmation = kvp.Value.AwaitingRestartConfirmation
+                });
+            File.WriteAllText(_sessionsPath, JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true }));
+            _logger.LogDebug("Persisted {Count} creation session(s) to disk", data.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to persist creation sessions");
+        }
+    }
+
+    /// <summary>
+    /// Restore creation sessions from disk after a container restart.
+    /// </summary>
+    private void RestoreCreationSessions()
+    {
+        if (string.IsNullOrEmpty(_sessionsPath) || !File.Exists(_sessionsPath)) return;
+        try
+        {
+            var json = File.ReadAllText(_sessionsPath);
+            var data = JsonSerializer.Deserialize<Dictionary<string, PersistedCreationSession>>(json);
+            if (data is null || data.Count == 0) return;
+
+            foreach (var (key, session) in data)
+            {
+                if (!ulong.TryParse(key, out var userId)) continue;
+                _creationSessions[userId] = new AiCreationSession(session.DiscordId)
+                {
+                    HasSheet = session.HasSheet,
+                    LastAiResponse = session.LastAiResponse,
+                    AwaitingRestartConfirmation = session.AwaitingRestartConfirmation
+                };
+            }
+            _logger.LogInformation("Restored {Count} pending creation session(s) from disk", _creationSessions.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to restore creation sessions from disk");
+        }
+    }
+
+    /// <summary>
+    /// Clean up the persisted sessions file (call after all sessions are finalized).
+    /// </summary>
+    private void CleanupPersistedSessions()
+    {
+        if (string.IsNullOrEmpty(_sessionsPath)) return;
+        try
+        {
+            if (_creationSessions.Count == 0 && File.Exists(_sessionsPath))
+                File.Delete(_sessionsPath);
+            else
+                PersistCreationSessions();
+        }
+        catch { /* best effort */ }
+    }
 }
 
 /// <summary>Tracks the AI-driven character creation conversation state.</summary>
@@ -1498,4 +1767,13 @@ internal class AiCreationSession
     public CharacterCreation.CharacterCreationSession? FallbackSession { get; set; }
 
     public AiCreationSession(string discordId) => DiscordId = discordId;
+}
+
+/// <summary>Serializable subset of AiCreationSession for disk persistence.</summary>
+internal class PersistedCreationSession
+{
+    public string DiscordId { get; set; } = "";
+    public bool HasSheet { get; set; }
+    public CharacterCreationAiResponse? LastAiResponse { get; set; }
+    public bool AwaitingRestartConfirmation { get; set; }
 }
