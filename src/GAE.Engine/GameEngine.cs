@@ -119,6 +119,7 @@ public class GameEngine : IGameEngine
             ActionType.Inventory => ProcessInventory(player, action),
             ActionType.Stats => ProcessStats(player, action),
             ActionType.Cast => await ProcessCastAsync(player, action, ct),
+            ActionType.Spellbook => ProcessSpellbook(player, action),
             ActionType.Help => ProcessHelp(action),
             ActionType.Map => await ProcessMapAsync(player, action, ct),
             _ => await ProcessFreeFormActionAsync(player, action, ct)
@@ -139,6 +140,7 @@ public class GameEngine : IGameEngine
             && action.Type != ActionType.Inventory
             && action.Type != ActionType.Map
             && action.Type != ActionType.Cast
+            && action.Type != ActionType.Spellbook
             && action.Type != ActionType.Shop
             && action.Type != ActionType.Unknown;
 
@@ -1164,245 +1166,262 @@ public class GameEngine : IGameEngine
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    //  CAST — registered spell with exact mechanics, or improvised spell
-    //         evaluated by the LLM with a power-budget system.
+    //  CAST — Spellbook system (Option A: AI creates, engine scales)
     // ═══════════════════════════════════════════════════════════════════
+
+    private static readonly Dictionary<int, string> LevelDamageDice = new()
+    {
+        {1,"1d4"},{2,"1d6"},{3,"1d8"},{4,"1d10"},{5,"2d6"},
+        {6,"2d8"},{7,"2d10"},{8,"3d8"},{9,"3d10"},{10,"4d10"}
+    };
+    private static readonly Dictionary<int, string> LevelHealDice = new()
+    {
+        {1,"1d4+1"},{2,"1d6+2"},{3,"1d8+3"},{4,"2d6+2"},{5,"2d8+3"},
+        {6,"3d6+3"},{7,"3d8+4"},{8,"4d6+4"},{9,"4d8+5"},{10,"5d8+5"}
+    };
 
     private async Task<ActionResult> ProcessCastAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
     {
-        var spellName = action.Target ?? action.RawInput;
-        var target = action.Parameters.GetValueOrDefault("target");
         var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
         room ??= new Room { Id = player.CurrentRoomId, Name = "Unknown" };
 
-        _logger.LogInformation("Cast attempt by {Player}: spell={Spell}, target={Target}", player.Name, spellName, target ?? "(none)");
+        string spellInput = action.Target ?? "";
+        if (string.IsNullOrWhiteSpace(spellInput))
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "Cast what? Try: `cast fireball at skeleton`" };
 
-        // ── Try registered spell first ──────────────────────────────
-        if (_registry is not null)
+        _logger.LogInformation("Cast attempt by {Player}: spell={Spell}, target={Target}",
+            player.Name, spellInput, action.Parameters.GetValueOrDefault("target") ?? "(none)");
+
+        // Check if spell is already known (fuzzy match)
+        var known = player.Spellbook.FirstOrDefault(s =>
+            s.Name.Equals(spellInput, StringComparison.OrdinalIgnoreCase) ||
+            spellInput.Contains(s.Name, StringComparison.OrdinalIgnoreCase));
+
+        if (known is not null)
+            return await CastKnownSpellAsync(player, known, action, room, ct);
+
+        // New spell - vet with AI
+        SpellVetResponse? vet = null;
+        try
         {
-            var validation = _registry.ValidateSpellCast(spellName, player.Class, player.Level, player.Mp);
-            if (validation.IsValid && validation.Spell is not null)
-                return await CastRegisteredSpellAsync(player, validation.Spell, target, room, action, ct);
-
-            // Spell IS in registry but player can't use it
-            if (validation.Spell is not null && validation.FailureReason is not null)
-            {
-                var failResult = new ActionResult
-                {
-                    ActionId = action.Id,
-                    Success = false,
-                    MechanicalSummary = validation.FailureReason
-                };
-
-                // Ask narrator for a fun fizzle description
-                var recentStory = await _stateManager.GetRecentStoryForRoomAsync(player.CurrentRoomId, 3, ct);
-                var fizzleNarration = await _narrator.ProcessFreeFormAsync(player, room,
-                    $"I try to cast {spellName} but fail because: {validation.FailureReason}. Describe the comedic fizzle.",
-                    recentStory, ct);
-                failResult.Narration = fizzleNarration.Narration;
-                return failResult;
-            }
+            vet = await _narrator.VetSpellAsync(player, spellInput, room, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Spell vetting failed");
         }
 
-        // ── Not in registry — improvised spell with power budget ────
-        return await CastImprovisedSpellAsync(player, spellName, target, room, action, ct);
+        if (vet is null)
+        {
+            // AI unavailable - create a basic damage spell mechanically
+            vet = new SpellVetResponse
+            {
+                Approved = true,
+                SpellName = spellInput.Length > 30 ? spellInput[..30] : spellInput,
+                Description = "A burst of raw magical energy.",
+                Category = "damage",
+                TargetType = "enemy",
+                BasePower = Math.Min(3, player.Level),
+                MpCost = 4,
+                Narration = "You channel raw magic, shaping it by force of will alone."
+            };
+        }
+
+        if (!vet.Approved)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"The magic fizzles... {vet.RejectionReason}" };
+
+        // Level-scale the spell
+        var newSpell = CreateLevelScaledSpell(vet, player);
+
+        // Check MP
+        if (player.Mp < newSpell.MpCost)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"Not enough MP to cast {newSpell.Name}. Need {newSpell.MpCost} MP, have {player.Mp}." };
+
+        // Add to spellbook
+        player.Spellbook.Add(newSpell);
+
+        // Cast it
+        return await ExecuteSpellAsync(player, newSpell, action, room, vet.Narration, isNewSpell: true, ct);
     }
 
-    private async Task<ActionResult> CastRegisteredSpellAsync(
-        PlayerCharacter player, SpellDefinition spell, string? target,
-        Room room, GameAction action, CancellationToken ct)
+    private static LearnedSpell CreateLevelScaledSpell(SpellVetResponse vet, PlayerCharacter player)
     {
-        var result = new ActionResult { ActionId = action.Id, Success = true };
-        var mechanics = new List<string>();
+        int effectivePower = Math.Clamp(Math.Min(vet.BasePower, player.Level + 1), 1, 10);
+        var category = Enum.TryParse<SpellCategory>(vet.Category, true, out var cat) ? cat : SpellCategory.Damage;
 
-        // Deduct mana
-        var oldMp = player.Mp;
-        player.Mp -= spell.ManaCost;
-        result.StateChanges.Add(new StateChange
+        string dice = category == SpellCategory.Healing
+            ? LevelHealDice.GetValueOrDefault(effectivePower, "1d4+1")
+            : LevelDamageDice.GetValueOrDefault(effectivePower, "1d4");
+
+        int mpCost = Math.Max(2, effectivePower * 2);
+
+        return new LearnedSpell
         {
-            EntityType = "player", EntityId = player.Id,
-            Property = "mp", OldValue = oldMp.ToString(), NewValue = player.Mp.ToString()
-        });
-        mechanics.Add($"MP: {oldMp} -> {player.Mp} (-{spell.ManaCost})");
+            Name = vet.SpellName,
+            Description = vet.Description,
+            DamageDice = dice,
+            DamageStat = "int",
+            Category = category,
+            MpCost = mpCost,
+            BasePower = vet.BasePower,
+            LearnedAtLevel = player.Level,
+            TargetType = vet.TargetType
+        };
+    }
 
-        // Resolve damage
-        if (!string.IsNullOrEmpty(spell.DamageDice))
+    private async Task<ActionResult> CastKnownSpellAsync(PlayerCharacter player, LearnedSpell spell, GameAction action, Room room, CancellationToken ct)
+    {
+        if (player.Mp < spell.MpCost)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"Not enough MP for {spell.Name}. Need {spell.MpCost}, have {player.Mp}." };
+
+        return await ExecuteSpellAsync(player, spell, action, room, null, isNewSpell: false, ct);
+    }
+
+    private async Task<ActionResult> ExecuteSpellAsync(PlayerCharacter player, LearnedSpell spell, GameAction action, Room room, string? narration, bool isNewSpell, CancellationToken ct)
+    {
+        player.Mp -= spell.MpCost;
+        var mech = new List<string>();
+        var dice = new List<DiceRoll>();
+        var stateChanges = new List<StateChange>();
+
+        if (isNewSpell)
+            mech.Add($"**New spell learned: {spell.Name}!** ({spell.DamageDice}, {spell.MpCost} MP)");
+
+        stateChanges.Add(new StateChange { EntityType = "player", EntityId = player.Id, Property = "mp", OldValue = (player.Mp + spell.MpCost).ToString(), NewValue = player.Mp.ToString() });
+
+        string? combatStatus = null;
+
+        switch (spell.Category)
         {
-            var statMod = player.GetModifier(spell.DamageStat ?? "int");
-            var damageRoll = _dice.RollDamage(spell.DamageDice, statMod);
-            mechanics.Add($"Damage: {damageRoll.Expression} + {statMod} = {damageRoll.Total}");
-
-            // Apply damage to target NPC if specified
-            if (!string.IsNullOrEmpty(target))
+            case SpellCategory.Damage:
             {
-                var targetNpc = room.Npcs.FirstOrDefault(n =>
-                    n.Name.Contains(target, StringComparison.OrdinalIgnoreCase));
-                if (targetNpc is not null && targetNpc.Hp.HasValue)
-                {
-                    var oldHp = targetNpc.Hp.Value;
-                    targetNpc.Hp = Math.Max(0, targetNpc.Hp.Value - damageRoll.Total);
-                    mechanics.Add($"{targetNpc.Name} HP: {oldHp} -> {targetNpc.Hp}");
-                    result.StateChanges.Add(new StateChange
-                    {
-                        EntityType = "npc", EntityId = targetNpc.Id,
-                        Property = "hp", OldValue = oldHp.ToString(), NewValue = targetNpc.Hp.Value.ToString()
-                    });
+                // Find target - use action parameter or first hostile NPC
+                string? castTarget = action.Parameters.GetValueOrDefault("target");
+                var target = !string.IsNullOrEmpty(castTarget)
+                    ? room.Npcs.FirstOrDefault(n => n.Name.Contains(castTarget, StringComparison.OrdinalIgnoreCase) && n.IsHostile && n.Hp > 0)
+                    : room.Npcs.FirstOrDefault(n => n.IsHostile && n.Hp > 0);
 
-                    if (targetNpc.Hp <= 0)
-                        mechanics.Add($"{targetNpc.Name} has been defeated!");
+                if (target is null)
+                {
+                    player.Mp += spell.MpCost; // refund
+                    return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "No valid target found. The spell fizzles." };
                 }
+
+                // Roll spell attack (INT-based)
+                int intMod = player.GetModifier("int");
+                int profBonus = 2 + (player.Level / 4);
+                var attackRoll = _dice.RollAttack(intMod + profBonus);
+                int targetDefense = target.Defense ?? 10;
+                var outcome = ProbabilityEngine.DetermineOutcome(attackRoll, targetDefense);
+                attackRoll.Outcome = outcome;
+                attackRoll.TargetNumber = targetDefense;
+                dice.Add(attackRoll);
+
+                if (outcome == RollOutcome.Hit || outcome == RollOutcome.CriticalHit)
+                {
+                    var dmgRoll = _dice.RollDamage(spell.DamageDice, intMod);
+                    dice.Add(dmgRoll);
+                    int totalDmg = outcome == RollOutcome.CriticalHit ? dmgRoll.Total * 2 : dmgRoll.Total;
+                    totalDmg = Math.Max(1, totalDmg);
+
+                    target.Hp = Math.Max(0, (target.Hp ?? 0) - totalDmg);
+                    stateChanges.Add(new StateChange { EntityType = "npc", EntityId = target.Id, Property = "hp", OldValue = ((target.Hp ?? 0) + totalDmg).ToString(), NewValue = (target.Hp ?? 0).ToString() });
+
+                    bool isCrit = outcome == RollOutcome.CriticalHit;
+                    mech.Add(isCrit
+                        ? $"**CRITICAL!** {spell.Name} devastates {target.Name}!"
+                        : $"{spell.Name} strikes {target.Name}!");
+
+                    if ((target.Hp ?? 0) <= 0)
+                    {
+                        mech.Add($"**{target.Name} falls!**");
+                        // Award XP and gold
+                        int xpReward = target.Level * 10 + 20;
+                        int goldReward = _dice.Roll($"1d{target.Level * 5 + 10}", "Spell kill gold").Total;
+                        player.Xp += xpReward;
+                        player.Gold += goldReward;
+                        mech.Add($"\n**Rewards:** +{xpReward} XP | +{goldReward} gold");
+                        var lvlUp = CheckAndApplyLevelUp(player);
+                        if (lvlUp is not null) mech.Add(lvlUp);
+
+                        // Check if combat over
+                        bool allDead = !room.Npcs.Any(n => n.IsHostile && (n.Hp ?? 0) > 0);
+                        if (allDead)
+                        {
+                            player.Interaction.Reset();
+                            combatStatus = "victory";
+                        }
+                    }
+                }
+                else
+                {
+                    mech.Add($"{spell.Name} misses {target.Name}!");
+                }
+                break;
+            }
+            case SpellCategory.Healing:
+            {
+                int intMod = player.GetModifier("int");
+                var healRoll = _dice.RollDamage(spell.DamageDice, intMod);
+                dice.Add(healRoll);
+                int healed = Math.Max(1, healRoll.Total);
+                int oldHp = player.Hp;
+                player.Hp = Math.Min(player.MaxHp, player.Hp + healed);
+                int actualHeal = player.Hp - oldHp;
+                stateChanges.Add(new StateChange { EntityType = "player", EntityId = player.Id, Property = "hp", OldValue = oldHp.ToString(), NewValue = player.Hp.ToString() });
+                mech.Add($"{spell.Name} restores {actualHeal} HP! (HP: {player.Hp}/{player.MaxHp})");
+                break;
+            }
+            default: // Buff, Debuff, Utility
+            {
+                mech.Add($"You cast {spell.Name}! {spell.Description}");
+                break;
             }
         }
 
-        // Resolve healing
-        if (!string.IsNullOrEmpty(spell.HealDice))
-        {
-            var healRoll = _dice.Roll(spell.HealDice, "Spell healing");
-            var oldHp = player.Hp;
-            player.Hp = Math.Min(player.MaxHp, player.Hp + healRoll.Total);
-            mechanics.Add($"Healed: {healRoll.Total} HP ({oldHp} -> {player.Hp})");
-            result.StateChanges.Add(new StateChange
-            {
-                EntityType = "player", EntityId = player.Id,
-                Property = "hp", OldValue = oldHp.ToString(), NewValue = player.Hp.ToString()
-            });
-        }
+        mech.Add($"\n*-{spell.MpCost} MP ({player.Mp}/{player.MaxMp} remaining)*");
 
-        // Status effect
-        if (!string.IsNullOrEmpty(spell.StatusEffect))
-        {
-            mechanics.Add($"Applied: {spell.StatusEffect} ({spell.Duration} turns)");
-        }
-
-        result.MechanicalSummary = $"**{spell.Name}** ({spell.School})\n" + string.Join("\n", mechanics);
-
-        // Narrate the successful cast
-        var recentStory = await _stateManager.GetRecentStoryForRoomAsync(player.CurrentRoomId, 3, ct);
-        var narration = await _narrator.ProcessFreeFormAsync(player, room,
-            $"I cast {spell.Name}{(target is not null ? $" at {target}" : "")}. Mechanical result: {result.MechanicalSummary}",
-            recentStory, ct);
-        result.Narration = narration.Narration;
-
-        // Save state
-        player.LastActiveAt = DateTimeOffset.UtcNow;
         await _stateManager.SavePlayerAsync(player, ct);
         await _stateManager.SaveRoomAsync(room, ct);
-
-        return result;
-    }
-
-    private async Task<ActionResult> CastImprovisedSpellAsync(
-        PlayerCharacter player, string spellName, string? target,
-        Room room, GameAction action, CancellationToken ct)
-    {
-        // Determine the player's power budget
-        var powerCap = _registry?.GetImprovisedSpellCap(player.Class, player.Level) ?? Math.Max(1, (player.Level + 1) / 2);
-
-        _logger.LogInformation("Improvised spell '{Spell}' by {Player} (Lv.{Level} {Class}). Power cap: {Cap}",
-            spellName, player.Name, player.Level, player.Class, powerCap);
-
-        // Ask the LLM to evaluate the improvised spell
-        var recentStory = await _stateManager.GetRecentStoryForRoomAsync(player.CurrentRoomId, 3, ct);
-        var evalResult = await _narrator.EvaluateImprovisedSpellAsync(
-            player, room, spellName, target, powerCap, recentStory, ct);
 
         var result = new ActionResult
         {
             ActionId = action.Id,
-            Success = evalResult.Success,
-            Narration = evalResult.Narration
+            RawInput = action.RawInput,
+            Success = true,
+            MechanicalSummary = string.Join("\n", mech),
+            Narration = narration,
+            DiceRolls = dice,
+            StateChanges = stateChanges,
+            InteractionUpdate = combatStatus is not null
+                ? new InteractionUpdate { Mode = combatStatus == "victory" ? InteractionMode.Explore : InteractionMode.Combat, CombatStatus = combatStatus }
+                : null
         };
 
-        if (evalResult.Success)
-        {
-            // Apply mana cost
-            if (evalResult.ManaCost > 0)
-            {
-                var oldMp = player.Mp;
-                player.Mp = Math.Max(0, player.Mp - evalResult.ManaCost);
-                result.StateChanges.Add(new StateChange
-                {
-                    EntityType = "player", EntityId = player.Id,
-                    Property = "mp", OldValue = oldMp.ToString(), NewValue = player.Mp.ToString()
-                });
-            }
-
-            // Apply stat changes from the evaluation
-            foreach (var (stat, delta) in evalResult.StatChanges)
-            {
-                switch (stat.ToLowerInvariant())
-                {
-                    case "hp":
-                        var oldHp = player.Hp;
-                        player.Hp = Math.Clamp(player.Hp + delta, 0, player.MaxHp);
-                        result.StateChanges.Add(new StateChange { EntityType = "player", EntityId = player.Id, Property = "hp", OldValue = oldHp.ToString(), NewValue = player.Hp.ToString() });
-                        break;
-                    case "gold":
-                        var oldGold = player.Gold;
-                        player.Gold = Math.Max(0, player.Gold + delta);
-                        result.StateChanges.Add(new StateChange { EntityType = "player", EntityId = player.Id, Property = "gold", OldValue = oldGold.ToString(), NewValue = player.Gold.ToString() });
-                        break;
-                }
-            }
-
-            // Apply damage to target NPC
-            if (evalResult.Damage > 0 && !string.IsNullOrEmpty(target))
-            {
-                var targetNpc = room.Npcs.FirstOrDefault(n =>
-                    n.Name.Contains(target, StringComparison.OrdinalIgnoreCase));
-                if (targetNpc is not null && targetNpc.Hp.HasValue)
-                {
-                    var oldHp = targetNpc.Hp.Value;
-                    targetNpc.Hp = Math.Max(0, targetNpc.Hp.Value - evalResult.Damage);
-                    result.StateChanges.Add(new StateChange
-                    {
-                        EntityType = "npc", EntityId = targetNpc.Id,
-                        Property = "hp", OldValue = oldHp.ToString(), NewValue = targetNpc.Hp.Value.ToString()
-                    });
-                }
-            }
-
-            // Apply healing
-            if (evalResult.Healing > 0)
-            {
-                var oldHp = player.Hp;
-                player.Hp = Math.Min(player.MaxHp, player.Hp + evalResult.Healing);
-                result.StateChanges.Add(new StateChange
-                {
-                    EntityType = "player", EntityId = player.Id,
-                    Property = "hp", OldValue = oldHp.ToString(), NewValue = player.Hp.ToString()
-                });
-            }
-
-            result.MechanicalSummary = $"**Improvised: {spellName}** (Power {evalResult.PowerLevel}/{powerCap})"
-                + (evalResult.ManaCost > 0 ? $" | MP: -{evalResult.ManaCost}" : "")
-                + (evalResult.Damage > 0 ? $" | Damage: {evalResult.Damage}" : "")
-                + (evalResult.Healing > 0 ? $" | Healed: {evalResult.Healing}" : "");
-        }
-        else
-        {
-            // Fizzle — still costs some mana for the attempt
-            var fizzleCost = Math.Max(1, evalResult.ManaCost / 2);
-            if (player.Mp >= fizzleCost)
-            {
-                var oldMp = player.Mp;
-                player.Mp -= fizzleCost;
-                result.StateChanges.Add(new StateChange
-                {
-                    EntityType = "player", EntityId = player.Id,
-                    Property = "mp", OldValue = oldMp.ToString(), NewValue = player.Mp.ToString()
-                });
-            }
-
-            result.MechanicalSummary = $"**Fizzle: {spellName}** (Power {evalResult.PowerLevel} exceeds your cap of {powerCap})"
-                + (fizzleCost > 0 ? $" | MP wasted: -{fizzleCost}" : "");
-        }
-
-        player.LastActiveAt = DateTimeOffset.UtcNow;
-        await _stateManager.SavePlayerAsync(player, ct);
-        await _stateManager.SaveRoomAsync(room, ct);
-
+        await PersistInteractionStoryEntry(player, action, result, ct);
         return result;
+    }
+
+    private static ActionResult ProcessSpellbook(PlayerCharacter player, GameAction action)
+    {
+        if (player.Spellbook.Count == 0)
+            return new ActionResult { ActionId = action.Id, Success = true, MechanicalSummary = "Your spellbook is empty. Try `cast <spell name>` to learn one!" };
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("```");
+        sb.AppendLine("\u250c\u2500 SPELLBOOK \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510");
+        foreach (var s in player.Spellbook)
+        {
+            var cat = s.Category.ToString()[..3].ToLower();
+            var name = s.Name.Length > 18 ? s.Name[..18] : s.Name;
+            sb.AppendLine($"\u2502 {name,-18} {s.DamageDice,-8} {s.MpCost,2}mp ({cat}) \u2502");
+        }
+        sb.AppendLine($"\u2502                                   \u2502");
+        sb.AppendLine($"\u2502 MP: {player.Mp}/{player.MaxMp}                          \u2502");
+        sb.AppendLine("\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518");
+        sb.Append("```");
+
+        return new ActionResult { ActionId = action.Id, Success = true, MechanicalSummary = sb.ToString() };
     }
 
     private async Task<ActionResult> ProcessFreeFormActionAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
@@ -2228,6 +2247,38 @@ public class GameEngine : IGameEngine
             return defResult;
         }
 
+        // ─── Cast spell during combat ───
+        if (action.Type == ActionType.Cast)
+        {
+            var castResult = await ProcessCastAsync(player, action, ct);
+            // If cast succeeded and player is still in combat, enemies get a turn
+            if (castResult.Success && player.Interaction.Mode == InteractionMode.Combat)
+            {
+                var aliveEnemies = enemies.Where(e => e.Hp.HasValue && e.Hp.Value > 0 && room.Npcs.Contains(e)).ToList();
+                if (aliveEnemies.Count > 0)
+                {
+                    var castMech = new List<string> { castResult.MechanicalSummary };
+                    var castDice = new List<DiceRoll>(castResult.DiceRolls);
+                    var castSC = new List<StateChange>(castResult.StateChanges);
+                    RunEnemyAttacks(player, aliveEnemies, room, castMech, castDice, castSC, defenseBonus: 0);
+
+                    string castCombatStatus = player.Hp <= 0 ? "defeat" : "ongoing";
+                    if (player.Hp <= 0) { player.Interaction.Reset(); if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, ct); }
+                    if (castCombatStatus == "ongoing") AppendHpBars(castMech, player, aliveEnemies, room);
+
+                    await _stateManager.SavePlayerAsync(player, ct);
+                    await _stateManager.SaveRoomAsync(room, ct);
+                    var combatCastResult = new ActionResult { ActionId = action.Id, RawInput = action.RawInput, Success = true,
+                        MechanicalSummary = string.Join("\n", castMech), DiceRolls = castDice, StateChanges = castSC,
+                        Narration = castResult.Narration,
+                        InteractionUpdate = new InteractionUpdate { Mode = castCombatStatus == "ongoing" ? InteractionMode.Combat : InteractionMode.Explore, CombatStatus = castCombatStatus } };
+                    await PersistInteractionStoryEntry(player, action, combatCastResult, ct);
+                    return combatCastResult;
+                }
+            }
+            return castResult;
+        }
+
         // ─── Resolve attack modifiers for special moves ───
         int attackHitBonus = 0;
         int attackDmgBonus = 0;
@@ -3050,7 +3101,8 @@ public class GameEngine : IGameEngine
                 `sell <item>` -- Sell an item to a shopkeeper
                 `equip <item>` -- Equip an item
                 `unequip <item>` -- Unequip an item
-                `cast <spell>` / `cast <spell> at <target>` -- Cast a spell
+                `cast <spell>` / `cast <spell> at <target>` -- Cast a spell (learns new spells!)
+                `spellbook` / `spells` -- View your learned spells
                 `rest` / `short rest` / `long rest` -- Rest and recover
                 `inventory` -- View your inventory
                 `stats` -- View your character stats

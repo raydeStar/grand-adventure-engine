@@ -686,6 +686,13 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
             return;
         }
 
+        // Spellbook — console-style text
+        if (action.Type == Core.Models.ActionType.Spellbook)
+        {
+            await thread.SendMessageAsync(result.MechanicalSummary);
+            return;
+        }
+
         // Help — show as proper embed
         if (action.Type == Core.Models.ActionType.Help)
         {

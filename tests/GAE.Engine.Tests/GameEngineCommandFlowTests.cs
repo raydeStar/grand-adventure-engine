@@ -722,5 +722,13 @@ public class GameEngineCommandFlowTests
         public void SetActiveModel(string model) { }
         public Task<IReadOnlyList<string>> ListAvailableModelsAsync(CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<string>>(["test-model"]);
+
+        public Task<SpellVetResponse?> VetSpellAsync(PlayerCharacter player, string spellDescription, Room room, CancellationToken ct = default)
+            => Task.FromResult<SpellVetResponse?>(new SpellVetResponse
+            {
+                Approved = true, SpellName = spellDescription, Description = "Test spell.",
+                Category = "damage", TargetType = "enemy", BasePower = 3, MpCost = 6,
+                Narration = "Test spell learned."
+            });
     }
 }

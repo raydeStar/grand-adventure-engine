@@ -179,6 +179,19 @@ public class StubNarratorService : INarratorService
     public Task<IReadOnlyList<string>> ListAvailableModelsAsync(CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<string>>(["stub-model"]);
 
+    public Task<SpellVetResponse?> VetSpellAsync(PlayerCharacter player, string spellDescription, Room room, CancellationToken ct = default)
+        => Task.FromResult<SpellVetResponse?>(new SpellVetResponse
+        {
+            Approved = true,
+            SpellName = spellDescription,
+            Description = "A test spell.",
+            Category = "damage",
+            TargetType = "enemy",
+            BasePower = 3,
+            MpCost = 6,
+            Narration = "[Spell] Learning new spell"
+        });
+
     private static string OppositeDir(string dir) => dir switch
     {
         "north" => "south", "south" => "north",

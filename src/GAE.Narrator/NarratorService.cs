@@ -2088,6 +2088,102 @@ public class NarratorService : INarratorService
     }
 
     // ═══════════════════════════════════════════════════════════════
+    //  Spell Vetting (Spellbook System — Option A)
+    // ═══════════════════════════════════════════════════════════════
+
+    public async Task<SpellVetResponse?> VetSpellAsync(PlayerCharacter player, string spellDescription, Room room, CancellationToken ct = default)
+    {
+        var systemPrompt = """
+            You are a Game Master vetting a player's invented spell for a dark-fantasy RPG.
+
+            APPROVAL RULES:
+            - The spell must fit a dark-fantasy setting (no sci-fi, modern tech, or memes)
+            - Creative and unusual spells are ENCOURAGED ("summon angry bees" = fine, "hack mainframe" = no)
+            - Non-combat spells (utility, buffs, debuffs) are valid
+            - Do NOT reject for being too powerful — power scaling is handled separately
+            - Only reject spells that are lore-breaking, nonsensical, or trolling
+
+            Assign basePower 1-10:
+              1-2: cantrip (spark, minor illusion)
+              3-4: standard (fireball, healing touch)
+              5-6: powerful (chain lightning, wall of fire)
+              7-8: very powerful (meteor, resurrection)
+              9-10: legendary (wish, reality warp)
+
+            Respond with ONLY valid JSON (no markdown, no code fences):
+            {"approved":true,"rejectionReason":null,"spellName":"Fireball","description":"A roaring sphere of flame erupts from your hands.","category":"damage","targetType":"enemy","basePower":4,"mpCost":8,"narration":"Arcane energy surges through your fingertips as you shape raw fire into a deadly sphere."}
+            """;
+
+        var userPrompt = $"""
+            CASTER: {player.Name} (Lv.{player.Level} {player.Race} {player.Class})
+            HP: {player.Hp}/{player.MaxHp} | MP: {player.Mp}/{player.MaxMp}
+            {player.FormatStatsCompact()}
+
+            LOCATION: {room.Name} - {room.Description}
+            NPCs present: {string.Join(", ", room.Npcs.Select(n => $"{n.Name} (HP:{n.Hp ?? 0}/{n.MaxHp ?? 0})"))}
+
+            SPELL DESCRIPTION: "{spellDescription}"
+
+            Vet this spell. Assign a name, description, category, targetType, basePower, mpCost, and narration.
+            """;
+
+        try
+        {
+            var rawResponse = await CompletionOrThrowAsync(systemPrompt, userPrompt, ct,
+                operation: "spell-vet", playerId: player.Id, roomId: room.Id);
+
+            var json = ExtractJson(rawResponse);
+            if (json is not null)
+            {
+                var parsed = JsonSerializer.Deserialize<SpellVetJsonResponse>(json, _jsonOptions);
+                if (parsed is not null)
+                {
+                    return new SpellVetResponse
+                    {
+                        Approved = parsed.Approved,
+                        RejectionReason = parsed.RejectionReason,
+                        SpellName = parsed.SpellName ?? spellDescription,
+                        Description = parsed.Description ?? "A burst of magical energy.",
+                        Category = parsed.Category ?? "damage",
+                        TargetType = parsed.TargetType ?? "enemy",
+                        BasePower = Math.Clamp(parsed.BasePower, 1, 10),
+                        MpCost = Math.Max(2, parsed.MpCost),
+                        Narration = parsed.Narration ?? "You channel arcane energy."
+                    };
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Spell vetting failed for '{Spell}'", spellDescription);
+        }
+
+        return null;
+    }
+
+    private class SpellVetJsonResponse
+    {
+        [JsonPropertyName("approved")]
+        public bool Approved { get; set; }
+        [JsonPropertyName("rejectionReason")]
+        public string? RejectionReason { get; set; }
+        [JsonPropertyName("spellName")]
+        public string? SpellName { get; set; }
+        [JsonPropertyName("description")]
+        public string? Description { get; set; }
+        [JsonPropertyName("category")]
+        public string? Category { get; set; }
+        [JsonPropertyName("targetType")]
+        public string? TargetType { get; set; }
+        [JsonPropertyName("basePower")]
+        public int BasePower { get; set; }
+        [JsonPropertyName("mpCost")]
+        public int MpCost { get; set; }
+        [JsonPropertyName("narration")]
+        public string? Narration { get; set; }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
     //  Improvised Spell Evaluation (Power Budget System)
     // ═══════════════════════════════════════════════════════════════
 
