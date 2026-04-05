@@ -15,7 +15,6 @@ public class DashboardController : ControllerBase
     private readonly IStateManager _stateManager;
     private readonly IGameEngine _engine;
     private readonly IGameEventBroadcaster _broadcaster;
-    private readonly IWikiService _wikiService;
     private readonly INarratorService _narrator;
     private readonly IConversationLogger _conversationLogger;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -32,7 +31,6 @@ public class DashboardController : ControllerBase
         IStateManager stateManager,
         IGameEngine engine,
         IGameEventBroadcaster broadcaster,
-        IWikiService wikiService,
         INarratorService narrator,
         IConversationLogger conversationLogger,
         IHttpClientFactory httpClientFactory,
@@ -44,7 +42,6 @@ public class DashboardController : ControllerBase
         _stateManager = stateManager;
         _engine = engine;
         _broadcaster = broadcaster;
-        _wikiService = wikiService;
         _narrator = narrator;
         _conversationLogger = conversationLogger;
         _httpClientFactory = httpClientFactory;
@@ -109,18 +106,6 @@ public class DashboardController : ControllerBase
                 timestamp = DateTimeOffset.UtcNow
             }
         };
-
-        try
-        {
-            var healthy = await _wikiService.IsHealthyAsync(ct);
-            checks["health/wiki"] = healthy
-                ? new { ok = true, status = "healthy", service = "wiki.js" }
-                : new { ok = false, status = "degraded", service = "wiki.js", note = "Wiki sync unavailable — game continues without wiki" };
-        }
-        catch (Exception ex)
-        {
-            checks["health/wiki"] = new { ok = false, status = "degraded", service = "wiki.js", error = ex.Message, note = "Wiki sync unavailable — game continues without wiki" };
-        }
 
         if (_narratorCachedResult is not null && DateTimeOffset.UtcNow < _narratorCacheExpiry)
         {

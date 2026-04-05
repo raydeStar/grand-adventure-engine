@@ -5,7 +5,6 @@
     <ProjectReference Include="..\GAE.Core\GAE.Core.csproj" />
     <ProjectReference Include="..\GAE.Engine\GAE.Engine.csproj" />
     <ProjectReference Include="..\GAE.Narrator\GAE.Narrator.csproj" />
-    <ProjectReference Include="..\GAE.WikiSync\GAE.WikiSync.csproj" />
     <ProjectReference Include="..\GAE.Discord\GAE.Discord.csproj" />
   </ItemGroup>
 

@@ -15,7 +15,6 @@ public class GameEngine : IGameEngine
     private readonly CommandParser _parser;
     private readonly GameRulesConfig _rules;
     private readonly ILogger<GameEngine> _logger;
-    private readonly IWikiService? _wiki;
     private readonly IContentRegistryService? _registry;
 
 
@@ -26,7 +25,6 @@ public class GameEngine : IGameEngine
         CommandParser parser,
         GameRulesConfig rules,
         ILogger<GameEngine> logger,
-        IWikiService? wiki = null,
         IContentRegistryService? registry = null)
     {
         _stateManager = stateManager;
@@ -35,7 +33,6 @@ public class GameEngine : IGameEngine
         _parser = parser;
         _rules = rules;
         _logger = logger;
-        _wiki = wiki;
         _registry = registry;
     }
 
@@ -410,7 +407,6 @@ public class GameEngine : IGameEngine
                 // Ensure reverse exit uses simple ID
                 targetRoom.Exits[OppositeDirection(direction)] = simpleSourceId;
                 await _stateManager.SaveRoomAsync(targetRoom, ct);
-                PublishToWikiInBackground(targetRoom);
             }
             catch (Exception ex)
             {
@@ -677,8 +673,6 @@ public class GameEngine : IGameEngine
             player.Interaction.Reset();
             result.InteractionUpdate = new InteractionUpdate { Mode = InteractionMode.Explore, CombatStatus = "victory" };
             await _stateManager.SaveRoomAsync(room, ct);
-            PublishEventToWikiInBackground(target.Id, "npc", $"{target.Name} Defeated",
-                $"{player.Name} defeated {target.Name} (Level {target.Level}, {target.Faction}) in combat.", room.Id);
         }
         else if (target.Hp.HasValue && target.Hp.Value > 0)
         {
@@ -1991,8 +1985,6 @@ public class GameEngine : IGameEngine
                 "Dungeon '{DungeonName}' ({DungeonId}) created for player {PlayerId} (level {Level}). Exit: {Direction}",
                 entrance.Name, dungeonId, player.Id, player.Level, exitDirection);
 
-            PublishToWikiInBackground(entrance);
-
             return $"⚔️ A new dungeon has appeared! **{entrance.Name}** — go **{exitDirection}** to enter.";
         }
         catch (Exception ex)
@@ -2425,8 +2417,6 @@ public class GameEngine : IGameEngine
                     }
                     room.Npcs.Remove(target);
                     combat?.TurnOrder.RemoveAll(t => t.Id == target.Id);
-                    PublishEventToWikiInBackground(target.Id, "npc", $"{target.Name} Defeated",
-                        $"{player.Name} defeated {target.Name} in combat.", room.Id);
 
                     // Check if all enemies dead
                     if (!enemies.Any(e => e.Hp.HasValue && e.Hp.Value > 0 && room.Npcs.Contains(e)))
@@ -3167,58 +3157,6 @@ public class GameEngine : IGameEngine
             if (val.Contains(':'))
                 room.Exits[key] = StripPlayerPrefix(val);
         }
-    }
-
-    private void PublishToWikiInBackground(Room room)
-    {
-        if (_wiki is null) return;
-
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await _wiki.SyncRoomPageAsync(room);
-                foreach (var npc in room.Npcs)
-                    await _wiki.SyncNpcPageAsync(npc);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Background wiki publish failed for room {RoomId}", room.Id);
-            }
-        });
-    }
-
-    private void PublishEventToWikiInBackground(string entityId, string entityType, string title, string description, string roomId)
-    {
-        if (_wiki is null) return;
-
-        var timestamp = DateTimeOffset.UtcNow;
-        var path = $"events/{entityType}/{entityId}/{timestamp:yyyyMMdd-HHmmss}";
-        var content = $"""
-            ---
-            title: {title}
-            tags: [event, {entityType}]
-            ---
-
-            # {title}
-
-            **Time:** {timestamp:u}
-            **Location:** {roomId}
-
-            {description}
-            """;
-
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await _wiki.CreateOrUpdatePageAsync(path, title, content);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Background wiki event publish failed for {Path}", path);
-            }
-        });
     }
 
     private static string OppositeDirection(string dir) => dir switch

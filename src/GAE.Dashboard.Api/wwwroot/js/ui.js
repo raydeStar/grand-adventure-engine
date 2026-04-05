@@ -736,7 +736,6 @@ const UI = {
   renderHealth(checks) {
     const items = [
       ['health', 'Core API'],
-      ['health/wiki', 'Wiki.js'],
       ['health/narrator', 'Narrator']
     ];
 

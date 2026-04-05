@@ -10,10 +10,8 @@ using GAE.Engine.Configuration;
 using GAE.Engine.Registry;
 using GAE.Engine.State;
 using GAE.Narrator;
-using GAE.WikiSync;
-using GraphQL.Client.Http;
-using GraphQL.Client.Serializer.SystemTextJson;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
@@ -102,6 +100,7 @@ builder.Services.AddHttpClient("LmStudio", client =>
     client.BaseAddress = new Uri(lmStudioEndpoint + "/");
     client.Timeout = TimeSpan.FromSeconds(120);
 });
+builder.Services.AddSingleton<WorldKnowledgeBuilder>();
 builder.Services.AddSingleton<INarratorService>(sp =>
 {
     var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("LmStudio");
@@ -110,22 +109,6 @@ builder.Services.AddSingleton<INarratorService>(sp =>
     var conversationLogger = sp.GetRequiredService<IConversationLogger>();
     return new NarratorService(httpClient, logger, lmStudioModel, knowledge, conversationLogger);
 });
-builder.Services.AddSingleton<WorldKnowledgeBuilder>();
-
-// Wiki.js — GraphQL client
-var wikiUrl = builder.Configuration["WikiJs:Url"] ?? "http://localhost:3000";
-var wikiApiKey = builder.Configuration["WikiJs:ApiKey"] ?? "";
-builder.Services.AddSingleton<GraphQL.Client.Abstractions.IGraphQLClient>(sp =>
-{
-    var client = new GraphQLHttpClient(
-        $"{wikiUrl}/graphql",
-        new SystemTextJsonSerializer());
-    if (!string.IsNullOrEmpty(wikiApiKey))
-        client.HttpClient.DefaultRequestHeaders.Authorization =
-            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", wikiApiKey);
-    return client;
-});
-builder.Services.AddSingleton<IWikiService, WikiService>();
 
 // Discord bot
 var discordToken = builder.Configuration["Discord:Token"] ?? "";
@@ -151,6 +134,11 @@ builder.Services.AddControllers();
 builder.Services.AddSingleton<IGameEventBroadcaster, SignalRGameEventBroadcaster>();
 builder.Services.Configure<DashboardAuthOptions>(builder.Configuration.GetSection(DashboardAuthOptions.SectionName));
 builder.Services.AddSingleton<IDashboardAuthService, DashboardAuthService>();
+// Persist DataProtection keys so auth cookies survive container restarts
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(dataDir, "data-protection-keys")))
+    .SetApplicationName("GAE-Dashboard");
+
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
@@ -215,17 +203,6 @@ try
 catch
 {
     app.Logger.LogWarning("LM Studio unreachable at {Endpoint} — narration will use fallback text", lmStudioEndpoint);
-}
-
-try
-{
-    var wiki = app.Services.GetRequiredService<IWikiService>();
-    if (!await wiki.IsHealthyAsync())
-        app.Logger.LogWarning("Wiki.js not healthy at {Url} — wiki sync disabled", wikiUrl);
-}
-catch
-{
-    app.Logger.LogWarning("Wiki.js unreachable at {Url} — wiki sync disabled", wikiUrl);
 }
 
 // ── Load content registries from seed files ──────────────────────────
@@ -295,21 +272,6 @@ app.MapGet("/health/ready", async (IStateManager sm) =>
     catch (Exception ex)
     {
         return Results.Json(new { status = "not-ready", error = ex.Message }, statusCode: 503);
-    }
-});
-
-app.MapGet("/health/wiki", async (IWikiService wiki) =>
-{
-    try
-    {
-        var healthy = await wiki.IsHealthyAsync();
-        return healthy
-            ? Results.Ok(new { status = "healthy", service = "wiki.js" })
-            : Results.Json(new { status = "degraded", service = "wiki.js", note = "Wiki sync unavailable — game continues without wiki" }, statusCode: 503);
-    }
-    catch (Exception ex)
-    {
-        return Results.Json(new { status = "degraded", service = "wiki.js", error = ex.Message, note = "Wiki sync unavailable — game continues without wiki" }, statusCode: 503);
     }
 });
 

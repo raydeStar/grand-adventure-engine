@@ -67,9 +67,10 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
             return Task.CompletedTask;
         };
 
-        _client.MessageReceived += HandleMessageAsync;
-        _client.SlashCommandExecuted += HandleSlashCommandAsync;
-        _client.Ready += OnReadyAsync;
+        // Fire-and-forget wrappers so handlers don't block the Discord gateway task
+        _client.MessageReceived += msg => { _ = Task.Run(() => HandleMessageAsync(msg)); return Task.CompletedTask; };
+        _client.SlashCommandExecuted += cmd => { _ = Task.Run(() => HandleSlashCommandAsync(cmd)); return Task.CompletedTask; };
+        _client.Ready += () => { _ = Task.Run(OnReadyAsync); return Task.CompletedTask; };
 
         await _client.LoginAsync(TokenType.Bot, _token);
         await _client.StartAsync();
