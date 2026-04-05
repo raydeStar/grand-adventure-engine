@@ -2257,9 +2257,15 @@ public class GameEngine : IGameEngine
         int baseAttackMod = player.GetModifier(attackStat);
         int proficiencyBonus = _rules.Combat.ProficiencyBaseBonus + (player.Level / _rules.Combat.ProficiencyScaleLevel);
 
+        // Round header
+        var primaryTarget = enemies.FirstOrDefault(e => e.Hp.HasValue && e.Hp.Value > 0 && room.Npcs.Contains(e));
+        int roundNum = (combat?.RoundNumber ?? 0) + 1;
+        mech.Add($"**Round {roundNum}** vs {primaryTarget?.Name ?? "???"}");
+        mech.Add("");
+
         for (int exchange = 0; exchange < ExchangesPerTurn && !combatOver; exchange++)
         {
-            if (exchange > 0) mech.Add("---"); // separator between exchanges
+            if (exchange > 0) mech.Add(""); // blank line between exchanges
 
             // Pick target (first alive enemy)
             Npc? target = null;
@@ -2396,8 +2402,11 @@ public class GameEngine : IGameEngine
             player.Gold += totalGold;
             player.Interaction.Reset();
             if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, ct);
-            if (totalXp > 0) mech.Add($"\nYou gain {totalXp} XP!");
-            if (totalGold > 0) mech.Add($"You find {totalGold} gold!");
+            // Rewards line
+            var rewards = new List<string>();
+            if (totalXp > 0) rewards.Add($"+{totalXp} XP");
+            if (totalGold > 0) rewards.Add($"+{totalGold} gold");
+            if (rewards.Count > 0) mech.Add($"\n**Rewards:** {string.Join(" | ", rewards)}");
             var lvlUp = CheckAndApplyLevelUp(player);
             if (lvlUp is not null) mech.Add(lvlUp);
         }
@@ -2411,7 +2420,7 @@ public class GameEngine : IGameEngine
                 if (!string.IsNullOrEmpty(momentum)) mech.Add(momentum);
             }
             AppendHpBars(mech, player, enemies, room);
-            mech.Add("*Commands: `attack` | `power attack` | `defend` | `aimed strike` | `use <potion>` | `flee`*");
+            mech.Add("> attack | power attack | defend | aimed strike | use <potion> | flee");
 
             if (combat is not null)
             {
@@ -3481,27 +3490,30 @@ public class GameEngine : IGameEngine
         return sb.ToString().TrimEnd();
     }
 
-    // ─── Combat Flavor ────────────────────────────────────────────────────
+    // ─── Combat Flavor (no damage numbers — HP bars tell the story) ─────
 
     private static readonly string[] PlayerHitVerbs = [
-        "You slash {0} for **{1}** damage!",
-        "You strike {0} — **{1}** damage!",
-        "Your blade bites into {0} for **{1}**!",
-        "You land a solid hit on {0} for **{1}**!",
-        "A clean strike catches {0} for **{1}** damage!",
-        "You drive your weapon into {0} — **{1}** damage!"
+        "You slash {0}!",
+        "You strike {0}!",
+        "Your blade bites into {0}!",
+        "You land a solid hit on {0}!",
+        "A clean strike catches {0}!",
+        "You drive your weapon into {0}!",
+        "You lash out at {0} — a direct hit!",
+        "Your weapon finds its mark on {0}!"
     ];
     private static readonly string[] PlayerCritVerbs = [
-        "💥 **CRITICAL HIT!** You devastate {0} for **{1}** damage!",
-        "💥 **CRITICAL!** You find a weak point — {0} takes **{1}** damage!",
-        "💥 **CRIT!** A bone-crushing blow smashes into {0} for **{1}**!",
-        "💥 **CRITICAL HIT!** Your weapon tears through {0}'s defenses — **{1}** damage!"
+        "**CRITICAL!** You devastate {0}!",
+        "**CRITICAL!** You find a weak point in {0}'s defenses!",
+        "**CRIT!** A bone-crushing blow smashes into {0}!",
+        "**CRITICAL!** Your weapon tears through {0}!",
+        "**CRIT!** A devastating blow lands on {0}!"
     ];
     private static readonly string[] PlayerGlanceVerbs = [
-        "You barely nick {0} for **{1}** damage.",
-        "A glancing blow scrapes {0} — **{1}** damage.",
-        "Your strike grazes {0} for **{1}**.",
-        "You clip {0} for **{1}** — barely enough to matter."
+        "You barely nick {0}.",
+        "A glancing blow scrapes {0}.",
+        "Your strike grazes {0}.",
+        "You clip {0} — barely a scratch."
     ];
     private static readonly string[] PlayerMissVerbs = [
         "{0} sidesteps your attack!",
@@ -3512,16 +3524,16 @@ public class GameEngine : IGameEngine
         "Your weapon cuts nothing but air!"
     ];
     private static readonly string[] PlayerFumbleVerbs = [
-        "You stumble, leaving yourself exposed! 💀 Critical miss!",
-        "Your grip slips mid-swing — fumble! 💀",
-        "You overcommit and nearly lose your footing! 💀 Fumble!",
-        "Your weapon catches on something — critical miss! 💀"
+        "You stumble, leaving yourself exposed!",
+        "Your grip slips mid-swing — fumble!",
+        "You overcommit and nearly lose your footing!",
+        "Your weapon catches on something — fumble!"
     ];
     private static readonly string[] EnemyHitVerbs = [
-        "{0} strikes you for **{1}**!",
-        "{0} lands a blow — **{1}** damage!",
-        "{0} connects hard — you take **{1}** damage!",
-        "{0} catches you off-guard for **{1}**!"
+        "{0} strikes you!",
+        "{0} lands a blow!",
+        "{0} connects hard!",
+        "{0} catches you off-guard!"
     ];
     private static readonly string[] EnemyMissVerbs = [
         "{0} swings and misses!",
@@ -3530,15 +3542,15 @@ public class GameEngine : IGameEngine
         "{0}'s strike goes wide!"
     ];
     private static readonly string[] KillVerbs = [
-        "⚔️ **{0} falls!** With a final strike, the fight is over.",
-        "⚔️ **{0} crumbles!** Your weapon finds its mark one last time.",
-        "⚔️ **{0} staggers... and collapses.** It's done.",
-        "⚔️ **{0} has been defeated!** The killing blow lands true."
+        "**{0} falls!** The fight is over.",
+        "**{0} crumbles!** Your weapon finds its mark one last time.",
+        "**{0} staggers... and collapses.** It's done.",
+        "**{0} has been defeated!** The killing blow lands true."
     ];
     private static readonly string[] DefeatVerbs = [
-        "💀 **You collapse!** Everything goes dark...",
-        "💀 **You fall!** The world fades to black...",
-        "💀 **Defeated!** Your vision tunnels as you hit the ground..."
+        "**You collapse!** Everything goes dark...",
+        "**You fall!** The world fades to black...",
+        "**Defeated!** Your vision tunnels as you hit the ground..."
     ];
 
     private static string PickFlavor(string[] pool, int seed)
@@ -3552,7 +3564,7 @@ public class GameEngine : IGameEngine
             RollOutcome.GlancingHit => PickFlavor(PlayerGlanceVerbs, seed),
             _ => PickFlavor(PlayerHitVerbs, seed)
         };
-        return string.Format(template, target, damage);
+        return string.Format(template, target);
     }
 
     private static string DescribePlayerMiss(string target, RollOutcome outcome, int seed)
@@ -3562,35 +3574,34 @@ public class GameEngine : IGameEngine
 
     private static string DescribeEnemyHit(string enemyName, int damage, bool isCrit, int seed)
     {
-        var verb = GetEnemyVerb(enemyName, damage, seed);
-        return isCrit ? $"💥 {verb} **CRIT!**" : verb;
+        var verb = GetEnemyVerb(enemyName, seed);
+        return isCrit ? $"**CRIT!** {verb}" : verb;
     }
 
-    private static string GetEnemyVerb(string name, int damage, int seed)
+    private static string GetEnemyVerb(string name, int seed)
     {
         var lower = name.ToLowerInvariant();
-        // Animal/beast enemies get special verbs
         if (lower.Contains("wolf") || lower.Contains("fang"))
         {
-            string[] wolfVerbs = [$"{name} sinks its fangs into you — **{damage}**!", $"{name} lunges with snapping jaws — **{damage}** damage!", $"{name} rakes you with claws — **{damage}**!"];
-            return PickFlavor(wolfVerbs, seed);
+            string[] pool = [$"{name} sinks its fangs into you!", $"{name} lunges with snapping jaws!", $"{name} rakes you with claws!"];
+            return PickFlavor(pool, seed);
         }
         if (lower.Contains("skeleton") || lower.Contains("hollow"))
         {
-            string[] skelVerbs = [$"{name} swings a rusty blade — **{damage}** damage!", $"{name} slashes with bony claws — **{damage}**!", $"{name} strikes with a corroded weapon — **{damage}** damage!"];
-            return PickFlavor(skelVerbs, seed);
+            string[] pool = [$"{name} swings a rusty blade!", $"{name} slashes with bony claws!", $"{name} strikes with a corroded weapon!"];
+            return PickFlavor(pool, seed);
         }
         if (lower.Contains("boar") || lower.Contains("tusk") || lower.Contains("goretusk"))
         {
-            string[] boarVerbs = [$"{name} gores you with massive tusks — **{damage}**!", $"{name} charges, slamming into you — **{damage}** damage!", $"{name} rams you with terrifying force — **{damage}**!"];
-            return PickFlavor(boarVerbs, seed);
+            string[] pool = [$"{name} gores you with massive tusks!", $"{name} charges, slamming into you!", $"{name} rams you with terrifying force!"];
+            return PickFlavor(pool, seed);
         }
         if (lower.Contains("cultist") || lower.Contains("acolyte"))
         {
-            string[] cultVerbs = [$"{name} slashes at you with dark energy — **{damage}**!", $"{name} channels malice into a strike — **{damage}** damage!", $"{name} lashes out with a cruel blow — **{damage}**!"];
-            return PickFlavor(cultVerbs, seed);
+            string[] pool = [$"{name} slashes at you with dark energy!", $"{name} channels malice into a strike!", $"{name} lashes out with a cruel blow!"];
+            return PickFlavor(pool, seed);
         }
-        return string.Format(PickFlavor(EnemyHitVerbs, seed), name, damage);
+        return string.Format(PickFlavor(EnemyHitVerbs, seed), name);
     }
 
     private static string DescribeEnemyMiss(string enemyName, int seed)
@@ -3608,9 +3619,9 @@ public class GameEngine : IGameEngine
     {
         double playerPct = (double)playerHp / playerMaxHp;
         double enemyPct = (double)enemyHp / enemyMaxHp;
-        if (enemyPct <= 0.25 && playerPct > 0.3) return "💪 *You sense victory is close!*";
-        if (playerPct <= 0.25 && enemyPct > 0.3) return "🩸 *Things are looking grim... you need to heal or flee!*";
-        if (playerPct <= 0.15) return "⚠️ *You're barely standing!*";
+        if (enemyPct <= 0.25 && playerPct > 0.3) return "*You sense victory is close!*";
+        if (playerPct <= 0.25 && enemyPct > 0.3) return "*Things are looking grim... heal or flee!*";
+        if (playerPct <= 0.15) return "*You're barely standing!*";
         return "";
     }
 
@@ -3650,13 +3661,16 @@ public class GameEngine : IGameEngine
         }
     }
 
-    /// <summary>Generates ASCII HP bars for all combatants.</summary>
+    /// <summary>Generates a code-block HP bar panel for all combatants (console-style).</summary>
     private static void AppendHpBars(List<string> mech, PlayerCharacter player, List<Npc> enemies, Room room)
     {
-        mech.Add(""); // blank line separator
-        mech.Add(FormatHpBar(player.Name, player.Hp, player.MaxHp));
+        var sb = new StringBuilder();
+        sb.AppendLine("```");
+        sb.AppendLine(FormatHpBar(player.Name, player.Hp, player.MaxHp));
         foreach (var enemy in enemies.Where(e => e.Hp.HasValue && e.Hp.Value > 0 && room.Npcs.Contains(e)))
-            mech.Add(FormatHpBar(enemy.Name, enemy.Hp!.Value, enemy.MaxHp ?? enemy.Hp!.Value));
+            sb.AppendLine(FormatHpBar(enemy.Name, enemy.Hp!.Value, enemy.MaxHp ?? enemy.Hp!.Value));
+        sb.Append("```");
+        mech.Add(sb.ToString());
     }
 
     private static string FormatHpBar(string name, int hp, int maxHp)
@@ -3665,7 +3679,7 @@ public class GameEngine : IGameEngine
         int filled = maxHp > 0 ? (int)Math.Round((double)hp / maxHp * BarWidth) : 0;
         filled = Math.Clamp(filled, 0, BarWidth);
         var bar = new string('#', filled) + new string('-', BarWidth - filled);
-        return $"  {name,-20} [{bar}] {hp}/{maxHp} HP";
+        return $"  {name,-18} [{bar}] {hp,3}/{maxHp} HP";
     }
 
     // ─── Auto-Equip Helper ────────────────────────────────────────────────
