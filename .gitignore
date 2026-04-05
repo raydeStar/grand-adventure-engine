@@ -35,3 +35,6 @@ config/appsettings.Production.json
 data/
 src/GAE.Dashboard.Api/artifacts/
 ux-scout-dashboard.png
+
+## Temporary test/playtest scripts
+tmp_*.py
