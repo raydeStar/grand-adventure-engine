@@ -723,22 +723,21 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
             narration = $"❌ **Failed!** {narration}";
         embed.WithDescription(narration);
 
-        // Dice rolls as a field
+        // Dice rolls hidden in a spoiler to keep the output clean
         if (result.DiceRolls.Count > 0)
         {
             var rollLines = result.DiceRolls.Select(roll =>
             {
-                var rollStr = $"🎲 [{string.Join(", ", roll.IndividualRolls)}]";
-                if (roll.Modifier != 0)
-                    rollStr += $" {(roll.Modifier > 0 ? "+" : "")}{roll.Modifier}";
-                rollStr += $" = **{roll.Total}**";
+                var rollStr = $"🎲 {roll.Total}";
                 if (roll.TargetNumber.HasValue)
                     rollStr += $" vs {roll.TargetNumber}";
                 rollStr += $" ({roll.Purpose})";
                 rollStr += FormatOutcomeBadge(roll);
                 return rollStr;
             });
-            embed.AddField("Rolls", string.Join("\n", rollLines));
+            var rollText = string.Join("\n", rollLines);
+            if (rollText.Length <= 1024)
+                embed.AddField("Rolls", $"||{rollText}||");
         }
 
         // Rewards & changes inline
@@ -824,61 +823,62 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
     private async Task SendCombatResultAsync(SocketThreadChannel thread, PlayerCharacter player, ActionResult result)
     {
         var combatStatus = result.InteractionUpdate?.CombatStatus ?? "ongoing";
-        var embedColor = combatStatus switch
-        {
-            "victory" => Color.Gold,
-            "defeat" => Color.DarkRed,
-            "fled" => Color.LightGrey,
-            _ => new Color(0xcc, 0x33, 0x33) // Combat red
-        };
 
-        var embed = new EmbedBuilder()
-            .WithTitle(combatStatus switch
+        // Use the mechanical summary as the primary combat text — it already contains
+        // round headers, narrative flavor, code-block HP bars, and command hints.
+        // Send as a plain message so there's no embed description limit (4096 char)
+        // and it renders like a console game.
+        var text = result.MechanicalSummary ?? "";
+
+        if (combatStatus is "victory" or "defeat" or "fled")
+        {
+            // Terminal states: send as an embed for visual pop
+            var embedColor = combatStatus switch
+            {
+                "victory" => Color.Gold,
+                "defeat" => Color.DarkRed,
+                "fled" => Color.LightGrey,
+                _ => new Color(0xcc, 0x33, 0x33)
+            };
+            var title = combatStatus switch
             {
                 "victory" => "⚔️ Victory!",
                 "defeat" => "💀 Defeated...",
                 "fled" => "🏃 Fled!",
                 _ => "⚔️ Combat"
-            })
-            .WithColor(embedColor);
+            };
 
-        // Narration as description
-        embed.WithDescription(result.Narration ?? result.MechanicalSummary);
+            // For terminal states, send the narrative as plain text first, then a small embed
+            if (!string.IsNullOrWhiteSpace(text))
+                await SendChunkedAsync(thread, text);
 
-        // Dice rolls
-        if (result.DiceRolls.Count > 0)
-        {
-            var rollLines = result.DiceRolls.Select(roll =>
-            {
-                var rollStr = $"🎲 [{string.Join(", ", roll.IndividualRolls)}]";
-                if (roll.Modifier != 0)
-                    rollStr += $" {(roll.Modifier > 0 ? "+" : "")}{roll.Modifier}";
-                rollStr += $" = **{roll.Total}**";
-                if (roll.TargetNumber.HasValue)
-                    rollStr += $" vs {roll.TargetNumber}";
-                rollStr += $" ({roll.Purpose})";
-                rollStr += FormatOutcomeBadge(roll);
-                return rollStr;
-            });
-            embed.AddField("Rolls", string.Join("\n", rollLines));
+            var embed = new EmbedBuilder()
+                .WithTitle(title)
+                .WithColor(embedColor)
+                .WithFooter(FormatStatusBar(player));
+
+            // Rewards in the embed
+            var rewards = new List<string>();
+            if (result.XpGained > 0) rewards.Add($"⭐ +{result.XpGained} XP");
+            if (result.GoldChange > 0) rewards.Add($"💰 +{result.GoldChange} gold");
+            foreach (var item in result.ItemsGained)
+                rewards.Add($"🎁 {item.Name}");
+            if (rewards.Count > 0)
+                embed.WithDescription(string.Join("\n", rewards));
+
+            await thread.SendMessageAsync(embed: embed.Build());
+
+            if (result.IsVictory)
+                await SendVictoryAnnouncementAsync(thread, player);
         }
-
-        // Rewards
-        var rewards = new List<string>();
-        if (result.XpGained > 0) rewards.Add($"⭐ +{result.XpGained} XP");
-        if (result.GoldChange > 0) rewards.Add($"💰 +{result.GoldChange} gold");
-        foreach (var item in result.ItemsGained)
-            rewards.Add($"🎁 {item.Name}");
-        if (rewards.Count > 0)
-            embed.AddField("Rewards", string.Join("\n", rewards), inline: true);
-
-        embed.WithFooter(FormatStatusBar(player));
-
-        await thread.SendMessageAsync(embed: embed.Build());
-
-        // Victory check
-        if (result.IsVictory)
-            await SendVictoryAnnouncementAsync(thread, player);
+        else
+        {
+            // Ongoing combat: send as plain text for clean console-style rendering
+            if (!string.IsNullOrWhiteSpace(text))
+                await SendChunkedAsync(thread, text);
+            else
+                await thread.SendMessageAsync("*Combat continues...*");
+        }
     }
 
     private async Task SendVictoryAnnouncementAsync(SocketThreadChannel thread, PlayerCharacter player)
