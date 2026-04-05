@@ -56,7 +56,7 @@ public class GameFlowTests : IClassFixture<GaeWebApplicationFactory>
     }
 
     [Fact]
-    public async Task PostAction_Look_DoesNotReturnRoomMetadataBlock()
+    public async Task PostAction_Look_ReturnsRoomDescription()
     {
         await CreateTestCharacterAsync("flow-player-look");
 
@@ -71,9 +71,8 @@ public class GameFlowTests : IClassFixture<GaeWebApplicationFactory>
         Assert.True(result.GetProperty("success").GetBoolean());
 
         var summary = result.GetProperty("mechanicalSummary").GetString()!;
-        Assert.Equal(string.Empty, summary);
-        Assert.DoesNotContain("The Rusted Flagon", summary);
-        Assert.DoesNotContain("Exits:", summary);
+        Assert.Contains("The Rusted Flagon", summary);
+        Assert.Contains("Exits:", summary);
     }
 
     [Fact]

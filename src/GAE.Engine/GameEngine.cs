@@ -1,3 +1,4 @@
+using System.Text;
 using GAE.Core.Interfaces;
 using GAE.Core.Models;
 using GAE.Core.Registry;
@@ -51,15 +52,20 @@ public class GameEngine : IGameEngine
         // (fixes existing characters created before level scaling was added)
         RecalculateMaxHpMp(player);
 
-        // Dead players can't do anything — they need to be revived first
+        // Dead players auto-respawn at the tavern with penalties
         if (!player.IsAlive)
         {
+            var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
+            room ??= new Room { Id = player.CurrentRoomId, Name = "Unknown" };
+            var (deathSummary, deathChanges) = await HandlePlayerDeathAsync(player, room, "their wounds", ct);
             return new ActionResult
             {
                 ActionId = action.Id,
                 RawInput = action.RawInput,
-                Success = false,
-                MechanicalSummary = $"{player.Name} is dead! You cannot take any actions while dead. An admin must revive you, or another player must use a resurrection ability."
+                Success = true,
+                MechanicalSummary = deathSummary,
+                StateChanges = deathChanges,
+                InteractionUpdate = new InteractionUpdate { Mode = InteractionMode.Explore }
             };
         }
 
@@ -98,6 +104,7 @@ public class GameEngine : IGameEngine
             ActionType.Look => await ProcessLookAsync(player, action, ct),
             ActionType.Attack or ActionType.PowerAttack or ActionType.AimedStrike => await ProcessAttackAsync(player, action, ct),
             ActionType.Defend => new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "You can only defend during combat." },
+            ActionType.Flee => new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "You're not in combat — nothing to flee from." },
             ActionType.Talk => await ProcessTalkAsync(player, action, ct),
             ActionType.Take => await ProcessTakeAsync(player, action, ct),
             ActionType.Drop => await ProcessDropAsync(player, action, ct),
@@ -401,11 +408,13 @@ public class GameEngine : IGameEngine
         var oldRoomId = player.CurrentRoomId;
         player.CurrentRoomId = simpleTargetId;
 
+        var moveSummary = BuildRoomSummary($"You move {direction} to **{targetRoom.Name}**.", targetRoom);
+
         return new ActionResult
         {
             ActionId = action.Id,
             Success = true,
-            MechanicalSummary = $"You move {direction} to {targetRoom.Name}.",
+            MechanicalSummary = moveSummary,
             NewRoom = targetRoom,
             StateChanges = [new StateChange
             {
@@ -421,29 +430,67 @@ public class GameEngine : IGameEngine
         if (room is null)
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "You can't see anything." };
 
+        // Room look (no target or "look around")
         if (string.IsNullOrWhiteSpace(action.Target) || TargetReferencesRoom(room, action.Target))
-            return new ActionResult { ActionId = action.Id, Success = true, MechanicalSummary = string.Empty };
+        {
+            var summary = BuildRoomSummary($"**{room.Name}**", room);
+            if (room.Id == "spawn")
+                summary += "\n\n*Type `help` for a list of commands, or `go east` to explore Thornwall.*";
+            return new ActionResult { ActionId = action.Id, Success = true, MechanicalSummary = summary };
+        }
 
+        // Look at NPC
         var npc = FindNamedEntity(room.Npcs, candidate => candidate.Name, action.Target);
         if (npc is not null)
-            return new ActionResult { ActionId = action.Id, Success = true, MechanicalSummary = string.Empty };
+        {
+            var npcDesc = new StringBuilder($"**{npc.Name}**");
+            if (!string.IsNullOrWhiteSpace(npc.Personality))
+                npcDesc.Append($" — {TrimToFirstSentence(npc.Personality)}");
+            if (npc.IsHostile) npcDesc.Append("\n⚠️ *Hostile*");
+            if (npc.IsShopkeeper) npcDesc.Append("\n🛒 *Shopkeeper — type `shop` to browse wares*");
+            if (npc.Hp.HasValue) npcDesc.Append($"\n{FormatHpBar(npc.Name, npc.Hp.Value, npc.MaxHp ?? npc.Hp.Value)}");
+            return new ActionResult { ActionId = action.Id, Success = true, MechanicalSummary = npcDesc.ToString() };
+        }
 
+        // Look at item in room
         var item = FindNamedEntity(room.Items, candidate => candidate.Name, action.Target);
         if (item is not null)
-            return new ActionResult { ActionId = action.Id, Success = true, MechanicalSummary = string.Empty };
+        {
+            var desc = !string.IsNullOrWhiteSpace(item.Description) ? item.Description : "Nothing remarkable about it.";
+            var itemText = $"**{item.Name}**{(item.Quantity > 1 ? $" (x{item.Quantity})" : "")} — {desc}";
+            if (item.Value > 0) itemText += $"\nWorth about {item.Value} gold.";
+            return new ActionResult { ActionId = action.Id, Success = true, MechanicalSummary = itemText };
+        }
 
         // Check player's inventory
         var invItem = FindNamedEntity(player.Inventory, candidate => candidate.Name, action.Target);
         if (invItem is not null)
-            return new ActionResult { ActionId = action.Id, Success = true, MechanicalSummary = string.Empty };
+        {
+            var desc = !string.IsNullOrWhiteSpace(invItem.Description) ? invItem.Description : "A useful item.";
+            var invText = $"**{invItem.Name}** (in your bag) — {desc}";
+            if (invItem.Value > 0) invText += $"\nWorth about {invItem.Value} gold.";
+            return new ActionResult { ActionId = action.Id, Success = true, MechanicalSummary = invText };
+        }
 
         // Check player's equipped items
         var equippedItems = player.Equipment.AllEquipped();
         var eqItem = FindNamedEntity(equippedItems, candidate => candidate.Name, action.Target);
         if (eqItem is not null)
-            return new ActionResult { ActionId = action.Id, Success = true, MechanicalSummary = string.Empty };
+        {
+            var desc = !string.IsNullOrWhiteSpace(eqItem.Description) ? eqItem.Description : "Currently equipped.";
+            var eqText = $"**{eqItem.Name}** (equipped) — {desc}";
+            if (eqItem.DamageDice is not null) eqText += $"\nDamage: {eqItem.DamageDice}";
+            return new ActionResult { ActionId = action.Id, Success = true, MechanicalSummary = eqText };
+        }
 
-        return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"'{action.Target}' was not found in the room or your inventory." };
+        return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"You don't see '{action.Target}' anywhere nearby." };
+    }
+
+    private static string TrimToFirstSentence(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return text;
+        var idx = text.IndexOfAny(['.', '!', '?']);
+        return idx >= 0 ? text[..(idx + 1)] : text;
     }
 
     private async Task<ActionResult> ProcessAttackAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
@@ -509,12 +556,13 @@ public class GameEngine : IGameEngine
             DiceRolls = advantage ? extraRolls : [attackRoll]
         };
 
+        int initSeed = target.Name.Length * 7 + attackRoll.Total;
+        string combatOpener = $"⚔️ **You engage {target.Name}!**\n";
+
         if (outcome == RollOutcome.CriticalMiss || outcome == RollOutcome.Miss)
         {
             result.Success = true;
-            result.MechanicalSummary = outcome == RollOutcome.CriticalMiss
-                ? $"You fumble your attack against {target.Name}! Critical miss!"
-                : $"You attack {target.Name} (rolled {attackRoll.Total} vs defense {targetDefense}) and miss!";
+            result.MechanicalSummary = combatOpener + DescribePlayerMiss(target.Name, outcome, initSeed);
 
             // Even on a miss, enter combat so the enemy can fight back
             if (target.IsHostile || (target.Hp.HasValue && target.Hp.Value > 0))
@@ -553,25 +601,19 @@ public class GameEngine : IGameEngine
             });
         }
 
-        string outcomeText = outcome switch
-        {
-            RollOutcome.CriticalHit => " **CRITICAL HIT!**",
-            RollOutcome.GlancingHit => " (glancing blow)",
-            _ => ""
-        };
         result.Success = true;
-        result.MechanicalSummary = $"You attack {target.Name} (rolled {attackRoll.Total} vs defense {targetDefense}) and deal {totalDamage} damage!{outcomeText}";
+        result.MechanicalSummary = combatOpener + DescribePlayerHit(target.Name, totalDamage, outcome, initSeed);
 
         // Check if NPC is dead
         if (target.Hp.HasValue && target.Hp.Value <= 0)
         {
-            result.MechanicalSummary += $"\n{target.Name} has been defeated!";
+            result.MechanicalSummary += "\n" + PickFlavor(KillVerbs, initSeed + 99).Replace("{0}", target.Name);
 
             // XP reward
             int xpGain = target.Level * 10;
             player.Xp += xpGain;
             result.XpGained = xpGain;
-            result.MechanicalSummary += $"\nYou gain {xpGain} XP!";
+            result.MechanicalSummary += $"\n⭐ You gain {xpGain} XP!";
 
             // Check for level-up
             var levelUpMsg = CheckAndApplyLevelUp(player);
@@ -585,7 +627,7 @@ public class GameEngine : IGameEngine
                 int goldAmount = goldDrop.Total + (target.Level * 2);
                 player.Gold += goldAmount;
                 result.GoldChange = goldAmount;
-                result.MechanicalSummary += $"\nYou find {goldAmount} gold!";
+                result.MechanicalSummary += $"\n💰 You find {goldAmount} gold!";
             }
 
             // Drop NPC loot table items
@@ -594,7 +636,7 @@ public class GameEngine : IGameEngine
                 var clone = CloneInventoryItem(lootItem, Math.Max(1, lootItem.Quantity));
                 player.Inventory.Add(clone);
                 result.ItemsGained.Add(clone);
-                result.MechanicalSummary += $"\nYou receive {lootItem.Name}!";
+                result.MechanicalSummary += $"\n🎁 {lootItem.Name}!";
             }
 
             room.Npcs.Remove(target);
@@ -2121,8 +2163,7 @@ public class GameEngine : IGameEngine
         }
 
         // ─── Flee ───
-        var rawLower = action.RawInput.Trim().ToLowerInvariant();
-        if (rawLower is "flee" or "run" or "escape" or "run away")
+        if (action.Type == ActionType.Flee)
         {
             int totalOppDamage = 0; var diceRolls = new List<DiceRoll>();
             foreach (var enemy in enemies.Where(e => e.Hp.HasValue && e.Hp.Value > 0))
@@ -2252,13 +2293,11 @@ public class GameEngine : IGameEngine
             attackRoll.Outcome = outcome;
             attackRoll.TargetNumber = targetDefense;
 
-            if (outcome == RollOutcome.CriticalMiss)
+            int flavorSeed = exchange * 7 + (target.Name.Length * 13) + (combat?.RoundNumber ?? 0) * 3;
+
+            if (outcome == RollOutcome.CriticalMiss || outcome == RollOutcome.Miss)
             {
-                mech.Add($"You fumble against {target.Name}! Critical miss!");
-            }
-            else if (outcome == RollOutcome.Miss)
-            {
-                mech.Add($"You swing at {target.Name} ({attackRoll.Total} vs {targetDefense}) — miss!");
+                mech.Add(DescribePlayerMiss(target.Name, outcome, flavorSeed));
             }
             else
             {
@@ -2281,13 +2320,12 @@ public class GameEngine : IGameEngine
                     allSC.Add(new StateChange { EntityType = "Npc", EntityId = target.Id, Property = "Hp", OldValue = oldHp.ToString(), NewValue = target.Hp.Value.ToString() });
                 }
 
-                string outcomeText = outcome switch { RollOutcome.CriticalHit => " **CRIT!**", RollOutcome.GlancingHit => " (glancing)", _ => "" };
-                mech.Add($"You hit {target.Name} for {totalDamage}!{outcomeText}");
+                mech.Add(DescribePlayerHit(target.Name, totalDamage, outcome, flavorSeed));
 
                 // Target killed?
                 if (target.Hp.HasValue && target.Hp.Value <= 0)
                 {
-                    mech.Add($"**{target.Name} has been defeated!**");
+                    mech.Add(PickFlavor(KillVerbs, flavorSeed + 99).Replace("{0}", target.Name));
                     totalXp += target.Level * 10;
                     if (_dice.Roll("1d100", "Loot").Total <= (int)(_rules.Loot.EnemyDropChance * 100))
                         totalGold += _dice.Roll("1d20", "Gold").Total + (target.Level * 2);
@@ -2295,7 +2333,7 @@ public class GameEngine : IGameEngine
                     {
                         var clone = CloneInventoryItem(lootItem, Math.Max(1, lootItem.Quantity));
                         player.Inventory.Add(clone); totalLoot.Add(clone);
-                        mech.Add($"  Loot: {lootItem.Name}!");
+                        mech.Add($"  🎁 {lootItem.Name}!");
                     }
                     room.Npcs.Remove(target);
                     combat?.TurnOrder.RemoveAll(t => t.Id == target.Id);
@@ -2312,12 +2350,13 @@ public class GameEngine : IGameEngine
             // ── Enemy counterattacks ──
             foreach (var enemy in enemies.Where(e => e.Hp.HasValue && e.Hp.Value > 0 && room.Npcs.Contains(e)))
             {
+                int eSeed = flavorSeed + enemy.Name.Length * 5;
                 int atkBonus = enemy.AttackBonus ?? 0;
                 var eRoll = _dice.RollAttack(atkBonus);
                 allDice.Add(eRoll);
 
-                if (eRoll.IsFumble) { mech.Add($"{enemy.Name} fumbles!"); continue; }
-                if (eRoll.Total < player.Defense && !eRoll.IsCritical) { mech.Add($"{enemy.Name} misses! ({eRoll.Total} vs {player.Defense})"); continue; }
+                if (eRoll.IsFumble) { mech.Add($"{enemy.Name} stumbles — fumble! 💀"); continue; }
+                if (eRoll.Total < player.Defense && !eRoll.IsCritical) { mech.Add(DescribeEnemyMiss(enemy.Name, eSeed)); continue; }
 
                 string eDmgDice = enemy.DamageDice ?? "1d4";
                 var eDmgRoll = _dice.Roll(eDmgDice, $"{enemy.Name} dmg");
@@ -2328,9 +2367,9 @@ public class GameEngine : IGameEngine
                 var oldPHp = player.Hp;
                 player.Hp = Math.Max(0, player.Hp - eDmg);
                 allSC.Add(new StateChange { EntityType = "Player", EntityId = player.Id, Property = "Hp", OldValue = oldPHp.ToString(), NewValue = player.Hp.ToString() });
-                mech.Add($"{enemy.Name} hits you for {eDmg}!{(eRoll.IsCritical ? " **CRIT!**" : "")}");
+                mech.Add(DescribeEnemyHit(enemy.Name, eDmg, eRoll.IsCritical, eSeed));
 
-                if (player.Hp <= 0) { mech.Add("**You have been defeated!**"); combatOver = true; break; }
+                if (player.Hp <= 0) { mech.Add(PickFlavor(DefeatVerbs, eSeed)); combatOver = true; break; }
             }
         }
 
@@ -2343,6 +2382,12 @@ public class GameEngine : IGameEngine
             combatStatus = "defeat";
             player.Interaction.Reset();
             if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, ct);
+            // Auto-respawn at tavern with penalties
+            var killer = enemies.FirstOrDefault(e => e.Hp.HasValue && e.Hp.Value > 0)?.Name ?? "the enemy";
+            var (deathMsg, deathChanges) = await HandlePlayerDeathAsync(player, room, killer, ct);
+            mech.Add("");
+            mech.Add(deathMsg);
+            allSC.AddRange(deathChanges);
         }
         else if (allEnemiesAlive.Count == 0)
         {
@@ -2358,7 +2403,13 @@ public class GameEngine : IGameEngine
         }
         else
         {
-            // Show HP bars and options hint
+            // Momentum indicator + HP bars
+            var primaryEnemy = allEnemiesAlive.FirstOrDefault();
+            if (primaryEnemy?.Hp.HasValue == true)
+            {
+                var momentum = GetMomentumText(player.Hp, player.MaxHp, primaryEnemy.Hp.Value, primaryEnemy.MaxHp ?? primaryEnemy.Hp.Value);
+                if (!string.IsNullOrEmpty(momentum)) mech.Add(momentum);
+            }
             AppendHpBars(mech, player, enemies, room);
             mech.Add("*Commands: `attack` | `power attack` | `defend` | `aimed strike` | `use <potion>` | `flee`*");
 
@@ -3396,6 +3447,173 @@ public class GameEngine : IGameEngine
         return convoResult;
     }
 
+    // ─── Room Description Helper ─────────────────────────────────────────
+
+    private static string BuildRoomSummary(string header, Room room)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(header);
+        if (!string.IsNullOrWhiteSpace(room.Description))
+        {
+            sb.AppendLine();
+            sb.AppendLine(room.Description.Trim());
+        }
+        if (room.Npcs.Count > 0)
+        {
+            sb.AppendLine();
+            foreach (var npc in room.Npcs)
+            {
+                var icon = npc.IsHostile ? "!" : npc.IsShopkeeper ? "$" : "-";
+                sb.AppendLine($"  {icon} {npc.Name}");
+            }
+        }
+        if (room.Items.Count > 0)
+        {
+            foreach (var item in room.Items)
+                sb.AppendLine($"  * {item.Name}{(item.Quantity > 1 ? $" (x{item.Quantity})" : "")}");
+        }
+        if (room.Exits.Count > 0)
+        {
+            sb.AppendLine();
+            sb.Append("**Exits:** ");
+            sb.AppendLine(string.Join(", ", room.Exits.Keys));
+        }
+        return sb.ToString().TrimEnd();
+    }
+
+    // ─── Combat Flavor ────────────────────────────────────────────────────
+
+    private static readonly string[] PlayerHitVerbs = [
+        "You slash {0} for **{1}** damage!",
+        "You strike {0} — **{1}** damage!",
+        "Your blade bites into {0} for **{1}**!",
+        "You land a solid hit on {0} for **{1}**!",
+        "A clean strike catches {0} for **{1}** damage!",
+        "You drive your weapon into {0} — **{1}** damage!"
+    ];
+    private static readonly string[] PlayerCritVerbs = [
+        "💥 **CRITICAL HIT!** You devastate {0} for **{1}** damage!",
+        "💥 **CRITICAL!** You find a weak point — {0} takes **{1}** damage!",
+        "💥 **CRIT!** A bone-crushing blow smashes into {0} for **{1}**!",
+        "💥 **CRITICAL HIT!** Your weapon tears through {0}'s defenses — **{1}** damage!"
+    ];
+    private static readonly string[] PlayerGlanceVerbs = [
+        "You barely nick {0} for **{1}** damage.",
+        "A glancing blow scrapes {0} — **{1}** damage.",
+        "Your strike grazes {0} for **{1}**.",
+        "You clip {0} for **{1}** — barely enough to matter."
+    ];
+    private static readonly string[] PlayerMissVerbs = [
+        "{0} sidesteps your attack!",
+        "You swing wide — {0} dodges!",
+        "Your strike glances off {0}'s guard!",
+        "{0} ducks under your swing!",
+        "You lunge at {0}, but miss!",
+        "Your weapon cuts nothing but air!"
+    ];
+    private static readonly string[] PlayerFumbleVerbs = [
+        "You stumble, leaving yourself exposed! 💀 Critical miss!",
+        "Your grip slips mid-swing — fumble! 💀",
+        "You overcommit and nearly lose your footing! 💀 Fumble!",
+        "Your weapon catches on something — critical miss! 💀"
+    ];
+    private static readonly string[] EnemyHitVerbs = [
+        "{0} strikes you for **{1}**!",
+        "{0} lands a blow — **{1}** damage!",
+        "{0} connects hard — you take **{1}** damage!",
+        "{0} catches you off-guard for **{1}**!"
+    ];
+    private static readonly string[] EnemyMissVerbs = [
+        "{0} swings and misses!",
+        "You dodge {0}'s attack!",
+        "{0} lunges but you sidestep!",
+        "{0}'s strike goes wide!"
+    ];
+    private static readonly string[] KillVerbs = [
+        "⚔️ **{0} falls!** With a final strike, the fight is over.",
+        "⚔️ **{0} crumbles!** Your weapon finds its mark one last time.",
+        "⚔️ **{0} staggers... and collapses.** It's done.",
+        "⚔️ **{0} has been defeated!** The killing blow lands true."
+    ];
+    private static readonly string[] DefeatVerbs = [
+        "💀 **You collapse!** Everything goes dark...",
+        "💀 **You fall!** The world fades to black...",
+        "💀 **Defeated!** Your vision tunnels as you hit the ground..."
+    ];
+
+    private static string PickFlavor(string[] pool, int seed)
+        => pool[Math.Abs(seed) % pool.Length];
+
+    private static string DescribePlayerHit(string target, int damage, RollOutcome outcome, int seed)
+    {
+        var template = outcome switch
+        {
+            RollOutcome.CriticalHit => PickFlavor(PlayerCritVerbs, seed),
+            RollOutcome.GlancingHit => PickFlavor(PlayerGlanceVerbs, seed),
+            _ => PickFlavor(PlayerHitVerbs, seed)
+        };
+        return string.Format(template, target, damage);
+    }
+
+    private static string DescribePlayerMiss(string target, RollOutcome outcome, int seed)
+        => outcome == RollOutcome.CriticalMiss
+            ? PickFlavor(PlayerFumbleVerbs, seed)
+            : string.Format(PickFlavor(PlayerMissVerbs, seed), target);
+
+    private static string DescribeEnemyHit(string enemyName, int damage, bool isCrit, int seed)
+    {
+        var verb = GetEnemyVerb(enemyName, damage, seed);
+        return isCrit ? $"💥 {verb} **CRIT!**" : verb;
+    }
+
+    private static string GetEnemyVerb(string name, int damage, int seed)
+    {
+        var lower = name.ToLowerInvariant();
+        // Animal/beast enemies get special verbs
+        if (lower.Contains("wolf") || lower.Contains("fang"))
+        {
+            string[] wolfVerbs = [$"{name} sinks its fangs into you — **{damage}**!", $"{name} lunges with snapping jaws — **{damage}** damage!", $"{name} rakes you with claws — **{damage}**!"];
+            return PickFlavor(wolfVerbs, seed);
+        }
+        if (lower.Contains("skeleton") || lower.Contains("hollow"))
+        {
+            string[] skelVerbs = [$"{name} swings a rusty blade — **{damage}** damage!", $"{name} slashes with bony claws — **{damage}**!", $"{name} strikes with a corroded weapon — **{damage}** damage!"];
+            return PickFlavor(skelVerbs, seed);
+        }
+        if (lower.Contains("boar") || lower.Contains("tusk") || lower.Contains("goretusk"))
+        {
+            string[] boarVerbs = [$"{name} gores you with massive tusks — **{damage}**!", $"{name} charges, slamming into you — **{damage}** damage!", $"{name} rams you with terrifying force — **{damage}**!"];
+            return PickFlavor(boarVerbs, seed);
+        }
+        if (lower.Contains("cultist") || lower.Contains("acolyte"))
+        {
+            string[] cultVerbs = [$"{name} slashes at you with dark energy — **{damage}**!", $"{name} channels malice into a strike — **{damage}** damage!", $"{name} lashes out with a cruel blow — **{damage}**!"];
+            return PickFlavor(cultVerbs, seed);
+        }
+        return string.Format(PickFlavor(EnemyHitVerbs, seed), name, damage);
+    }
+
+    private static string DescribeEnemyMiss(string enemyName, int seed)
+    {
+        var lower = enemyName.ToLowerInvariant();
+        if (lower.Contains("wolf") || lower.Contains("fang"))
+        {
+            string[] pool = [$"{enemyName} snaps at you but bites air!", $"You leap back from {enemyName}'s jaws!", $"{enemyName} pounces — you roll aside!"];
+            return PickFlavor(pool, seed);
+        }
+        return string.Format(PickFlavor(EnemyMissVerbs, seed), enemyName);
+    }
+
+    private static string GetMomentumText(int playerHp, int playerMaxHp, int enemyHp, int enemyMaxHp)
+    {
+        double playerPct = (double)playerHp / playerMaxHp;
+        double enemyPct = (double)enemyHp / enemyMaxHp;
+        if (enemyPct <= 0.25 && playerPct > 0.3) return "💪 *You sense victory is close!*";
+        if (playerPct <= 0.25 && enemyPct > 0.3) return "🩸 *Things are looking grim... you need to heal or flee!*";
+        if (playerPct <= 0.15) return "⚠️ *You're barely standing!*";
+        return "";
+    }
+
     // ─── Combat Helpers ────────────────────────────────────────────────────
 
     /// <summary>Runs a single round of enemy attacks against the player.</summary>
@@ -3403,15 +3621,17 @@ public class GameEngine : IGameEngine
         List<string> mech, List<DiceRoll> dice, List<StateChange> sc, int defenseBonus)
     {
         int effectiveDefense = player.Defense + defenseBonus;
+        int idx = 0;
         foreach (var enemy in enemies.Where(e => e.Hp.HasValue && e.Hp.Value > 0 && room.Npcs.Contains(e)))
         {
+            int eSeed = idx * 11 + enemy.Name.Length * 3;
             int atkBonus = enemy.AttackBonus ?? 0;
             var eRoll = _dice.RollAttack(atkBonus);
             dice.Add(eRoll);
 
-            if (eRoll.IsFumble) { mech.Add($"{enemy.Name} fumbles!"); continue; }
+            if (eRoll.IsFumble) { mech.Add($"{enemy.Name} stumbles — fumble! 💀"); idx++; continue; }
             if (eRoll.Total < effectiveDefense && !eRoll.IsCritical)
-            { mech.Add($"{enemy.Name} misses! ({eRoll.Total} vs {effectiveDefense})"); continue; }
+            { mech.Add(DescribeEnemyMiss(enemy.Name, eSeed)); idx++; continue; }
 
             string eDmgDice = enemy.DamageDice ?? "1d4";
             var eDmgRoll = _dice.Roll(eDmgDice, $"{enemy.Name} dmg");
@@ -3423,9 +3643,10 @@ public class GameEngine : IGameEngine
             player.Hp = Math.Max(0, player.Hp - eDmg);
             sc.Add(new StateChange { EntityType = "Player", EntityId = player.Id, Property = "Hp",
                 OldValue = oldHp.ToString(), NewValue = player.Hp.ToString() });
-            mech.Add($"{enemy.Name} hits you for {eDmg}!{(eRoll.IsCritical ? " **CRIT!**" : "")}");
+            mech.Add(DescribeEnemyHit(enemy.Name, eDmg, eRoll.IsCritical, eSeed));
 
-            if (player.Hp <= 0) { mech.Add("**You have been defeated!**"); break; }
+            if (player.Hp <= 0) { mech.Add(PickFlavor(DefeatVerbs, eSeed)); break; }
+            idx++;
         }
     }
 

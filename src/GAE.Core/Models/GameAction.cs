@@ -37,5 +37,6 @@ public enum ActionType
     PowerAttack,
     Defend,
     AimedStrike,
+    Flee,
     Unknown
 }

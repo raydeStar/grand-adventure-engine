@@ -299,10 +299,10 @@ public class FullPlaythroughTests : IClassFixture<GaeWebApplicationFactory>
         var goretusk = depths!.Npcs.FirstOrDefault(n => n.Name.Contains("Goretusk"));
         Assert.NotNull(goretusk);
         Assert.True(goretusk!.IsHostile);
-        Assert.Equal(80, goretusk.Hp);
-        Assert.Equal(80, goretusk.MaxHp);
-        Assert.Equal(14, goretusk.Defense);
-        Assert.Equal(8, goretusk.AttackBonus);
+        Assert.Equal(55, goretusk.Hp);
+        Assert.Equal(55, goretusk.MaxHp);
+        Assert.Equal(12, goretusk.Defense);
+        Assert.Equal(5, goretusk.AttackBonus);
         Assert.Equal(6, goretusk.Level);
     }
 
@@ -372,15 +372,14 @@ public class FullPlaythroughTests : IClassFixture<GaeWebApplicationFactory>
         Assert.NotNull(geared.Equipment.Helmet);
         Assert.Equal(23, geared.Defense);
 
-        // Goretusk (+8 attack) vs AC 23: needs 15+ on d20 = 30% hit rate
-        // Player at 22 HP (CON 14 = +2 mod), Goretusk does avg 13 damage = avg 3.9 DPR
-        // Player survives ~5-6 rounds without healing — very doable with potions
+        // Goretusk (+5 attack) vs AC 23: needs 18+ on d20 = 15% hit rate
+        // Player at 22 HP, Goretusk does avg 6.5 damage per hit x3 exchanges
+        // Much more survivable with nerfed stats and multi-exchange combat
 
-        // Player (+2 STR mod) with Thunderstrike (3d8+5) vs Goretusk AC 15:
-        // needs 13+ on d20 = 40% hit rate
-        // avg damage ~18.5, effective DPR ~7.4
-        // 80 HP / 7.4 = ~11 rounds to kill
-        // With crits, ~9-10 rounds — well within survival window with potions
+        // Player (+2 STR mod) with Thunderstrike (3d8+5) vs Goretusk AC 12:
+        // needs 10+ on d20 = 55% hit rate
+        // avg damage ~18.5, effective DPR ~10.2
+        // 55 HP / 10.2 = ~5-6 rounds to kill — fast and satisfying
     }
 
     [Fact]
@@ -430,7 +429,7 @@ public class FullPlaythroughTests : IClassFixture<GaeWebApplicationFactory>
 
         // Should have dice rolls in the result
         var summary = result.GetProperty("mechanicalSummary").GetString()!;
-        Assert.Contains("Attack", summary, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Hollow Skeleton", summary, StringComparison.OrdinalIgnoreCase);
 
         // Check dice rolls were recorded
         var diceRolls = result.GetProperty("diceRolls");

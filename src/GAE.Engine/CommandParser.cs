@@ -83,6 +83,11 @@ public partial class CommandParser
                 action.Target = aimedMatch.Groups["target"].Value.Trim();
             return action;
         }
+        if (FleeRegex().IsMatch(input))
+        {
+            action.Type = ActionType.Flee;
+            return action;
+        }
 
         // Attack
         var attackMatch = AttackRegex().Match(input);
@@ -278,6 +283,9 @@ public partial class CommandParser
 
     [GeneratedRegex(@"^(?:aimed?\s+(?:strike|attack|shot)|focus\s+(?:attack|strike)|precise\s+(?:strike|attack|hit))(?:\s+(?<target>.+))?$", RegexOptions.IgnoreCase)]
     private static partial Regex AimedStrikeRegex();
+
+    [GeneratedRegex(@"^(?:flee|run|escape|run\s+away|retreat|bail)$", RegexOptions.IgnoreCase)]
+    private static partial Regex FleeRegex();
 
     [GeneratedRegex(@"^(?:attack|hit|strike|fight|slash)\s+(?<target>.+)$", RegexOptions.IgnoreCase)]
     private static partial Regex AttackRegex();
