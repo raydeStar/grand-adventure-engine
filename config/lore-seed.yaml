@@ -726,11 +726,11 @@ rooms:
         knowledge_scopes: []
         is_hostile: true
         level: 3
-        hp: 35
-        max_hp: 35
-        attack_bonus: 5
-        damage_dice: "2d6+3"
-        defense: 13
+        hp: 30
+        max_hp: 30
+        attack_bonus: 4
+        damage_dice: "1d6+2"
+        defense: 12
         loot:
           - id: "wolf_pelt"
             name: "Shadowfang Pelt"
@@ -791,11 +791,11 @@ rooms:
         knowledge_scopes: []
         is_hostile: true
         level: 3
-        hp: 28
-        max_hp: 28
-        attack_bonus: 5
-        damage_dice: "1d8+2"
-        defense: 13
+        hp: 22
+        max_hp: 22
+        attack_bonus: 4
+        damage_dice: "1d6+1"
+        defense: 12
         loot:
           - id: "rusted_sword"
             name: "Rusted Longsword"
@@ -832,11 +832,11 @@ rooms:
         knowledge_scopes: ["hollow_cult", "goretusk", "rituals", "dread_hollow"]
         is_hostile: true
         level: 3
-        hp: 25
-        max_hp: 25
-        attack_bonus: 4
-        damage_dice: "1d8+2"
-        defense: 13
+        hp: 22
+        max_hp: 22
+        attack_bonus: 3
+        damage_dice: "1d6+1"
+        defense: 12
         loot:
           - id: "acolyte_staff"
             name: "Staff of Dark Whispers"
@@ -885,11 +885,11 @@ rooms:
         knowledge_scopes: ["dread_hollow", "ancient_evil", "hollow_cult"]
         is_hostile: true
         level: 6
-        hp: 80
-        max_hp: 80
-        attack_bonus: 8
-        damage_dice: "2d8+4"
-        defense: 14
+        hp: 55
+        max_hp: 55
+        attack_bonus: 5
+        damage_dice: "1d8+2"
+        defense: 12
         loot:
           - id: "goretusk_tusk"
             name: "Tusk of the Undying"
