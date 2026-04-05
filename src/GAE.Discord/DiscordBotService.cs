@@ -503,7 +503,44 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
             _logger.LogWarning("AI character creation returned null — LM Studio may not be running at {Endpoint}",
                 "http://host.docker.internal:1234");
 
-            // Fallback to rigid wizard
+            // If we already have a sheet, try to apply changes mechanically (stat/name/race/class overrides)
+            if (session.HasSheet && session.LastAiResponse is not null)
+            {
+                bool changed = CharacterCreation.SheetOverrides.ApplyDirect(input, session.LastAiResponse);
+                if (changed)
+                {
+                    // Re-display updated sheet
+                    var standardArr = new[] { 15, 14, 13, 12, 10, 8 };
+                    var updatedStats = AssignStatsFromOrder(session.LastAiResponse.StatOrder, standardArr);
+                    session.LastSheetJson = System.Text.Json.JsonSerializer.Serialize(session.LastAiResponse);
+
+                    var updatedEmbed = new EmbedBuilder()
+                        .WithTitle("\u2694\uFE0F CHARACTER SHEET")
+                        .WithColor(Color.Gold)
+                        .AddField("Name", session.LastAiResponse.Name ?? "???", inline: true)
+                        .AddField("Race", session.LastAiResponse.Race, inline: true)
+                        .AddField("Class", session.LastAiResponse.Class, inline: true)
+                        .AddField("Stats",
+                            $"STR: {updatedStats["str"]} ({FormatMod(updatedStats["str"])})  DEX: {updatedStats["dex"]} ({FormatMod(updatedStats["dex"])})\n" +
+                            $"CON: {updatedStats["con"]} ({FormatMod(updatedStats["con"])})  INT: {updatedStats["int"]} ({FormatMod(updatedStats["int"])})\n" +
+                            $"WIS: {updatedStats["wis"]} ({FormatMod(updatedStats["wis"])})  CHA: {updatedStats["cha"]} ({FormatMod(updatedStats["cha"])})")
+                        .AddField("Backstory", session.LastAiResponse.Backstory)
+                        .WithFooter("Say \"looks good\" to start, or describe changes you want.");
+                    await thread.SendMessageAsync(embed: updatedEmbed.Build());
+                    return;
+                }
+                else
+                {
+                    // Couldn't parse the change — tell the user what we can handle
+                    await message.Channel.SendMessageAsync(
+                        "⚠️ The storyteller is resting, so I can only handle direct changes right now.\n" +
+                        "Try: `change str to 15`, `change name to Grok`, `change race to Elf`, `change class to Ranger`\n" +
+                        "Or say **\"looks good\"** to start your adventure!");
+                    return;
+                }
+            }
+
+            // Fallback to rigid wizard (no sheet yet)
             if (session.FallbackSession is null)
             {
                 session.FallbackSession = new CharacterCreation.CharacterCreationSession(discordId);
