@@ -175,6 +175,14 @@ rooms:
             damage_stat: "str"
             value: 25
             is_equippable: true
+          - id: "keen_dagger"
+            name: "Keen Dagger"
+            description: "A wickedly sharp dagger balanced for speed. Perfect for rogues and finesse fighters."
+            type: "Weapon"
+            damage_dice: "1d6+2"
+            damage_stat: "dex"
+            value: 30
+            is_equippable: true
           - id: "leather_armor"
             name: "Leather Armor"
             description: "Sturdy leather armor. Won't stop a giant, but it's better than nothing."

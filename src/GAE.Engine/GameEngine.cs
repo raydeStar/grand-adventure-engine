@@ -47,6 +47,10 @@ public class GameEngine : IGameEngine
         if (player is null)
             return new ActionResult { ActionId = action.Id, RawInput = action.RawInput, Success = false, MechanicalSummary = "Player not found." };
 
+        // Ensure MaxHP/MaxMP are correct for this player's level and stats
+        // (fixes existing characters created before level scaling was added)
+        RecalculateMaxHpMp(player);
+
         // Dead players can't do anything — they need to be revived first
         if (!player.IsAlive)
         {
@@ -92,7 +96,8 @@ public class GameEngine : IGameEngine
         {
             ActionType.Move => await ProcessMoveAsync(player, action, ct),
             ActionType.Look => await ProcessLookAsync(player, action, ct),
-            ActionType.Attack => await ProcessAttackAsync(player, action, ct),
+            ActionType.Attack or ActionType.PowerAttack or ActionType.AimedStrike => await ProcessAttackAsync(player, action, ct),
+            ActionType.Defend => new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "You can only defend during combat." },
             ActionType.Talk => await ProcessTalkAsync(player, action, ct),
             ActionType.Take => await ProcessTakeAsync(player, action, ct),
             ActionType.Drop => await ProcessDropAsync(player, action, ct),
@@ -215,16 +220,9 @@ public class GameEngine : IGameEngine
         // Set starting level
         player.Level = _rules.CharacterCreation.StartingLevel;
 
-        // Calculate HP/MP from rules — scale with level
-        int hpBase = _rules.Stats.GetValueOrDefault("hp")?.Base ?? 20;
-        int mpBase = _rules.Stats.GetValueOrDefault("mp")?.Base ?? 10;
-        int conMod = PlayerCharacter.GetStatModifier(player.Con);
-        int intMod = PlayerCharacter.GetStatModifier(player.Int);
-        // Each level above 1 adds (5 + CON mod) HP and (3 + INT mod) MP
-        int bonusLevels = Math.Max(0, player.Level - 1);
-        player.MaxHp = hpBase + conMod + bonusLevels * (5 + Math.Max(0, conMod));
+        // Calculate HP/MP from rules — scale with level using percentage model
+        RecalculateMaxHpMp(player);
         player.Hp = player.MaxHp;
-        player.MaxMp = mpBase + intMod + bonusLevels * (3 + Math.Max(0, intMod));
         player.Mp = player.MaxMp;
 
         // Grant starting items from the registry / lore seed
@@ -477,12 +475,30 @@ public class GameEngine : IGameEngine
 
         // Add level-based proficiency bonus to attack rolls
         int proficiencyBonus = _rules.Combat.ProficiencyBaseBonus + (player.Level / _rules.Combat.ProficiencyScaleLevel);
-        int totalAttackMod = attackMod + proficiencyBonus;
 
-        var attackRoll = _dice.RollAttack(totalAttackMod);
+        // Apply special attack modifiers
+        int hitBonus = 0, dmgBonus = 0;
+        bool advantage = false;
+        if (action.Type == ActionType.PowerAttack) { hitBonus = -3; dmgBonus = 5; }
+        else if (action.Type == ActionType.AimedStrike) { advantage = true; }
+
+        int totalAttackMod = attackMod + proficiencyBonus + hitBonus;
+
+        DiceRoll attackRoll;
+        var extraRolls = new List<DiceRoll>();
+        if (advantage)
+        {
+            var r1 = _dice.RollAttack(totalAttackMod);
+            var r2 = _dice.RollAttack(totalAttackMod);
+            attackRoll = r1.Total >= r2.Total ? r1 : r2;
+            extraRolls.Add(r1); extraRolls.Add(r2);
+        }
+        else
+        {
+            attackRoll = _dice.RollAttack(totalAttackMod);
+        }
+
         int targetDefense = target.Defense ?? _rules.Combat.BaseDefense;
-
-        // Determine outcome tier
         var outcome = ProbabilityEngine.DetermineOutcome(attackRoll, targetDefense);
         attackRoll.Outcome = outcome;
         attackRoll.TargetNumber = targetDefense;
@@ -490,7 +506,7 @@ public class GameEngine : IGameEngine
         var result = new ActionResult
         {
             ActionId = action.Id,
-            DiceRolls = [attackRoll]
+            DiceRolls = advantage ? extraRolls : [attackRoll]
         };
 
         if (outcome == RollOutcome.CriticalMiss || outcome == RollOutcome.Miss)
@@ -513,7 +529,7 @@ public class GameEngine : IGameEngine
 
         // Hit (GlancingHit, Hit, or CriticalHit) — roll damage
         string damageDice = weapon?.DamageDice ?? "1d4";
-        int damageMod = player.GetModifier(attackStat);
+        int damageMod = player.GetModifier(attackStat) + dmgBonus;
         var damageRoll = _dice.RollDamage(damageDice, damageMod);
 
         int totalDamage = outcome switch
@@ -556,6 +572,11 @@ public class GameEngine : IGameEngine
             player.Xp += xpGain;
             result.XpGained = xpGain;
             result.MechanicalSummary += $"\nYou gain {xpGain} XP!";
+
+            // Check for level-up
+            var levelUpMsg = CheckAndApplyLevelUp(player);
+            if (levelUpMsg is not null)
+                result.MechanicalSummary += $"\n{levelUpMsg}";
 
             // Gold loot drop
             if (_dice.Roll("1d100", "Loot check").Total <= (int)(_rules.Loot.EnemyDropChance * 100))
@@ -615,16 +636,19 @@ public class GameEngine : IGameEngine
         target.DispositionState.DecayTowardBaseline(elapsed);
         target.Disposition = target.DispositionState.ToFlatDisposition();
 
-        // Enter conversation mode
+        // Enter conversation or trading mode depending on NPC type
+        var mode = target.IsShopkeeper ? InteractionMode.Trading : InteractionMode.Conversation;
         player.Interaction = new InteractionState
         {
-            Mode = InteractionMode.Conversation,
+            Mode = mode,
             Target = target.Name,
             NpcDisposition = target.Disposition,
             CanLeave = true,
             LeaveConsequence = "normal"
         };
-        player.Interaction.AppendContext($"Player initiated conversation with {target.Name}.");
+        player.Interaction.AppendContext(target.IsShopkeeper
+            ? $"Player initiated trading with shopkeeper {target.Name}."
+            : $"Player initiated conversation with {target.Name}.");
 
         // Get AI narration for the greeting
         var freeForm = await _narrator.ProcessConversationTurnAsync(player, room, target, player.Interaction, action.RawInput, ct);
@@ -1389,6 +1413,13 @@ public class GameEngine : IGameEngine
                     if (delta > 100)
                         _logger.LogWarning("Large XP change from free-form: {Delta} for player {PlayerId}", delta, player.Id);
                     result.StateChanges.Add(new StateChange { EntityType = "player", EntityId = player.Id, Property = "xp", OldValue = oldXp.ToString(), NewValue = player.Xp.ToString() });
+                    // Check for level-up after free-form XP gain
+                    if (delta > 0)
+                    {
+                        var freeFormLevelUp = CheckAndApplyLevelUp(player);
+                        if (freeFormLevelUp is not null)
+                            result.MechanicalSummary += $"\n{freeFormLevelUp}";
+                    }
                     break;
                 default:
                     // Block arbitrary stat modifications (str, dex, etc.) from free-form
@@ -2071,17 +2102,10 @@ public class GameEngine : IGameEngine
     private async Task<ActionResult?> ProcessCombatTurnAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
     {
         var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
-        if (room is null)
-        {
-            player.Interaction.Reset();
-            return null;
-        }
+        if (room is null) { player.Interaction.Reset(); return null; }
 
-        // Get combat state (multi-enemy tracking)
         var combat = await _stateManager.GetCombatStateAsync(room.Id, ct);
         var enemies = room.Npcs.Where(n => combat?.TurnOrder.Any(t => !t.IsPlayer && t.Id == n.Id) == true).ToList();
-
-        // Fallback: if no CombatState, fight the interaction target
         if (combat is null || enemies.Count == 0)
         {
             var singleEnemy = FindNamedEntity(room.Npcs, n => n.Name, player.Interaction.Target);
@@ -2089,290 +2113,228 @@ public class GameEngine : IGameEngine
             {
                 player.Interaction.Reset();
                 await _stateManager.SavePlayerAsync(player, ct);
-                return new ActionResult
-                {
-                    ActionId = action.Id, RawInput = action.RawInput, Success = true,
+                return new ActionResult { ActionId = action.Id, RawInput = action.RawInput, Success = true,
                     MechanicalSummary = "Your opponent is no longer here. Combat ends.",
-                    InteractionUpdate = new InteractionUpdate { Mode = InteractionMode.Explore }
-                };
+                    InteractionUpdate = new InteractionUpdate { Mode = InteractionMode.Explore } };
             }
             enemies = [singleEnemy];
         }
 
-        // --- Flee attempt ---
+        // ─── Flee ───
         var rawLower = action.RawInput.Trim().ToLowerInvariant();
         if (rawLower is "flee" or "run" or "escape" or "run away")
         {
-            int totalOppDamage = 0;
-            var diceRolls = new List<DiceRoll>();
+            int totalOppDamage = 0; var diceRolls = new List<DiceRoll>();
             foreach (var enemy in enemies.Where(e => e.Hp.HasValue && e.Hp.Value > 0))
-            {
                 if (enemy.DamageDice is not null)
-                {
-                    var oppRoll = _dice.Roll(enemy.DamageDice, $"{enemy.Name} opportunity attack");
-                    int oppDmg = Math.Max(1, oppRoll.Total);
-                    totalOppDamage += oppDmg;
-                    diceRolls.Add(oppRoll);
-                }
-            }
+                { var r = _dice.Roll(enemy.DamageDice, $"{enemy.Name} opportunity attack"); totalOppDamage += Math.Max(1, r.Total); diceRolls.Add(r); }
             player.Hp = Math.Max(0, player.Hp - totalOppDamage);
             player.Interaction.Reset();
-
-            string? escapeDirection = room.Exits.Keys.FirstOrDefault();
-            if (escapeDirection is not null)
-                player.CurrentRoomId = room.Exits[escapeDirection];
-
-            if (combat is not null)
-                await _stateManager.RemoveCombatStateAsync(room.Id, ct);
-
+            var escDir = room.Exits.Keys.FirstOrDefault();
+            if (escDir is not null) player.CurrentRoomId = room.Exits[escDir];
+            if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, ct);
             await _stateManager.SavePlayerAsync(player, ct);
-
-            var fleeResult = new ActionResult
-            {
-                ActionId = action.Id, RawInput = action.RawInput, Success = true,
-                MechanicalSummary = totalOppDamage > 0
-                    ? $"You flee! The enemies strike you for {totalOppDamage} total damage as you escape."
-                    : "You flee from combat!",
-                DiceRolls = diceRolls,
-                InteractionUpdate = new InteractionUpdate { Mode = InteractionMode.Explore, CombatStatus = "fled" },
-                StateChanges = [new StateChange { EntityType = "Player", EntityId = player.Id, Property = "Hp", NewValue = player.Hp.ToString() }]
-            };
+            var fleeResult = new ActionResult { ActionId = action.Id, RawInput = action.RawInput, Success = true,
+                MechanicalSummary = totalOppDamage > 0 ? $"You flee! Enemies strike for {totalOppDamage} as you escape." : "You flee from combat!",
+                DiceRolls = diceRolls, InteractionUpdate = new InteractionUpdate { Mode = InteractionMode.Explore, CombatStatus = "fled" } };
             await PersistInteractionStoryEntry(player, action, fleeResult, ct);
             return fleeResult;
         }
 
-        // --- Use item during combat (potions, scrolls, etc.) ---
+        // ─── Use item during combat ───
         if (action.Type == ActionType.Use)
         {
             var useResult = await ProcessUseAsync(player, action, ct);
-            if (useResult.Success)
-            {
-                // Item was used successfully — enemies still get their turn
-                var useMechanical = new List<string> { useResult.MechanicalSummary };
-                var useDice = new List<DiceRoll>(useResult.DiceRolls);
-                var useStateChanges = new List<StateChange>(useResult.StateChanges);
+            var useMech = new List<string> { useResult.MechanicalSummary };
+            var useDice = new List<DiceRoll>(useResult.DiceRolls);
+            var useSC = new List<StateChange>(useResult.StateChanges);
 
-                // Enemy turns after item use
-                foreach (var enemy in enemies.Where(e => e.Hp.HasValue && e.Hp.Value > 0 && room.Npcs.Contains(e)))
-                {
-                    int enemyAttackBonus = enemy.AttackBonus ?? 0;
-                    var enemyAttackRoll = _dice.RollAttack(enemyAttackBonus);
-                    useDice.Add(enemyAttackRoll);
+            // Enemies get 1 turn after item use (success or fail)
+            RunEnemyAttacks(player, enemies, room, useMech, useDice, useSC, defenseBonus: 0);
 
-                    if (enemyAttackRoll.IsFumble)
-                    {
-                        useMechanical.Add($"{enemy.Name} fumbles their attack!");
-                        continue;
-                    }
+            string useCombatStatus = player.Hp <= 0 ? "defeat" : "ongoing";
+            if (player.Hp <= 0) { player.Interaction.Reset(); if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, ct); }
 
-                    if (enemyAttackRoll.Total < player.Defense && !enemyAttackRoll.IsCritical)
-                    {
-                        useMechanical.Add($"{enemy.Name} attacks you (rolled {enemyAttackRoll.Total} vs {player.Defense}) and misses!");
-                        continue;
-                    }
+            // HP bar after item use
+            if (useCombatStatus == "ongoing")
+                AppendHpBars(useMech, player, enemies, room);
 
-                    string enemyDmgDice = enemy.DamageDice ?? "1d4";
-                    var enemyDmgRoll = _dice.Roll(enemyDmgDice, $"{enemy.Name} damage");
-                    int enemyDmg = enemyAttackRoll.IsCritical ? enemyDmgRoll.Total * _rules.Combat.CriticalMultiplier : enemyDmgRoll.Total;
-                    enemyDmg = Math.Max(1, enemyDmg);
-                    useDice.Add(enemyDmgRoll);
-
-                    var oldHp = player.Hp;
-                    player.Hp = Math.Max(0, player.Hp - enemyDmg);
-                    useStateChanges.Add(new StateChange { EntityType = "Player", EntityId = player.Id, Property = "Hp", OldValue = oldHp.ToString(), NewValue = player.Hp.ToString() });
-                    useMechanical.Add($"{enemy.Name} hits you for {enemyDmg} damage!{(enemyAttackRoll.IsCritical ? " **CRITICAL!**" : "")}");
-
-                    if (player.Hp <= 0)
-                    {
-                        useMechanical.Add("You have been defeated!");
-                        break;
-                    }
-                }
-
-                string useCombatStatus = player.Hp <= 0 ? "defeat" : "ongoing";
-                if (player.Hp <= 0)
-                {
-                    player.Interaction.Reset();
-                    if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, ct);
-                }
-
-                await _stateManager.SavePlayerAsync(player, ct);
-                await _stateManager.SaveRoomAsync(room, ct);
-
-                var combatUseResult = new ActionResult
-                {
-                    ActionId = action.Id, RawInput = action.RawInput, Success = true,
-                    MechanicalSummary = string.Join("\n", useMechanical),
-                    DiceRolls = useDice,
-                    StateChanges = useStateChanges,
-                    ItemsLost = useResult.ItemsLost,
-                    InteractionUpdate = new InteractionUpdate
-                    {
-                        Mode = useCombatStatus == "ongoing" ? InteractionMode.Combat : InteractionMode.Explore,
-                        CombatStatus = useCombatStatus
-                    }
-                };
-                await PersistInteractionStoryEntry(player, action, combatUseResult, ct);
-                return combatUseResult;
-            }
-            // If use failed (item not found, not consumable), fall through to normal combat
-        }
-
-        // --- Player's attack turn ---
-        // Determine target: explicit from input, or first living enemy
-        var targetName = action.Target;
-        Npc? target = null;
-        if (!string.IsNullOrWhiteSpace(targetName))
-            target = FindNamedEntity(enemies.Where(e => e.Hp.HasValue && e.Hp.Value > 0), n => n.Name, targetName);
-        target ??= enemies.FirstOrDefault(e => e.Hp.HasValue && e.Hp.Value > 0);
-
-        if (target is null)
-        {
-            // All enemies already dead — victory
-            player.Interaction.Reset();
-            if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, ct);
             await _stateManager.SavePlayerAsync(player, ct);
-            return new ActionResult
-            {
-                ActionId = action.Id, RawInput = action.RawInput, Success = true,
-                MechanicalSummary = "All enemies have been defeated!",
-                InteractionUpdate = new InteractionUpdate { Mode = InteractionMode.Explore, CombatStatus = "victory" }
-            };
+            await _stateManager.SaveRoomAsync(room, ct);
+            var itemResult = new ActionResult { ActionId = action.Id, RawInput = action.RawInput, Success = useResult.Success,
+                MechanicalSummary = string.Join("\n", useMech), DiceRolls = useDice, StateChanges = useSC, ItemsLost = useResult.ItemsLost,
+                InteractionUpdate = new InteractionUpdate { Mode = useCombatStatus == "ongoing" ? InteractionMode.Combat : InteractionMode.Explore, CombatStatus = useCombatStatus } };
+            await PersistInteractionStoryEntry(player, action, itemResult, ct);
+            return itemResult;
         }
 
-        var allDiceRolls = new List<DiceRoll>();
-        var allStateChanges = new List<StateChange>();
-        var mechanicalParts = new List<string>();
-        int totalXp = 0;
-        int totalGold = 0;
-        var totalLoot = new List<InventoryItem>();
+        // ─── Defend (skip attacks, gain +4 defense for this round) ───
+        if (action.Type == ActionType.Defend)
+        {
+            var defMech = new List<string> { "You raise your guard and brace for impact! (+4 defense this round)" };
+            var defDice = new List<DiceRoll>();
+            var defSC = new List<StateChange>();
+            RunEnemyAttacks(player, enemies, room, defMech, defDice, defSC, defenseBonus: 4);
+            string defStatus = player.Hp <= 0 ? "defeat" : "ongoing";
+            if (player.Hp <= 0) { player.Interaction.Reset(); if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, ct); }
+            if (defStatus == "ongoing") AppendHpBars(defMech, player, enemies, room);
+            await _stateManager.SavePlayerAsync(player, ct);
+            await _stateManager.SaveRoomAsync(room, ct);
+            var defResult = new ActionResult { ActionId = action.Id, RawInput = action.RawInput, Success = true,
+                MechanicalSummary = string.Join("\n", defMech), DiceRolls = defDice, StateChanges = defSC,
+                InteractionUpdate = new InteractionUpdate { Mode = defStatus == "ongoing" ? InteractionMode.Combat : InteractionMode.Explore, CombatStatus = defStatus } };
+            await PersistInteractionStoryEntry(player, action, defResult, ct);
+            return defResult;
+        }
 
-        // Player attack
+        // ─── Resolve attack modifiers for special moves ───
+        int attackHitBonus = 0;
+        int attackDmgBonus = 0;
+        bool hasAdvantage = false;
+
+        if (action.Type == ActionType.PowerAttack)
+        {
+            attackHitBonus = -3;
+            attackDmgBonus = 5;
+        }
+        else if (action.Type == ActionType.AimedStrike)
+        {
+            hasAdvantage = true;
+        }
+
+        // ─── Multi-exchange combat (3 exchanges per turn) ───
+        const int ExchangesPerTurn = 3;
+        var allDice = new List<DiceRoll>();
+        var allSC = new List<StateChange>();
+        var mech = new List<string>();
+        int totalXp = 0, totalGold = 0;
+        var totalLoot = new List<InventoryItem>();
+        bool combatOver = false;
+
         var weapon = player.Equipment.Weapon;
         string attackStat = weapon?.DamageStat ?? _rules.Combat.MeleeStat;
-        int attackMod = player.GetModifier(attackStat);
-
-        // Add level-based proficiency bonus to attack rolls
+        int baseAttackMod = player.GetModifier(attackStat);
         int proficiencyBonus = _rules.Combat.ProficiencyBaseBonus + (player.Level / _rules.Combat.ProficiencyScaleLevel);
-        int totalAttackMod = attackMod + proficiencyBonus;
 
-        var attackRoll = _dice.RollAttack(totalAttackMod);
-        int targetDefense = target.Defense ?? _rules.Combat.BaseDefense;
+        for (int exchange = 0; exchange < ExchangesPerTurn && !combatOver; exchange++)
+        {
+            if (exchange > 0) mech.Add("---"); // separator between exchanges
 
-        // Determine outcome tier
-        var outcome = ProbabilityEngine.DetermineOutcome(attackRoll, targetDefense);
-        attackRoll.Outcome = outcome;
-        attackRoll.TargetNumber = targetDefense;
-        allDiceRolls.Add(attackRoll);
+            // Pick target (first alive enemy)
+            Npc? target = null;
+            if (!string.IsNullOrWhiteSpace(action.Target))
+                target = FindNamedEntity(enemies.Where(e => e.Hp.HasValue && e.Hp.Value > 0 && room.Npcs.Contains(e)), n => n.Name, action.Target);
+            target ??= enemies.FirstOrDefault(e => e.Hp.HasValue && e.Hp.Value > 0 && room.Npcs.Contains(e));
 
-        if (outcome == RollOutcome.CriticalMiss)
-        {
-            mechanicalParts.Add($"You fumble your attack against {target.Name}! Critical miss!");
-        }
-        else if (outcome == RollOutcome.Miss)
-        {
-            mechanicalParts.Add($"You attack {target.Name} (rolled {attackRoll.Total} vs defense {targetDefense}) and miss!");
-        }
-        else
-        {
-            string damageDice = weapon?.DamageDice ?? "1d4";
-            int damageMod = player.GetModifier(attackStat);
-            var damageRoll = _dice.RollDamage(damageDice, damageMod);
-            int totalDamage = outcome switch
+            if (target is null) { combatOver = true; break; }
+
+            // ── Player attacks ──
+            int totalAttackMod = baseAttackMod + proficiencyBonus + attackHitBonus;
+
+            DiceRoll attackRoll;
+            if (hasAdvantage && exchange == 0) // advantage only on first exchange for aimed strike
             {
-                RollOutcome.CriticalHit => damageRoll.Total * _rules.Combat.CriticalMultiplier,
-                RollOutcome.GlancingHit => Math.Max(1, damageRoll.Total / 2),
-                _ => damageRoll.Total
-            };
-            totalDamage = Math.Max(1, totalDamage);
-            allDiceRolls.Add(damageRoll);
-
-            if (target.Hp.HasValue)
+                var roll1 = _dice.RollAttack(totalAttackMod);
+                var roll2 = _dice.RollAttack(totalAttackMod);
+                attackRoll = roll1.Total >= roll2.Total ? roll1 : roll2;
+                mech.Add($"[Aimed] Rolled {roll1.Total} and {roll2.Total}, taking {attackRoll.Total}.");
+                allDice.Add(roll1);
+                allDice.Add(roll2);
+            }
+            else
             {
-                var oldHp = target.Hp.Value;
-                target.Hp = Math.Max(0, target.Hp.Value - totalDamage);
-                allStateChanges.Add(new StateChange { EntityType = "Npc", EntityId = target.Id, Property = "Hp", OldValue = oldHp.ToString(), NewValue = target.Hp.Value.ToString() });
+                attackRoll = _dice.RollAttack(totalAttackMod);
+                allDice.Add(attackRoll);
             }
 
-            string outcomeText = outcome switch
-            {
-                RollOutcome.CriticalHit => " **CRITICAL HIT!**",
-                RollOutcome.GlancingHit => " (glancing blow)",
-                _ => ""
-            };
-            mechanicalParts.Add($"You hit {target.Name} for {totalDamage} damage!{outcomeText}");
+            int targetDefense = target.Defense ?? _rules.Combat.BaseDefense;
+            var outcome = ProbabilityEngine.DetermineOutcome(attackRoll, targetDefense);
+            attackRoll.Outcome = outcome;
+            attackRoll.TargetNumber = targetDefense;
 
-            // Check if target died
-            if (target.Hp.HasValue && target.Hp.Value <= 0)
+            if (outcome == RollOutcome.CriticalMiss)
             {
-                mechanicalParts.Add($"{target.Name} has been defeated!");
-                int xpGain = target.Level * 10;
-                totalXp += xpGain;
-
-                if (_dice.Roll("1d100", "Loot check").Total <= (int)(_rules.Loot.EnemyDropChance * 100))
+                mech.Add($"You fumble against {target.Name}! Critical miss!");
+            }
+            else if (outcome == RollOutcome.Miss)
+            {
+                mech.Add($"You swing at {target.Name} ({attackRoll.Total} vs {targetDefense}) — miss!");
+            }
+            else
+            {
+                string damageDice = weapon?.DamageDice ?? "1d4";
+                int damageMod = player.GetModifier(attackStat) + attackDmgBonus;
+                var damageRoll = _dice.RollDamage(damageDice, damageMod);
+                int totalDamage = outcome switch
                 {
-                    var goldRoll = _dice.Roll("1d20", "Gold drop");
-                    int goldAmount = goldRoll.Total + (target.Level * 2);
-                    totalGold += goldAmount;
+                    RollOutcome.CriticalHit => damageRoll.Total * _rules.Combat.CriticalMultiplier,
+                    RollOutcome.GlancingHit => Math.Max(1, damageRoll.Total / 2),
+                    _ => damageRoll.Total
+                };
+                totalDamage = Math.Max(1, totalDamage);
+                allDice.Add(damageRoll);
+
+                if (target.Hp.HasValue)
+                {
+                    var oldHp = target.Hp.Value;
+                    target.Hp = Math.Max(0, target.Hp.Value - totalDamage);
+                    allSC.Add(new StateChange { EntityType = "Npc", EntityId = target.Id, Property = "Hp", OldValue = oldHp.ToString(), NewValue = target.Hp.Value.ToString() });
                 }
 
-                // Drop NPC loot table items
-                foreach (var lootItem in target.LootTable)
+                string outcomeText = outcome switch { RollOutcome.CriticalHit => " **CRIT!**", RollOutcome.GlancingHit => " (glancing)", _ => "" };
+                mech.Add($"You hit {target.Name} for {totalDamage}!{outcomeText}");
+
+                // Target killed?
+                if (target.Hp.HasValue && target.Hp.Value <= 0)
                 {
-                    var clone = CloneInventoryItem(lootItem, Math.Max(1, lootItem.Quantity));
-                    player.Inventory.Add(clone);
-                    totalLoot.Add(clone);
-                    mechanicalParts.Add($"You receive {lootItem.Name}!");
+                    mech.Add($"**{target.Name} has been defeated!**");
+                    totalXp += target.Level * 10;
+                    if (_dice.Roll("1d100", "Loot").Total <= (int)(_rules.Loot.EnemyDropChance * 100))
+                        totalGold += _dice.Roll("1d20", "Gold").Total + (target.Level * 2);
+                    foreach (var lootItem in target.LootTable)
+                    {
+                        var clone = CloneInventoryItem(lootItem, Math.Max(1, lootItem.Quantity));
+                        player.Inventory.Add(clone); totalLoot.Add(clone);
+                        mech.Add($"  Loot: {lootItem.Name}!");
+                    }
+                    room.Npcs.Remove(target);
+                    combat?.TurnOrder.RemoveAll(t => t.Id == target.Id);
+                    PublishEventToWikiInBackground(target.Id, "npc", $"{target.Name} Defeated",
+                        $"{player.Name} defeated {target.Name} in combat.", room.Id);
+
+                    // Check if all enemies dead
+                    if (!enemies.Any(e => e.Hp.HasValue && e.Hp.Value > 0 && room.Npcs.Contains(e)))
+                    { combatOver = true; continue; }
+                    continue; // skip enemy turn for this exchange (target is dead)
                 }
+            }
 
-                room.Npcs.Remove(target);
-                combat?.TurnOrder.RemoveAll(t => t.Id == target.Id);
-                PublishEventToWikiInBackground(target.Id, "npc", $"{target.Name} Defeated",
-                    $"{player.Name} defeated {target.Name} (Level {target.Level}, {target.Faction}) in combat.", room.Id);
+            // ── Enemy counterattacks ──
+            foreach (var enemy in enemies.Where(e => e.Hp.HasValue && e.Hp.Value > 0 && room.Npcs.Contains(e)))
+            {
+                int atkBonus = enemy.AttackBonus ?? 0;
+                var eRoll = _dice.RollAttack(atkBonus);
+                allDice.Add(eRoll);
+
+                if (eRoll.IsFumble) { mech.Add($"{enemy.Name} fumbles!"); continue; }
+                if (eRoll.Total < player.Defense && !eRoll.IsCritical) { mech.Add($"{enemy.Name} misses! ({eRoll.Total} vs {player.Defense})"); continue; }
+
+                string eDmgDice = enemy.DamageDice ?? "1d4";
+                var eDmgRoll = _dice.Roll(eDmgDice, $"{enemy.Name} dmg");
+                int eDmg = eRoll.IsCritical ? eDmgRoll.Total * _rules.Combat.CriticalMultiplier : eDmgRoll.Total;
+                eDmg = Math.Max(1, eDmg);
+                allDice.Add(eDmgRoll);
+
+                var oldPHp = player.Hp;
+                player.Hp = Math.Max(0, player.Hp - eDmg);
+                allSC.Add(new StateChange { EntityType = "Player", EntityId = player.Id, Property = "Hp", OldValue = oldPHp.ToString(), NewValue = player.Hp.ToString() });
+                mech.Add($"{enemy.Name} hits you for {eDmg}!{(eRoll.IsCritical ? " **CRIT!**" : "")}");
+
+                if (player.Hp <= 0) { mech.Add("**You have been defeated!**"); combatOver = true; break; }
             }
         }
 
-        // --- Enemy turns ---
-        var survivingEnemies = enemies.Where(e => e.Hp.HasValue && e.Hp.Value > 0 && room.Npcs.Contains(e)).ToList();
-        foreach (var enemy in survivingEnemies)
-        {
-            int enemyAttackBonus = enemy.AttackBonus ?? 0;
-            var enemyAttackRoll = _dice.RollAttack(enemyAttackBonus);
-            allDiceRolls.Add(enemyAttackRoll);
-
-            if (enemyAttackRoll.IsFumble)
-            {
-                mechanicalParts.Add($"{enemy.Name} fumbles their attack!");
-                continue;
-            }
-
-            if (enemyAttackRoll.Total < player.Defense && !enemyAttackRoll.IsCritical)
-            {
-                mechanicalParts.Add($"{enemy.Name} attacks you (rolled {enemyAttackRoll.Total} vs {player.Defense}) and misses!");
-                continue;
-            }
-
-            string enemyDamageDice = enemy.DamageDice ?? "1d4";
-            var enemyDamageRoll = _dice.Roll(enemyDamageDice, $"{enemy.Name} damage");
-            int enemyDamage = enemyAttackRoll.IsCritical ? enemyDamageRoll.Total * _rules.Combat.CriticalMultiplier : enemyDamageRoll.Total;
-            enemyDamage = Math.Max(1, enemyDamage);
-            allDiceRolls.Add(enemyDamageRoll);
-
-            var oldPlayerHp = player.Hp;
-            player.Hp = Math.Max(0, player.Hp - enemyDamage);
-            allStateChanges.Add(new StateChange { EntityType = "Player", EntityId = player.Id, Property = "Hp", OldValue = oldPlayerHp.ToString(), NewValue = player.Hp.ToString() });
-
-            string enemyCrit = enemyAttackRoll.IsCritical ? " **CRITICAL!**" : "";
-            mechanicalParts.Add($"{enemy.Name} hits you for {enemyDamage} damage!{enemyCrit}");
-
-            if (player.Hp <= 0)
-            {
-                mechanicalParts.Add("You have been defeated!");
-                break;
-            }
-        }
-
-        // --- Check for victory or defeat ---
+        // ─── Post-combat resolution ───
         var allEnemiesAlive = enemies.Where(e => e.Hp.HasValue && e.Hp.Value > 0 && room.Npcs.Contains(e)).ToList();
         string combatStatus = "ongoing";
 
@@ -2381,8 +2343,6 @@ public class GameEngine : IGameEngine
             combatStatus = "defeat";
             player.Interaction.Reset();
             if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, ct);
-            PublishEventToWikiInBackground(player.Id, "player", $"{player.Name} Defeated",
-                $"{player.Name} was defeated in multi-enemy combat.", room.Id);
         }
         else if (allEnemiesAlive.Count == 0)
         {
@@ -2391,41 +2351,36 @@ public class GameEngine : IGameEngine
             player.Gold += totalGold;
             player.Interaction.Reset();
             if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, ct);
-
-            if (totalXp > 0) mechanicalParts.Add($"You gain {totalXp} XP!");
-            if (totalGold > 0) mechanicalParts.Add($"You find {totalGold} gold!");
+            if (totalXp > 0) mech.Add($"\nYou gain {totalXp} XP!");
+            if (totalGold > 0) mech.Add($"You find {totalGold} gold!");
+            var lvlUp = CheckAndApplyLevelUp(player);
+            if (lvlUp is not null) mech.Add(lvlUp);
         }
-        else if (combat is not null)
+        else
         {
-            // Update combat state for next round
-            combat.RoundNumber++;
-            var playerParticipant = combat.TurnOrder.FirstOrDefault(t => t.IsPlayer);
-            if (playerParticipant is not null) playerParticipant.Hp = player.Hp;
-            foreach (var ep in combat.TurnOrder.Where(t => !t.IsPlayer))
+            // Show HP bars and options hint
+            AppendHpBars(mech, player, enemies, room);
+            mech.Add("*Commands: `attack` | `power attack` | `defend` | `aimed strike` | `use <potion>` | `flee`*");
+
+            if (combat is not null)
             {
-                var npc = enemies.FirstOrDefault(e => e.Id == ep.Id);
-                if (npc?.Hp.HasValue == true) ep.Hp = npc.Hp.Value;
+                combat.RoundNumber++;
+                var pp = combat.TurnOrder.FirstOrDefault(t => t.IsPlayer);
+                if (pp is not null) pp.Hp = player.Hp;
+                foreach (var ep in combat.TurnOrder.Where(t => !t.IsPlayer))
+                { var npc = enemies.FirstOrDefault(e => e.Id == ep.Id); if (npc?.Hp.HasValue == true) ep.Hp = npc.Hp.Value; }
+                await _stateManager.SaveCombatStateAsync(combat, ct);
             }
-            await _stateManager.SaveCombatStateAsync(combat, ct);
         }
 
-        var summary = string.Join("\n", mechanicalParts);
+        var summary = string.Join("\n", mech);
         var combatResult = new ActionResult
         {
-            ActionId = action.Id,
-            RawInput = action.RawInput,
-            Success = true,
-            MechanicalSummary = summary,
-            DiceRolls = allDiceRolls,
-            StateChanges = allStateChanges,
-            XpGained = totalXp,
-            GoldChange = totalGold,
-            ItemsGained = totalLoot,
+            ActionId = action.Id, RawInput = action.RawInput, Success = true,
+            MechanicalSummary = summary, DiceRolls = allDice, StateChanges = allSC,
+            XpGained = totalXp, GoldChange = totalGold, ItemsGained = totalLoot,
             InteractionUpdate = new InteractionUpdate
-            {
-                Mode = combatStatus == "ongoing" ? InteractionMode.Combat : InteractionMode.Explore,
-                CombatStatus = combatStatus
-            }
+            { Mode = combatStatus == "ongoing" ? InteractionMode.Combat : InteractionMode.Explore, CombatStatus = combatStatus }
         };
 
         await _stateManager.SavePlayerAsync(player, ct);
@@ -2572,7 +2527,7 @@ public class GameEngine : IGameEngine
             player.Interaction.AppendContext(contextEntry);
     }
 
-    private static void ApplyFreeFormStatChanges(PlayerCharacter player, FreeFormResponse freeForm, ActionResult? result)
+    private void ApplyFreeFormStatChanges(PlayerCharacter player, FreeFormResponse freeForm, ActionResult? result)
     {
         foreach (var (stat, delta) in freeForm.StatChanges)
         {
@@ -2591,6 +2546,13 @@ public class GameEngine : IGameEngine
                 case "xp":
                     player.Xp = Math.Max(0, player.Xp + delta);
                     if (result is not null) result.XpGained += Math.Max(0, delta);
+                    // Check for level-up
+                    if (delta > 0)
+                    {
+                        var lvlUp = CheckAndApplyLevelUp(player);
+                        if (lvlUp is not null && result is not null)
+                            result.MechanicalSummary += $"\n{lvlUp}";
+                    }
                     break;
             }
         }
@@ -3014,7 +2976,11 @@ public class GameEngine : IGameEngine
                 **Available Commands:**
                 `go <direction>` -- Move north/south/east/west/up/down
                 `look` / `look at <target>` -- Examine surroundings or a specific thing
-                `attack <target>` -- Attack an NPC
+                `attack <target>` -- Attack an NPC (3 exchanges per round)
+                `power attack` -- Reckless swing: -3 accuracy, +5 damage
+                `aimed strike` -- Focus your aim: advantage on first hit
+                `defend` -- Brace for impact: +4 defense, skip your attacks
+                `flee` -- Run from combat (enemies get a free hit)
                 `talk to <target>` -- Talk to an NPC
                 `take <item>` -- Pick up an item
                 `drop <item>` -- Drop an item from inventory
@@ -3286,13 +3252,23 @@ public class GameEngine : IGameEngine
         else
             player.Inventory.Add(boughtItem);
 
+        // Auto-equip if the item is equippable and the relevant slot is empty
+        string? equipNote = null;
+        if (boughtItem.IsEquippable && existingStack is null)
+        {
+            var equipped = TryAutoEquip(player, boughtItem);
+            if (equipped)
+                equipNote = $" Equipped {boughtItem.Name}.";
+        }
+
         await _stateManager.SaveRoomAsync(room, ct);
 
+        var mechMsg = $"Bought {shopItem.Name} for {price} gold. You have {player.Gold} gold remaining.{equipNote ?? ""}";
         return new ActionResult
         {
             ActionId = action.Id,
             Success = true,
-            MechanicalSummary = $"Bought {shopItem.Name} for {price} gold. You have {player.Gold} gold remaining.",
+            MechanicalSummary = mechMsg,
             GoldChange = -price,
             ItemsGained = [boughtItem],
             StateChanges =
@@ -3418,5 +3394,166 @@ public class GameEngine : IGameEngine
 
         await PersistInteractionStoryEntry(player, action, convoResult, ct);
         return convoResult;
+    }
+
+    // ─── Combat Helpers ────────────────────────────────────────────────────
+
+    /// <summary>Runs a single round of enemy attacks against the player.</summary>
+    private void RunEnemyAttacks(PlayerCharacter player, List<Npc> enemies, Room room,
+        List<string> mech, List<DiceRoll> dice, List<StateChange> sc, int defenseBonus)
+    {
+        int effectiveDefense = player.Defense + defenseBonus;
+        foreach (var enemy in enemies.Where(e => e.Hp.HasValue && e.Hp.Value > 0 && room.Npcs.Contains(e)))
+        {
+            int atkBonus = enemy.AttackBonus ?? 0;
+            var eRoll = _dice.RollAttack(atkBonus);
+            dice.Add(eRoll);
+
+            if (eRoll.IsFumble) { mech.Add($"{enemy.Name} fumbles!"); continue; }
+            if (eRoll.Total < effectiveDefense && !eRoll.IsCritical)
+            { mech.Add($"{enemy.Name} misses! ({eRoll.Total} vs {effectiveDefense})"); continue; }
+
+            string eDmgDice = enemy.DamageDice ?? "1d4";
+            var eDmgRoll = _dice.Roll(eDmgDice, $"{enemy.Name} dmg");
+            int eDmg = eRoll.IsCritical ? eDmgRoll.Total * _rules.Combat.CriticalMultiplier : eDmgRoll.Total;
+            eDmg = Math.Max(1, eDmg);
+            dice.Add(eDmgRoll);
+
+            var oldHp = player.Hp;
+            player.Hp = Math.Max(0, player.Hp - eDmg);
+            sc.Add(new StateChange { EntityType = "Player", EntityId = player.Id, Property = "Hp",
+                OldValue = oldHp.ToString(), NewValue = player.Hp.ToString() });
+            mech.Add($"{enemy.Name} hits you for {eDmg}!{(eRoll.IsCritical ? " **CRIT!**" : "")}");
+
+            if (player.Hp <= 0) { mech.Add("**You have been defeated!**"); break; }
+        }
+    }
+
+    /// <summary>Generates ASCII HP bars for all combatants.</summary>
+    private static void AppendHpBars(List<string> mech, PlayerCharacter player, List<Npc> enemies, Room room)
+    {
+        mech.Add(""); // blank line separator
+        mech.Add(FormatHpBar(player.Name, player.Hp, player.MaxHp));
+        foreach (var enemy in enemies.Where(e => e.Hp.HasValue && e.Hp.Value > 0 && room.Npcs.Contains(e)))
+            mech.Add(FormatHpBar(enemy.Name, enemy.Hp!.Value, enemy.MaxHp ?? enemy.Hp!.Value));
+    }
+
+    private static string FormatHpBar(string name, int hp, int maxHp)
+    {
+        const int BarWidth = 20;
+        int filled = maxHp > 0 ? (int)Math.Round((double)hp / maxHp * BarWidth) : 0;
+        filled = Math.Clamp(filled, 0, BarWidth);
+        var bar = new string('#', filled) + new string('-', BarWidth - filled);
+        return $"  {name,-20} [{bar}] {hp}/{maxHp} HP";
+    }
+
+    // ─── Auto-Equip Helper ────────────────────────────────────────────────
+
+    /// <summary>
+    /// Tries to auto-equip an item if its slot is empty. Returns true if equipped.
+    /// Removes the item from inventory on success.
+    /// </summary>
+    private static bool TryAutoEquip(PlayerCharacter player, InventoryItem item)
+    {
+        if (!item.IsEquippable) return false;
+
+        bool slotEmpty = item.Type switch
+        {
+            ItemType.Weapon => player.Equipment.MainHand is null,
+            ItemType.Shield => player.Equipment.OffHand is null,
+            ItemType.Armor => player.Equipment.Armor is null,
+            ItemType.Helmet => player.Equipment.Helmet is null,
+            ItemType.Cloak => player.Equipment.Cloak is null,
+            ItemType.Boots => player.Equipment.Boots is null,
+            ItemType.Gloves => player.Equipment.Gloves is null,
+            _ => false
+        };
+
+        if (!slotEmpty) return false;
+
+        player.Equipment.Equip(item, out _);
+        player.Inventory.Remove(item);
+        return true;
+    }
+
+    // ─── Level Scaling ───────────────────────────────────────────────────
+
+    /// <summary>
+    /// Recalculates MaxHp and MaxMp based on current level and stats.
+    /// Formula: base * (1 + scalePerLevel * (level - 1)) + statMod.
+    /// Called on player load (to fix existing characters) and on level-up.
+    /// Does NOT touch current HP/MP — callers decide whether to heal.
+    /// </summary>
+    private void RecalculateMaxHpMp(PlayerCharacter player)
+    {
+        // Enforce stat caps (protects against inflated values from free-form RP)
+        int statMax = _rules.Stats.GetValueOrDefault("str")?.Max ?? 20;
+        player.Str = Math.Clamp(player.Str, 1, statMax);
+        player.Dex = Math.Clamp(player.Dex, 1, statMax);
+        player.Con = Math.Clamp(player.Con, 1, statMax);
+        player.Int = Math.Clamp(player.Int, 1, statMax);
+        player.Wis = Math.Clamp(player.Wis, 1, statMax);
+        player.Cha = Math.Clamp(player.Cha, 1, statMax);
+        player.Luck = Math.Clamp(player.Luck, 1, statMax);
+
+        int hpBase = _rules.Stats.GetValueOrDefault("hp")?.Base ?? 20;
+        int mpBase = _rules.Stats.GetValueOrDefault("mp")?.Base ?? 10;
+        int conMod = PlayerCharacter.GetStatModifier(player.Con);
+        int intMod = PlayerCharacter.GetStatModifier(player.Int);
+        double hpScale = _rules.Leveling.HpScalePerLevel;
+        double mpScale = _rules.Leveling.MpScalePerLevel;
+        int bonusLevels = Math.Max(0, player.Level - 1);
+
+        // Base + stat modifier, then scale up by percentage per bonus level
+        int baseHp = hpBase + conMod;
+        int baseMp = mpBase + intMod;
+        player.MaxHp = Math.Max(1, (int)(baseHp * (1.0 + hpScale * bonusLevels)));
+        player.MaxMp = Math.Max(0, (int)(baseMp * (1.0 + mpScale * bonusLevels)));
+
+        // Clamp current values
+        player.Hp = Math.Min(player.Hp, player.MaxHp);
+        player.Mp = Math.Min(player.Mp, player.MaxMp);
+    }
+
+    /// <summary>
+    /// Returns the XP required to advance from the given level to the next.
+    /// Formula: BaseXpPerLevel * level.
+    /// </summary>
+    private int XpRequiredForLevel(int currentLevel)
+        => _rules.Leveling.BaseXpPerLevel * currentLevel;
+
+    /// <summary>
+    /// Checks if the player has enough XP to level up. May trigger multiple level-ups.
+    /// Returns a description of level-ups that occurred, or null if none.
+    /// Heals the player to full on level-up.
+    /// </summary>
+    private string? CheckAndApplyLevelUp(PlayerCharacter player)
+    {
+        int maxLevel = _rules.Leveling.MaxLevel;
+        if (player.Level >= maxLevel) return null;
+
+        var levelUps = new List<string>();
+        while (player.Level < maxLevel)
+        {
+            int xpNeeded = XpRequiredForLevel(player.Level);
+            if (player.Xp < xpNeeded) break;
+
+            player.Xp -= xpNeeded;
+            player.Level++;
+
+            int oldMaxHp = player.MaxHp;
+            int oldMaxMp = player.MaxMp;
+            RecalculateMaxHpMp(player);
+
+            // Full heal on level-up
+            player.Hp = player.MaxHp;
+            player.Mp = player.MaxMp;
+
+            levelUps.Add($"LEVEL UP! You are now level {player.Level}! " +
+                         $"MaxHP: {oldMaxHp} → {player.MaxHp}, MaxMP: {oldMaxMp} → {player.MaxMp}. " +
+                         $"You feel refreshed — HP and MP fully restored!");
+        }
+
+        return levelUps.Count > 0 ? string.Join("\n", levelUps) : null;
     }
 }

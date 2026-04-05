@@ -9,6 +9,7 @@ public class GameRulesConfig
     public RestConfig Rest { get; set; } = new();
     public DeathConfig Death { get; set; } = new();
     public LootConfig Loot { get; set; } = new();
+    public LevelingConfig Leveling { get; set; } = new();
 }
 
 public class CharacterCreationConfig
@@ -90,4 +91,24 @@ public class LootConfig
 {
     public double EnemyDropChance { get; set; } = 0.6;
     public string GoldDropRange { get; set; } = "1d20 + {enemy_level * 2}";
+}
+
+/// <summary>
+/// Level progression configuration. Uses a simple percentage scaling model:
+/// XP to next level = BaseXpPerLevel * Level.
+/// HP/MP scale by a percentage bonus per level above 1.
+/// </summary>
+public class LevelingConfig
+{
+    /// <summary>XP required per level = BaseXpPerLevel * currentLevel. E.g., level 5→6 = 100*5 = 500 XP.</summary>
+    public int BaseXpPerLevel { get; set; } = 100;
+
+    /// <summary>Maximum achievable level.</summary>
+    public int MaxLevel { get; set; } = 20;
+
+    /// <summary>Percentage bonus to MaxHP per level above 1. 0.10 = +10% per level.</summary>
+    public double HpScalePerLevel { get; set; } = 0.10;
+
+    /// <summary>Percentage bonus to MaxMP per level above 1. 0.10 = +10% per level.</summary>
+    public double MpScalePerLevel { get; set; } = 0.10;
 }

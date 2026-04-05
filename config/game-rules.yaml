@@ -7,10 +7,11 @@ character_creation:
   flat_value: 10
   starting_hp_formula: "base + con_mod"
   starting_mp_formula: "base + int_mod"
-  starting_gold: 150
+  starting_gold: 250
   starting_level: 5
   starting_items:
     - "Iron Sword"
+    - "Keen Dagger"
     - "Leather Armor"
     - "Minor Healing Potion"
     - "Minor Healing Potion"
@@ -140,3 +141,12 @@ death:
 loot:
   enemy_drop_chance: 0.6
   gold_drop_range: "1d20 + {enemy_level * 2}"
+
+# Level progression — simple percentage scaling.
+# XP to level up = base_xp_per_level * current_level (e.g., 5→6 costs 500 XP).
+# HP/MP grow by +10% of their base per level above 1.
+leveling:
+  base_xp_per_level: 100
+  max_level: 20
+  hp_scale_per_level: 0.10
+  mp_scale_per_level: 0.10

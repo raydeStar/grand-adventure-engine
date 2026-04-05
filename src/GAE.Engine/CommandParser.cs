@@ -61,6 +61,29 @@ public partial class CommandParser
             return action;
         }
 
+        // Combat special moves (must be checked before generic Attack)
+        var powerAttackMatch = PowerAttackRegex().Match(input);
+        if (powerAttackMatch.Success)
+        {
+            action.Type = ActionType.PowerAttack;
+            if (powerAttackMatch.Groups["target"].Success)
+                action.Target = powerAttackMatch.Groups["target"].Value.Trim();
+            return action;
+        }
+        if (DefendRegex().IsMatch(input))
+        {
+            action.Type = ActionType.Defend;
+            return action;
+        }
+        var aimedMatch = AimedStrikeRegex().Match(input);
+        if (aimedMatch.Success)
+        {
+            action.Type = ActionType.AimedStrike;
+            if (aimedMatch.Groups["target"].Success)
+                action.Target = aimedMatch.Groups["target"].Value.Trim();
+            return action;
+        }
+
         // Attack
         var attackMatch = AttackRegex().Match(input);
         if (attackMatch.Success)
@@ -246,6 +269,15 @@ public partial class CommandParser
 
     [GeneratedRegex(@"(?:look|examine|inspect|search)\s+(?:(?:at|for)\s+)?(?<target>.+)$", RegexOptions.IgnoreCase)]
     private static partial Regex LookTargetRegex();
+
+    [GeneratedRegex(@"^(?:power\s+attack|heavy\s+(?:attack|strike|hit)|smash)(?:\s+(?<target>.+))?$", RegexOptions.IgnoreCase)]
+    private static partial Regex PowerAttackRegex();
+
+    [GeneratedRegex(@"^(?:defend|block|brace|guard|defensive\s+stance|raise\s+shield)$", RegexOptions.IgnoreCase)]
+    private static partial Regex DefendRegex();
+
+    [GeneratedRegex(@"^(?:aimed?\s+(?:strike|attack|shot)|focus\s+(?:attack|strike)|precise\s+(?:strike|attack|hit))(?:\s+(?<target>.+))?$", RegexOptions.IgnoreCase)]
+    private static partial Regex AimedStrikeRegex();
 
     [GeneratedRegex(@"^(?:attack|hit|strike|fight|slash)\s+(?<target>.+)$", RegexOptions.IgnoreCase)]
     private static partial Regex AttackRegex();

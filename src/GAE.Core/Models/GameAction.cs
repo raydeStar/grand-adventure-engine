@@ -34,5 +34,8 @@ public enum ActionType
     Help,
     Map,
     Shop,
+    PowerAttack,
+    Defend,
+    AimedStrike,
     Unknown
 }

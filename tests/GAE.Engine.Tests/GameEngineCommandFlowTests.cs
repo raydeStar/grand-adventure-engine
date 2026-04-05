@@ -328,7 +328,7 @@ public class GameEngineCommandFlowTests
         Assert.Contains("Restored", result.MechanicalSummary);
 
         player = await stateManager.GetPlayerAsync(PlayerId);
-        Assert.Equal(12, player!.Hp); // 5 + 10 clamped to MaxHp 12
+        Assert.Equal(15, player!.Hp); // 5 + 10 = 15 (MaxHp is 20, no clamp needed)
         Assert.Single(player.Inventory); // 2 - 1 = 1 remaining
         Assert.Equal(1, player.Inventory[0].Quantity);
     }
@@ -350,7 +350,7 @@ public class GameEngineCommandFlowTests
 
         Assert.True(result.Success);
         player = await stateManager.GetPlayerAsync(PlayerId);
-        Assert.Equal(4, player!.Mp); // 1 + 5 clamped to MaxMp 4
+        Assert.Equal(6, player!.Mp); // 1 + 5 = 6 (MaxMp is 10, no clamp needed)
         Assert.Empty(player.Inventory); // Last one consumed
     }
 
@@ -400,8 +400,9 @@ public class GameEngineCommandFlowTests
 
         player = await stateManager.GetPlayerAsync(PlayerId);
         Assert.Equal(50, player!.Gold);
-        Assert.Single(player.Inventory);
-        Assert.Equal("Iron Sword", player.Inventory[0].Name);
+        // Iron Sword is auto-equipped into mainHand since the slot was empty
+        Assert.NotNull(player.Equipment.MainHand);
+        Assert.Equal("Iron Sword", player.Equipment.MainHand!.Name);
     }
 
     [Fact]
@@ -622,6 +623,9 @@ public class GameEngineCommandFlowTests
             }
         });
 
+        // MaxHp/MaxMp must match the level-scaling formula:
+        // MaxHp = (hpBase + conMod) * (1 + 0.10 * (level-1))
+        // Level 1, CON 11 (mod 0): MaxHp = 20, INT 10 (mod 0): MaxMp = 10
         await stateManager.SavePlayerAsync(new PlayerCharacter
         {
             Id = PlayerId,
@@ -630,10 +634,10 @@ public class GameEngineCommandFlowTests
             Class = "Warrior",
             Level = 1,
             CurrentRoomId = room?.Id ?? "spawn",
-            Hp = 12,
-            MaxHp = 12,
-            Mp = 4,
-            MaxMp = 4,
+            Hp = 20,
+            MaxHp = 20,
+            Mp = 10,
+            MaxMp = 10,
             Str = 12,
             Dex = 10,
             Con = 11,
