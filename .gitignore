@@ -41,3 +41,7 @@ ux-scout-dashboard.png
 
 ## Temporary test/playtest scripts
 tmp_*.py
+
+## Theme overlays (personal/playtest branding — not for distribution)
+config/themes/
+scripts/apply-ff-theme.ps1

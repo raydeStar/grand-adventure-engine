@@ -1,16 +1,13 @@
-# ============================================================
-# Grand Adventure Engine - Class Registry Seed
-# ============================================================
-# improvised_spell_cap: max power level for improvised spells
-#   at each character level (index 0 = level 1).
-#   Casters get higher caps; martial classes get lower caps.
-# ============================================================
+# ══════════════════════════════════════════════════════════════════
+# FINAL FANTASY-THEMED CLASS REGISTRY
+# "The job system is the soul of every adventure." — Cid
+# ══════════════════════════════════════════════════════════════════
 
 classes:
 
   - id: fighter
-    name: Fighter
-    description: "A master of martial combat, trained in weapons and armor. Fighters rely on strength and endurance to prevail."
+    name: Knight
+    description: "A noble warrior wielding sword and shield in defense of the realm. Knights are frontline fighters who combine raw martial power with unwavering discipline."
     hit_die: d10
     primary_stat: str
     secondary_stat: con
@@ -27,8 +24,8 @@ classes:
     tags: [martial, tank, melee]
 
   - id: mage
-    name: Mage
-    description: "A scholarly spellcaster who commands arcane forces through intellect and study. Fragile but devastating at range."
+    name: Black Mage
+    description: "A master of destructive elemental magic — fire, ice, and lightning answer their command. Devastating at range but fragile up close. The pointy hat is mandatory."
     hit_die: d6
     primary_stat: int
     secondary_stat: wis
@@ -45,8 +42,8 @@ classes:
     tags: [caster, arcane, ranged]
 
   - id: rogue
-    name: Rogue
-    description: "A cunning trickster who uses stealth, deception, and precision strikes. Rogues excel at finding and exploiting weaknesses."
+    name: Thief
+    description: "A nimble treasure hunter who relies on speed, stealth, and cunning. Thieves excel at picking locks, dodging attacks, and relieving enemies of their valuables mid-combat."
     hit_die: d8
     primary_stat: dex
     secondary_stat: cha
@@ -63,8 +60,8 @@ classes:
     tags: [stealth, precision, melee, ranged]
 
   - id: cleric
-    name: Cleric
-    description: "A divine spellcaster who channels the power of the gods. Clerics heal, protect, and smite the unholy."
+    name: White Mage
+    description: "A healer and protector who channels divine light to mend wounds and smite the wicked. White Mages are the backbone of any adventuring party."
     hit_die: d8
     primary_stat: wis
     secondary_stat: con
@@ -81,8 +78,8 @@ classes:
     tags: [caster, divine, healer, support]
 
   - id: ranger
-    name: Ranger
-    description: "A warrior of the wilderness who combines martial skill with nature magic. Rangers are trackers, hunters, and survivalists."
+    name: Archer
+    description: "A keen-eyed wilderness warrior who combines bowmanship with nature magic. Archers track prey through any terrain and strike from beyond sight."
     hit_die: d10
     primary_stat: dex
     secondary_stat: wis
@@ -99,8 +96,8 @@ classes:
     tags: [hybrid, nature, ranged, tracker]
 
   - id: sorcerer
-    name: Sorcerer
-    description: "A natural-born spellcaster whose power comes from innate magical talent rather than study. Chaotic, powerful, unpredictable."
+    name: Summoner
+    description: "A spellcaster who draws power from pacts with Espers — ancient beings of immense elemental might. Their magic is wild, charismatic, and devastatingly unpredictable."
     hit_die: d6
     primary_stat: cha
     secondary_stat: int
@@ -118,7 +115,7 @@ classes:
 
   - id: monk
     name: Monk
-    description: "A martial artist who channels inner ki through disciplined combat. Monks strike fast and move faster."
+    description: "A martial artist who channels inner chakra through disciplined combat. Monks reject weapons and armor, relying on speed, precision, and devastating unarmed techniques."
     hit_die: d8
     primary_stat: dex
     secondary_stat: wis

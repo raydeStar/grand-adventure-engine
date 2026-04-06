@@ -1,17 +1,15 @@
-# ============================================================
-# Grand Adventure Engine - Spell Registry Seed
-# ============================================================
-# Power levels: 1-2 = cantrip/basic, 3-4 = intermediate,
-#               5-6 = advanced, 7-8 = expert, 9-10 = legendary
-# ============================================================
+# ══════════════════════════════════════════════════════════════════
+# FINAL FANTASY-THEMED SPELL REGISTRY
+# "Fire, Fira, Firaga — destruction comes in threes." — Vivi
+# ══════════════════════════════════════════════════════════════════
 
 spells:
 
   # ── EVOCATION (damage dealing) ──────────────────────────────
 
   - id: magic_missile
-    name: Magic Missile
-    description: "Bolts of arcane energy streak toward the target, never missing."
+    name: Aero
+    description: "Razor-sharp blades of wind cut through the target with pinpoint accuracy."
     school: evocation
     mana_cost: 2
     damage_dice: "1d4+1"
@@ -20,11 +18,11 @@ spells:
     required_classes: [mage, sorcerer]
     required_level: 1
     power_level: 1
-    tags: [force, auto-hit, single-target]
+    tags: [wind, auto-hit, single-target]
 
   - id: firebolt
-    name: Firebolt
-    description: "A mote of fire streaks toward the target."
+    name: Fire
+    description: "A mote of elemental fire streaks toward the target. The most basic — and beloved — Black Magic spell."
     school: evocation
     mana_cost: 1
     damage_dice: "1d10"
@@ -36,8 +34,8 @@ spells:
     tags: [fire, single-target, cantrip]
 
   - id: fireball
-    name: Fireball
-    description: "A bright streak flashes from your finger to a point you choose, then blossoms into an explosion of flame."
+    name: Firaga
+    description: "A massive explosion of flame engulfs the area. The pinnacle of fire magic — everything burns."
     school: evocation
     mana_cost: 8
     damage_dice: "3d6"
@@ -49,8 +47,8 @@ spells:
     tags: [fire, aoe]
 
   - id: lightning_bolt
-    name: Lightning Bolt
-    description: "A stroke of lightning forming a line 60 feet long and 5 feet wide blasts out from you."
+    name: Thundaga
+    description: "A devastating bolt of lightning crashes down from above. The air crackles with ozone and terrified screams."
     school: evocation
     mana_cost: 8
     damage_dice: "3d6"
@@ -62,8 +60,8 @@ spells:
     tags: [lightning, line]
 
   - id: sacred_flame
-    name: Sacred Flame
-    description: "Flame-like radiance descends on a creature that you can see."
+    name: Holy
+    description: "Brilliant white radiance descends upon the target, searing the unholy with divine judgment."
     school: evocation
     mana_cost: 1
     damage_dice: "1d8"
@@ -75,8 +73,8 @@ spells:
     tags: [radiant, single-target, cantrip]
 
   - id: smite
-    name: Divine Smite
-    description: "Channel divine energy through your weapon strike."
+    name: Banish
+    description: "Channel divine energy through your weapon strike, dealing devastating holy damage."
     school: evocation
     mana_cost: 4
     damage_dice: "2d8"
@@ -90,8 +88,8 @@ spells:
   # ── RESTORATION (healing) ────────────────────────────────────
 
   - id: cure_wounds
-    name: Cure Wounds
-    description: "A creature you touch regains hit points."
+    name: Cure
+    description: "A warm glow of restorative magic mends wounds and eases pain. The White Mage's signature spell."
     school: restoration
     mana_cost: 3
     heal_dice: "1d8+2"
@@ -102,8 +100,8 @@ spells:
     tags: [healing, single-target]
 
   - id: healing_word
-    name: Healing Word
-    description: "A quick word of restoration mends wounds at a distance."
+    name: Cura
+    description: "A quick utterance of healing magic that restores health at a distance."
     school: restoration
     mana_cost: 2
     heal_dice: "1d4+1"
@@ -114,8 +112,8 @@ spells:
     tags: [healing, single-target, quick]
 
   - id: lesser_restoration
-    name: Lesser Restoration
-    description: "You touch a creature and can end one disease or condition afflicting it."
+    name: Esuna
+    description: "Cleansing magic washes over the target, purging poison, paralysis, and disease."
     school: restoration
     mana_cost: 4
     status_effect: "cleanse"
@@ -128,8 +126,8 @@ spells:
   # ── ABJURATION (protection) ─────────────────────────────────
 
   - id: shield
-    name: Shield
-    description: "An invisible barrier of magical force appears and protects you."
+    name: Protect
+    description: "An invisible barrier of magical force shields the target from physical harm."
     school: abjuration
     mana_cost: 2
     status_effect: "shielded"
@@ -141,8 +139,8 @@ spells:
     tags: [defense, self]
 
   - id: mage_armor
-    name: Mage Armor
-    description: "You touch a willing creature and a protective magical force surrounds it."
+    name: Shell
+    description: "A shimmering magical shell surrounds the target, reducing magical damage."
     school: abjuration
     mana_cost: 3
     status_effect: "mage_armor"
@@ -154,8 +152,8 @@ spells:
     tags: [defense, single-target]
 
   - id: bless
-    name: Bless
-    description: "You bestow divine favor upon your allies."
+    name: Faith
+    description: "Divine favor empowers your allies, boosting their accuracy and morale."
     school: abjuration
     mana_cost: 4
     status_effect: "blessed"
@@ -169,8 +167,8 @@ spells:
   # ── ILLUSION ────────────────────────────────────────────────
 
   - id: minor_illusion
-    name: Minor Illusion
-    description: "You create a sound or an image of an object within range."
+    name: Vanish
+    description: "A shimmer of light creates a distracting illusion or renders an object temporarily invisible."
     school: illusion
     mana_cost: 1
     range: ranged
@@ -180,8 +178,8 @@ spells:
     tags: [utility, cantrip]
 
   - id: invisibility
-    name: Invisibility
-    description: "A creature you touch becomes invisible until the spell ends."
+    name: Invisible
+    description: "The target fades from sight completely. Even their footsteps fall silent."
     school: illusion
     mana_cost: 5
     status_effect: "invisible"
@@ -195,8 +193,8 @@ spells:
   # ── CONJURATION ─────────────────────────────────────────────
 
   - id: poison_spray
-    name: Poison Spray
-    description: "You extend your hand toward a creature and project a puff of noxious gas."
+    name: Bio
+    description: "A cloud of toxic green Mist sprays toward the target, eating at their flesh."
     school: conjuration
     mana_cost: 1
     damage_dice: "1d12"
@@ -210,8 +208,8 @@ spells:
   # ── DIVINATION ──────────────────────────────────────────────
 
   - id: detect_magic
-    name: Detect Magic
-    description: "You sense the presence of magic within 30 feet of you."
+    name: Libra
+    description: "Reveals the hidden properties of creatures and objects within range. Essential scouting magic."
     school: divination
     mana_cost: 2
     range: self
@@ -223,8 +221,8 @@ spells:
   # ── NECROMANCY ──────────────────────────────────────────────
 
   - id: chill_touch
-    name: Chill Touch
-    description: "A ghostly, skeletal hand reaches for the target, sapping their life force."
+    name: Blizzard
+    description: "A shard of ice forms and lances toward the target, sapping warmth and life."
     school: necromancy
     mana_cost: 2
     damage_dice: "1d8"
@@ -233,11 +231,11 @@ spells:
     required_classes: [mage, sorcerer]
     required_level: 1
     power_level: 2
-    tags: [necrotic, single-target]
+    tags: [ice, single-target]
 
   - id: drain_life
-    name: Drain Life
-    description: "Dark tendrils of energy siphon life from the target to you."
+    name: Drain
+    description: "Dark tendrils of energy siphon life force from the target, restoring the caster's vitality."
     school: necromancy
     mana_cost: 6
     damage_dice: "2d6"
@@ -253,7 +251,7 @@ spells:
 
   - id: haste
     name: Haste
-    description: "You alter time around a willing creature, doubling its speed."
+    description: "Time warps around the target, doubling their speed. A classic support spell — and the reason Summoners are always welcome in a party."
     school: transmutation
     mana_cost: 6
     status_effect: "hasted"
@@ -267,8 +265,8 @@ spells:
   # ── RANGER SPELLS ───────────────────────────────────────────
 
   - id: hunters_mark
-    name: "Hunter's Mark"
-    description: "You choose a creature and mystically mark it as your quarry."
+    name: "Scan"
+    description: "You mystically scan a creature, revealing its weaknesses and marking it as your quarry."
     school: divination
     mana_cost: 2
     status_effect: "marked"
@@ -280,8 +278,8 @@ spells:
     tags: [buff, tracking, single-target]
 
   - id: entangle
-    name: Entangle
-    description: "Grasping weeds and vines sprout from the ground, restraining creatures."
+    name: Slow
+    description: "Gravity intensifies around the target area, restraining creatures and slowing their movements."
     school: conjuration
     mana_cost: 3
     status_effect: "entangled"
@@ -290,4 +288,4 @@ spells:
     required_classes: [ranger, cleric]
     required_level: 1
     power_level: 2
-    tags: [control, aoe, nature]
+    tags: [control, aoe, gravity]

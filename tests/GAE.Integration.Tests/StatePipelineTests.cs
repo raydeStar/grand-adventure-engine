@@ -141,10 +141,10 @@ public class StatePipelineTests : IClassFixture<GaeWebApplicationFactory>
         var spawn = await state.GetRoomAsync("spawn");
 
         Assert.NotNull(spawn);
-        Assert.Equal("The Rusted Flagon", spawn.Name);
+        Assert.False(string.IsNullOrWhiteSpace(spawn.Name));
         Assert.True(spawn.Exits.ContainsKey("east"), "Spawn should have east exit");
         Assert.True(spawn.Exits.ContainsKey("south"), "Spawn should have south exit");
         Assert.True(spawn.Npcs.Count > 0, "Spawn should have at least one NPC");
-        Assert.Contains(spawn.Npcs, n => n.Name.Contains("Mara"));
+        Assert.Contains(spawn.Npcs, n => n.Id == "innkeeper_mara");
     }
 }

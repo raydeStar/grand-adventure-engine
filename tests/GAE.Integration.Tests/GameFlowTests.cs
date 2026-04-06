@@ -39,6 +39,13 @@ public class GameFlowTests : IClassFixture<GaeWebApplicationFactory>
         return await engine.CreateCharacterFromConceptAsync(concept);
     }
 
+    private async Task<Room> GetRoomAsync(string roomId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var state = scope.ServiceProvider.GetRequiredService<IStateManager>();
+        return (await state.GetRoomAsync(roomId))!;
+    }
+
     [Fact]
     public async Task CreateCharacter_ThenGetPlayer_ReturnsCharacter()
     {
@@ -59,6 +66,7 @@ public class GameFlowTests : IClassFixture<GaeWebApplicationFactory>
     public async Task PostAction_Look_ReturnsRoomDescription()
     {
         await CreateTestCharacterAsync("flow-player-look");
+        var spawn = await GetRoomAsync("spawn");
 
         var response = await _client.PostAsJsonAsync("/api/dashboard/action", new
         {
@@ -71,7 +79,7 @@ public class GameFlowTests : IClassFixture<GaeWebApplicationFactory>
         Assert.True(result.GetProperty("success").GetBoolean());
 
         var summary = result.GetProperty("mechanicalSummary").GetString()!;
-        Assert.Contains("The Rusted Flagon", summary);
+        Assert.Contains(spawn.Name, summary);
         Assert.Contains("Exits:", summary);
     }
 
@@ -194,16 +202,26 @@ public class GameFlowTests : IClassFixture<GaeWebApplicationFactory>
     public async Task PostAction_AttackNpc_ProducesDiceRolls()
     {
         await CreateTestCharacterAsync("flow-player-atk");
+        var adminClient = _factory.CreateAdminClient();
+        await adminClient.PostAsJsonAsync("/api/dashboard/admin/mutations/teleport", new
+        {
+            PlayerId = "flow-player-atk",
+            RoomId = "dungeon_hall",
+            CreateRoomIfMissing = false,
+            ConnectFromCurrentRoom = false
+        });
+
+        var dungeonHall = await GetRoomAsync("dungeon_hall");
+        var target = dungeonHall.Npcs.First(n => n.IsHostile);
 
         var response = await _client.PostAsJsonAsync("/api/dashboard/action", new
         {
             PlayerId = "flow-player-atk",
-            Command = "attack mara"
+            Command = $"attack {target.Name}"
         });
         response.EnsureSuccessStatusCode();
 
         var result = await response.Content.ReadFromJsonAsync<JsonElement>();
-        // Attack may succeed or miss, but should always have dice rolls
         Assert.True(result.GetProperty("diceRolls").GetArrayLength() > 0, "Attack should produce at least an attack roll");
     }
 

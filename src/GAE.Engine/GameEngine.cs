@@ -285,55 +285,12 @@ public class GameEngine : IGameEngine
     /// </summary>
     private async Task GrantStartingItemsAsync(PlayerCharacter player, CancellationToken ct)
     {
-        if (_rules.CharacterCreation.StartingItems.Count == 0) return;
+        var itemLookups = GetStartingItemLookups(player);
+        if (itemLookups.Count == 0) return;
 
-        // Try to resolve items from the registry first
-        foreach (var itemName in _rules.CharacterCreation.StartingItems)
+        foreach (var itemLookup in itemLookups)
         {
-            InventoryItem? item = null;
-
-            // Check registry
-            if (_registry is not null)
-            {
-                var template = _registry.Items.GetAll()
-                    .FirstOrDefault(t => t.Name.Equals(itemName, StringComparison.OrdinalIgnoreCase));
-                if (template is not null)
-                    item = template.ToInventoryItem();
-            }
-
-            // Fallback: check starting room's shop inventories
-            if (item is null)
-            {
-                var spawnRoom = await _stateManager.GetPlayerRoomAsync(player.Id, "spawn", ct);
-                if (spawnRoom is not null)
-                    item = TryResolveKnownItem(itemName, spawnRoom);
-
-                // Also check all connected rooms' shops (blacksmith, general store, etc.)
-                if (item is null && spawnRoom is not null)
-                {
-                    foreach (var exitRoomId in spawnRoom.Exits.Values)
-                    {
-                        var exitRoom = await _stateManager.GetPlayerRoomAsync(player.Id, exitRoomId, ct);
-                        if (exitRoom is not null)
-                        {
-                            item = TryResolveKnownItem(itemName, exitRoom);
-                            if (item is not null) break;
-
-                            // Check rooms one more level deep (e.g., town_square -> blacksmith)
-                            foreach (var deepExitId in exitRoom.Exits.Values)
-                            {
-                                var deepRoom = await _stateManager.GetPlayerRoomAsync(player.Id, deepExitId, ct);
-                                if (deepRoom is not null)
-                                {
-                                    item = TryResolveKnownItem(itemName, deepRoom);
-                                    if (item is not null) break;
-                                }
-                            }
-                            if (item is not null) break;
-                        }
-                    }
-                }
-            }
+            var item = await ResolveStartingItemAsync(player, itemLookup, ct);
 
             if (item is not null)
             {
@@ -355,13 +312,80 @@ public class GameEngine : IGameEngine
                         player.Inventory.Add(item);
                 }
 
-                _logger.LogInformation("Granted starting item '{ItemName}' to {PlayerId}", itemName, player.Id);
+                _logger.LogInformation("Granted starting item '{ItemLookup}' to {PlayerId}", itemLookup, player.Id);
             }
             else
             {
-                _logger.LogWarning("Could not resolve starting item '{ItemName}' from registry or shops", itemName);
+                _logger.LogWarning("Could not resolve starting item '{ItemLookup}' from registry or shops", itemLookup);
             }
         }
+    }
+
+    private List<string> GetStartingItemLookups(PlayerCharacter player)
+    {
+        var itemLookups = new List<string>();
+
+        if (_registry is not null)
+        {
+            var classDefinition = _registry.Classes.GetAll()
+                .FirstOrDefault(candidate =>
+                    candidate.Id.Equals(player.Class, StringComparison.OrdinalIgnoreCase)
+                    || candidate.Name.Equals(player.Class, StringComparison.OrdinalIgnoreCase));
+
+            if (classDefinition is not null)
+                itemLookups.AddRange(classDefinition.StartingEquipment);
+        }
+
+        itemLookups.AddRange(_rules.CharacterCreation.StartingItems);
+        return itemLookups;
+    }
+
+    private async Task<InventoryItem?> ResolveStartingItemAsync(PlayerCharacter player, string itemLookup, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(itemLookup))
+            return null;
+
+        if (_registry is not null)
+        {
+            var template = _registry.Items.GetAll().FirstOrDefault(candidate =>
+                candidate.Id.Equals(itemLookup, StringComparison.OrdinalIgnoreCase)
+                || candidate.Name.Equals(itemLookup, StringComparison.OrdinalIgnoreCase));
+
+            if (template is not null)
+                return template.ToInventoryItem();
+        }
+
+        var spawnRoom = await _stateManager.GetPlayerRoomAsync(player.Id, "spawn", ct);
+        if (spawnRoom is not null)
+        {
+            var roomItem = TryResolveKnownItem(itemLookup, spawnRoom);
+            if (roomItem is not null)
+                return roomItem;
+
+            foreach (var exitRoomId in spawnRoom.Exits.Values)
+            {
+                var exitRoom = await _stateManager.GetPlayerRoomAsync(player.Id, exitRoomId, ct);
+                if (exitRoom is null)
+                    continue;
+
+                roomItem = TryResolveKnownItem(itemLookup, exitRoom);
+                if (roomItem is not null)
+                    return roomItem;
+
+                foreach (var deepExitId in exitRoom.Exits.Values)
+                {
+                    var deepRoom = await _stateManager.GetPlayerRoomAsync(player.Id, deepExitId, ct);
+                    if (deepRoom is null)
+                        continue;
+
+                    roomItem = TryResolveKnownItem(itemLookup, deepRoom);
+                    if (roomItem is not null)
+                        return roomItem;
+                }
+            }
+        }
+
+        return null;
     }
 
     public async Task<CombatState?> GetActiveCombatAsync(string roomId, CancellationToken ct = default)
@@ -1804,19 +1828,26 @@ public class GameEngine : IGameEngine
     private static InventoryItem? TryResolveKnownItem(string itemName, Room room)
     {
         // Check room floor items
-        var roomItem = FindNamedEntity(room.Items, i => i.Name, itemName);
+        var roomItem = room.Items.FirstOrDefault(i => MatchesItemLookup(i, itemName));
         if (roomItem is not null)
             return CloneInventoryItem(roomItem, 1);
 
         // Check shopkeeper inventories in the room
         foreach (var npc in room.Npcs.Where(n => n.IsShopkeeper))
         {
-            var shopItem = FindNamedEntity(npc.ShopInventory, i => i.Name, itemName);
+            var shopItem = npc.ShopInventory.FirstOrDefault(i => MatchesItemLookup(i, itemName));
             if (shopItem is not null)
                 return CloneInventoryItem(shopItem, 1);
         }
 
         return null;
+    }
+
+    private static bool MatchesItemLookup(InventoryItem item, string itemLookup)
+    {
+        var normalizedLookup = NormalizeLookupText(itemLookup);
+        return NormalizeLookupText(item.Name) == normalizedLookup
+            || NormalizeLookupText(item.Id) == normalizedLookup;
     }
 
     private static void AddRoomItem(Room room, InventoryItem item)

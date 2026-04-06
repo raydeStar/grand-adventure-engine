@@ -7,14 +7,11 @@ character_creation:
   flat_value: 10
   starting_hp_formula: "base + con_mod"
   starting_mp_formula: "base + int_mod"
-  starting_gold: 250
-  starting_level: 5
+  starting_gold: 30
+  starting_level: 1
   starting_items:
-    - "Iron Sword"
-    - "Keen Dagger"
-    - "Leather Armor"
-    - "Minor Healing Potion"
-    - "Minor Healing Potion"
+    - "Potion"
+    - "Potion"
     - "Torch"
 
 stats:

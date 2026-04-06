@@ -189,63 +189,58 @@ public static class RegistrySeedLoader
 
         foreach (var room in allRooms)
         {
-            if (room.Items is null) continue;
-            foreach (var item in room.Items)
+            if (room.Items is not null)
             {
-                if (string.IsNullOrWhiteSpace(item.Id)) continue;
-                if (registry.Exists(item.Id)) continue;
-
-                registry.Register(new ItemTemplate
-                {
-                    Id = item.Id,
-                    Name = item.Name ?? item.Id,
-                    Description = item.Description,
-                    Type = ParseItemType(item.Type),
-                    DamageDice = item.DamageDice,
-                    DamageStat = item.DamageStat,
-                    ArmorValue = item.ArmorValue,
-                    IsEquippable = item.IsEquippable ?? InventoryItem.IsEquippableType(ParseItemType(item.Type)),
-                    IsConsumable = item.IsConsumable ?? false,
-                    IsTwoHanded = item.IsTwoHanded ?? false,
-                    Effect = item.Effect,
-                    Value = item.Value,
-                    StatBonuses = item.StatBonuses ?? new(),
-                    Tags = []
-                });
-                count++;
+                foreach (var item in room.Items)
+                    RegisterLoreItemIfMissing(registry, item, ref count);
             }
 
-            // Also pull items from NPC loot tables
             if (room.Npcs is null) continue;
+
             foreach (var npc in room.Npcs)
             {
-                if (npc.Loot is null) continue;
-                foreach (var loot in npc.Loot)
+                if (npc.ShopInventory is not null)
                 {
-                    if (string.IsNullOrWhiteSpace(loot.Id) || registry.Exists(loot.Id)) continue;
-                    registry.Register(new ItemTemplate
-                    {
-                        Id = loot.Id,
-                        Name = loot.Name ?? loot.Id,
-                        Description = loot.Description,
-                        Type = ParseItemType(loot.Type),
-                        DamageDice = loot.DamageDice,
-                        DamageStat = loot.DamageStat,
-                        ArmorValue = loot.ArmorValue,
-                        IsEquippable = loot.IsEquippable ?? InventoryItem.IsEquippableType(ParseItemType(loot.Type)),
-                        IsConsumable = loot.IsConsumable ?? false,
-                        IsTwoHanded = loot.IsTwoHanded ?? false,
-                        Effect = loot.Effect,
-                        Value = loot.Value,
-                        StatBonuses = loot.StatBonuses ?? new(),
-                        Tags = []
-                    });
-                    count++;
+                    foreach (var shopItem in npc.ShopInventory)
+                        RegisterLoreItemIfMissing(registry, shopItem, ref count);
                 }
+
+                if (npc.Loot is null) continue;
+
+                foreach (var loot in npc.Loot)
+                    RegisterLoreItemIfMissing(registry, loot, ref count);
             }
         }
 
         logger?.LogInformation("Loaded {Count} item templates from lore seed", count);
+    }
+
+    private static void RegisterLoreItemIfMissing(IContentRegistry<ItemTemplate> registry, LoreItemDto item, ref int count)
+    {
+        if (string.IsNullOrWhiteSpace(item.Id) || registry.Exists(item.Id))
+            return;
+
+        var itemType = ParseItemType(item.Type);
+        registry.Register(new ItemTemplate
+        {
+            Id = item.Id,
+            Name = item.Name ?? item.Id,
+            Description = item.Description,
+            Type = itemType,
+            DamageDice = item.DamageDice,
+            DamageStat = item.DamageStat,
+            ArmorValue = item.ArmorValue,
+            IsEquippable = item.IsEquippable ?? InventoryItem.IsEquippableType(itemType),
+            IsConsumable = item.IsConsumable ?? false,
+            IsTwoHanded = item.IsTwoHanded ?? false,
+            Effect = item.Effect,
+            Value = item.Value,
+            StatBonuses = item.StatBonuses ?? new(),
+            RequiredLevel = item.RequiredLevel,
+            Rarity = string.IsNullOrWhiteSpace(item.Rarity) ? "common" : item.Rarity,
+            Tags = item.Tags ?? []
+        });
+        count++;
     }
 
     private static ItemType ParseItemType(string? type) => type?.ToLowerInvariant() switch
@@ -297,6 +292,7 @@ public static class RegistrySeedLoader
 
     private class LoreNpcForItems
     {
+        public List<LoreItemDto>? ShopInventory { get; set; }
         public List<LoreItemDto>? Loot { get; set; }
     }
 

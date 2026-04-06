@@ -395,6 +395,9 @@ static GAE.Core.Models.Npc ConvertLoreNpc(LoreNpc n)
     if (n.KnowledgeScopes is not null)
         npc.KnowledgeScopes.AddRange(n.KnowledgeScopes);
 
+    if (n.QuestsOffered is not null)
+        npc.QuestsOffered.AddRange(n.QuestsOffered);
+
     if (n.Loot is not null)
         npc.LootTable.AddRange(n.Loot.Select(ConvertLoreItem));
 
@@ -475,6 +478,7 @@ public class LoreNpc
     public List<LoreItem>? Loot { get; set; }
     public bool IsShopkeeper { get; set; }
     public List<LoreItem>? ShopInventory { get; set; }
+    public List<string>? QuestsOffered { get; set; }
 }
 public class LoreItem
 {

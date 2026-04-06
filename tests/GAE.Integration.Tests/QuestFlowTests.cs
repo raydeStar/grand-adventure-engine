@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using GAE.Core.Interfaces;
 using GAE.Core.Models;
+using GAE.Core.Registry;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace GAE.Integration.Tests;
@@ -50,6 +51,17 @@ public class QuestFlowTests : IClassFixture<GaeWebApplicationFactory>
         return await response.Content.ReadFromJsonAsync<JsonElement>();
     }
 
+    private async Task<QuestDefinition> GetSpawnQuestAsync()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var state = scope.ServiceProvider.GetRequiredService<IStateManager>();
+        var registry = scope.ServiceProvider.GetRequiredService<IContentRegistryService>();
+
+        var spawn = await state.GetRoomAsync("spawn");
+        var questId = spawn!.Npcs.First(n => n.QuestsOffered.Count > 0).QuestsOffered[0];
+        return registry.Quests.GetAll().First(q => q.Id.Equals(questId, StringComparison.OrdinalIgnoreCase));
+    }
+
     [Fact]
     public async Task Journal_EmptyQuestLog_ReturnsNoActiveQuests()
     {
@@ -67,18 +79,17 @@ public class QuestFlowTests : IClassFixture<GaeWebApplicationFactory>
     {
         var playerId = "quest-accept-flow";
         await CreateTestCharacterAsync(playerId);
+        var quest = await GetSpawnQuestAsync();
 
-        // Accept a quest available in the spawn room
-        var acceptResult = await PostActionAsync(playerId, "accept rat problem");
+        var acceptResult = await PostActionAsync(playerId, $"accept quest {quest.Name}");
         Assert.True(acceptResult.GetProperty("success").GetBoolean());
 
         var acceptSummary = acceptResult.GetProperty("mechanicalSummary").GetString()!;
-        Assert.Contains("Rat Problem", acceptSummary, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(quest.Name, acceptSummary, StringComparison.OrdinalIgnoreCase);
 
-        // Verify it shows in journal
         var journalResult = await PostActionAsync(playerId, "journal");
         var journalSummary = journalResult.GetProperty("mechanicalSummary").GetString()!;
-        Assert.Contains("Rat Problem", journalSummary, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(quest.Name, journalSummary, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -86,15 +97,20 @@ public class QuestFlowTests : IClassFixture<GaeWebApplicationFactory>
     {
         var playerId = "quest-info-flow";
         await CreateTestCharacterAsync(playerId);
+        var quest = await GetSpawnQuestAsync();
 
-        await PostActionAsync(playerId, "accept rat problem");
+        await PostActionAsync(playerId, $"accept quest {quest.Name}");
 
-        var infoResult = await PostActionAsync(playerId, "quest rat problem");
+        var infoResult = await PostActionAsync(playerId, $"quest {quest.Name}");
         Assert.True(infoResult.GetProperty("success").GetBoolean());
 
         var summary = infoResult.GetProperty("mechanicalSummary").GetString()!;
-        Assert.Contains("Rat Problem", summary, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Clear the Cellar", summary, StringComparison.OrdinalIgnoreCase);
+        var firstObjectiveText = quest.Stages[0].Objectives[0].Description ?? quest.Stages[0].Objectives[0].Id;
+        Assert.Contains(quest.Name, summary, StringComparison.OrdinalIgnoreCase);
+        Assert.True(
+            summary.Contains(quest.Stages[0].Name, StringComparison.OrdinalIgnoreCase)
+            || summary.Contains(firstObjectiveText, StringComparison.OrdinalIgnoreCase),
+            $"Expected quest info to mention the active stage or objective. Got: {summary}");
     }
 
     [Fact]
@@ -102,10 +118,11 @@ public class QuestFlowTests : IClassFixture<GaeWebApplicationFactory>
     {
         var playerId = "quest-abandon-flow";
         await CreateTestCharacterAsync(playerId);
+        var quest = await GetSpawnQuestAsync();
 
-        await PostActionAsync(playerId, "accept rat problem");
+        await PostActionAsync(playerId, $"accept quest {quest.Name}");
 
-        var abandonResult = await PostActionAsync(playerId, "abandon rat problem");
+        var abandonResult = await PostActionAsync(playerId, $"abandon quest {quest.Name}");
         Assert.True(abandonResult.GetProperty("success").GetBoolean());
 
         var abandonSummary = abandonResult.GetProperty("mechanicalSummary").GetString()!;
@@ -122,14 +139,13 @@ public class QuestFlowTests : IClassFixture<GaeWebApplicationFactory>
     {
         var playerId = "quest-dup-accept";
         await CreateTestCharacterAsync(playerId);
+        var quest = await GetSpawnQuestAsync();
 
-        await PostActionAsync(playerId, "accept rat problem");
+        await PostActionAsync(playerId, $"accept quest {quest.Name}");
 
-        // Try to accept again
-        var dupeResult = await PostActionAsync(playerId, "accept rat problem");
+        var dupeResult = await PostActionAsync(playerId, $"accept quest {quest.Name}");
         var summary = dupeResult.GetProperty("mechanicalSummary").GetString()!;
 
-        // Should indicate the quest is already active or accepted
         Assert.True(
             summary.Contains("already", StringComparison.OrdinalIgnoreCase) ||
             summary.Contains("active", StringComparison.OrdinalIgnoreCase) ||

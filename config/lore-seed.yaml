@@ -1,102 +1,85 @@
-# LORE SEED — Demo World: Thornwall & the Dread Hollow
-# "Every world begins with a whisper of history." — Sir Thaddeus
+# ══════════════════════════════════════════════════════════════════
+# FINAL FANTASY-THEMED LORE SEED
+# "Kupo! Another adventurer wanders into our story." — Mog
 #
-# VICTORY CONDITION: Defeat Goretusk the Undying in the Dread Hollow depths.
-# A small town, a forest, and a dungeon. Short, punchy, and fun.
-
-world:
-  name: "Thornwall and the Dread Hollow"
-  description: >-
-    A small frontier town perched on the edge of a cursed forest.
-    Something stirs in the dungeon beneath the old ruins, and the townsfolk
-    are too scared to investigate. That's where you come in.
+# A love letter to Final Fantasy, reskinned for the Grand Adventure Engine.
+# NOT for public distribution — personal playtest theming only.
+# ══════════════════════════════════════════════════════════════════
 
 regions:
-  - id: "thornwall"
-    name: "Thornwall"
-    description: "A modest frontier town with a tavern, a blacksmith, and more rumors than residents."
-    tags: ["town", "safe", "trade"]
+  - id: "rabanastre"
+    name: "Rabanastre"
+    description: "The great desert city, jewel of Dalmasca. Its grand bazaars and towering sandstone archways shelter soldiers, merchants, moogles, and cutthroats alike."
+    tags: ["city", "safe", "trade", "desert"]
 
-  - id: "whisperwood"
-    name: "The Whisperwood"
-    description: "A dense, fog-choked forest between Thornwall and the Dread Hollow."
-    tags: ["forest", "dark", "wilderness"]
+  - id: "golmore"
+    name: "The Golmore Jungle"
+    description: "A vast primordial jungle where ancient creatures and wayward spirits roam beneath a canopy no sunlight penetrates. The Viera once called it home."
+    tags: ["jungle", "dark", "wilderness", "magical"]
 
-  - id: "dread_hollow"
-    name: "The Dread Hollow"
-    description: "Ancient ruins and tunnels carved deep into the earth. Something terrible waits at the bottom."
-    tags: ["dungeon", "underground", "dangerous"]
+  - id: "pharos"
+    name: "The Pharos at Ridorana"
+    description: "A tower of black stone rising from the sea, built by the Occuria to house an ancient power. Something stirs within its highest reaches."
+    tags: ["dungeon", "tower", "dangerous", "ancient"]
 
 factions:
-  - id: "thornwall_militia"
-    name: "Thornwall Militia"
-    description: "The town's small but loyal guard force. Underpaid, overworked, deeply suspicious of adventurers."
+  - id: "dalmascan_resistance"
+    name: "The Dalmascan Resistance"
+    description: "Freedom fighters loyal to the memory of King Raminas, working in the shadows to liberate Rabanastre from Imperial control."
 
-  - id: "hollow_cult"
-    name: "The Hollow Cult"
-    description: "Cultists who worship Goretusk and feed the dungeon with offerings."
+  - id: "occuria_cult"
+    name: "The Cult of the Occuria"
+    description: "Zealots who believe the Occuria are gods and seek to awaken the Esper sealed in the Pharos. Dangerously devoted."
 
   - id: "merchants_guild"
-    name: "Thornwall Merchants"
-    description: "The shopkeepers and traders who keep Thornwall running."
-
-# ──────────────────────────────────────────────────────────
-#  TOWN: THORNWALL
-# ──────────────────────────────────────────────────────────
-
-starting_room:
-  id: "spawn"
-  name: "The Rusted Flagon"
-  description: >-
-    A creaky tavern that smells of woodsmoke and cheap ale. Mismatched chairs
-    surround battered tables, and a mounted boar's head watches the room with
-    glass eyes. The barkeep, Mara, keeps one hand under the counter at all times.
-    A notice board near the door is covered in bounty postings and desperate pleas.
-  exits:
-    east: "town_square"
-    south: "back_alley"
-    down: "tavern_cellar"
-  npcs:
-    - id: "innkeeper_mara"
-      name: "Mara the Barkeep"
-      personality: "Warm and flirtatious, but sharp as a knife. Knows every secret in Thornwall. Has a soft spot for adventurers with good stories. Lonely since her husband left."
-      faction: "merchants_guild"
-      knowledge_scopes: ["rumors", "town", "whisperwood", "dread_hollow", "merchants_guild"]
-      quests_offered: ["rat_problem"]
-    - id: "drunk_pete"
-      name: "Stumbling Pete"
-      personality: "Town drunk. Cowardly, gullible, and desperate for coin. Claims he saw the dungeon boss once. Nobody believes him. Surprisingly honest when sober, which is never."
-      faction: "neutral"
-      knowledge_scopes: ["rumors", "dread_hollow"]
-      quests_offered: ["petes_courage"]
-  items:
-    - id: "chipped_mug"
-      name: "Chipped Mug"
-      description: "A ceramic mug with a crack running down the side. Someone left it on the table half-full of flat ale."
-      type: "Misc"
-      value: 1
-    - id: "half_eaten_bread"
-      name: "Half-Eaten Bread"
-      description: "A crusty hunk of bread with a bite taken out of it. Still edible, probably."
-      type: "Misc"
-      value: 1
-      is_consumable: true
-    - id: "worn_playing_cards"
-      name: "Worn Playing Cards"
-      description: "A dog-eared deck of playing cards. Several are missing, and the rest are sticky with ale."
-      type: "Misc"
-      value: 2
-  environment_tags: ["indoor", "safe", "lit", "tavern"]
+    name: "Rabanastre Merchants' Guild"
+    description: "The shopkeepers, traders, and moogles who keep Rabanastre's economy moving. Gil is the only god they worship."
 
 rooms:
+  # ── RABANASTRE — CITY ROOMS ────────────────────────────────
+
+  - id: "spawn"
+    name: "The Seventh Heaven"
+    description: "A bustling tavern wedged between two towering sandstone buildings. Ceiling fans creak overhead, struggling against the desert heat. The bar is polished driftwood, the chairs are mismatched, and the air smells of spiced meat and strong coffee. A bounty board near the door overflows with hunt postings. Lebreau keeps the drinks flowing and the rumors sharper."
+    exits:
+      east: "town_square"
+      south: "back_alley"
+      down: "tavern_cellar"
+    environment_tags: ["indoor", "safe", "lit", "tavern"]
+    npcs:
+      - id: "innkeeper_mara"
+        name: "Lebreau"
+        personality: "Warm, confident, and effortlessly cool. Runs the Seventh Heaven with charm and steel. Knows everyone's secrets and trades them like currency. Flirtatious with adventurers she finds interesting. Used to run with a resistance cell before settling down. Still keeps a gunblade behind the bar."
+        faction: "merchants_guild"
+        knowledge_scopes: ["rumors", "town", "golmore", "pharos", "merchants_guild", "dalmascan_resistance"]
+        quests_offered: ["waterway_infestation"]
+      - id: "drunk_pete"
+        name: "Wedge"
+        personality: "One half of Biggs & Wedge — except Biggs shipped out weeks ago and Wedge has been drinking ever since. Hapless, good-hearted, and terrible at his job. Claims he once piloted an airship. Nobody believes him. Surprisingly loyal to anyone who shows him kindness."
+        faction: "dalmascan_resistance"
+        knowledge_scopes: ["rumors", "pharos", "airships"]
+        quests_offered: ["wedge_lucky_charm"]
+    items:
+      - id: "chipped_mug"
+        name: "Cracked Mug"
+        description: "A ceramic mug with a lightning-bolt crack down the side. Half-full of something that might be coffee or might be motor oil."
+        type: "Misc"
+        value: 1
+      - id: "half_eaten_bread"
+        name: "Gysahl Biscuit"
+        description: "A crunchy biscuit made from gysahl greens. Chocobos love them, and Wedge apparently does too — there's a bite taken out of this one."
+        type: "Misc"
+        is_consumable: true
+        value: 1
+      - id: "worn_playing_cards"
+        name: "Triple Triad Deck"
+        description: "A dog-eared deck of Triple Triad cards. Several are missing, and the rest are sticky with spilled ale. The Ifrit card has a mustache drawn on it."
+        type: "Misc"
+        value: 2
+
   - id: "town_square"
-    name: "Thornwall Town Square"
-    description: >-
-      The heart of Thornwall — a cobblestone clearing ringed by crooked buildings.
-      A stone well sits in the center, and a militia guardsman leans against a post,
-      watching passersby with the enthusiasm of a man who'd rather be anywhere else.
-      The blacksmith's hammer rings from the north. The tavern is to the west, and the
-      town gate opens east toward the forest.
+    name: "Rabanastre Bazaar"
+    description: "The beating heart of Rabanastre — a vast open-air marketplace shaded by colorful canvas awnings. Vendors hawk everything from potions to chocobo feathers. A massive crystal fountain dominates the center, its waters glowing faintly blue. An airship rumbles overhead, casting a shadow across the cobblestones. To the north, the clang of hammers. To the east, the great city gates."
     exits:
       west: "spawn"
       north: "blacksmith"
@@ -105,181 +88,187 @@ rooms:
       southeast: "church"
       northeast: "market_stalls"
       southwest: "town_well"
+    environment_tags: ["outdoor", "safe", "lit", "town_center", "bazaar"]
     npcs:
       - id: "guard_bram"
-        name: "Bram the Gate Guard"
-        personality: "Stern, gruff, and suspicious. Devoted to his post. Extremely hard to charm or bribe. Respects strength and directness. Hates adventurers who cause trouble."
-        faction: "thornwall_militia"
-        knowledge_scopes: ["town", "militia", "whisperwood", "security"]
-        quests_offered: ["brams_patrol"]
+        name: "Basch fon Ronsenburg"
+        personality: "A disgraced knight falsely accused of regicide, now serving as a common gate guard under an assumed name. Noble, honorable, and haunted by guilt. Speaks with quiet authority. Respects strength and directness. Won't talk about his past unless trust is earned. The resistance knows who he really is."
+        faction: "dalmascan_resistance"
+        knowledge_scopes: ["town", "dalmascan_resistance", "golmore", "security", "military"]
+        quests_offered: ["patrol_resistance"]
       - id: "dungeon_master_garrick"
-        name: "Garrick the Dungeoneer"
-        personality: "A weathered old adventurer with a patch over one eye and a scarred grin. Claims he knows the location of every lost dungeon in the realm. For a price, he'll tell you where to find one suited to your skill level. Dramatic storyteller, loves embellishing danger."
-        faction: "neutral"
-        knowledge_scopes: ["dungeons", "monsters", "treasure", "adventure", "lore"]
+        name: "Cid Highwind"
+        personality: "A legendary airship engineer with a cigarette perpetually between his teeth and a spear strapped to his back. Retired from active adventuring but knows every dungeon, ruin, and monster den in the realm. Loud, profane, and deeply competent. Will mark dangerous locations on your map for the right price. Loves telling stories about the old days."
+        faction: "dalmascan_resistance"
+        knowledge_scopes: ["dungeons", "monsters", "treasure", "adventure", "lore", "airships", "technology"]
         level: 5
     items:
       - id: "loose_cobblestone"
-        name: "Loose Cobblestone"
-        description: "A cobblestone that's worked itself free from the square. Heavy and rough-edged."
+        name: "Cracked Paving Stone"
+        description: "A chunk of sandstone worked loose from the bazaar floor. Heavy and rough-edged. An Imperial boot print is stamped into the dust on top."
         type: "Misc"
         value: 1
       - id: "wilted_flower"
-        name: "Wilted Flower"
-        description: "A sad little wildflower dropped by some passerby. Its petals are brown at the edges."
+        name: "Withered Desert Rose"
+        description: "A sad little flower dropped by some passerby. Its petals are brown at the edges, but it still smells faintly sweet."
         type: "Misc"
         value: 1
-    environment_tags: ["outdoor", "safe", "lit", "town_center"]
 
   - id: "blacksmith"
-    name: "Korga's Forge"
-    description: >-
-      Waves of heat pour from the open-air forge where a massive orc woman hammers
-      glowing steel into shape. Weapons and armor hang from every surface — some
-      mundane, others crackling with faint enchantment. A sign reads:
-      "YOU BREAK IT, YOU BUY IT. YES, THAT INCLUDES YOUR FACE."
+    name: "Watts' Forge"
+    description: "Waves of heat pour from the open-air forge where a grizzled Bangaa hammers glowing mythril into shape. Swords, spears, and shields hang from every surface — some mundane, others crackling with materia-infused enchantment. A sign reads: 'YOU BREAK IT, YOU BUY IT. YES, THAT INCLUDES YOUR SKULL, KUPO.' A moogle assistant scurries about, taking measurements."
     exits:
       south: "town_square"
+    environment_tags: ["indoor", "safe", "lit", "forge", "hot"]
     npcs:
       - id: "blacksmith_korga"
-        name: "Korga Ironjaw"
-        personality: "Blunt, loud, and proud of her work. An orc blacksmith who settled in Thornwall after retiring from mercenary life. Respects fighters. Finds rogues amusing. Will give discounts to people who impress her."
+        name: "Watts"
+        personality: "A veteran Bangaa weaponsmith who has forged blades for kings, rebels, and monsters alike. Blunt, loud, and relentlessly proud of his craft. Settled in Rabanastre after years on the road. Respects fighters who know their steel. Finds mages amusing. Will give discounts to anyone who impresses him with combat knowledge."
         faction: "merchants_guild"
-        knowledge_scopes: ["weapons", "armor", "combat", "mercenary_life"]
+        knowledge_scopes: ["weapons", "armor", "combat", "mercenary_life", "mythril", "materia"]
         is_shopkeeper: true
-        quests_offered: ["korgas_test"]
+        quests_offered: ["watts_masterwork"]
         shop_inventory:
           - id: "thunderstrike_blade"
-            name: "Thunderstrike Blade"
-            description: "A longsword that crackles with blue lightning. Korga's masterwork — she's been looking for someone worthy to carry it."
+            name: "Masamune Replica"
+            description: "A katana that crackles with lightning-aspected aether. Watts' masterwork — he's been looking for someone worthy to carry it. 'It ain't the real thing,' he grunts, 'but it'll do.'"
             type: "Weapon"
             damage_dice: "3d8+5"
-            damage_stat: "str"
+            damage_stat: "STR"
             value: 500
             is_equippable: true
+            slot: "Weapon"
           - id: "ironbark_plate"
-            name: "Ironbark Plate Armor"
-            description: "Armor forged from ironwood and tempered steel. Light enough to move in, tough enough to stop a troll's claw."
+            name: "Adamant Armor"
+            description: "Armor forged from adamantite alloy and tempered in dragon's breath. Light enough to move in, tough enough to stop a Behemoth's claw."
             type: "Armor"
             armor_value: 6
             value: 400
             is_equippable: true
+            slot: "Armor"
           - id: "starfall_shield"
-            name: "Starfall Shield"
-            description: "A round shield inlaid with a meteor fragment. Glows faintly in the dark."
+            name: "Crystal Shield"
+            description: "A round shield inlaid with a fragment of Nethicite. Glows faintly in the dark and hums near magical energy."
             type: "Shield"
             armor_value: 4
             value: 250
             is_equippable: true
+            slot: "Shield"
           - id: "iron_sword"
-            name: "Iron Sword"
-            description: "A simple but reliable blade. Good for beginners."
+            name: "Mythril Sword"
+            description: "A standard-issue mythril blade. Reliable, well-balanced, and perfect for beginners who want to survive."
             type: "Weapon"
             damage_dice: "1d6+1"
-            damage_stat: "str"
+            damage_stat: "STR"
             value: 25
             is_equippable: true
+            slot: "Weapon"
           - id: "keen_dagger"
-            name: "Keen Dagger"
-            description: "A wickedly sharp dagger balanced for speed. Perfect for rogues and finesse fighters."
+            name: "Assassin's Dagger"
+            description: "A wickedly sharp dagger balanced for speed. The kind of blade a Thief keeps in their boot."
             type: "Weapon"
             damage_dice: "1d6+2"
-            damage_stat: "dex"
+            damage_stat: "DEX"
             value: 30
             is_equippable: true
+            slot: "Weapon"
           - id: "leather_armor"
-            name: "Leather Armor"
-            description: "Sturdy leather armor. Won't stop a giant, but it's better than nothing."
+            name: "Leather Plate"
+            description: "Sturdy leather armor reinforced with iron rivets. It won't stop a Behemoth, but it's better than your shirt."
             type: "Armor"
             armor_value: 2
             value: 15
             is_equippable: true
+            slot: "Armor"
           - id: "wooden_shield"
-            name: "Wooden Shield"
-            description: "A basic wooden shield, reinforced with iron bands."
+            name: "Bronze Shield"
+            description: "A basic bronze shield with the Dalmascan crest. Standard militia issue."
             type: "Shield"
             armor_value: 1
             value: 10
             is_equippable: true
+            slot: "Shield"
           - id: "iron_helmet"
-            name: "Iron Helmet"
-            description: "A plain iron helmet. Protects the important bits."
+            name: "Iron Helm"
+            description: "A plain iron helmet. Protects the important bits. Has a dent that someone tried to hammer out. Unsuccessfully."
             type: "Helmet"
             armor_value: 1
             value: 20
             is_equippable: true
+            slot: "Helmet"
           - id: "steel_longsword"
-            name: "Steel Longsword"
-            description: "A well-forged steel blade with a leather-wrapped grip. A reliable weapon for the serious adventurer."
+            name: "Platinum Sword"
+            description: "A well-forged platinum blade with a leather-wrapped grip. A reliable weapon for the serious adventurer."
             type: "Weapon"
             damage_dice: "2d6+2"
-            damage_stat: "str"
+            damage_stat: "STR"
             value: 100
             is_equippable: true
+            slot: "Weapon"
           - id: "iron_greatsword"
-            name: "Iron Greatsword"
-            description: "A massive two-handed sword. Slow but devastating. Requires both hands to wield."
+            name: "Claymore"
+            description: "A massive two-handed greatsword. Slow but devastating. Requires both hands and considerable foolishness to wield."
             type: "Weapon"
             damage_dice: "2d6"
-            damage_stat: "str"
+            damage_stat: "STR"
             value: 45
             is_equippable: true
-            is_two_handed: true
-          - id: "str_amulet"
-            name: "Amulet of Might"
-            description: "A bronze amulet shaped like a clenched fist. Grants the wearer increased physical power."
-            type: "Amulet"
-            value: 30
-            is_equippable: true
-            stat_bonuses:
-              str: 2
-    environment_tags: ["indoor", "safe", "lit", "forge", "hot"]
+            slot: "Weapon"
+            properties:
+              two_handed: true
+    items:
+      - id: "str_amulet"
+        name: "Power Wrist"
+        description: "A leather bracer inlaid with a red materia shard. Grants the wearer increased physical power. Watts keeps it on display — 'For someone who earns it.'"
+        type: "Amulet"
+        value: 30
+        is_equippable: true
+        slot: "Amulet"
+        stat_bonuses:
+          str: 2
 
   - id: "general_store"
-    name: "Needful Things"
-    description: >-
-      A cramped shop stuffed floor to ceiling with everything a frontier town
-      could need. Rope, torches, dried rations, questionable potions, and a
-      taxidermied owlbear that might be watching you. The shopkeeper, a
-      fast-talking halfling named Pip, grins from behind the counter.
+    name: "O'aka's Emporium"
+    description: "A cramped shop stuffed floor to ceiling with everything an adventurer could need. Potions, ethers, phoenix downs, questionable materia, and a taxidermied Cactuar that might be winking at you. O'aka himself grins from behind the counter, rubbing his hands together. 'Welcome, welcome! O'aka the Twenty-Third, merchant extraordinaire, at your service!'"
     exits:
       north: "town_square"
+    environment_tags: ["indoor", "safe", "lit", "shop"]
     npcs:
       - id: "shopkeeper_pip"
-        name: "Pip Needler"
-        personality: "Cheerful, fast-talking, and a shameless haggler. A halfling with big dreams and bigger prices. Friendly to everyone because everyone is a potential customer. Secretly terrified of the forest."
+        name: "O'aka XXIII"
+        personality: "A fast-talking traveling merchant who wandered into Rabanastre and never left. Cheerful, shameless, and convinced he's doing you a favor with every sale. Claims his family has been merchants for twenty-three generations. Prices are flexible if you're charming enough. Secretly terrified of anything outside the city walls."
         faction: "merchants_guild"
-        knowledge_scopes: ["trade", "supplies", "rumors", "town"]
+        knowledge_scopes: ["trade", "supplies", "rumors", "town", "potions", "materia"]
         is_shopkeeper: true
         shop_inventory:
           - id: "healing_potion_1"
-            name: "Greater Healing Potion"
-            description: "A thick red liquid that tastes like cherries and regret. Restores a massive amount of health."
+            name: "Hi-Potion"
+            description: "A thick crimson liquid in a crystal vial etched with healing runes. Restores a significant amount of health. Tastes like strawberries and magic."
             type: "Potion"
-            value: 50
             is_consumable: true
+            value: 50
             effect: "Restores 30 HP"
             quantity: 3
           - id: "torch_1"
             name: "Torch"
-            description: "A simple torch. Lights the way in dark places."
+            description: "A simple torch. Lights the way in dark places. Essential for the Pharos."
             type: "Misc"
             value: 2
             quantity: 5
           - id: "minor_healing_potion"
-            name: "Minor Healing Potion"
-            description: "A small vial of red liquid. Not as strong as the good stuff, but it'll do in a pinch."
+            name: "Potion"
+            description: "A small vial of red liquid. The most basic healing item, but it's kept many an adventurer alive."
             type: "Potion"
-            value: 15
             is_consumable: true
+            value: 15
             effect: "Restores 2d4+2 HP"
             quantity: 5
           - id: "antidote_1"
             name: "Antidote"
-            description: "A bitter green liquid that neutralizes most common poisons."
+            description: "A bitter green liquid that neutralizes most common poisons. Essential in the Golmore Jungle."
             type: "Potion"
-            value: 10
             is_consumable: true
+            value: 10
             effect: "Cures poison"
             quantity: 3
           - id: "rope_1"
@@ -289,219 +278,209 @@ rooms:
             value: 5
           - id: "rations_1"
             name: "Rations"
-            description: "Dried meat, hardtack, and a questionable cheese. Keeps you alive."
+            description: "Dried behemoth jerky, hardtack, and a questionable cheese. Keeps you alive between towns."
             type: "Misc"
-            value: 3
             is_consumable: true
+            value: 3
             quantity: 10
           - id: "lockpick_set"
             name: "Lockpick Set"
-            description: "A leather case containing picks and tension wrenches. For 'legitimate' use only."
+            description: "A leather case containing picks and tension wrenches. 'For treasure chests only,' insists O'aka with a wink."
             type: "Misc"
             value: 20
           - id: "copper_ring"
-            name: "Copper Ring of Fortitude"
-            description: "A simple copper band etched with protective runes. Warms slightly to the touch."
+            name: "Protect Ring"
+            description: "A copper band etched with protective runes. Warms slightly to the touch and bolsters the wearer's constitution."
             type: "Ring"
             value: 15
             is_equippable: true
+            slot: "Ring"
             stat_bonuses:
               con: 1
           - id: "leather_gloves"
-            name: "Leather Gloves"
-            description: "Sturdy leather gloves that improve grip and protect the hands. Every adventurer needs a pair."
+            name: "Battle Gloves"
+            description: "Sturdy leather gloves reinforced with metal plates. Improve grip and protect the hands."
             type: "Gloves"
             armor_value: 1
             value: 8
             is_equippable: true
+            slot: "Gloves"
           - id: "traveler_boots"
-            name: "Traveler's Boots"
-            description: "Well-worn boots with thick soles. They make long journeys far more bearable."
+            name: "Hermes Sandals"
+            description: "Enchanted sandals blessed by the spirit of speed. They make long journeys far more bearable and the wearer noticeably quicker."
             type: "Boots"
             armor_value: 1
             value: 12
             is_equippable: true
+            slot: "Boots"
             stat_bonuses:
               dex: 1
-    environment_tags: ["indoor", "safe", "lit", "shop"]
-
+  
   - id: "back_alley"
-    name: "Thornwall Back Alley"
-    description: >-
-      A narrow, shadow-choked passage behind the tavern. Crates and barrels
-      are stacked haphazardly, and the air smells of damp stone and something
-      less pleasant. A hooded figure leans against the wall, watching you with
-      unsettling calm.
+    name: "Lowtown"
+    description: "A labyrinth of narrow passages beneath Rabanastre's main level. The ceiling is the underside of the bazaar above, dripping condensation. Crates and barrels are stacked haphazardly, and the air smells of damp stone and desperation. Refugees, smugglers, and those the Empire forgot call this home. A masked figure leans against the wall, arms folded, watching you with unsettling calm."
     exits:
       north: "spawn"
+    environment_tags: ["outdoor", "dark", "shady", "alley", "lowtown"]
     npcs:
       - id: "fence_silas"
-        name: "Silas the Fence"
-        personality: "Quiet, calculating, and amoral. Buys and sells anything with no questions asked. Loyal only to coin. Secretly a member of a thieves' network. Very hard to deceive — he's heard every con."
-        faction: "neutral"
-        knowledge_scopes: ["black_market", "rumors", "dread_hollow", "hollow_cult"]
+        name: "Gilgamesh"
+        personality: "A flamboyant, self-proclaimed legendary swordsman who runs a black market arms dealership from Lowtown. Dramatic, boastful, and surprisingly knowledgeable about weapons — though most of his 'legendary collection' is knockoffs. Buys and sells anything with theatrical flair. Claims to have crossed dimensions. Speaks about himself in the third person when excited."
+        faction: "merchants_guild"
+        knowledge_scopes: ["black_market", "rumors", "pharos", "occuria_cult", "weapons", "dimensions"]
         is_shopkeeper: true
         shop_inventory:
           - id: "shadow_dagger"
-            name: "Nightfang Dagger"
-            description: "A wickedly curved dagger that seems to drink the light. Impossibly sharp. Previous owner didn't need it anymore — on account of being dead."
+            name: "Zwill Crossblade"
+            description: "A wickedly curved dual-blade that seems to drink the light. Impossibly sharp. 'Gilgamesh acquired this from a ninja in another dimension! ...Probably.'"
             type: "Weapon"
             damage_dice: "2d8+4"
-            damage_stat: "dex"
+            damage_stat: "DEX"
             value: 300
             is_equippable: true
+            slot: "Weapon"
           - id: "poison_vial"
-            name: "Poison Vial"
-            description: "A small vial of viscous purple liquid. Coat a weapon to add poison damage."
+            name: "Poison Fang"
+            description: "A small vial of viscous purple liquid harvested from a Malboro. Coat a weapon to add poison damage for several strikes."
             type: "Misc"
-            value: 30
             is_consumable: true
+            value: 30
             effect: "Coat weapon with poison"
           - id: "smoke_bomb"
             name: "Smoke Bomb"
-            description: "A clay sphere filled with alchemical powder. Breaks on impact, filling the area with thick smoke."
+            description: "A clay sphere filled with alchemical powder. Breaks on impact, filling the area with thick smoke. Perfect for dramatic exits."
             type: "Misc"
-            value: 25
             is_consumable: true
+            value: 25
             effect: "Escape combat"
           - id: "thieves_tools"
-            name: "Thieves' Tools"
-            description: "A professional set of lockpicks, files, and prybars. For the discerning rogue."
+            name: "Thief's Cuffs"
+            description: "An enchanted bracelet that improves the wearer's sleight of hand. For the discerning treasure hunter."
             type: "Misc"
             value: 35
           - id: "cloak_of_shadows"
-            name: "Cloak of Shadows"
-            description: "A dark cloak that seems to shift and blend with the shadows. Light as silk, but surprisingly protective."
+            name: "Ninja Gear"
+            description: "A dark outfit that seems to shift and blend with the shadows. Light as silk, but surprisingly protective. Gilgamesh swears it belonged to Shadow himself."
             type: "Cloak"
             armor_value: 1
             value: 100
             is_equippable: true
+            slot: "Cloak"
             stat_bonuses:
               dex: 2
           - id: "ring_of_cunning"
-            name: "Ring of Cunning"
-            description: "A thin silver band inscribed with tiny runes. It sharpens the wearer's wit and tongue."
+            name: "Angel Ring"
+            description: "A thin mithril band inscribed with angel feather runes. It sharpens the wearer's wit, tongue, and survival instincts."
             type: "Ring"
             value: 75
             is_equippable: true
+            slot: "Ring"
             stat_bonuses:
               cha: 2
               int: 1
-          - id: "shadow_bracelet"
-            name: "Shadow Bracelet"
-            description: "A braided leather bracelet with obsidian beads. Grants the wearer uncanny reflexes."
-            type: "Bracelet"
-            value: 60
-            is_equippable: true
-            stat_bonuses:
-              dex: 1
-              luck: 2
     items:
+      - id: "shadow_bracelet"
+        name: "Ribbon Fragment"
+        description: "A fragment of the legendary Ribbon — said to protect against all status ailments. This scrap grants partial protection and uncanny reflexes."
+        type: "Bracelet"
+        value: 60
+        is_equippable: true
+        slot: "Bracelet"
+        stat_bonuses:
+          dex: 1
+          lck: 2
       - id: "discarded_bottle"
-        name: "Discarded Bottle"
-        description: "An empty glass bottle tossed into the gutter. Smells faintly of cheap whiskey."
+        name: "Empty Potion Bottle"
+        description: "An empty crystal potion vial tossed in the gutter. The label reads 'POTION — Manufactured in Lindblum.'"
         type: "Misc"
         value: 1
       - id: "torn_wanted_poster"
-        name: "Torn Wanted Poster"
-        description: "A rain-smeared wanted poster ripped from the notice board. Only the word 'DANGEROUS' is still legible."
+        name: "Torn Imperial Notice"
+        description: "A rain-smeared Imperial bounty notice torn from the board. Only the words 'WANTED — DANGEROUS — 10,000 GIL REWARD' are still legible."
         type: "Misc"
         value: 1
       - id: "bent_nail"
-        name: "Bent Nail"
-        description: "A rusty iron nail bent at an awkward angle. Could poke an eye out if you tried hard enough."
+        name: "Rusty Bolt"
+        description: "A bent iron bolt from some piece of magitek machinery. Could poke an eye out if you tried hard enough."
         type: "Misc"
         value: 1
-    environment_tags: ["outdoor", "dark", "shady", "alley"]
 
   - id: "town_gate"
-    name: "Thornwall Eastern Gate"
-    description: >-
-      The town's main gate — two heavy wooden doors reinforced with iron bands.
-      Beyond them, a dirt road winds into the dark tree line of the Whisperwood.
-      Claw marks score the outside of the gate. A militia guard paces nervously.
+    name: "Rabanastre Gate"
+    description: "The great city gates — two massive stone-and-iron doors tall enough for an airship to taxi through. Beyond them, a sand-swept road curves into the dark tree line of the Golmore Jungle. Claw marks from some massive beast score the outside. Imperial banners hang limp in the desert heat. A Viera warrior stands sentinel, her long ears twitching at every sound from the jungle."
     exits:
       west: "town_square"
       east: "forest_edge"
+    environment_tags: ["outdoor", "lit", "fortified", "gate"]
     npcs:
       - id: "gate_guard_lena"
-        name: "Lena the Gate Guard"
-        personality: "Young, nervous, and eager to prove herself. Recently joined the militia after her brother went missing in the Whisperwood. Brave but inexperienced. Easy to talk to, hard to intimidate because she's already scared of everything. Will ask the player to look for her brother's journal if they're heading into the forest."
-        faction: "thornwall_militia"
-        knowledge_scopes: ["militia", "whisperwood", "monsters", "missing_people"]
-        quests_offered: ["lenas_brother"]
+        name: "Fran"
+        personality: "A Viera exile who left the Golmore Jungle decades ago, estranged from her people. Quiet, perceptive, and deadly with a bow. Joined the Rabanastre guard because she has nowhere else to go. Recently heard rumors that a kinsman — her younger sister Mjrn — has gone missing in the jungle. Stoic exterior, deep worry beneath. Hard to read, but responds to sincerity."
+        faction: "dalmascan_resistance"
+        knowledge_scopes: ["dalmascan_resistance", "golmore", "monsters", "missing_people", "viera"]
+        quests_offered: ["fran_missing_kin"]
     items:
       - id: "discarded_torch"
-        name: "Discarded Torch"
+        name: "Spent Torch"
         description: "A half-burned torch dropped by a previous patrol. Still has some life left in it."
         type: "Misc"
         value: 1
       - id: "militia_notice"
-        name: "Militia Notice"
-        description: "A posted warning about increased wolf activity in the Whisperwood. 'Report all sightings to Captain Holt. Do NOT engage alone.' Someone has written 'too late' in the margin."
+        name: "Hunt Board Posting"
+        description: "A posted hunt notice about increased Malboro activity in the Golmore Jungle. 'RANK B HUNT — Malboro Menace. Report all sightings. Do NOT engage alone.' Someone has written 'too late' in the margin."
         type: "Misc"
         value: 1
       - id: "broken_arrow"
         name: "Broken Arrow"
-        description: "A snapped arrow shaft with dark stains on the tip. Found wedged between the gate's iron bands."
+        description: "A snapped arrow shaft with dark stains on the tip. Viera-crafted, by the fletching. Found wedged between the gate's iron bands."
         type: "Misc"
         value: 1
-    environment_tags: ["outdoor", "lit", "fortified", "gate"]
 
   - id: "church"
-    name: "Chapel of the Silver Light"
-    description: >-
-      A small stone chapel tucked behind the town square, its steeple topped with
-      a tarnished silver crescent. Inside, stained glass windows cast colored light
-      across worn wooden pews. The air smells of incense and old candle wax. A
-      priest potters about near the altar, muttering prayers to himself and
-      occasionally arguing with someone who isn't there.
+    name: "The Crystal Sanctum"
+    description: "A serene temple built around a massive natural crystal formation that juts from the sandstone floor. Soft prismatic light refracts through the crystal, casting rainbows across the marble walls. Incense drifts in lazy spirals. The air itself feels cleansing. A White Mage in flowing robes tends to the crystal with quiet reverence, occasionally pausing to listen to something only he can hear."
     exits:
       northwest: "town_square"
+    environment_tags: ["indoor", "safe", "lit", "holy", "chapel", "crystal"]
     npcs:
       - id: "priest_aldric"
-        name: "Father Aldric"
-        personality: "A kindly but slightly unhinged priest who claims to hear the voice of the Silver Light directly. Blesses items for adventurers with genuine enthusiasm. Tends to trail off mid-sentence to listen to 'guidance' no one else can hear. Harmless, generous, and deeply convinced the apocalypse is next Tuesday."
-        faction: "neutral"
-        knowledge_scopes: ["religion", "blessings", "undead", "holy_relics", "town"]
-        quests_offered: ["aldrics_blessing"]
+        name: "Minwu"
+        personality: "A legendary White Mage who claims the Crystals speak to him directly. Kind, gentle, and slightly unhinged. Blesses adventurers with genuine enthusiasm. Tends to trail off mid-sentence to listen to 'crystal guidance' no one else can hear. Deeply convinced the world's destruction cycle is approaching — 'The Void stirs again, kupo... wait, I'm not a moogle.' Generous with healing magic."
+        faction: "dalmascan_resistance"
+        knowledge_scopes: ["religion", "blessings", "undead", "holy_relics", "town", "crystals", "espers"]
+        quests_offered: ["crystal_blessing"]
     items:
       - id: "prayer_candle"
-        name: "Prayer Candle"
-        description: "A stubby white candle inscribed with a tiny prayer. It smells of lavender and hope."
+        name: "Crystal Shard"
+        description: "A small fragment of crystal that broke from the main formation. It pulses faintly with warm light and smells of lavender."
         type: "Misc"
         value: 1
       - id: "dusty_hymnal"
-        name: "Dusty Hymnal"
-        description: "A leather-bound book of hymns. Most of the pages are stuck together, and someone has doodled in the margins."
+        name: "Hymn of the Fayth"
+        description: "A leather-bound book of sacred songs. Most of the pages are stuck together, and someone has doodled moogles in the margins."
         type: "Misc"
         value: 2
       - id: "silver_holy_symbol"
-        name: "Silver Holy Symbol"
-        description: "A polished silver pendant in the shape of a radiant sun. Warm to the touch and faintly luminous. Grants clarity of mind to the wearer."
+        name: "Crystal Pendant"
+        description: "A polished pendant containing a sliver of crystal. Warm to the touch and faintly luminous. Grants clarity of mind to the wearer."
         type: "Amulet"
         value: 15
         is_equippable: true
+        slot: "Amulet"
         stat_bonuses:
           wis: 1
-    environment_tags: ["indoor", "safe", "lit", "holy", "chapel"]
 
   - id: "tavern_cellar"
-    name: "The Flagon's Cellar"
-    description: >-
-      A damp, musty cellar beneath the Rusted Flagon. Barrels of ale and crates
-      of supplies line the rough stone walls. Cobwebs hang thick from the low
-      ceiling, and something skitters in the shadows between the barrels. The
-      only light comes from the trapdoor above and the faint glow of rat eyes
-      watching from the dark corners.
+    name: "The Waterway"
+    description: "The Garamsythe Waterway — an ancient sewer network beneath Rabanastre. Slick stone tunnels stretch into darkness, water channels running with murky flow. The air is thick with moisture and the squeaking of rats. Moss-covered pipes drip from overhead. Something large hisses in the shadows between the collapsed sections. Lebreau mentioned a pest problem down here — now you see why."
     exits:
       up: "spawn"
+    environment_tags: ["indoor", "dark", "damp", "cellar", "dangerous", "waterway"]
     npcs:
       - id: "giant_rat"
-        name: "Giant Rat"
-        personality: "A bloated, aggressive rat the size of a small dog. Its fur is matted and its teeth are yellow. Fiercely territorial over its barrel kingdom. Hisses and lunges at anything that gets too close."
+        name: "Dire Rat"
+        personality: "A bloated, aggressive rat the size of a small dog, mutated by exposure to leaking Mist energy in the waterway. Its fur is matted and its teeth glow faintly blue. Fiercely territorial. Hisses and lunges at anything that gets too close."
         faction: "neutral"
-        knowledge_scopes: []
         is_hostile: true
         level: 1
         hp: 8
@@ -511,174 +490,151 @@ rooms:
         defense: 9
         loot:
           - id: "rat_tail"
-            name: "Giant Rat Tail"
-            description: "A thick, greasy rat tail. Disgusting, but some alchemists pay for these."
+            name: "Rat Tail"
+            description: "A thick, greasy rat tail. Disgusting, but alchemists in the bazaar pay good gil for these."
             type: "Misc"
             value: 2
-            quantity: 1
     items:
       - id: "aged_wine_bottle"
-        name: "Aged Wine Bottle"
-        description: "A dusty bottle of wine from a vintage that predates the tavern itself. Mara probably doesn't know it's down here."
+        name: "Baccus Wine"
+        description: "A dusty bottle of vintage wine from the old kingdom. Lebreau probably doesn't know it's down here. Worth a fortune to the right collector."
         type: "Misc"
         value: 8
       - id: "rat_chewed_coin_pouch"
-        name: "Rat-Chewed Coin Pouch"
-        description: "A small leather pouch gnawed open by rats. A few tarnished coins still jingle inside."
+        name: "Gnawed Gil Pouch"
+        description: "A small leather pouch gnawed open by rats. A few tarnished gil coins still jingle inside."
         type: "Misc"
         value: 3
       - id: "rusty_key"
         name: "Rusty Key"
-        description: "An old iron key coated in rust. It must open something, but what? The teeth are worn but still intact."
+        description: "An old iron key coated in rust. It must open something deeper in the waterway. The teeth are worn but still intact."
         type: "Misc"
         value: 5
-    environment_tags: ["indoor", "dark", "damp", "cellar", "dangerous"]
 
   - id: "market_stalls"
-    name: "Morning Market"
-    description: >-
-      A cluster of colorful canvas stalls and rickety wooden tables spread out
-      in an open clearing northeast of the town square. Merchants hawk their wares
-      with varying degrees of enthusiasm and honesty. The smell of fresh bread
-      mingles with dried herbs, old leather, and something frying in a pan.
-      A weathered old woman tends the largest stall with a knowing smile.
+    name: "Moogle Market"
+    description: "A cluster of colorful stalls and flying moogles in an open clearing northeast of the bazaar. The moogles run a brisk trade in fresh food, gossip, and unsolicited advice. Their leader, Matoya, is ancient even by moogle standards — she sits atop a stack of crates, peering at customers through spectacles thicker than bottle-caps. The smell of fresh kupo nuts mingles with dried herbs and grilled behemoth skewers."
     exits:
       southwest: "town_square"
+    environment_tags: ["outdoor", "safe", "lit", "market", "busy", "moogle"]
     npcs:
       - id: "merchant_bess"
-        name: "Old Bess"
-        personality: "A sharp-eyed old woman who has been selling produce and gossip at the morning market for decades. Knows everyone's business and isn't shy about sharing it — for a customer, anyway. Warm to those who buy, frosty to those who browse. Sells cheap food and cheaper advice."
+        name: "Matoya"
+        personality: "An ancient, sharp-eyed woman who has been selling potions and wisdom at the moogle market for longer than anyone can remember. Knows everyone's business. Warm to those who buy, frosty to those who browse. Speaks in proverbs and riddles. Claims to have taught a Warrior of Light once. Her broom sweeps by itself."
         faction: "merchants_guild"
-        knowledge_scopes: ["rumors", "town", "food", "gossip", "merchants_guild"]
+        knowledge_scopes: ["rumors", "town", "food", "gossip", "merchants_guild", "crystals", "ancient_lore"]
         is_shopkeeper: true
         shop_inventory:
           - id: "fresh_bread"
-            name: "Fresh Bread"
-            description: "A warm loaf of crusty bread. Simple but satisfying."
+            name: "Kupo Nut Bread"
+            description: "A warm loaf of bread baked with kupo nuts. Simple but satisfying. Moogles swear by it."
             type: "Misc"
-            value: 2
             is_consumable: true
+            value: 2
             effect: "Restores 1 HP"
             quantity: 5
           - id: "meat_pie"
-            name: "Meat Pie"
-            description: "A flaky pastry filled with mystery meat and gravy. Don't ask what's in it."
+            name: "Behemoth Steak"
+            description: "A sizzling cut of behemoth flank, flash-grilled over moogle flames. Don't ask how a moogle hunted a behemoth."
             type: "Misc"
-            value: 3
             is_consumable: true
+            value: 3
             effect: "Restores 3 HP"
             quantity: 3
           - id: "dried_herbs"
-            name: "Dried Herbs"
-            description: "A bundle of dried herbs tied with twine. Useful for cooking or basic remedies."
+            name: "Remedy Herbs"
+            description: "A bundle of dried medicinal herbs tied with twine. Useful for brewing basic remedies or suppressing status ailments."
             type: "Misc"
             value: 2
             quantity: 5
     items:
       - id: "bruised_apple"
-        name: "Bruised Apple"
-        description: "A red apple with a large brown bruise on one side. Fell off a cart, probably. Still edible."
+        name: "Gysahl Green"
+        description: "A fresh gysahl green that fell off a cart. Chocobos go wild for these. Still edible for non-chocobos, probably."
         type: "Misc"
-        value: 1
         is_consumable: true
+        value: 1
       - id: "torn_silk_scarf"
-        name: "Torn Silk Scarf"
-        description: "A once-fine silk scarf with a tear along one edge. The colors are still vibrant — purple and gold."
+        name: "Torn Silk Sash"
+        description: "A once-fine silk sash with a tear along one edge. The colors are still vibrant — Dalmascan royal purple and gold."
         type: "Misc"
         value: 3
       - id: "cracked_mirror"
-        name: "Cracked Mirror"
-        description: "A small hand mirror with a crack running through the glass. Seven years of bad luck, or a handy signaling tool."
+        name: "Broken Scrying Glass"
+        description: "A small hand mirror with a crack through the glass. Was once used for fortune-telling. Seven years of bad luck, or a handy signaling tool."
         type: "Misc"
         value: 2
-    environment_tags: ["outdoor", "safe", "lit", "market", "busy"]
 
   - id: "town_well"
-    name: "The Old Well"
-    description: >-
-      A weathered stone well tucked in a quiet corner southwest of the town square.
-      The well is old — older than the town, some say. Its stones are covered in
-      moss and faded carvings that nobody can read anymore. A frayed rope hangs
-      over the edge into impenetrable darkness below. If you lean over and look
-      down, you can't see the bottom. But you get the feeling something down
-      there can see you.
+    name: "Moogle Post"
+    description: "A quiet corner southwest of the bazaar, centered around an ancient well topped with a cheerful moogle statue. The well is old — far older than the city. Its stones are covered in moss and faded runes that nobody can read anymore. Moogles have claimed it as their unofficial mail depot. Letters and packages in tiny bags are stacked around the base. A familiar-looking cat sits atop the moogle statue, watching the world with unsettling intelligence."
     exits:
       northeast: "town_square"
+    environment_tags: ["outdoor", "safe", "dim", "mysterious", "well", "moogle"]
     npcs:
       - id: "stray_cat_whiskers"
-        name: "Whiskers"
-        personality: "A scruffy orange tabby cat who has claimed the well as his personal territory. Supremely unbothered by everything. Will rub against your legs if you have food, ignore you completely if you don't. Occasionally stares into the well with an intensity that is deeply unsettling. Meows at inappropriate moments. Cannot be recruited, reasoned with, or impressed."
-        faction: "neutral"
-        knowledge_scopes: []
+        name: "Cait Sith"
+        personality: "A black-and-white cat wearing a tiny gold crown and a red cape. Speaks in a thick accent. Claims to be a fortune-teller but his predictions are spectacularly wrong 90% of the time. Actually appears to be a sentient magical construct rather than a real cat. Cannot be recruited, but will tell your fortune (badly) if asked. Rides an invisible moogle, apparently."
+        faction: "merchants_guild"
+        knowledge_scopes: ["fortune_telling", "rumors", "moogles", "ancient_lore"]
     items:
       - id: "mossy_coin"
-        name: "Mossy Coin"
-        description: "An old copper coin fished out of the well, covered in green moss. Might be lucky. Might be cursed."
+        name: "Ancient Gil"
+        description: "An old gil coin fished out of the well, covered in green moss. From the old Dalmascan kingdom. Might be lucky. Might be cursed."
         type: "Misc"
         value: 1
       - id: "frayed_rope"
-        name: "Frayed Rope"
-        description: "A short length of rope cut from the well's bucket line. Worn thin and fraying, but still has some use."
+        name: "Moogle Mail Cord"
+        description: "A short length of cord cut from the moogle mail pulley. Worn thin but still has some use."
         type: "Misc"
         value: 2
-    environment_tags: ["outdoor", "safe", "dim", "mysterious", "well"]
 
-# ──────────────────────────────────────────────────────────
-#  FOREST: THE WHISPERWOOD
-# ──────────────────────────────────────────────────────────
+  # ── GOLMORE JUNGLE — WILDERNESS ROOMS ───────────────────────
 
   - id: "forest_edge"
-    name: "Edge of the Whisperwood"
-    description: >-
-      The tree line hits you like a wall. Ancient oaks crowd together, their
-      branches tangled overhead into a canopy that blocks most of the sky.
-      The path splits — north toward strange lights between the trees, and
-      east deeper into the forest where the fog thickens.
+    name: "Golmore Entrance"
+    description: "The tree line hits you like a wall of green. Ancient trees tower overhead, their canopy so thick it blocks the sky and traps the Mist below. Strange bioluminescent fungi dot the undergrowth. The path splits — north toward shimmering lights between the trees, and east deeper into the jungle where the Mist thickens. A beast sits at the crossroads, watching you with ancient, intelligent eyes."
     exits:
       west: "town_gate"
       north: "fairy_grove"
       east: "deep_forest"
+    environment_tags: ["outdoor", "forest", "dim", "wilderness", "mist"]
     npcs:
       - id: "ranger_thorne"
-        name: "Thorne the Ranger"
-        personality: "Quiet, weathered, and world-weary. A retired adventurer who patrols the forest edge to keep Thornwall safe. Respects nature and anyone who doesn't waste his time. Will warn about dangers ahead honestly."
-        faction: "neutral"
-        knowledge_scopes: ["whisperwood", "monsters", "dread_hollow", "survival", "herbs"]
+        name: "Red XIII"
+        personality: "A flame-maned beast — not a dog, not a lion, something older. Intelligent, articulate, and deeply wise despite looking like he should be chasing chocobos. Patrols the jungle edge to keep Rabanastre safe. Speaks in a low, measured growl. Respects nature and anyone who doesn't waste his time. Will warn about dangers ahead with absolute honesty."
+        faction: "dalmascan_resistance"
+        knowledge_scopes: ["golmore", "monsters", "pharos", "survival", "herbs", "ancient_beasts"]
     items:
       - id: "odd_mushroom"
-        name: "Odd Mushroom"
-        description: "A plump mushroom with a spotted purple cap. It smells earthy and slightly sweet. Probably safe to eat. Probably."
+        name: "Malboro Sprout"
+        description: "A plump mushroom with a spotted purple cap. It smells earthy and slightly sweet. Probably safe to eat. The emphasis is on 'probably.'"
         type: "Misc"
-        value: 2
         is_consumable: true
+        value: 2
       - id: "bird_feather"
-        name: "Bird Feather"
-        description: "A long iridescent feather from some forest bird. It catches the light with flashes of blue and green."
+        name: "Chocobo Feather"
+        description: "A long golden feather from a wild chocobo. It catches the light beautifully. Some say carrying one brings good luck."
         type: "Misc"
         value: 1
       - id: "smooth_river_stone"
         name: "Smooth River Stone"
-        description: "A flat, perfectly smooth stone from a nearby stream. Ideal for skipping or throwing at things."
+        description: "A flat, perfectly smooth stone from a jungle stream. Ideal for skipping or throwing at things."
         type: "Misc"
         value: 1
-    environment_tags: ["outdoor", "forest", "dim", "wilderness"]
 
   - id: "fairy_grove"
-    name: "The Fairy Grove"
-    description: >-
-      A clearing where soft golden light filters through crystalline leaves.
-      Tiny luminous shapes dart between mushroom rings, leaving trails of
-      sparkling dust. It's beautiful and deeply unsettling. A massive ancient
-      tree stands in the center, its trunk carved with faces that seem to watch you.
-      A shimmering figure perches on a low branch, watching you with amused malice.
+    name: "Eruyt Village"
+    description: "A hidden settlement in the treetops where crystalline platforms connect ancient wooden dwellings. Soft golden light filters through leaves that shimmer like glass. Bioluminescent sprites dart between mushroom rings, leaving trails of sparkling Mist. A massive Viera elder tree stands at the center, its trunk carved with faces that watch all who enter. A bizarre creature perches on a branch — an octopus wearing a bowtie. It waves a tentacle at you."
     exits:
       south: "forest_edge"
+    environment_tags: ["outdoor", "forest", "magical", "lit", "fae", "viera_village"]
     npcs:
       - id: "fae_trickster"
-        name: "Thornweave the Trickster"
-        personality: "A mercurial fae spirit who guards the grove's treasures. Speaks in riddles and half-truths. Will not let anyone take items from the grove without first answering a riddle or besting them in a contest of wits (CHA or INT check). If insulted, becomes a dangerous opponent. If charmed, might offer a bonus item. Loves wordplay and despises boring people."
+        name: "Ultros"
+        personality: "A purple octopus with a bowtie, a flair for the dramatic, and absolutely no business being in a tree. Self-proclaimed guardian of Eruyt Village — the actual Viera tolerate him because he's entertaining. Speaks in bad puns and worse pickup lines. Will not let anyone take items from the village without a battle of wits (or actual battle). If charmed, offers bonus treasure. If insulted, becomes genuinely dangerous. Loves pretty adventurers."
         faction: "neutral"
-        knowledge_scopes: ["fae", "forest", "riddles", "ancient_secrets"]
+        knowledge_scopes: ["fae", "forest", "riddles", "ancient_secrets", "viera"]
         level: 4
         hp: 30
         max_hp: 30
@@ -687,49 +643,45 @@ rooms:
         defense: 14
         loot:
           - id: "fae_dust"
-            name: "Handful of Fae Dust"
-            description: "Glittering motes of crystallized magic. Could be sold for a tidy sum, or used to enchant something."
+            name: "Handful of Stardust"
+            description: "Glittering motes of crystallized Mist. Could be sold for good gil, or used to enchant equipment."
             type: "Misc"
             value: 50
-            quantity: 1
     items:
       - id: "fairy_crown"
-        name: "Crown of the Fae"
-        description: "A circlet woven from living silver vines. Whispers ancient secrets to its wearer. Dramatically boosts magical ability."
+        name: "Genji Helm"
+        description: "A legendary helm said to be from another dimension. Dramatically boosts magical ability. Ultros claims Gilgamesh dropped it — 'He drops everything, that guy!'"
         type: "Helmet"
         armor_value: 2
         value: 600
         is_equippable: true
-        effect: "+5 to INT and WIS while worn"
+        slot: "Helmet"
         stat_bonuses:
           int: 5
           wis: 5
+        properties:
+          description_override: "+5 to INT and WIS while worn"
       - id: "healing_mushroom"
-        name: "Glowcap Mushroom"
-        description: "A luminous mushroom that pulses with warm light. Eating it restores health and cures poison."
+        name: "Elixir Mushroom"
+        description: "A luminous mushroom that pulses with warm Mist energy. Eating it restores health and cures all status ailments."
         type: "Potion"
-        value: 25
         is_consumable: true
+        value: 25
         effect: "Restores 20 HP and cures poison"
         quantity: 3
-    environment_tags: ["outdoor", "forest", "magical", "lit", "fae"]
 
   - id: "deep_forest"
-    name: "The Tangled Deep"
-    description: >-
-      The fog is so thick you can barely see your own hands. Roots snake across
-      the ground like tripwires, and every sound is swallowed by the damp
-      stillness. Something large crashed through here recently — broken branches
-      and deep gouges mark the trail heading south toward crumbling stone ruins.
+    name: "The Feywood"
+    description: "The Mist is so thick you can barely see your own hands. Ancient roots snake across the ground like tripwires, and every sound is swallowed by the damp stillness. Something large crashed through here recently — broken trees and deep claw marks scar the trail heading south toward crumbling black stone ruins. The air tastes of ozone and something primal."
     exits:
       west: "forest_edge"
       south: "dungeon_entrance"
+    environment_tags: ["outdoor", "forest", "dark", "fog", "dangerous", "mist"]
     npcs:
       - id: "wolf_alpha"
-        name: "Shadowfang"
-        personality: "A massive dire wolf with glowing amber eyes. Territorial and aggressive. Will attack on sight unless the player shows dominance or offers food."
+        name: "Fenrir"
+        personality: "A massive spectral wolf with glowing amber eyes, wreathed in frost. An ancient guardian spirit of the Golmore Jungle, corrupted by the Mist leaking from the Pharos. Territorial and aggressive. Will attack on sight unless the player shows dominance or offers an offering."
         faction: "neutral"
-        knowledge_scopes: []
         is_hostile: true
         level: 3
         hp: 30
@@ -739,62 +691,50 @@ rooms:
         defense: 12
         loot:
           - id: "wolf_pelt"
-            name: "Shadowfang Pelt"
-            description: "A thick, dark pelt that radiates warmth. Worth a fortune to the right buyer."
+            name: "Fenrir's Mane"
+            description: "A thick, ethereal pelt that radiates both warmth and cold simultaneously. Worth a fortune to the right buyer. It shimmers when you're not looking directly at it."
             type: "Misc"
             value: 150
-            quantity: 1
-    environment_tags: ["outdoor", "forest", "dark", "fog", "dangerous"]
 
-# ──────────────────────────────────────────────────────────
-#  DUNGEON: THE DREAD HOLLOW
-# ──────────────────────────────────────────────────────────
+  # ── THE PHAROS AT RIDORANA — DUNGEON ROOMS ─────────────────
 
   - id: "dungeon_entrance"
-    name: "Dread Hollow Entrance"
-    description: >-
-      Crumbling stone archways frame a yawning darkness that descends into the
-      earth. The air smells of rot and old blood. Carved into the lintel above
-      the entrance is a crude image of a tusked beast. Someone has scratched
-      "TURN BACK" into the stone in shaky letters. The path continues down.
+    name: "Pharos Entrance"
+    description: "A colossal archway of black obsidian frames a darkness that seems to breathe. The tower rises impossibly high above, piercing the clouds. Carved into the lintel are the Occuria script — angular, alien symbols that make your teeth ache. Someone has scratched 'TURN BACK' in common tongue below them. The Mist here is thick enough to taste. The path ascends into the tower's interior."
     exits:
       north: "deep_forest"
       down: "dungeon_hall"
+    environment_tags: ["outdoor", "ruins", "dark", "dangerous", "dungeon_entrance", "pharos"]
     items:
       - id: "crumbling_brick"
-        name: "Crumbling Brick"
-        description: "A chunk of ancient masonry that broke free from the archway. Covered in a thin layer of dried blood."
+        name: "Obsidian Shard"
+        description: "A chunk of the Pharos's outer wall that sheared off. Smooth, impossibly black, and slightly warm to the touch."
         type: "Misc"
         value: 1
       - id: "faded_map_fragment"
-        name: "Faded Map Fragment"
-        description: "A torn piece of parchment showing what might be a rough layout of tunnels below. Most of the ink has faded, but a few passages are still visible."
+        name: "Pharos Map Fragment"
+        description: "A torn piece of parchment showing a rough layout of the tower's lower floors. Most of the ink has faded, but a few passages and trap warnings are still visible."
         type: "Misc"
         value: 5
       - id: "adventurer_journal"
-        name: "Adventurer's Journal"
-        description: "A water-stained journal from a previous explorer. The last entry reads: 'The cultists worship something in the deep. If you fight the priestess, destroy the staff first — it heals the beast.' The rest is unreadable."
+        name: "Explorer's Journal"
+        description: "A water-stained journal from a previous explorer. The last entry reads: 'The cultists worship an Esper in the summit. If you fight the High Seeker, destroy the staff first — it heals the beast.' The rest is unreadable."
         type: "Misc"
         value: 3
-    environment_tags: ["outdoor", "ruins", "dark", "dangerous", "dungeon_entrance"]
 
   - id: "dungeon_hall"
-    name: "The Hollow Hall"
-    description: >-
-      A long underground corridor lined with crumbling pillars. Torches flicker
-      in rusty sconces — someone has been maintaining them. Bones crunch
-      underfoot. The hall branches east toward the sound of chanting, and a
-      heavy iron door blocks the passage deeper down.
+    name: "Pharos First Ascent"
+    description: "A vast spiraling corridor within the Pharos, lined with crumbling pillars of black stone. Magitek torches flicker in crystal sconces — someone has been maintaining them. Ancient tiles crunch underfoot, their mosaics depicting the Occuria's judgment of mortal races. The hall branches east toward the sound of chanting, and a heavy sealed door blocks the ascent further up."
     exits:
       up: "dungeon_entrance"
       east: "cultist_shrine"
       down: "dungeon_depths"
+    environment_tags: ["indoor", "underground", "dark", "dungeon", "dangerous", "pharos"]
     npcs:
       - id: "skeleton_guard_1"
-        name: "Hollow Skeleton"
-        personality: "An animated skeleton in rusted armor. Mindless but relentless. Attacks any living creature on sight. Its empty eye sockets glow with a faint crimson light."
-        faction: "hollow_cult"
-        knowledge_scopes: []
+        name: "Iron Giant"
+        personality: "A massive animated suit of ancient armor, powered by Mist energy from the tower's core. Mindless but devastatingly strong. Its visor glows with crimson light. Attacks any living creature on sight. The Cult uses them as guardians."
+        faction: "occuria_cult"
         is_hostile: true
         level: 3
         hp: 22
@@ -804,38 +744,36 @@ rooms:
         defense: 12
         loot:
           - id: "rusted_sword"
-            name: "Rusted Longsword"
-            description: "Pitted and dull, but still capable of drawing blood."
+            name: "Giant's Sword"
+            description: "A massive blade pried from the Iron Giant's grip. Pitted and ancient, but still capable of cleaving through stone."
             type: "Weapon"
             damage_dice: "1d8"
-            damage_stat: "str"
+            damage_stat: "STR"
             value: 10
             is_equippable: true
+            slot: "Weapon"
     items:
       - id: "old_shield"
-        name: "Battered Iron Shield"
-        description: "Dented and scarred from countless battles. Still holds together. Barely."
+        name: "Ancient Shield"
+        description: "A shield from the Pharos's original garrison. Dented and scarred from centuries of service. Still holds together. Barely."
         type: "Shield"
         armor_value: 2
         value: 15
         is_equippable: true
-    environment_tags: ["indoor", "underground", "dark", "dungeon", "dangerous"]
+        slot: "Shield"
 
   - id: "cultist_shrine"
-    name: "Shrine of the Tusk"
-    description: >-
-      A circular chamber dominated by a crude stone altar stained dark with
-      old blood. Candles flicker around a massive boar skull mounted on the
-      wall. Hooded figures kneel in prayer, murmuring in a language that makes
-      your teeth hurt. They haven't noticed you. Yet.
+    name: "Hall of the Occuria"
+    description: "A circular chamber dominated by a floating crystal altar crackling with dark Mist energy. Strange symbols rotate slowly in the air around it. Hooded figures kneel in prayer, murmuring in the Occuria's alien tongue — the words make reality shimmer at the edges. They haven't noticed you. Yet. A massive carved eye watches from the far wall, and you're not entirely sure it's just a carving."
     exits:
       west: "dungeon_hall"
+    environment_tags: ["indoor", "underground", "dark", "shrine", "dangerous", "cultist", "occuria"]
     npcs:
       - id: "cultist_leader"
-        name: "High Acolyte Vex"
-        personality: "Fanatical, unhinged, and dangerously intelligent. Leads the Hollow Cult's rituals. Believes Goretusk is a god. Will try to convert the player before attacking. Immune to intimidation — she genuinely welcomes death."
-        faction: "hollow_cult"
-        knowledge_scopes: ["hollow_cult", "goretusk", "rituals", "dread_hollow"]
+        name: "Seymour Guado"
+        personality: "The High Seeker of the Occuria Cult — beautiful, charismatic, and utterly insane. Believes death is a gift and the Esper sealed in the Pharos summit is the key to 'eternal peace.' Will try to recruit the player with honeyed words before resorting to magic. Immune to intimidation — he genuinely welcomes death. His staff channels the tower's Mist directly."
+        faction: "occuria_cult"
+        knowledge_scopes: ["occuria_cult", "espers", "rituals", "pharos"]
         is_hostile: true
         level: 3
         hp: 22
@@ -845,18 +783,19 @@ rooms:
         defense: 12
         loot:
           - id: "acolyte_staff"
-            name: "Staff of Dark Whispers"
-            description: "A gnarled staff that hums with malevolent energy. Boosts magic damage significantly."
+            name: "Staff of the Magus"
+            description: "A gnarled staff that hums with raw Mist energy. Seymour channeled the Occuria's power through this. It boosts magic damage significantly and whispers to its wielder in the dark."
             type: "Weapon"
             damage_dice: "3d6+4"
-            damage_stat: "int"
+            damage_stat: "INT"
             value: 400
             is_equippable: true
+            slot: "Weapon"
       - id: "cultist_grunt"
-        name: "Hollow Cultist"
-        personality: "A brainwashed follower. Fearful of Vex, more fearful of Goretusk. Will flee if Vex is defeated."
-        faction: "hollow_cult"
-        knowledge_scopes: ["hollow_cult"]
+        name: "Tonberry"
+        personality: "A small, hooded creature holding a chef's knife and a lantern. Walks slowly but deliberately toward its prey. Remarkably patient. The Cult didn't recruit it — it was already here. It has a grudge. Don't ask against whom."
+        faction: "occuria_cult"
+        knowledge_scopes: ["occuria_cult"]
         is_hostile: true
         level: 2
         hp: 15
@@ -866,29 +805,23 @@ rooms:
         defense: 11
     items:
       - id: "cult_treasure"
-        name: "Offering Chest"
-        description: "A chest filled with gold coins and trinkets offered to Goretusk. The cultists won't miss it. Probably."
+        name: "Esper Offering Chest"
+        description: "A chest filled with gil coins and enchanted trinkets offered to the sealed Esper. The cultists won't miss it. Probably. The Tonberry might, though."
         type: "Misc"
         value: 200
-    environment_tags: ["indoor", "underground", "dark", "shrine", "dangerous", "cultist"]
 
   - id: "dungeon_depths"
-    name: "The Dread Depths"
-    description: >-
-      The deepest chamber of the Dread Hollow. The ceiling soars into darkness
-      above. The floor is cracked and scorched. In the center of the room,
-      chained to a massive stone pillar, is a creature from nightmares —
-      Goretusk the Undying. A monstrous boar-demon the size of a wagon,
-      with tusks like scimitars and eyes that burn with hellfire. The chains
-      are cracking. It sees you. It smiles.
+    name: "Pharos Summit"
+    description: "The highest chamber of the Pharos. The ceiling opens to the sky — or what was the sky. The Mist here is so concentrated it forms visible currents of energy, swirling around a massive crystal formation at the chamber's center. Chained to the crystal by bindings of light is the Esper — Ultima, the High Seraph. A being of terrible beauty, wings spread wide, eyes burning with power that predates the world. The chains are cracking. It sees you. It smiles."
     exits:
       up: "dungeon_hall"
+    environment_tags: ["indoor", "underground", "dark", "boss_arena", "mist_storm", "dangerous", "pharos_summit"]
     npcs:
       - id: "boss_goretusk"
-        name: "Goretusk the Undying"
-        personality: "Ancient, malevolent, and theatrical. A demon-boar bound beneath the Dread Hollow for centuries. Loves to monologue before killing. Respects nothing. Cannot be reasoned with — only destroyed. VICTORY CONDITION: defeating this creature wins the demo."
-        faction: "hollow_cult"
-        knowledge_scopes: ["dread_hollow", "ancient_evil", "hollow_cult"]
+        name: "Ultima, the High Seraph"
+        personality: "An ancient Esper — one of the Scions of Light bound by the Occuria eons ago. Beautiful, terrifying, and theatrically aware of her own magnificence. Speaks in archaic verse. Believes mortals are insects — but entertaining insects. Loves to monologue before annihilating. Cannot be reasoned with — only destroyed. VICTORY CONDITION: defeating this Esper proves your legend."
+        faction: "occuria_cult"
+        knowledge_scopes: ["pharos", "ancient_evil", "occuria_cult", "espers"]
         is_hostile: true
         level: 6
         hp: 55
@@ -898,20 +831,21 @@ rooms:
         defense: 12
         loot:
           - id: "goretusk_tusk"
-            name: "Tusk of the Undying"
-            description: "A massive curved tusk torn from Goretusk's skull. It pulses with dark power. Proof that you actually did it."
+            name: "Esper Shard"
+            description: "A fragment of Ultima's crystallized essence, torn free during the battle. It pulses with divine power. Proof that you actually did it."
             type: "QuestItem"
             value: 1000
           - id: "champion_blade"
-            name: "Demonslayer Greatsword"
-            description: "A legendary weapon forged in Goretusk's own hellfire. Absurdly powerful. You earned this."
+            name: "Tournesol"
+            description: "The legendary sunflower blade, forged in Ultima's own divine fire and quenched in holy water. Absurdly powerful. You earned this."
             type: "Weapon"
             damage_dice: "4d8+8"
-            damage_stat: "str"
+            damage_stat: "STR"
             value: 2000
             is_equippable: true
-            is_two_handed: true
+            slot: "Weapon"
+            properties:
+              two_handed: true
             stat_bonuses:
               str: 3
               con: 2
-    environment_tags: ["indoor", "underground", "dark", "boss_arena", "hellfire", "dangerous"]

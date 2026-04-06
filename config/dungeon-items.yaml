@@ -1,12 +1,14 @@
-# DUNGEON ITEM REGISTRY — Level-tiered equipment for dungeon generation
-# Items are organized by type and required_level for the dungeon generator to query.
+# ══════════════════════════════════════════════════════════════════
+# FINAL FANTASY-THEMED DUNGEON ITEM REGISTRY
+# "Phoenix Down: Because death is a minor inconvenience." — O'aka
+# ══════════════════════════════════════════════════════════════════
 
 items:
   # ── Tier 1 Weapons (Level 1-3) ────────────────────────────────────
 
   - id: "rusty_shortsword"
-    name: "Rusty Shortsword"
-    description: "Pitted and dull, but functional."
+    name: "Rusty Broadsword"
+    description: "Pitted and dull, but still sharp enough to draw blood."
     type: "Weapon"
     damage_dice: "1d6"
     value: 10
@@ -15,8 +17,8 @@ items:
     tags: ["dungeon_loot", "tier1"]
 
   - id: "cracked_mace"
-    name: "Cracked Mace"
-    description: "Splintered handle, heavy head."
+    name: "Cracked Rod"
+    description: "A splintered mage's rod. Still channels a trickle of Mist energy."
     type: "Weapon"
     damage_dice: "1d6"
     value: 12
@@ -25,8 +27,8 @@ items:
     tags: ["dungeon_loot", "tier1"]
 
   - id: "hunting_bow"
-    name: "Hunting Bow"
-    description: "A simple shortbow with a frayed string."
+    name: "Shortbow"
+    description: "A simple hunter's bow with a frayed string. Reliable at short range."
     type: "Weapon"
     damage_dice: "1d6"
     damage_stat: "dex"
@@ -36,8 +38,8 @@ items:
     tags: ["dungeon_loot", "tier1", "ranged"]
 
   - id: "goblin_shiv"
-    name: "Goblin Shiv"
-    description: "A crude blade made from a sharpened bone."
+    name: "Goblin Knife"
+    description: "A crude blade fashioned from sharpened bone. Goblins aren't known for craftsmanship."
     type: "Weapon"
     damage_dice: "1d4+1"
     value: 6
@@ -48,8 +50,8 @@ items:
   # ── Tier 2 Weapons (Level 3-6) ────────────────────────────────────
 
   - id: "steel_longsword"
-    name: "Steel Longsword"
-    description: "Well-balanced and sharp."
+    name: "Mythril Blade"
+    description: "Lightweight mythril, sharp as a razor and gleaming silver."
     type: "Weapon"
     damage_dice: "1d8+1"
     value: 35
@@ -58,8 +60,8 @@ items:
     tags: ["dungeon_loot", "tier2"]
 
   - id: "war_hammer"
-    name: "War Hammer"
-    description: "Dwarven make, dented but deadly."
+    name: "Diamond Mace"
+    description: "A heavy mace with a diamond-hard head. Bangaa-forged."
     type: "Weapon"
     damage_dice: "1d10"
     value: 40
@@ -68,8 +70,8 @@ items:
     tags: ["dungeon_loot", "tier2"]
 
   - id: "crossbow_of_precision"
-    name: "Crossbow of Precision"
-    description: "A finely machined crossbow with iron sights."
+    name: "Killer Bow"
+    description: "A finely-tuned crossbow with magitek sights. Rarely misses."
     type: "Weapon"
     damage_dice: "1d10"
     damage_stat: "dex"
@@ -79,8 +81,8 @@ items:
     tags: ["dungeon_loot", "tier2", "ranged"]
 
   - id: "serrated_battleaxe"
-    name: "Serrated Battleaxe"
-    description: "Jagged teeth along the blade cause grievous wounds."
+    name: "Viking Axe"
+    description: "A broad-headed axe with jagged teeth. Causes grievous wounds."
     type: "Weapon"
     damage_dice: "1d10+1"
     value: 50
@@ -89,8 +91,8 @@ items:
     tags: ["dungeon_loot", "tier2"]
 
   - id: "arcane_staff"
-    name: "Arcane Staff"
-    description: "A gnarled wooden staff humming with latent energy."
+    name: "Oak Staff"
+    description: "A gnarled staff humming with latent Mist energy. A Black Mage's bread and butter."
     type: "Weapon"
     damage_dice: "1d6+2"
     damage_stat: "int"
@@ -102,8 +104,8 @@ items:
   # ── Tier 3 Weapons (Level 6-9) ────────────────────────────────────
 
   - id: "enchanted_blade"
-    name: "Enchanted Blade"
-    description: "Faint runes pulse along the edge."
+    name: "Rune Blade"
+    description: "Faint runes of power pulse along the edge. Forged with materia infusion."
     type: "Weapon"
     damage_dice: "2d6+2"
     value: 120
@@ -112,8 +114,8 @@ items:
     tags: ["dungeon_loot", "tier3", "magical"]
 
   - id: "flamberge_of_ash"
-    name: "Flamberge of Ash"
-    description: "The blade smolders with residual heat."
+    name: "Flame Tongue"
+    description: "The blade smolders with Ifrit's residual heat. Burns on contact."
     type: "Weapon"
     damage_dice: "2d8"
     value: 150
@@ -122,8 +124,8 @@ items:
     tags: ["dungeon_loot", "tier3", "fire"]
 
   - id: "frostbite_halberd"
-    name: "Frostbite Halberd"
-    description: "Ice crystals form along the blade, numbing anything it touches."
+    name: "Ice Lance"
+    description: "A halberd sheathed in Shiva's eternal frost. Numbs everything it touches."
     type: "Weapon"
     damage_dice: "2d6+3"
     is_two_handed: true
@@ -133,8 +135,8 @@ items:
     tags: ["dungeon_loot", "tier3", "ice"]
 
   - id: "shadow_dagger"
-    name: "Shadow Dagger"
-    description: "A blade forged from condensed darkness. Hard to see, harder to dodge."
+    name: "Zwill Crossblade"
+    description: "A dark blade that moves between shadows. Nearly invisible in dim light."
     type: "Weapon"
     damage_dice: "2d6+1"
     damage_stat: "dex"
@@ -146,8 +148,8 @@ items:
   # ── Tier 4 Weapons (Level 9-12) ───────────────────────────────────
 
   - id: "demonslayer_greatsword"
-    name: "Demonslayer Greatsword"
-    description: "Forged in hellfire, quenched in holy water."
+    name: "Excalibur"
+    description: "The legendary holy blade, forged by divine hands. Demons weep at its approach."
     type: "Weapon"
     damage_dice: "3d8+4"
     is_two_handed: true
@@ -157,8 +159,8 @@ items:
     tags: ["dungeon_loot", "tier4", "holy"]
 
   - id: "soulreaver"
-    name: "Soulreaver"
-    description: "The blade hums with stolen life force."
+    name: "Masamune"
+    description: "The legendary katana. Its edge exists partially outside reality."
     type: "Weapon"
     damage_dice: "4d6+3"
     value: 500
@@ -167,8 +169,8 @@ items:
     tags: ["dungeon_loot", "tier4", "dark"]
 
   - id: "thundercaller_warhammer"
-    name: "Thundercaller Warhammer"
-    description: "Lightning arcs between the runes etched into the head."
+    name: "Mjolnir"
+    description: "An ancient war hammer crackling with Ramuh's lightning. Each strike calls thunder."
     type: "Weapon"
     damage_dice: "3d6+5"
     is_two_handed: true
@@ -178,8 +180,8 @@ items:
     tags: ["dungeon_loot", "tier4", "lightning"]
 
   - id: "voidtouched_bow"
-    name: "Voidtouched Bow"
-    description: "Arrows fired from this bow briefly phase through reality."
+    name: "Artemis Bow"
+    description: "Arrows fired from this bow phase briefly through the Void before striking their target."
     type: "Weapon"
     damage_dice: "3d6+4"
     damage_stat: "dex"
@@ -192,7 +194,7 @@ items:
 
   - id: "leather_cap"
     name: "Leather Cap"
-    description: "Scuffed but protective."
+    description: "Simple head protection. Better than nothing, kupo."
     type: "Helmet"
     armor_value: 1
     value: 8
@@ -201,8 +203,8 @@ items:
     tags: ["dungeon_loot", "tier1"]
 
   - id: "padded_vest"
-    name: "Padded Vest"
-    description: "Quilted linen over leather."
+    name: "Cotton Robe"
+    description: "Quilted cotton over leather. A starter mage's staple."
     type: "Armor"
     armor_value: 1
     value: 15
@@ -211,8 +213,8 @@ items:
     tags: ["dungeon_loot", "tier1"]
 
   - id: "wooden_buckler"
-    name: "Wooden Buckler"
-    description: "A small round shield, good for deflecting blows."
+    name: "Escutcheon"
+    description: "A small round shield. Standard militia issue."
     type: "Shield"
     armor_value: 1
     value: 10
@@ -221,8 +223,8 @@ items:
     tags: ["dungeon_loot", "tier1"]
 
   - id: "hide_boots"
-    name: "Hide Boots"
-    description: "Rough leather boots that keep your feet dry."
+    name: "Battle Boots"
+    description: "Rough leather boots that keep your feet dry and functional."
     type: "Boots"
     armor_value: 0
     value: 5
@@ -235,8 +237,8 @@ items:
   # ── Tier 2 Armor (Level 3-6) ──────────────────────────────────────
 
   - id: "chainmail_shirt"
-    name: "Chainmail Shirt"
-    description: "Interlocking iron rings."
+    name: "Chain Plate"
+    description: "Interlocking mythril rings. Light and strong."
     type: "Armor"
     armor_value: 3
     value: 50
@@ -245,8 +247,8 @@ items:
     tags: ["dungeon_loot", "tier2"]
 
   - id: "iron_shield"
-    name: "Iron Shield"
-    description: "Battered but solid."
+    name: "Mythril Shield"
+    description: "A gleaming mythril shield. Lighter than iron but twice as strong."
     type: "Shield"
     armor_value: 2
     value: 30
@@ -255,8 +257,8 @@ items:
     tags: ["dungeon_loot", "tier2"]
 
   - id: "iron_helm"
-    name: "Iron Helm"
-    description: "A simple but effective iron helmet."
+    name: "Mythril Helm"
+    description: "A mythril helmet. Good protection without the weight."
     type: "Helmet"
     armor_value: 2
     value: 25
@@ -265,8 +267,8 @@ items:
     tags: ["dungeon_loot", "tier2"]
 
   - id: "studded_leather_armor"
-    name: "Studded Leather Armor"
-    description: "Reinforced leather with iron rivets."
+    name: "Brigandine"
+    description: "Reinforced leather with metal studs. A Thief's favorite."
     type: "Armor"
     armor_value: 2
     value: 35
@@ -275,8 +277,8 @@ items:
     tags: ["dungeon_loot", "tier2"]
 
   - id: "ring_of_fortitude"
-    name: "Ring of Fortitude"
-    description: "A bronze ring that bolsters the wearer's resilience."
+    name: "Ruby Ring"
+    description: "A deep red ring that bolsters the wearer's constitution."
     type: "Ring"
     armor_value: 0
     value: 40
@@ -289,8 +291,8 @@ items:
   # ── Tier 3 Armor (Level 6-9) ──────────────────────────────────────
 
   - id: "plate_greaves"
-    name: "Plate Greaves"
-    description: "Forged steel leg protection."
+    name: "Platinum Armor"
+    description: "Heavy platinum plate armor. The Knight's dream."
     type: "Armor"
     armor_value: 5
     value: 100
@@ -299,8 +301,8 @@ items:
     tags: ["dungeon_loot", "tier3"]
 
   - id: "tower_shield"
-    name: "Tower Shield"
-    description: "Nearly as tall as you."
+    name: "Aegis Shield"
+    description: "A legendary shield said to ward off all magical attacks."
     type: "Shield"
     armor_value: 4
     value: 90
@@ -309,8 +311,8 @@ items:
     tags: ["dungeon_loot", "tier3"]
 
   - id: "mithril_chainmail"
-    name: "Mithril Chainmail"
-    description: "Impossibly light and strong. The links shimmer like starlight."
+    name: "Minerva Bustier"
+    description: "Enchanted armor of impossible lightness. Shimmer like moonlight."
     type: "Armor"
     armor_value: 4
     value: 130
@@ -321,8 +323,8 @@ items:
     tags: ["dungeon_loot", "tier3", "magical"]
 
   - id: "helm_of_clarity"
-    name: "Helm of Clarity"
-    description: "A silver helm that sharpens the mind."
+    name: "Grand Helm"
+    description: "A masterwork helm that clears the mind and focuses magical power."
     type: "Helmet"
     armor_value: 3
     value: 110
@@ -333,8 +335,8 @@ items:
     tags: ["dungeon_loot", "tier3", "magical"]
 
   - id: "cloak_of_shadows"
-    name: "Cloak of Shadows"
-    description: "The fabric seems to drink in light."
+    name: "Ninja Gear"
+    description: "Shadow-woven fabric that bends light. Perfect for those who prefer not to be seen."
     type: "Cloak"
     armor_value: 1
     value: 95
@@ -347,8 +349,8 @@ items:
   # ── Tier 4 Armor (Level 9-12) ─────────────────────────────────────
 
   - id: "dragonscale_armor"
-    name: "Dragonscale Armor"
-    description: "Scales shimmer with inner fire."
+    name: "Dragon Mail"
+    description: "Armor forged from Bahamut's shed scales. Shimmers with divine fire."
     type: "Armor"
     armor_value: 7
     value: 350
@@ -357,8 +359,8 @@ items:
     tags: ["dungeon_loot", "tier4", "dragon"]
 
   - id: "aegis_of_the_fallen"
-    name: "Aegis of the Fallen"
-    description: "A shield that whispers warnings."
+    name: "Crystal Shield"
+    description: "A shield that hums with Crystal energy and whispers tactical warnings."
     type: "Shield"
     armor_value: 6
     value: 300
@@ -367,8 +369,8 @@ items:
     tags: ["dungeon_loot", "tier4", "magical"]
 
   - id: "crown_of_the_damned"
-    name: "Crown of the Damned"
-    description: "A circlet of dark iron that pulses with unholy power."
+    name: "Circlet of the Esper"
+    description: "A circlet that pulses with Esper energy. Dramatically increases magical power."
     type: "Helmet"
     armor_value: 4
     value: 280
@@ -377,11 +379,11 @@ items:
     stat_bonuses:
       int: 3
       cha: 2
-    tags: ["dungeon_loot", "tier4", "dark"]
+    tags: ["dungeon_loot", "tier4", "esper"]
 
   - id: "boots_of_the_windwalker"
-    name: "Boots of the Windwalker"
-    description: "You barely touch the ground when you walk."
+    name: "Hermes Shoes"
+    description: "Blessed by the spirit of speed itself. You barely touch the ground."
     type: "Boots"
     armor_value: 2
     value: 260
@@ -392,8 +394,8 @@ items:
     tags: ["dungeon_loot", "tier4", "magical"]
 
   - id: "ring_of_undying"
-    name: "Ring of Undying"
-    description: "A black band that pulses with faint warmth."
+    name: "Ribbon"
+    description: "The legendary Ribbon — a simple hair tie that protects against every status ailment. The most coveted accessory in the realm."
     type: "Ring"
     armor_value: 0
     value: 400
@@ -406,8 +408,8 @@ items:
   # ── Potions (All Levels) ──────────────────────────────────────────
 
   - id: "minor_healing_potion"
-    name: "Minor Healing Potion"
-    description: "Restores a small amount of health."
+    name: "Potion"
+    description: "The adventurer's bread and butter. A small vial of red liquid that heals minor wounds."
     type: "Potion"
     value: 10
     is_consumable: true
@@ -417,8 +419,8 @@ items:
     tags: ["dungeon_loot", "potion", "healing"]
 
   - id: "healing_potion"
-    name: "Healing Potion"
-    description: "Warm red liquid that mends wounds."
+    name: "Hi-Potion"
+    description: "A concentrated healing elixir. Significantly more potent than a basic Potion."
     type: "Potion"
     value: 25
     is_consumable: true
@@ -428,8 +430,8 @@ items:
     tags: ["dungeon_loot", "potion", "healing"]
 
   - id: "greater_healing_potion"
-    name: "Greater Healing Potion"
-    description: "A deep crimson elixir that heals grievous wounds."
+    name: "X-Potion"
+    description: "A deep crimson elixir that heals even grievous wounds. Expensive but worth it."
     type: "Potion"
     value: 60
     is_consumable: true
@@ -439,8 +441,8 @@ items:
     tags: ["dungeon_loot", "potion", "healing"]
 
   - id: "supreme_healing_potion"
-    name: "Supreme Healing Potion"
-    description: "Liquid light that restores even mortal wounds."
+    name: "Megalixir"
+    description: "Liquid light distilled from Crystal energy. Restores even mortal wounds. Horrendously rare."
     type: "Potion"
     value: 150
     is_consumable: true
@@ -450,8 +452,8 @@ items:
     tags: ["dungeon_loot", "potion", "healing"]
 
   - id: "mana_potion"
-    name: "Mana Potion"
-    description: "Shimmering blue tonic restores magical energy."
+    name: "Ether"
+    description: "Shimmering blue tonic that restores magical energy. A mage's best friend."
     type: "Potion"
     value: 20
     is_consumable: true
@@ -461,8 +463,8 @@ items:
     tags: ["dungeon_loot", "potion", "mana"]
 
   - id: "greater_mana_potion"
-    name: "Greater Mana Potion"
-    description: "A swirling azure draught that surges with arcane power."
+    name: "Turbo Ether"
+    description: "A swirling azure elixir that surges with concentrated Mist energy."
     type: "Potion"
     value: 50
     is_consumable: true
@@ -472,8 +474,8 @@ items:
     tags: ["dungeon_loot", "potion", "mana"]
 
   - id: "elixir_of_strength"
-    name: "Elixir of Strength"
-    description: "Muscles swell and veins bulge after drinking this amber brew."
+    name: "Hero Drink"
+    description: "Muscles swell with heroic power. For a few minutes, you feel unstoppable."
     type: "Potion"
     value: 30
     is_consumable: true
@@ -483,8 +485,8 @@ items:
     tags: ["dungeon_loot", "potion", "buff"]
 
   - id: "potion_of_stoneskin"
-    name: "Potion of Stoneskin"
-    description: "Your skin hardens like granite for a short time."
+    name: "Earth Drum"
+    description: "Drinking this thick brown liquid hardens your skin like stone."
     type: "Potion"
     value: 35
     is_consumable: true
@@ -492,3 +494,59 @@ items:
     required_level: 4
     rarity: "uncommon"
     tags: ["dungeon_loot", "potion", "buff"]
+
+  # ── FF Signature Items ────────────────────────────────────────────
+
+  - id: "phoenix_down"
+    name: "Phoenix Down"
+    description: "A golden feather from the legendary Phoenix. Revives a fallen ally from the brink of death. The most precious item in any adventurer's pack."
+    type: "Potion"
+    value: 100
+    is_consumable: true
+    effect: "heal:10d4+20"
+    required_level: 3
+    rarity: "rare"
+    tags: ["dungeon_loot", "potion", "healing", "revive"]
+
+  - id: "elixir"
+    name: "Elixir"
+    description: "A legendary potion that fully restores health and magic. Wars have been fought over these."
+    type: "Potion"
+    value: 200
+    is_consumable: true
+    effect: "heal:20d4+40"
+    required_level: 7
+    rarity: "epic"
+    tags: ["dungeon_loot", "potion", "healing", "mana"]
+
+  - id: "chocobo_feather"
+    name: "Chocobo Feather"
+    description: "A golden feather from a wild chocobo. Grants temporary Haste when used."
+    type: "Misc"
+    value: 15
+    is_consumable: true
+    effect: "buff:dex:2:3"
+    required_level: 1
+    rarity: "uncommon"
+    tags: ["dungeon_loot", "chocobo", "buff"]
+
+  - id: "gysahl_green"
+    name: "Gysahl Greens"
+    description: "The preferred food of chocobos everywhere. Can be used to befriend wild chocobos or fed to domesticated ones for bonuses."
+    type: "Misc"
+    value: 5
+    is_consumable: true
+    required_level: 1
+    rarity: "common"
+    tags: ["dungeon_loot", "chocobo", "food"]
+
+  - id: "tent"
+    name: "Tent"
+    description: "A portable shelter that allows full rest outside of town. Restores HP and MP when used at a save point."
+    type: "Misc"
+    value: 50
+    is_consumable: true
+    effect: "heal:5d4+10"
+    required_level: 3
+    rarity: "uncommon"
+    tags: ["dungeon_loot", "rest", "healing"]

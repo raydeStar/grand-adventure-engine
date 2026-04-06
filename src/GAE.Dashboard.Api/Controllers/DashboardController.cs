@@ -2,6 +2,7 @@ using GAE.Core.Interfaces;
 using GAE.Core.Models;
 using GAE.Core.Registry;
 using GAE.Dashboard.Api.Security;
+using GAE.Engine.Configuration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -20,6 +21,7 @@ public class DashboardController : ControllerBase
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _configuration;
     private readonly WorldSeedConfig _worldSeedConfig;
+    private readonly GameRulesConfig _rules;
     private readonly IContentRegistryService _registry;
     private readonly IDiscordNotifier? _discordNotifier;
 
@@ -36,6 +38,7 @@ public class DashboardController : ControllerBase
         IHttpClientFactory httpClientFactory,
         IConfiguration configuration,
         WorldSeedConfig worldSeedConfig,
+        GameRulesConfig rules,
         IContentRegistryService registry,
         IDiscordNotifier? discordNotifier = null)
     {
@@ -47,6 +50,7 @@ public class DashboardController : ControllerBase
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
         _worldSeedConfig = worldSeedConfig;
+        _rules = rules;
         _registry = registry;
         _discordNotifier = discordNotifier;
     }
@@ -393,17 +397,7 @@ public class DashboardController : ControllerBase
             // Reset players back to spawn with clean state, keep their identity
             foreach (var player in players)
             {
-                player.CurrentRoomId = "spawn";
-                player.Hp = player.MaxHp;
-                player.Mp = player.MaxMp;
-                player.Inventory.Clear();
-                player.Equipment = new GAE.Core.Models.EquipmentLoadout();
-                player.StatusEffects.Clear();
-                player.Interaction = new GAE.Core.Models.InteractionState();
-                player.Gold = 50;
-                player.Xp = 0;
-                player.Level = 1;
-                player.LastActiveAt = DateTimeOffset.UtcNow;
+                ResetPlayerToConfiguredBaseline(player);
                 await _stateManager.SavePlayerAsync(player, ct);
             }
         }
@@ -445,6 +439,127 @@ public class DashboardController : ControllerBase
             playersKept = keepPlayers,
             playerCount = players.Count
         });
+    }
+
+    private void ResetPlayerToConfiguredBaseline(PlayerCharacter player)
+    {
+        player.CurrentRoomId = "spawn";
+        player.HasCompletedDemo = false;
+        player.Inventory.Clear();
+        player.Equipment = new EquipmentLoadout();
+        player.StatusEffects.Clear();
+        player.Spellbook.Clear();
+        player.QuestLog.Clear();
+        player.Interaction = new InteractionState();
+        player.Gold = _rules.CharacterCreation.StartingGold;
+        player.Xp = 0;
+        player.Level = _rules.CharacterCreation.StartingLevel;
+
+        AddDefaultHealSpell(player);
+
+        foreach (var itemLookup in GetStartingItemLookups(player))
+        {
+            var template = ResolveItemTemplate(itemLookup);
+            if (template is null)
+                continue;
+
+            var item = template.ToInventoryItem();
+            if (item.IsEquippable)
+            {
+                var equippedSlot = player.Equipment.Equip(item, out _);
+                if (equippedSlot is null)
+                    AddItemToInventory(player, item);
+            }
+            else
+            {
+                AddItemToInventory(player, item);
+            }
+        }
+
+        RecalculatePlayerResources(player);
+        player.Hp = player.MaxHp;
+        player.Mp = player.MaxMp;
+        player.LastActiveAt = DateTimeOffset.UtcNow;
+    }
+
+    private List<string> GetStartingItemLookups(PlayerCharacter player)
+    {
+        var itemLookups = new List<string>();
+
+        var classDefinition = _registry.Classes.GetAll().FirstOrDefault(candidate =>
+            candidate.Id.Equals(player.Class, StringComparison.OrdinalIgnoreCase)
+            || candidate.Name.Equals(player.Class, StringComparison.OrdinalIgnoreCase));
+
+        if (classDefinition is not null)
+            itemLookups.AddRange(classDefinition.StartingEquipment);
+
+        itemLookups.AddRange(_rules.CharacterCreation.StartingItems);
+        return itemLookups;
+    }
+
+    private ItemTemplate? ResolveItemTemplate(string itemLookup)
+    {
+        if (string.IsNullOrWhiteSpace(itemLookup))
+            return null;
+
+        return _registry.Items.GetAll().FirstOrDefault(candidate =>
+            candidate.Id.Equals(itemLookup, StringComparison.OrdinalIgnoreCase)
+            || candidate.Name.Equals(itemLookup, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void RecalculatePlayerResources(PlayerCharacter player)
+    {
+        int statMax = _rules.Stats.GetValueOrDefault("str")?.Max ?? 20;
+        player.Str = Math.Clamp(player.Str, 1, statMax);
+        player.Dex = Math.Clamp(player.Dex, 1, statMax);
+        player.Con = Math.Clamp(player.Con, 1, statMax);
+        player.Int = Math.Clamp(player.Int, 1, statMax);
+        player.Wis = Math.Clamp(player.Wis, 1, statMax);
+        player.Cha = Math.Clamp(player.Cha, 1, statMax);
+        player.Luck = Math.Clamp(player.Luck, 1, statMax);
+
+        int hpBase = _rules.Stats.GetValueOrDefault("hp")?.Base ?? 20;
+        int mpBase = _rules.Stats.GetValueOrDefault("mp")?.Base ?? 10;
+        int conMod = PlayerCharacter.GetStatModifier(player.Con);
+        int intMod = PlayerCharacter.GetStatModifier(player.Int);
+        int bonusLevels = Math.Max(0, player.Level - 1);
+
+        int baseHp = hpBase + conMod;
+        int baseMp = mpBase + intMod;
+        player.MaxHp = Math.Max(1, (int)(baseHp * (1.0 + _rules.Leveling.HpScalePerLevel * bonusLevels)));
+        player.MaxMp = Math.Max(0, (int)(baseMp * (1.0 + _rules.Leveling.MpScalePerLevel * bonusLevels)));
+    }
+
+    private static void AddDefaultHealSpell(PlayerCharacter player)
+    {
+        player.Spellbook.Add(new LearnedSpell
+        {
+            Name = "Heal",
+            Description = "Channel restorative magic to mend your wounds.",
+            DamageDice = "1d4+2",
+            DamageStat = "wis",
+            Category = SpellCategory.Healing,
+            MpCost = 2,
+            BasePower = 1,
+            LearnedAtLevel = 1,
+            TargetType = "self"
+        });
+    }
+
+    private static void AddItemToInventory(PlayerCharacter player, InventoryItem item)
+    {
+        var existing = player.Inventory.FirstOrDefault(candidate =>
+            candidate.Name.Equals(item.Name, StringComparison.OrdinalIgnoreCase)
+            && candidate.Type == item.Type
+            && !candidate.IsEquippable);
+
+        if (existing is null)
+        {
+            player.Inventory.Add(item);
+            return;
+        }
+
+        existing.Quantity += Math.Max(1, item.Quantity);
     }
 
     // SeedWorldFromLore is defined as a static method in Program.cs — call it via the same pattern
