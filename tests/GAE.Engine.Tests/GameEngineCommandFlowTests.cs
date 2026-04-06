@@ -685,7 +685,7 @@ public class GameEngineCommandFlowTests
         Assert.Equal(InteractionMode.Combat, player!.Interaction.Mode);
 
         // CombatState should exist with both enemies + player
-        var combat = await stateManager.GetCombatStateAsync($"{PlayerId}:{room.Id}");
+        var combat = await stateManager.GetCombatStateAsync($"{PlayerId}:{room.Id}", WorldDefaults.DefaultWorldId);
         Assert.NotNull(combat);
         Assert.True(combat!.TurnOrder.Count >= 2); // At least player + surviving enemies
     }

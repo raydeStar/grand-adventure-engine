@@ -161,7 +161,7 @@ public class GameEngine : IGameEngine
             try
             {
                 var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
-                var recentStory = await _stateManager.GetRecentStoryForRoomAsync(player.CurrentRoomId, 5, ct);
+                var recentStory = await _stateManager.GetRecentStoryForRoomAsync(player.CurrentRoomId, player.ActiveWorldId, 5, ct);
                 var context = new NarratorContext
                 {
                     Player = player,
@@ -390,8 +390,8 @@ public class GameEngine : IGameEngine
         return null;
     }
 
-    public async Task<CombatState?> GetActiveCombatAsync(string roomId, CancellationToken ct = default)
-        => await _stateManager.GetCombatStateAsync(roomId, ct);
+    public async Task<CombatState?> GetActiveCombatAsync(string roomId, string worldId, CancellationToken ct = default)
+        => await _stateManager.GetCombatStateAsync(roomId, worldId, ct);
 
     // --- Action processors ---
 
@@ -444,6 +444,7 @@ public class GameEngine : IGameEngine
                 targetRoom.Id = simpleTargetId;
                 targetRoom.IsDiscovered = true;
                 targetRoom.DiscoveredAt = DateTimeOffset.UtcNow;
+                targetRoom.WorldIds = [player.ActiveWorldId];
                 // Ensure reverse exit uses simple ID
                 targetRoom.Exits[OppositeDirection(direction)] = simpleSourceId;
                 await _stateManager.SaveRoomAsync(targetRoom, ct);
@@ -458,6 +459,7 @@ public class GameEngine : IGameEngine
                     Description = "A dimly lit area that stretches before you.",
                     IsDiscovered = true,
                     DiscoveredAt = DateTimeOffset.UtcNow,
+                    WorldIds = [player.ActiveWorldId],
                     Exits = new Dictionary<string, string> { [OppositeDirection(direction)] = simpleSourceId }
                 };
                 await _stateManager.SaveRoomAsync(targetRoom, ct);
@@ -1606,7 +1608,7 @@ public class GameEngine : IGameEngine
         var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
         room ??= new Room { Id = player.CurrentRoomId, Name = "Unknown" };
 
-        var recentStory = await _stateManager.GetRecentStoryForRoomAsync(player.CurrentRoomId, 5, ct);
+        var recentStory = await _stateManager.GetRecentStoryForRoomAsync(player.CurrentRoomId, player.ActiveWorldId, 5, ct);
         var freeForm = await _narrator.ProcessFreeFormAsync(player, room, action.RawInput, recentStory, ct);
 
         var result = new ActionResult
@@ -2151,7 +2153,7 @@ public class GameEngine : IGameEngine
                 ? new DungeonGenerator(_registry, _logger)
                 : throw new InvalidOperationException("Content registry is required for dungeon generation");
             var entrance = await generator.GenerateFullDungeonAsync(
-                dungeonId, player.Level, room, _stateManager, ct);
+                dungeonId, player.Level, room, _stateManager, player.ActiveWorldId, ct);
 
             // Add exit from current room to the dungeon
             var exitDirection = PickDungeonExitDirection(room);
@@ -2365,7 +2367,7 @@ public class GameEngine : IGameEngine
         var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
         if (room is null) { player.Interaction.Reset(); return null; }
 
-        var combat = await _stateManager.GetCombatStateAsync(room.Id, ct);
+        var combat = await _stateManager.GetCombatStateAsync(room.Id, player.ActiveWorldId, ct);
         var enemies = room.Npcs.Where(n => combat?.TurnOrder.Any(t => !t.IsPlayer && t.Id == n.Id) == true).ToList();
         if (combat is null || enemies.Count == 0)
         {
@@ -2392,7 +2394,7 @@ public class GameEngine : IGameEngine
             player.Interaction.Reset();
             var escDir = room.Exits.Keys.FirstOrDefault();
             if (escDir is not null) player.CurrentRoomId = room.Exits[escDir];
-            if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, ct);
+            if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, player.ActiveWorldId, ct);
             await _stateManager.SavePlayerAsync(player, ct);
             var fleeResult = new ActionResult { ActionId = action.Id, RawInput = action.RawInput, Success = true,
                 MechanicalSummary = totalOppDamage > 0 ? $"You flee! Enemies strike for {totalOppDamage} as you escape." : "You flee from combat!",
@@ -2413,7 +2415,7 @@ public class GameEngine : IGameEngine
             RunEnemyAttacks(player, enemies, room, useMech, useDice, useSC, defenseBonus: 0);
 
             string useCombatStatus = player.Hp <= 0 ? "defeat" : "ongoing";
-            if (player.Hp <= 0) { player.Interaction.Reset(); if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, ct); }
+            if (player.Hp <= 0) { player.Interaction.Reset(); if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, player.ActiveWorldId, ct); }
 
             // HP bar after item use
             if (useCombatStatus == "ongoing")
@@ -2436,7 +2438,7 @@ public class GameEngine : IGameEngine
             var defSC = new List<StateChange>();
             RunEnemyAttacks(player, enemies, room, defMech, defDice, defSC, defenseBonus: 4);
             string defStatus = player.Hp <= 0 ? "defeat" : "ongoing";
-            if (player.Hp <= 0) { player.Interaction.Reset(); if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, ct); }
+            if (player.Hp <= 0) { player.Interaction.Reset(); if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, player.ActiveWorldId, ct); }
             if (defStatus == "ongoing") AppendHpBars(defMech, player, enemies, room);
             await _stateManager.SavePlayerAsync(player, ct);
             await _stateManager.SaveRoomAsync(room, ct);
@@ -2463,7 +2465,7 @@ public class GameEngine : IGameEngine
                     RunEnemyAttacks(player, aliveEnemies, room, castMech, castDice, castSC, defenseBonus: 0);
 
                     string castCombatStatus = player.Hp <= 0 ? "defeat" : "ongoing";
-                    if (player.Hp <= 0) { player.Interaction.Reset(); if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, ct); }
+                    if (player.Hp <= 0) { player.Interaction.Reset(); if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, player.ActiveWorldId, ct); }
                     if (castCombatStatus == "ongoing") AppendHpBars(castMech, player, aliveEnemies, room);
 
                     await _stateManager.SavePlayerAsync(player, ct);
@@ -2636,7 +2638,7 @@ public class GameEngine : IGameEngine
         {
             combatStatus = "defeat";
             player.Interaction.Reset();
-            if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, ct);
+            if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, player.ActiveWorldId, ct);
             // Auto-respawn at tavern with penalties
             var killer = enemies.FirstOrDefault(e => e.Hp.HasValue && e.Hp.Value > 0)?.Name ?? "the enemy";
             var (deathMsg, deathChanges) = await HandlePlayerDeathAsync(player, room, killer, ct);
@@ -2650,7 +2652,7 @@ public class GameEngine : IGameEngine
             player.Xp += totalXp;
             player.Gold += totalGold;
             player.Interaction.Reset();
-            if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, ct);
+            if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, player.ActiveWorldId, ct);
             // Rewards line
             var rewards = new List<string>();
             if (totalXp > 0) rewards.Add($"+{totalXp} XP");

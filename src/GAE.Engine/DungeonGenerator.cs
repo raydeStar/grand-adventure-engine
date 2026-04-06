@@ -238,7 +238,7 @@ public class DungeonGenerator
     /// </summary>
     public async Task<Room> GenerateFullDungeonAsync(
         string dungeonId, int playerLevel, Room sourceRoom,
-        IStateManager stateManager, CancellationToken ct = default)
+        IStateManager stateManager, string worldId, CancellationToken ct = default)
     {
         var profile = GetProfile(playerLevel);
         var (floorCount, roomsPerFloor) = GetDungeonSize(playerLevel);
@@ -285,7 +285,10 @@ public class DungeonGenerator
         }
 
         foreach (var room in allRooms)
+        {
+            room.WorldIds = [worldId];
             await stateManager.SaveRoomAsync(room, ct);
+        }
 
         return entrance!;
     }

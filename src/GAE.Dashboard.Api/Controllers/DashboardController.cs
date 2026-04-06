@@ -95,9 +95,9 @@ public class DashboardController : ControllerBase
     }
 
     [HttpGet("story/room/{roomId}")]
-    public async Task<IActionResult> GetRoomStory(string roomId, [FromQuery] int limit = 10, CancellationToken ct = default)
+    public async Task<IActionResult> GetRoomStory(string roomId, [FromQuery] string? worldId = null, [FromQuery] int limit = 10, CancellationToken ct = default)
     {
-        var entries = await _stateManager.GetRecentStoryForRoomAsync(roomId, limit, ct);
+        var entries = await _stateManager.GetRecentStoryForRoomAsync(roomId, worldId ?? WorldDefaults.DefaultWorldId, limit, ct);
         return Ok(entries);
     }
 

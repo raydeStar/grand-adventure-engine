@@ -43,11 +43,11 @@ public class JournaledStateManager : IStateManager
     public Task<IReadOnlyList<StoryEntry>> GetStoryEntriesAsync(string? playerId = null, int limit = 50, CancellationToken ct = default)
         => _inner.GetStoryEntriesAsync(playerId, limit, ct);
 
-    public Task<IReadOnlyList<StoryEntry>> GetRecentStoryForRoomAsync(string roomId, int limit = 10, CancellationToken ct = default)
-        => _inner.GetRecentStoryForRoomAsync(roomId, limit, ct);
+    public Task<IReadOnlyList<StoryEntry>> GetRecentStoryForRoomAsync(string roomId, string worldId, int limit = 10, CancellationToken ct = default)
+        => _inner.GetRecentStoryForRoomAsync(roomId, worldId, limit, ct);
 
-    public Task<CombatState?> GetCombatStateAsync(string roomId, CancellationToken ct = default)
-        => _inner.GetCombatStateAsync(roomId, ct);
+    public Task<CombatState?> GetCombatStateAsync(string roomId, string worldId, CancellationToken ct = default)
+        => _inner.GetCombatStateAsync(roomId, worldId, ct);
 
     // Write operations journal then apply
     public async Task SavePlayerAsync(PlayerCharacter player, CancellationToken ct = default)
@@ -122,9 +122,9 @@ public class JournaledStateManager : IStateManager
         }, ct);
     }
 
-    public async Task RemoveCombatStateAsync(string roomId, CancellationToken ct = default)
+    public async Task RemoveCombatStateAsync(string roomId, string worldId, CancellationToken ct = default)
     {
-        await _inner.RemoveCombatStateAsync(roomId, ct);
+        await _inner.RemoveCombatStateAsync(roomId, worldId, ct);
         await _journal.AppendAsync(new GameEvent
         {
             Type = GameEventType.CombatEnded,

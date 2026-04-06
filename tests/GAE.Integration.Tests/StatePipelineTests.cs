@@ -99,15 +99,15 @@ public class StatePipelineTests : IClassFixture<GaeWebApplicationFactory>
         };
 
         await state.SaveCombatStateAsync(combat);
-        var retrieved = await state.GetCombatStateAsync("combat-test-room");
+        var retrieved = await state.GetCombatStateAsync("combat-test-room", WorldDefaults.DefaultWorldId);
 
         Assert.NotNull(retrieved);
         Assert.Equal(CombatPhase.PlayerTurn, retrieved.Phase);
         Assert.Equal(1, retrieved.RoundNumber);
 
         // Remove and verify
-        await state.RemoveCombatStateAsync("combat-test-room");
-        var removed = await state.GetCombatStateAsync("combat-test-room");
+        await state.RemoveCombatStateAsync("combat-test-room", WorldDefaults.DefaultWorldId);
+        var removed = await state.GetCombatStateAsync("combat-test-room", WorldDefaults.DefaultWorldId);
         Assert.Null(removed);
     }
 

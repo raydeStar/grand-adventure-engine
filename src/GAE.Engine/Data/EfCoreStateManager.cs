@@ -238,11 +238,11 @@ public class EfCoreStateManager : IStateManager
         return entities.Select(e => e.ToDomain()).ToList();
     }
 
-    public async Task<IReadOnlyList<StoryEntry>> GetRecentStoryForRoomAsync(string roomId, int limit = 10, CancellationToken ct = default)
+    public async Task<IReadOnlyList<StoryEntry>> GetRecentStoryForRoomAsync(string roomId, string worldId, int limit = 10, CancellationToken ct = default)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var entities = await db.StoryEntries.AsNoTracking()
-            .Where(e => e.RoomId == roomId)
+            .Where(e => e.RoomId == roomId && e.WorldId == worldId)
             .OrderByDescending(e => e.Timestamp)
             .Take(limit)
             .ToListAsync(ct);
@@ -257,11 +257,11 @@ public class EfCoreStateManager : IStateManager
 
     // ── Combat operations ──────────────────────────────────────────
 
-    public async Task<CombatState?> GetCombatStateAsync(string roomId, CancellationToken ct = default)
+    public async Task<CombatState?> GetCombatStateAsync(string roomId, string worldId, CancellationToken ct = default)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var entity = await db.CombatStates.AsNoTracking()
-            .FirstOrDefaultAsync(c => c.RoomId == roomId && c.WorldId == WorldDefaults.DefaultWorldId, ct);
+            .FirstOrDefaultAsync(c => c.RoomId == roomId && c.WorldId == worldId, ct);
         return entity?.State;
     }
 
@@ -288,10 +288,10 @@ public class EfCoreStateManager : IStateManager
         await db.SaveChangesAsync(ct);
     }
 
-    public async Task RemoveCombatStateAsync(string roomId, CancellationToken ct = default)
+    public async Task RemoveCombatStateAsync(string roomId, string worldId, CancellationToken ct = default)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
-        await db.CombatStates.Where(c => c.RoomId == roomId && c.WorldId == WorldDefaults.DefaultWorldId).ExecuteDeleteAsync(ct);
+        await db.CombatStates.Where(c => c.RoomId == roomId && c.WorldId == worldId).ExecuteDeleteAsync(ct);
     }
 
     public async Task RemoveAllCombatStatesAsync(CancellationToken ct = default)

@@ -31,15 +31,15 @@ public interface IStateManager
     // Story operations
     Task AddStoryEntryAsync(StoryEntry entry, CancellationToken ct = default);
     Task<IReadOnlyList<StoryEntry>> GetStoryEntriesAsync(string? playerId = null, int limit = 50, CancellationToken ct = default);
-    Task<IReadOnlyList<StoryEntry>> GetRecentStoryForRoomAsync(string roomId, int limit = 10, CancellationToken ct = default);
+    Task<IReadOnlyList<StoryEntry>> GetRecentStoryForRoomAsync(string roomId, string worldId, int limit = 10, CancellationToken ct = default);
 
     // Story bulk operations
     Task ClearStoryAsync(CancellationToken ct = default);
 
     // Combat operations
-    Task<CombatState?> GetCombatStateAsync(string roomId, CancellationToken ct = default);
+    Task<CombatState?> GetCombatStateAsync(string roomId, string worldId, CancellationToken ct = default);
     Task SaveCombatStateAsync(CombatState combat, CancellationToken ct = default);
-    Task RemoveCombatStateAsync(string roomId, CancellationToken ct = default);
+    Task RemoveCombatStateAsync(string roomId, string worldId, CancellationToken ct = default);
     Task RemoveAllCombatStatesAsync(CancellationToken ct = default);
 
     // Party quest operations

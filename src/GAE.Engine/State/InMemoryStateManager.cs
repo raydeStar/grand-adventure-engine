@@ -148,12 +148,12 @@ public class InMemoryStateManager : IStateManager
         }
     }
 
-    public Task<IReadOnlyList<StoryEntry>> GetRecentStoryForRoomAsync(string roomId, int limit = 10, CancellationToken ct = default)
+    public Task<IReadOnlyList<StoryEntry>> GetRecentStoryForRoomAsync(string roomId, string worldId, int limit = 10, CancellationToken ct = default)
     {
         lock (_storyLock)
         {
             var entries = _storyEntries.AsEnumerable().Reverse()
-                .Where(e => e.RoomId == roomId)
+                .Where(e => e.RoomId == roomId && e.WorldId == worldId)
                 .Take(limit)
                 .ToList();
             return Task.FromResult<IReadOnlyList<StoryEntry>>(entries);
@@ -170,8 +170,8 @@ public class InMemoryStateManager : IStateManager
     }
 
     // Combat operations
-    public Task<CombatState?> GetCombatStateAsync(string roomId, CancellationToken ct = default)
-        => Task.FromResult(_combats.GetValueOrDefault(BuildCombatKey(WorldDefaults.DefaultWorldId, roomId)));
+    public Task<CombatState?> GetCombatStateAsync(string roomId, string worldId, CancellationToken ct = default)
+        => Task.FromResult(_combats.GetValueOrDefault(BuildCombatKey(worldId, roomId)));
 
     public Task SaveCombatStateAsync(CombatState combat, CancellationToken ct = default)
     {
@@ -179,9 +179,9 @@ public class InMemoryStateManager : IStateManager
         return Task.CompletedTask;
     }
 
-    public Task RemoveCombatStateAsync(string roomId, CancellationToken ct = default)
+    public Task RemoveCombatStateAsync(string roomId, string worldId, CancellationToken ct = default)
     {
-        _combats.TryRemove(BuildCombatKey(WorldDefaults.DefaultWorldId, roomId), out _);
+        _combats.TryRemove(BuildCombatKey(worldId, roomId), out _);
         return Task.CompletedTask;
     }
 
