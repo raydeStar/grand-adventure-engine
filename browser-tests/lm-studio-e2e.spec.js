@@ -4,6 +4,7 @@ const {
   openAdminConsole,
   openCreateCharacter,
   cleanupTestPlayersViaApi,
+  switchAdminTab,
   uniqueId
 } = require('./helpers');
 
@@ -12,19 +13,43 @@ const {
  * through the browser dashboard. These tests require LM Studio to be
  * running at localhost:1234 and the Docker container at localhost:8181.
  *
- * The tests verify that real LLM narration is produced (not fallback text).
+ * The tests verify that real LLM narration is produced, not fallback text.
  */
 test.describe('LM Studio end-to-end narration', () => {
+  async function waitForCommandCompletion(page) {
+    await page.waitForFunction(() => {
+      const input = document.getElementById('command-input');
+      return !!input && !input.disabled && (!window.UI || !window.UI._streamNode);
+    }, null, { timeout: 30_000 });
+  }
+
+  async function sendCommand(page, command) {
+    const responsePromise = page.waitForResponse((response) => {
+      if (!response.url().includes('/api/dashboard/action')) return false;
+      if (response.request().method() !== 'POST') return false;
+      return (response.request().postData() || '').includes(command);
+    });
+
+    await page.locator('#command-input').fill(command);
+    await page.getByRole('button', { name: 'Send' }).click();
+
+    const actionResponse = await responsePromise;
+    const result = await actionResponse.json();
+    await waitForCommandCompletion(page);
+    return result;
+  }
+
   test.afterEach(async ({ request }) => {
     try {
       await cleanupTestPlayersViaApi(request, ['lm-e2e-']);
-    } catch { /* best effort */ }
+    } catch {
+      /* best effort */
+    }
   });
 
   test('narrator health check shows LM Studio connected', async ({ page }) => {
     await login(page, 'admin');
 
-    // The health panel should show narrator as OK
     const healthResult = await page.evaluate(async () => {
       const checks = await API.getHealth();
       return checks['health/narrator'];
@@ -45,22 +70,18 @@ test.describe('LM Studio end-to-end narration', () => {
     await page.locator('#char-race').selectOption('Human');
     await page.locator('#char-class').selectOption('Warrior');
     await page.locator('#char-backstory').fill('Born for testing narrator connectivity.');
-    await page.getByRole('button', { name: 'Create Character' }).click();
+    await page.locator('#create-form').getByRole('button', { name: 'Create' }).click();
 
     await expect(page.locator('#header-player')).toContainText('Narrator Test Hero');
     await expect(page.locator('#command-input')).toBeEnabled();
 
-    // Send 'look' — this should trigger narration
-    await page.locator('#command-input').fill('look');
-    await page.getByRole('button', { name: 'Send' }).click();
-    await expect(page.locator('#command-input')).toBeDisabled({ timeout: 3_000 });
-    await expect(page.locator('#command-input')).toBeEnabled({ timeout: 30_000 });
+    const result = await sendCommand(page, 'look');
+    const narrationText = [result.narration, result.mechanicalSummary].filter(Boolean).join(' ');
 
-    // Verify the story log contains a real narration entry (not the fallback)
-    const storyText = await page.locator('#story-log').textContent();
-    expect(storyText).toBeTruthy();
-    expect(storyText).not.toContain('narrator clears his throat');
-    expect(storyText.length).toBeGreaterThan(20);
+    expect(result.success).toBeTruthy();
+    expect(narrationText).toBeTruthy();
+    expect(narrationText).not.toContain('narrator clears his throat');
+    expect(narrationText.length).toBeGreaterThan(20);
   });
 
   test('movement generates a new room with LLM-produced description', async ({ page }, testInfo) => {
@@ -73,28 +94,22 @@ test.describe('LM Studio end-to-end narration', () => {
     await page.locator('#char-race').selectOption('Elf');
     await page.locator('#char-class').selectOption('Ranger');
     await page.locator('#char-backstory').fill('Wanderer of generated realms.');
-    await page.getByRole('button', { name: 'Create Character' }).click();
+    await page.locator('#create-form').getByRole('button', { name: 'Create' }).click();
 
     await expect(page.locator('#header-player')).toContainText('Explorer Test');
     await expect(page.locator('#command-input')).toBeEnabled();
 
-    // Move north — should generate a new room via LM Studio
-    await page.locator('#command-input').fill('go north');
-    await page.getByRole('button', { name: 'Send' }).click();
-    await expect(page.locator('#command-input')).toBeDisabled({ timeout: 3_000 });
-    await expect(page.locator('#command-input')).toBeEnabled({ timeout: 30_000 });
+    const moveResult = await sendCommand(page, 'go north');
+    expect(moveResult.success).toBeTruthy();
 
-    // Room name should change from Crossroads of the Shattered Reaches
     const roomName = await page.locator('#room-name').textContent();
     expect(roomName).toBeTruthy();
     expect(roomName).not.toBe('');
 
-    // Description should be present (LLM-generated)
-    const roomDesc = await page.locator('#room-description').textContent();
+    const roomDesc = await page.locator('#room-desc').textContent();
     expect(roomDesc).toBeTruthy();
     expect(roomDesc.length).toBeGreaterThan(10);
 
-    // Story log should have narration for the move
     const storyText = await page.locator('#story-log').textContent();
     expect(storyText).not.toContain('narrator clears his throat');
   });
@@ -102,21 +117,18 @@ test.describe('LM Studio end-to-end narration', () => {
   test('admin command probe returns narrated response', async ({ page }) => {
     await login(page, 'admin');
 
-    // Seed demo characters
-    await page.getByRole('button', { name: 'Seed Demo User + Admin' }).click();
+    await page.locator('#btn-seed-demo-admin').click();
     await expect(page.locator('#portal-message')).toContainText(/Seeded|already existed/i);
 
     await openAdminConsole(page);
+    await switchAdminTab(page, 'commands');
 
-    // Run a command as demo-user via admin console
     await page.locator('#admin-player-select').selectOption('demo-user');
     await page.locator('#admin-command-input').fill('look');
-    await page.getByRole('button', { name: 'Ask / Execute' }).click();
+    await page.getByRole('button', { name: 'Execute' }).click();
 
-    // Wait for response in admin command log
     await expect(page.locator('#admin-command-log')).toContainText('demo-user > look', { timeout: 30_000 });
 
-    // Verify it shows real narration, not "narrator clears his throat"
     const logText = await page.locator('#admin-command-log').textContent();
     expect(logText).not.toContain('narrator clears his throat');
   });
@@ -131,29 +143,19 @@ test.describe('LM Studio end-to-end narration', () => {
     await page.locator('#char-race').selectOption('Dwarf');
     await page.locator('#char-class').selectOption('Warrior');
     await page.locator('#char-backstory').fill('Tests sequential LLM calls.');
-    await page.getByRole('button', { name: 'Create Character' }).click();
+    await page.locator('#create-form').getByRole('button', { name: 'Create' }).click();
 
     await expect(page.locator('#command-input')).toBeEnabled();
 
-    // First command: look
-    await page.locator('#command-input').fill('look');
-    await page.getByRole('button', { name: 'Send' }).click();
-    await expect(page.locator('#command-input')).toBeDisabled({ timeout: 3_000 });
-    await expect(page.locator('#command-input')).toBeEnabled({ timeout: 30_000 });
-
+    const firstResult = await sendCommand(page, 'look');
     const firstStory = await page.locator('#story-log').textContent();
 
-    // Second command: look again (should produce a different narration due to temperature)
-    await page.locator('#command-input').fill('look');
-    await page.getByRole('button', { name: 'Send' }).click();
-    await expect(page.locator('#command-input')).toBeDisabled({ timeout: 3_000 });
-    await expect(page.locator('#command-input')).toBeEnabled({ timeout: 30_000 });
-
+    const secondResult = await sendCommand(page, 'look');
     const secondStory = await page.locator('#story-log').textContent();
 
-    // Story log should have grown (more content after second command)
     expect(secondStory.length).toBeGreaterThan(firstStory.length);
-    // Neither should contain fallback text
+    expect(firstResult.success).toBeTruthy();
+    expect(secondResult.success).toBeTruthy();
     expect(secondStory).not.toContain('narrator clears his throat');
   });
 });

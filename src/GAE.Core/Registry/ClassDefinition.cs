@@ -1,3 +1,5 @@
+using GAE.Core.Models;
+
 namespace GAE.Core.Registry;
 
 /// <summary>A registered playable class with stat priorities, allowed spells, and equipment restrictions.</summary>
@@ -6,6 +8,7 @@ public class ClassDefinition : IRegistryEntry
     public string Id { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
+    public List<string> WorldIds { get; set; } = [WorldDefaults.DefaultWorldId];
 
     /// <summary>Hit die per level (e.g. "d10", "d6").</summary>
     public string HitDie { get; set; } = "d8";

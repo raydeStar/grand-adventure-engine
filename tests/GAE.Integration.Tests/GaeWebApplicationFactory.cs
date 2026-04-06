@@ -1,27 +1,32 @@
 using System.Net.Http.Json;
 using GAE.Core.Interfaces;
 using GAE.Core.Models;
-using GAE.Engine.State;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Logging;
+using Testcontainers.PostgreSql;
 
 namespace GAE.Integration.Tests;
 
 /// <summary>
-/// Spins up the real ASP.NET host in-process but replaces external services
-/// (Discord, Wiki.js, LM Studio narrator) with safe test stubs.
-/// Each factory instance gets its own isolated data directory to avoid file contention.
+/// Spins up the real ASP.NET host in-process with an isolated PostgreSQL container
+/// (via Testcontainers) and replaces external services (Discord, Wiki.js, LM Studio)
+/// with safe test stubs. Each factory instance gets its own database.
 /// </summary>
-public class GaeWebApplicationFactory : WebApplicationFactory<Program>
+public class GaeWebApplicationFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
     public const string DefaultUserUsername = "user";
     public const string DefaultUserPassword = "GAE-User-Local!123";
     public const string DefaultAdminUsername = "admin";
     public const string DefaultAdminPassword = "GAE-Admin-Local!123";
+
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17")
+        .WithDatabase("gae_test")
+        .WithUsername("gae_app")
+        .WithPassword("gae_test_password")
+        .Build();
 
     private readonly string _dataDir = Path.Combine(Path.GetTempPath(), "gae-tests", Guid.NewGuid().ToString("N"));
 
@@ -29,18 +34,34 @@ public class GaeWebApplicationFactory : WebApplicationFactory<Program>
 
     public HttpClient CreateAdminClient() => CreateAuthenticatedClient(DefaultAdminUsername, DefaultAdminPassword);
 
+    public async Task InitializeAsync()
+    {
+        await _postgres.StartAsync();
+    }
+
+    async Task IAsyncLifetime.DisposeAsync()
+    {
+        await base.DisposeAsync();
+        await _postgres.DisposeAsync();
+        try { Directory.Delete(_dataDir, true); } catch { /* best effort */ }
+    }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.UseEnvironment("Development");
+        builder.UseEnvironment("Test");
 
-        // Ensure tests use file-based persistence, not PostgreSQL
+        // Point at the Testcontainers PostgreSQL instance and isolated data dir
         builder.ConfigureAppConfiguration((context, config) =>
         {
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Persistence:UsePostgres"] = "false"
+                ["ConnectionStrings:GameDatabase"] = _postgres.GetConnectionString(),
+                ["DataDir"] = _dataDir
             });
         });
+
+        // Isolate file-based data paths (migration service reads from these)
+        Directory.CreateDirectory(_dataDir);
 
         builder.ConfigureServices(services =>
         {
@@ -55,31 +76,7 @@ public class GaeWebApplicationFactory : WebApplicationFactory<Program>
             // Replace event broadcaster with no-op (no SignalR clients in tests)
             services.RemoveAll<IGameEventBroadcaster>();
             services.AddSingleton<IGameEventBroadcaster, StubGameEventBroadcaster>();
-
-            // Replace file-based journal/checkpoint with isolated temp directory
-            Directory.CreateDirectory(_dataDir);
-
-            services.RemoveAll<IStateJournal>();
-            services.AddSingleton<IStateJournal>(sp =>
-                new FileStateJournal(
-                    Path.Combine(_dataDir, "journal.jsonl"),
-                    sp.GetRequiredService<ILogger<FileStateJournal>>()));
-
-            services.RemoveAll<IStateCheckpointStore>();
-            services.AddSingleton<IStateCheckpointStore>(sp =>
-                new FileStateCheckpointStore(
-                    Path.Combine(_dataDir, "checkpoints"),
-                    sp.GetRequiredService<ILogger<FileStateCheckpointStore>>()));
         });
-    }
-
-    protected override void Dispose(bool disposing)
-    {
-        base.Dispose(disposing);
-        if (disposing)
-        {
-            try { Directory.Delete(_dataDir, true); } catch { /* best effort */ }
-        }
     }
 
     private HttpClient CreateAuthenticatedClient(string username, string password)

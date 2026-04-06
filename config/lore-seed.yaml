@@ -215,8 +215,7 @@ rooms:
             value: 45
             is_equippable: true
             slot: "Weapon"
-            properties:
-              two_handed: true
+            is_two_handed: true
     items:
       - id: "str_amulet"
         name: "Power Wrist"
@@ -847,8 +846,7 @@ rooms:
             value: 2000
             is_equippable: true
             slot: "Weapon"
-            properties:
-              two_handed: true
+            is_two_handed: true
             stat_bonuses:
               str: 3
               con: 2

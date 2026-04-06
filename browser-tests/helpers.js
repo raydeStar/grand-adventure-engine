@@ -17,20 +17,11 @@ function uniqueId(prefix, projectName) {
 
 async function waitForAuthenticatedShell(page) {
   await expect(page.locator('#auth-form')).toBeHidden();
+  // After login, the app auto-navigates to the dashboard
+  await expect(page.locator('#dashboard')).toBeVisible();
   await page.waitForFunction(() => {
-    const players = document.getElementById('existing-players');
-    const headerPlayer = document.getElementById('header-player');
-    const statsGrid = document.getElementById('stats-grid');
-
-    if (!players || !headerPlayer || !statsGrid) {
-      return false;
-    }
-
-    const playersText = players.textContent?.trim() ?? '';
-    return playersText.length > 0
-      && !playersText.includes('Sign in to view characters')
-      && (headerPlayer.textContent?.includes('No active character') ?? false)
-      && (statsGrid.textContent?.includes('No stats loaded.') ?? false);
+    const badge = document.getElementById('session-badge');
+    return badge && !badge.textContent?.includes('Signed out');
   });
 }
 
@@ -44,18 +35,17 @@ async function login(page, role = 'user') {
   await page.locator('#auth-username').fill(account.username);
   await page.locator('#auth-password').fill(account.password);
   await page.getByRole('button', { name: 'Sign In' }).click();
-  await expect(page.locator('#session-summary')).toContainText(account.username);
   await waitForAuthenticatedShell(page);
   return account;
 }
 
 async function openCreateCharacter(page) {
-  await page.getByRole('button', { name: 'Create New Character' }).click();
+  await page.getByRole('button', { name: 'New Character' }).click();
   await expect(page.locator('#create-form')).toBeVisible();
 }
 
 async function openAdminConsole(page) {
-  await page.getByRole('button', { name: 'Open Admin Console' }).click();
+  await page.locator('[data-mode-button="admin"]').click();
   await expect(page.locator('#workspace-admin')).toBeVisible();
 }
 

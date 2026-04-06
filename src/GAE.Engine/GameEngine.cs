@@ -940,6 +940,9 @@ public class GameEngine : IGameEngine
         if (target is null)
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"Conversation target '{action.Target}' was not found in the current room." };
 
+        // Load world-scoped NPC state (disposition may differ per world)
+        await OverlayWorldNpcStateAsync(target, player.ActiveWorldId, player.Id, ct);
+
         // Decay disposition toward baseline before starting conversation
         var elapsed = DateTimeOffset.UtcNow - target.DispositionState.LastUpdated;
         target.DispositionState.DecayTowardBaseline(elapsed);
@@ -964,6 +967,9 @@ public class GameEngine : IGameEngine
 
         // Apply interaction update from AI
         ApplyInteractionUpdate(player, room, target, freeForm);
+
+        // Persist world-scoped NPC state
+        await PersistWorldNpcStateAsync(target, player.ActiveWorldId, player.Id, ct);
 
         // Quest tracking: conversation started (TalkTo + Deliver objectives)
         var questUpdate = _questTracker is not null
@@ -2356,6 +2362,9 @@ public class GameEngine : IGameEngine
             };
         }
 
+        // Load world-scoped NPC state for this conversation
+        await OverlayWorldNpcStateAsync(npc, player.ActiveWorldId, player.Id, ct);
+
         // Movement mid-conversation: exit with disposition penalty
         if (action.Type == ActionType.Move)
         {
@@ -2367,6 +2376,7 @@ public class GameEngine : IGameEngine
             ApplyInteractionUpdate(player, room, npc, freeForm);
 
             player.Interaction.Reset();
+            await PersistWorldNpcStateAsync(npc, player.ActiveWorldId, player.Id, ct);
             await _stateManager.SavePlayerAsync(player, ct);
             await _stateManager.SaveRoomAsync(room, ct);
 
@@ -2407,6 +2417,7 @@ public class GameEngine : IGameEngine
             ApplyInteractionUpdate(player, room, npc, freeForm);
 
             player.Interaction.Reset();
+            await PersistWorldNpcStateAsync(npc, player.ActiveWorldId, player.Id, ct);
             await _stateManager.SavePlayerAsync(player, ct);
             await _stateManager.SaveRoomAsync(room, ct);
 
@@ -2426,6 +2437,8 @@ public class GameEngine : IGameEngine
 
         // Normal conversation turn —  everything the player says goes to the AI as dialogue
         {
+            player.Interaction.AdvancePlayerTurn();
+
             // Check for social skill intent and roll if detected
             var socialCheck = TryRollSocialCheck(player, npc, action.RawInput);
             var promptInput = action.RawInput;
@@ -2448,6 +2461,7 @@ public class GameEngine : IGameEngine
                 await EnterCombatAsync(player, room, [npc], ct);
             }
 
+            await PersistWorldNpcStateAsync(npc, player.ActiveWorldId, player.Id, ct);
             await _stateManager.SavePlayerAsync(player, ct);
             await _stateManager.SaveRoomAsync(room, ct);
 
@@ -2460,7 +2474,7 @@ public class GameEngine : IGameEngine
                 dungeonCreatedMessage = await TryCreateDungeonAsync(player, room, npc, ct);
             }
 
-            var mechanicalLine = $"[Conversation with {npc.Name}, turn {player.Interaction.TurnCount}]";
+            var mechanicalLine = $"[Conversation with {npc.Name}, turn {player.Interaction.CurrentTurnNumber}]";
             if (socialCheck is not null)
                 mechanicalLine = $"[{socialCheck.SkillName} check: {socialCheck.Roll.Total} vs DC {socialCheck.DC} — {(socialCheck.Succeeded ? "SUCCESS" : "FAILURE")}]";
             if (dungeonCreatedMessage is not null)
@@ -2961,6 +2975,37 @@ public class GameEngine : IGameEngine
 
         foreach (var contextEntry in update.Context)
             player.Interaction.AppendContext(contextEntry);
+    }
+
+    /// <summary>
+    /// Overlays world-scoped NPC state onto the canonical NPC before a conversation.
+    /// If a WorldNpcState exists for this NPC/world/player, it overrides disposition.
+    /// </summary>
+    private async Task OverlayWorldNpcStateAsync(Npc npc, string worldId, string? playerId, CancellationToken ct)
+    {
+        if (_worldRepository is null) return;
+
+        var worldState = await _worldRepository.GetWorldNpcStateAsync(npc.Id, worldId, playerId, ct);
+        if (worldState is null) return;
+
+        npc.DispositionState = worldState.DispositionState;
+        npc.Disposition = npc.DispositionState.ToFlatDisposition();
+        if (worldState.KnowledgeScopeOverrides is { Count: > 0 })
+            npc.KnowledgeScopes = worldState.KnowledgeScopeOverrides;
+    }
+
+    /// <summary>
+    /// Persists the NPC's current disposition into world-scoped state after an interaction.
+    /// </summary>
+    private async Task PersistWorldNpcStateAsync(Npc npc, string worldId, string? playerId, CancellationToken ct)
+    {
+        if (_worldRepository is null) return;
+
+        var worldState = await _worldRepository.GetWorldNpcStateAsync(npc.Id, worldId, playerId, ct)
+                          ?? new WorldNpcState { NpcId = npc.Id, WorldId = worldId, PlayerId = playerId };
+
+        worldState.DispositionState = npc.DispositionState;
+        await _worldRepository.SaveWorldNpcStateAsync(worldState, ct);
     }
 
     private void ApplyFreeFormStatChanges(PlayerCharacter player, FreeFormResponse freeForm, ActionResult? result)
@@ -3906,6 +3951,7 @@ public class GameEngine : IGameEngine
         var freeForm = await _narrator.ProcessConversationTurnAsync(player, room, shopkeeper, player.Interaction, action.RawInput, ct);
         ApplyInteractionUpdate(player, room, shopkeeper, freeForm);
 
+        await PersistWorldNpcStateAsync(shopkeeper, player.ActiveWorldId, player.Id, ct);
         await _stateManager.SavePlayerAsync(player, ct);
         await _stateManager.SaveRoomAsync(room, ct);
 

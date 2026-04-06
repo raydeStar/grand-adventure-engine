@@ -31,7 +31,6 @@ const RESERVED_PLAYER_KEYS = new Set([
 ]);
 
 const PLAYER_SELECT_IDS = [
-  'workflow-player-select',
   'admin-player-select',
   'resource-player-select',
   'teleport-player-select',
@@ -64,6 +63,23 @@ const UI = {
     }
   },
 
+  showPlayerSelect(show) {
+    const panel = this.$('player-select-panel');
+    if (panel) panel.classList.toggle('hidden', !show);
+  },
+
+  setResumeMessage(message, tone = 'info') {
+    const el = this.$('resume-message');
+    if (!el) return;
+    if (!message) {
+      el.textContent = '';
+      el.className = 'inline-message hidden';
+      return;
+    }
+    el.textContent = message;
+    el.className = `inline-message ${tone}`;
+  },
+
   setMode(mode, session = null) {
     const effectiveMode = mode === 'admin' && !session?.isAdmin ? 'user' : mode;
 
@@ -87,8 +103,8 @@ const UI = {
 
     const summary = this.$('session-summary');
     summary.textContent = session
-      ? `${session.displayName} signed in as ${session.username}. ${canAdmin ? 'Admin workflows and mutations are unlocked.' : 'Admin console remains protected.'}`
-      : 'Sign in to unlock gameplay, manual test controls, and the protected API.';
+      ? `Signed in as ${session.username}.`
+      : 'Authentication required.';
 
     const badge = this.$('session-badge');
     badge.textContent = session ? `${session.username} | ${session.role}` : 'Signed out';
@@ -100,15 +116,9 @@ const UI = {
     this.$('btn-fill-user').classList.toggle('hidden', signedIn);
     this.$('btn-fill-admin').classList.toggle('hidden', signedIn);
 
-    this.$('btn-new-char').disabled = !signedIn;
-
-    const roleAdmin = document.querySelector('[data-role-choice="admin"]');
     const modeAdmin = document.querySelector('[data-mode-button="admin"]');
-    if (roleAdmin) roleAdmin.classList.toggle('hidden', !canAdmin);
     if (modeAdmin) modeAdmin.classList.toggle('hidden', !canAdmin);
 
-    this.$('btn-open-admin').classList.toggle('hidden', !canAdmin);
-    this.$('btn-seed-demo').classList.toggle('hidden', !canAdmin);
     this.$('btn-seed-demo-admin').classList.toggle('hidden', !canAdmin);
 
     if (!signedIn) {
@@ -191,85 +201,11 @@ const UI = {
         : 'Sign in to send commands';
   },
 
-  renderPortalPlayers(players, currentPlayerId, session) {
-    const container = this.$('existing-players');
-    const countEl = this.$('player-count');
-    const searchInput = this.$('player-search');
-
-    // Store full list for filtering
-    this._portalPlayers = players;
-    this._portalCurrentPlayerId = currentPlayerId;
-    this._portalSession = session;
-
-    if (!session) {
-      container.innerHTML = '<div class="empty-state">Sign in to view characters and open a protected play session.</div>';
-      if (countEl) countEl.textContent = '';
-      return;
-    }
-
-    if (!players.length) {
-      container.innerHTML = '<div class="empty-state">No characters yet. Create one or seed the demo user and admin personas.</div>';
-      if (countEl) countEl.textContent = '0 characters';
-      return;
-    }
-
-    // Wire up search (once)
-    if (searchInput && !searchInput._wired) {
-      searchInput._wired = true;
-      searchInput.addEventListener('input', () => this._filterPortalPlayers());
-    }
-
-    this._filterPortalPlayers();
+  renderPortalPlayers(_players, _currentPlayerId, _session) {
+    // Character list removed — players resume by entering their ID directly.
   },
 
-  _filterPortalPlayers() {
-    const container = this.$('existing-players');
-    const countEl = this.$('player-count');
-    const searchInput = this.$('player-search');
-    const players = this._portalPlayers || [];
-    const currentPlayerId = this._portalCurrentPlayerId || '';
-    const session = this._portalSession;
-    const query = (searchInput?.value || '').toLowerCase().trim();
-
-    const filtered = query
-      ? players.filter(p =>
-          (p.name || '').toLowerCase().includes(query) ||
-          (p.id || '').toLowerCase().includes(query) ||
-          (p.race || '').toLowerCase().includes(query) ||
-          (p.class || '').toLowerCase().includes(query) ||
-          (p.currentRoomId || '').toLowerCase().includes(query))
-      : players;
-
-    if (countEl) {
-      countEl.textContent = query
-        ? `${filtered.length} / ${players.length}`
-        : `${players.length} character${players.length !== 1 ? 's' : ''}`;
-    }
-
-    if (!filtered.length) {
-      container.innerHTML = `<div class="empty-state">No characters matching "${this.esc(query)}".</div>`;
-      return;
-    }
-
-    container.innerHTML = filtered.map((player) => {
-      const isActive = player.id === currentPlayerId;
-      return `
-        <div class="player-card">
-          <div class="player-card-main">
-            <div>
-              <div class="player-card-name">${this.esc(player.name)}</div>
-              <div class="player-card-meta">${this.esc(player.id)} | Lv.${player.level} ${this.esc(player.race)} ${this.esc(player.class)} | Room ${this.esc(player.currentRoomId)}</div>
-            </div>
-            ${isActive ? '<span class="role-chip active">Active</span>' : ''}
-          </div>
-          <div class="player-card-actions">
-            <button class="btn btn-primary btn-sm" data-portal-action="user" data-player-id="${this.esc(player.id)}" type="button">User Flow</button>
-            ${session?.isAdmin ? `<button class="btn btn-secondary btn-sm" data-portal-action="admin" data-player-id="${this.esc(player.id)}" type="button">Admin Console</button>` : ''}
-          </div>
-        </div>
-      `;
-    }).join('');
-  },
+  _filterPortalPlayers() {},
 
   renderRoom(room) {
     this._roomContext = room || null;
@@ -322,27 +258,29 @@ const UI = {
   },
 
   renderNoActivePlayer(isAuthenticated = true) {
-    this.$('header-player').textContent = 'No active character';
-    this.$('char-title').textContent = 'Character';
-    this.$('char-meta').textContent = isAuthenticated
-      ? 'Choose a character from the portal or keep working in the admin console.'
-      : 'Sign in, then choose a character from the portal or seed a demo actor.';
+    const set = (id, text) => { const el = this.$(id); if (el) el.textContent = text; };
+    const html = (id, markup) => { const el = this.$(id); if (el) el.innerHTML = markup; };
+
+    set('header-player', 'No active character');
+    set('char-title', 'Character');
+    set('char-meta', '');
     this.setBar('hp-bar', 'hp-text', 0, 0);
     this.setBar('mp-bar', 'mp-text', 0, 0);
     this.setBar('xp-bar', 'xp-text', 0, 100);
-    this.$('stats-grid').innerHTML = '<div class="empty-state">No stats loaded.</div>';
-    this.$('character-details').innerHTML = '<div class="empty-state">Dynamic character details will appear here.</div>';
-    this.$('char-gold').textContent = 'Gold 0';
-    this.$('char-level').textContent = 'Level 1';
-    this.$('char-defense').textContent = 'Defense 10';
-    this.$('equipment-slots').innerHTML = '<div class="empty-state">No equipment loaded.</div>';
-    this.$('inventory-list').innerHTML = '<div class="inv-empty">Inventory unavailable until a character is selected.</div>';
-    this.$('status-effects').innerHTML = '<span class="no-effects">No active effects.</span>';
+    html('stats-grid', '<div class="empty-state">No stats loaded.</div>');
+    html('character-details', '<div class="empty-state">Dynamic character details will appear here.</div>');
+    set('char-gold', 'Gold 0');
+    set('char-level', 'Level 1');
+    set('char-defense', 'Defense 10');
+    html('equipment-slots', '<div class="empty-state">No equipment loaded.</div>');
+    html('inventory-list', '<div class="inv-empty">Inventory unavailable until a character is selected.</div>');
+    html('status-effects', '<span class="no-effects">No active effects.</span>');
     this.renderPayloads(null, null);
     this.renderRoom(null);
     this.renderStatBar(null);
-    this.$('story-log').innerHTML = '<div class="empty-state">Story entries will appear once a character starts acting.</div>';
+    html('story-log', '');
     this.setUserCommandState(false, isAuthenticated);
+    this.showPlayerSelect(true);
   },
 
   renderPlayer(player) {
@@ -351,9 +289,12 @@ const UI = {
       return;
     }
 
-    this.$('header-player').textContent = `${player.name} | Lv.${player.level} ${player.race} ${player.class}`;
-    this.$('char-title').textContent = player.name;
-    this.$('char-meta').textContent = `${player.race} ${player.class} | Room ${player.currentRoomId}`;
+    const set = (id, text) => { const el = this.$(id); if (el) el.textContent = text; };
+    const setHtml = (id, markup) => { const el = this.$(id); if (el) el.innerHTML = markup; };
+
+    set('header-player', `${player.name} | Lv.${player.level} ${player.race} ${player.class}`);
+    set('char-title', player.name);
+    set('char-meta', `${player.race} ${player.class} | Room ${player.currentRoomId}`);
     this.setUserCommandState(true, true);
 
     this.setBar('hp-bar', 'hp-text', player.hp, player.maxHp);
@@ -366,7 +307,7 @@ const UI = {
     this.renderStatBar(player);
 
     const statEntries = this.getStatEntries(player);
-    this.$('stats-grid').innerHTML = statEntries.length
+    setHtml('stats-grid', statEntries.length
       ? statEntries.map((entry) => {
         const modifierText = entry.modifier === null || entry.modifier === undefined
           ? ''
@@ -379,47 +320,47 @@ const UI = {
           </div>
         `;
       }).join('')
-      : '<div class="empty-state">No stat fields detected.</div>';
+      : '<div class="empty-state">No stat fields detected.</div>');
 
     const detailEntries = this.getDetailEntries(player);
-    this.$('character-details').innerHTML = detailEntries.length
+    setHtml('character-details', detailEntries.length
       ? detailEntries.map((entry) => `
           <div class="detail-card">
             <div class="detail-label">${this.esc(entry.label)}</div>
             <div class="detail-value">${this.esc(entry.value)}</div>
           </div>
         `).join('')
-      : '<div class="empty-state">No extra character fields detected.</div>';
+      : '<div class="empty-state">No extra character fields detected.</div>');
 
-    this.$('char-gold').textContent = `Gold ${player.gold}`;
-    this.$('char-level').textContent = `Level ${player.level}`;
-    this.$('char-defense').textContent = `Defense ${player.defense ?? 10}`;
+    set('char-gold', `Gold ${player.gold}`);
+    set('char-level', `Level ${player.level}`);
+    set('char-defense', `Defense ${player.defense ?? 10}`);
 
     const equipment = player.equipment || {};
     const slots = Object.entries(equipment);
-    this.$('equipment-slots').innerHTML = slots.length
+    setHtml('equipment-slots', slots.length
       ? slots.map(([name, item]) => `
       <div class="equip-slot">
         <div class="slot-name">${this.esc(this.humanizeKey(name))}</div>
         <div class="${item ? 'slot-item' : 'slot-empty'}">${this.esc(item ? this.summarizeEntity(item) : 'Empty')}</div>
       </div>
     `).join('')
-      : '<div class="empty-state">No equipment slots populated.</div>';
+      : '<div class="empty-state">No equipment slots populated.</div>');
 
     const inventory = player.inventory || [];
-    this.$('inventory-list').innerHTML = inventory.length
+    setHtml('inventory-list', inventory.length
       ? inventory.map((item) => `
           <div class="inv-item">
             <strong>${this.esc(this.summarizeEntity(item))}</strong>
             <span class="player-card-meta">${this.esc(this.describeSupplementaryFields(item))}</span>
           </div>
         `).join('')
-      : '<div class="inv-empty">Inventory empty.</div>';
+      : '<div class="inv-empty">Inventory empty.</div>');
 
     const effects = player.statusEffects || [];
-    this.$('status-effects').innerHTML = effects.length
+    setHtml('status-effects', effects.length
       ? effects.map((effect) => `<span class="status-tag">${this.esc(this.summarizeEntity(effect))}</span>`).join('')
-      : '<span class="no-effects">No active effects.</span>';
+      : '<span class="no-effects">No active effects.</span>');
   },
 
   renderPayloads(player, room) {
@@ -436,8 +377,10 @@ const UI = {
   setBar(fillId, textId, current, max) {
     const safeMax = Math.max(0, max || 0);
     const pct = safeMax > 0 ? Math.max(0, Math.min(100, (current / safeMax) * 100)) : 0;
-    this.$(fillId).style.width = `${pct}%`;
-    this.$(textId).textContent = `${current} / ${safeMax}`;
+    const fill = this.$(fillId);
+    const text = this.$(textId);
+    if (fill) fill.style.width = `${pct}%`;
+    if (text) text.textContent = `${current} / ${safeMax}`;
   },
 
   _lastStoryCount: 0,
@@ -530,9 +473,17 @@ const UI = {
     const commandText = this._extractCommandText(entry, cleanedMechanicalSummary);
     const normalizedCommand = commandText ? this._normalizeRoomLine(commandText) : '';
     const normalizedMechanical = cleanedMechanicalSummary ? this._normalizeRoomLine(cleanedMechanicalSummary.replace(/^>\s*/, '')) : '';
+    const normalizedNarration = cleanedNarration ? this._normalizeRoomLine(cleanedNarration) : '';
+    // Suppress mechanical summary when it duplicates narration (exact match or content overlap)
+    const mechanicalRedundant = normalizedNarration && (
+      normalizedMechanical === normalizedNarration
+      || (normalizedMechanical.length > 20 && normalizedNarration.includes(normalizedMechanical))
+      || this._mechanicalSubsumedByNarration(normalizedMechanical, normalizedNarration)
+    );
     const shouldRenderMechanicalSummary = !!cleanedMechanicalSummary
       && !(commandText && normalizedMechanical === normalizedCommand)
-      && !(entry.success === false && cleanedNarration);
+      && !(entry.success === false && cleanedNarration)
+      && !mechanicalRedundant;
 
     if (commandText) {
       html += `<div class="story-command-line">&gt; ${this.esc(commandText)}</div>`;
@@ -541,7 +492,7 @@ const UI = {
     // Narration: stream newest entry, render older ones statically
     const streamNarration = animate && cleanedNarration;
     if (cleanedNarration && !streamNarration) {
-      html += `<div class="story-narration">${this.esc(cleanedNarration)}</div>`;
+      html += `<div class="story-narration">${this.formatNarration(cleanedNarration)}</div>`;
     }
 
     if (shouldRenderMechanicalSummary && !streamNarration) {
@@ -643,8 +594,8 @@ const UI = {
       }
       this._streamNode = null;
 
-      // Show full text
-      textSpan.textContent = text;
+      // Show full text with formatting
+      textSpan.innerHTML = UI.formatNarration(text);
       cursor.remove();
       narrationDiv.classList.add('stream-complete');
 
@@ -784,7 +735,7 @@ const UI = {
       ['Rooms', summary.roomCount],
       ['Discovered', summary.discoveredRoomCount],
       ['Story Entries', summary.storyEntryCount],
-      ['Transport', connectionMode]
+      ['Worlds', summary.worldCount ?? '?']
     ];
 
     container.innerHTML = cards.map(([label, value]) => `
@@ -833,96 +784,502 @@ const UI = {
     });
   },
 
-  renderAdminPlayers(players, currentPlayerId, session) {
-    const container = this.$('admin-players-table');
-    if (!session?.isAdmin) {
-      container.innerHTML = '<div class="empty-state">Admin login required.</div>';
+  // ── Overview search browser (reuses DM Console rendering) ──
+
+  _ovSelectedItem: null,
+  _ovSelectedType: null,
+  _ovJsonMode: false,
+
+  async ovSearch(query) {
+    const results = this.$('overview-results');
+    if (!results) return;
+    if (!query.trim()) {
+      this._ovShowWelcome();
       return;
     }
 
-    this._adminPlayers = players;
-    this._adminCurrentPlayerId = currentPlayerId;
-
-    // Always rebuild search bar + list wrapper
-    container.innerHTML = `
-      <div class="admin-search-bar search-bar" style="margin-bottom:0.75rem;">
-        <input type="text" id="admin-player-search" placeholder="Search players by name, id, race, class..." />
-        <span class="search-count" id="admin-player-count"></span>
-      </div>
-      <div id="admin-players-list" class="portal-player-list"></div>
-    `;
-    const searchInput = this.$('admin-player-search');
-    if (searchInput) {
-      searchInput.addEventListener('input', () => this._filterAdminPlayers());
+    const typeFilter = this.$('overview-type-filter')?.value || '';
+    results.innerHTML = '<div class="dm-result-count">Searching...</div>';
+    try {
+      const data = await API.dmSearch(query, typeFilter || undefined);
+      this._ovRenderResults(data.results, query);
+    } catch (err) {
+      results.innerHTML = `<div class="dm-no-results">Error: ${this.esc(err.message)}</div>`;
     }
-
-    this._filterAdminPlayers();
   },
 
-  _filterAdminPlayers() {
-    const list = this.$('admin-players-list');
-    const countEl = this.$('admin-player-count');
-    const searchInput = this.$('admin-player-search');
-    const players = this._adminPlayers || [];
-    const currentPlayerId = this._adminCurrentPlayerId || '';
-    const query = (searchInput?.value || '').toLowerCase().trim();
+  async ovBrowse(type) {
+    const results = this.$('overview-results');
+    const input = this.$('overview-search-input');
+    if (!results) return;
+    if (input) input.value = '';
 
-    const filtered = query
-      ? players.filter(p => {
-          const hay = `${p.name} ${p.id} ${p.race} ${p.class} ${p.currentRoomId}`.toLowerCase();
-          return hay.includes(query);
-        })
-      : players;
-
-    if (countEl) {
-      countEl.textContent = query
-        ? `${filtered.length} / ${players.length}`
-        : `${players.length} characters`;
+    results.innerHTML = '<div class="dm-result-count">Loading...</div>';
+    try {
+      const data = await API.dmBrowse(type);
+      this._ovRenderResults(data.results, null, type);
+    } catch (err) {
+      results.innerHTML = `<div class="dm-no-results">Error: ${this.esc(err.message)}</div>`;
     }
+  },
 
-    if (!filtered.length) {
-      list.innerHTML = '<div class="empty-state">No players match your search.</div>';
+  _ovRenderResults(items, query, browseType) {
+    const results = this.$('overview-results');
+    if (!items.length) {
+      results.innerHTML = `<div class="dm-no-results">No results found${query ? ` for "${this.esc(query)}"` : ''}.</div>`;
       return;
     }
 
-    list.innerHTML = filtered.map((player) => {
-      const worldLabel = player.activeWorldId ? ` | World: ${this.esc(player.activeWorldId)}` : '';
-      return `
-      <div class="registry-row">
-        <div class="registry-meta">
-          <div>
-            <div class="registry-name">${this.esc(player.name)}${player.id === currentPlayerId ? ' (active)' : ''}</div>
-            <div class="registry-subtext">${this.esc(player.id)} | Lv.${player.level} ${this.esc(player.race)} ${this.esc(player.class)} | Room ${this.esc(player.currentRoomId)}${worldLabel}</div>
+    const countLabel = browseType
+      ? `${items.length} ${browseType}`
+      : `${items.length} result${items.length !== 1 ? 's' : ''}`;
+
+    results.innerHTML = `<div class="dm-result-count">${countLabel}</div>` +
+      items.map(item => `
+        <div class="dm-result-card" data-ov-id="${this.esc(item.id)}" data-ov-type="${this.esc(item.type)}">
+          <div class="dm-result-header">
+            <span class="dm-result-name">${this.esc(item.name)}</span>
+            <span class="dm-result-type dm-type-${this.esc(item.type)}">${this.esc(item.type)}</span>
           </div>
+          <div class="dm-result-meta">${this.esc(item.meta || '')}</div>
+          ${item.description ? `<div class="dm-result-desc">${this.esc(item.description)}</div>` : ''}
         </div>
-        <div class="registry-actions">
-          <button class="btn btn-primary btn-sm" data-admin-action="user" data-player-id="${this.esc(player.id)}" type="button">Play</button>
-          <button class="btn btn-secondary btn-sm" data-admin-action="admin" data-player-id="${this.esc(player.id)}" type="button">Admin View</button>
-          <button class="btn btn-secondary btn-sm" data-admin-action="copy-id" data-player-id="${this.esc(player.id)}" type="button">Copy Id</button>
-          <button class="admin-row-delete" data-admin-action="delete-player" data-player-id="${this.esc(player.id)}" data-player-name="${this.esc(player.name)}" type="button">Del</button>
+      `).join('');
+  },
+
+  _ovShowWelcome() {
+    const results = this.$('overview-results');
+    if (results) results.innerHTML = `
+      <div class="dm-welcome">
+        <h3>Game Browser</h3>
+        <p>Search for anything in the game world. Click a result to inspect, edit, or ask the AI to change it.</p>
+        <div class="dm-quick-links">
+          <button class="dm-quick-btn" data-ov-quick="players" type="button">All Players</button>
+          <button class="dm-quick-btn" data-ov-quick="rooms" type="button">All Rooms</button>
+          <button class="dm-quick-btn" data-ov-quick="spells" type="button">All Spells</button>
+          <button class="dm-quick-btn" data-ov-quick="items" type="button">All Items</button>
+          <button class="dm-quick-btn" data-ov-quick="classes" type="button">All Classes</button>
+          <button class="dm-quick-btn" data-ov-quick="races" type="button">All Races</button>
+        </div>
+      </div>`;
+  },
+
+  ovSelectItem(item, type) {
+    this._ovSelectedItem = item;
+    this._ovSelectedType = type;
+    this._ovJsonMode = false;
+
+    const panel = this.$('overview-detail-panel');
+    if (!panel) return;
+
+    // Highlight selected card
+    document.querySelectorAll('#overview-results .dm-result-card').forEach(c => c.classList.remove('selected'));
+    const card = document.querySelector(`[data-ov-id="${item.id}"][data-ov-type="${type}"]`);
+    if (card) card.classList.add('selected');
+
+    const displayType = type.charAt(0).toUpperCase() + type.slice(1);
+    const cardRows = this._dmBuildCardRows(item, type);
+    const descHtml = item.description ? `<div class="dm-detail-desc">${this.esc(item.description)}</div>` : '';
+
+    // Player-specific action buttons
+    const playerActions = type === 'player' ? `
+      <div class="dm-player-actions">
+        <button class="btn btn-primary btn-sm" id="btn-ov-play" title="Play as this character"><span class="btn-icon">&#9654;</span> Play</button>
+        <button class="btn btn-secondary btn-sm" id="btn-ov-smoke" title="Run look/stats/inventory/help"><span class="btn-icon">&#9881;</span> Smoke Test</button>
+        <button class="btn btn-secondary btn-sm" id="btn-ov-teleport-spawn" title="Teleport to spawn room"><span class="btn-icon">&#8634;</span> To Spawn</button>
+        <button class="btn btn-secondary btn-sm" id="btn-ov-discord-msg" title="Send Discord message"${item.discordId ? '' : ' disabled'}><span class="btn-icon">&#9993;</span> Discord</button>
+        <button class="btn btn-accent btn-sm" id="btn-ov-add-item" title="Grant item from registry"><span class="btn-icon">+</span> Item</button>
+      </div>
+      <div class="dm-item-picker hidden" id="ov-item-picker">
+        <div class="dm-item-picker-row">
+          <input type="text" id="ov-item-search" placeholder="Search items..." autocomplete="off" />
+          <select id="ov-item-dest"><option value="inventory">Inventory</option><option value="equip">Equip</option></select>
+        </div>
+        <div class="dm-item-picker-list" id="ov-item-list"></div>
+      </div>` : '';
+
+    // Non-player top actions
+    const genericPlayBtn = type !== 'player'
+      ? '' : '';
+
+    panel.innerHTML = `
+      <div class="dm-detail-header">
+        <div class="dm-detail-header-left">
+          <span class="dm-detail-title">${this.esc(item.name || item.id)}</span>
+          <span class="dm-detail-type-badge dm-type-${type}">${displayType}</span>
+        </div>
+        <div class="dm-detail-actions-top">
+          <button class="dm-icon-btn" id="btn-ov-toggle-json" title="Edit raw JSON">{ }</button>
+          <button class="dm-icon-btn dm-icon-danger" id="btn-ov-delete" title="Delete">&#x2715;</button>
         </div>
       </div>
-    `;}).join('');
+      ${playerActions}
+      ${descHtml}
+      <div class="dm-detail-card">
+        <table>${cardRows}</table>
+      </div>
+      <div class="dm-detail-json" id="ov-json-section">
+        <textarea id="ov-json-textarea" spellcheck="false">${this.esc(JSON.stringify(item, null, 2))}</textarea>
+        <button class="btn btn-primary btn-sm" id="btn-ov-save-json" type="button">Save JSON</button>
+      </div>
+      <div class="dm-detail-ai">
+        <div class="dm-ai-row">
+          <input type="text" id="ov-chat-input" placeholder="Ask AI to edit... e.g. 'give them a fire sword', 'set HP to 50'" autocomplete="off" />
+          <button class="btn btn-primary btn-sm" id="btn-ov-chat-send" type="button">AI Edit</button>
+          <button class="btn btn-primary btn-sm" id="btn-ov-save" type="button">Save</button>
+        </div>
+        <div class="dm-ai-messages" id="ov-chat-messages"></div>
+      </div>
+    `;
+
+    // Wire events
+    const chatInput = this.$('ov-chat-input');
+    if (chatInput) chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') this._ovSendChat(); });
+    this.$('btn-ov-chat-send')?.addEventListener('click', () => this._ovSendChat());
+    this.$('btn-ov-save')?.addEventListener('click', () => this._ovSave());
+    this.$('btn-ov-save-json')?.addEventListener('click', () => { this._ovJsonMode = true; this._ovSave(); });
+    this.$('btn-ov-toggle-json')?.addEventListener('click', () => this._ovToggleJson());
+    this.$('btn-ov-delete')?.addEventListener('click', () => this._ovDelete());
+    this.$('btn-ov-play')?.addEventListener('click', () => {
+      if (this._ovSelectedItem?.id) {
+        document.dispatchEvent(new CustomEvent('overview-play-player', { detail: { playerId: this._ovSelectedItem.id } }));
+      }
+    });
+    this.$('btn-ov-smoke')?.addEventListener('click', () => {
+      if (this._ovSelectedItem?.id) {
+        document.dispatchEvent(new CustomEvent('overview-smoke-player', { detail: { playerId: this._ovSelectedItem.id } }));
+      }
+    });
+    this.$('btn-ov-teleport-spawn')?.addEventListener('click', () => {
+      if (this._ovSelectedItem?.id) {
+        document.dispatchEvent(new CustomEvent('overview-teleport-spawn', { detail: { playerId: this._ovSelectedItem.id } }));
+      }
+    });
+    this.$('btn-ov-discord-msg')?.addEventListener('click', () => {
+      if (this._ovSelectedItem?.id) {
+        const msg = prompt('Message to send via Discord:');
+        if (msg?.trim()) {
+          document.dispatchEvent(new CustomEvent('overview-discord-msg', { detail: { playerId: this._ovSelectedItem.id, message: msg.trim() } }));
+        }
+      }
+    });
+    this.$('btn-ov-add-item')?.addEventListener('click', () => this._ovToggleItemPicker());
+    this.$('ov-item-search')?.addEventListener('input', (e) => this._ovFilterItems(e.target.value));
+    panel.querySelectorAll('[data-ov-item-action]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const itemId = button.dataset.ovItemId;
+        const action = button.dataset.ovItemAction;
+        if (!this._ovSelectedItem?.id || !itemId || !action) return;
+        document.dispatchEvent(new CustomEvent('overview-item-action', {
+          detail: { playerId: this._ovSelectedItem.id, itemId, action }
+        }));
+      });
+    });
+  },
+
+  _ovItemCache: null,
+
+  async _ovToggleItemPicker() {
+    const picker = this.$('ov-item-picker');
+    if (!picker) return;
+    const wasHidden = picker.classList.contains('hidden');
+    picker.classList.toggle('hidden');
+    if (wasHidden) {
+      if (!this._ovItemCache) {
+        const listEl = this.$('ov-item-list');
+        if (listEl) listEl.innerHTML = '<div class="dm-item-picker-loading">Loading items...</div>';
+        try {
+          this._ovItemCache = await API.getRegistry('items');
+        } catch (err) {
+          if (listEl) listEl.innerHTML = '<div class="dm-item-picker-loading">Failed to load items.</div>';
+          return;
+        }
+      }
+      this.$('ov-item-search').value = '';
+      this._ovRenderItemList(this._ovItemCache);
+      this.$('ov-item-search')?.focus();
+    }
+  },
+
+  _ovFilterItems(query) {
+    if (!this._ovItemCache) return;
+    const q = query.toLowerCase().trim();
+    const filtered = q ? this._ovItemCache.filter(i =>
+      i.name.toLowerCase().includes(q) || (i.type || '').toLowerCase().includes(q)
+      || (i.tags || []).some(t => t.toLowerCase().includes(q))
+    ) : this._ovItemCache;
+    this._ovRenderItemList(filtered);
+  },
+
+  _ovRenderItemList(items) {
+    const listEl = this.$('ov-item-list');
+    if (!listEl) return;
+    if (!items.length) { listEl.innerHTML = '<div class="dm-item-picker-loading">No items found.</div>'; return; }
+    const typeIcon = (t) => {
+      const map = { Weapon: '⚔', Armor: '🛡', Shield: '🛡', Helmet: '⛑', Potion: '🧪', Ring: '💍', Amulet: '📿', Scroll: '📜', Key: '🔑' };
+      return map[t] || '•';
+    };
+    listEl.innerHTML = items.slice(0, 50).map(i => `
+      <div class="dm-item-pick" data-item-id="${this.esc(i.id)}" title="${this.esc(i.description || '')}">
+        <span class="dm-item-pick-icon">${typeIcon(i.type)}</span>
+        <span class="dm-item-pick-name">${this.esc(i.name)}</span>
+        <span class="dm-item-pick-meta">${this.esc(i.type || 'Misc')}${i.isTwoHanded ? ' (2H)' : ''}${i.damageDice ? ' ' + i.damageDice : ''}${i.armorValue ? ' AC+' + i.armorValue : ''}${i.value ? ' ' + i.value + 'g' : ''}</span>
+      </div>
+    `).join('');
+    listEl.querySelectorAll('.dm-item-pick').forEach(el => {
+      el.addEventListener('click', () => {
+        const itemId = el.dataset.itemId;
+        const template = this._ovItemCache?.find(i => i.id === itemId);
+        if (!template || !this._ovSelectedItem?.id) return;
+        const dest = this.$('ov-item-dest')?.value || 'inventory';
+        document.dispatchEvent(new CustomEvent('overview-add-item', {
+          detail: { playerId: this._ovSelectedItem.id, template, autoEquip: dest === 'equip' }
+        }));
+        this.$('ov-item-picker')?.classList.add('hidden');
+      });
+    });
+  },
+
+  _ovToPlayerItemEntry(item, slot, fallbackName) {
+    const objectItem = item && typeof item === 'object' ? item : null;
+    return {
+      slot,
+      itemId: objectItem?.id || '',
+      name: objectItem?.name || objectItem?.title || objectItem?.id || (typeof item === 'string' ? item : fallbackName),
+      quantity: Number.isFinite(objectItem?.quantity) && objectItem.quantity > 0 ? objectItem.quantity : 1
+    };
+  },
+
+  _ovGetEquipmentEntries(equipment) {
+    const entries = [];
+    const push = (slot, item, fallbackName = slot) => {
+      if (item == null) return;
+      entries.push(this._ovToPlayerItemEntry(item, slot, fallbackName));
+    };
+    const pushMany = (slot, values) => {
+      if (!Array.isArray(values)) return;
+      values.forEach((value, index) => {
+        const label = values.length > 1 ? `${slot} ${index + 1}` : slot;
+        push(label, value, `${slot} ${index + 1}`);
+      });
+    };
+
+    push('Main Hand', equipment?.mainHand);
+    push('Off Hand', equipment?.offHand);
+    push('Armor', equipment?.armor);
+    push('Helmet', equipment?.helmet);
+    push('Cloak', equipment?.cloak);
+    push('Boots', equipment?.boots);
+    push('Gloves', equipment?.gloves);
+    pushMany('Ring', equipment?.rings);
+    pushMany('Amulet', equipment?.amulets);
+    pushMany('Bracelet', equipment?.bracelets);
+
+    return entries.filter(entry => entry.name);
+  },
+
+  _ovGetInventoryEntries(items) {
+    if (!Array.isArray(items)) return [];
+    return items
+      .map((item, index) => this._ovToPlayerItemEntry(item, '', `Item ${index + 1}`))
+      .filter(entry => entry.name);
+  },
+
+  _ovRenderPlayerItemChips(entries, action, emptyText) {
+    if (!entries.length) return `<span class="dm-card-placeholder">${this.esc(emptyText)}</span>`;
+    const actionTitle = action === 'unequip' ? 'Unequip to inventory' : 'Remove from inventory';
+    return `<div class="dm-inline-item-list">${entries.map((entry) => `
+      <span class="dm-inline-item">
+        ${entry.slot ? `<span class="dm-inline-slot">${this.esc(entry.slot)}</span>` : ''}
+        <span class="dm-inline-item-label">${this.esc(entry.name)}</span>
+        ${entry.quantity > 1 ? `<span class="dm-inline-item-qty">x${this.esc(String(entry.quantity))}</span>` : ''}
+        ${entry.itemId ? `<button type="button" class="dm-inline-action" data-ov-item-action="${this.esc(action)}" data-ov-item-id="${this.esc(entry.itemId)}" title="${this.esc(actionTitle)}">&#x00d7;</button>` : ''}
+      </span>
+    `).join('')}</div>`;
+  },
+
+  _ovToggleJson() {
+    const section = this.$('ov-json-section');
+    const btn = this.$('btn-ov-toggle-json');
+    if (!section) return;
+    this._ovJsonMode = !this._ovJsonMode;
+    section.classList.toggle('visible', this._ovJsonMode);
+    if (btn) btn.textContent = this._ovJsonMode ? 'Card View' : '{ }';
+    if (this._ovJsonMode && this._ovSelectedItem) {
+      const ta = this.$('ov-json-textarea');
+      if (ta) ta.value = JSON.stringify(this._ovSelectedItem, null, 2);
+    }
+  },
+
+  async _ovSendChat() {
+    const input = this.$('ov-chat-input');
+    const messages = this.$('ov-chat-messages');
+    if (!input || !input.value.trim() || !this._ovSelectedItem) return;
+
+    const userMsg = input.value.trim();
+    input.value = '';
+    messages.innerHTML += `<div class="dm-ai-msg user">${this.esc(userMsg)}</div>`;
+    messages.innerHTML += `<div class="dm-ai-msg ai loading" id="ov-chat-loading">Thinking...</div>`;
+    messages.scrollTop = messages.scrollHeight;
+    messages.classList.remove('hidden');
+
+    try {
+      const type = this._ovSelectedType;
+      const existingJson = JSON.stringify(this._ovSelectedItem);
+      const result = await API.generateContent(type, userMsg, existingJson);
+
+      const loadingEl = this.$('ov-chat-loading');
+      if (loadingEl) loadingEl.remove();
+
+      if (result.json) {
+        try {
+          const updated = JSON.parse(result.json);
+          this._ovSelectedItem = updated;
+          const cardSection = document.querySelector('#overview-detail-panel .dm-detail-card');
+          if (cardSection) cardSection.innerHTML = `<table>${this._dmBuildCardRows(updated, type)}</table>`;
+          const ta = this.$('ov-json-textarea');
+          if (ta) ta.value = JSON.stringify(updated, null, 2);
+          messages.innerHTML += `<div class="dm-ai-msg ai">Updated! Review changes above, then Save.</div>`;
+        } catch {
+          messages.innerHTML += `<div class="dm-ai-msg ai">Got a response but couldn't parse it. Try again?</div>`;
+        }
+      }
+      messages.scrollTop = messages.scrollHeight;
+    } catch (err) {
+      const loadingEl = this.$('ov-chat-loading');
+      if (loadingEl) loadingEl.remove();
+      messages.innerHTML += `<div class="dm-ai-msg system">Error: ${this.esc(err.message)}</div>`;
+      messages.scrollTop = messages.scrollHeight;
+    }
+  },
+
+  async _ovSave() {
+    if (!this._ovSelectedItem || !this._ovSelectedType) return;
+
+    if (this._ovJsonMode) {
+      const ta = this.$('ov-json-textarea');
+      if (ta) {
+        try {
+          this._ovSelectedItem = JSON.parse(ta.value);
+        } catch (err) {
+          alert('Invalid JSON: ' + err.message);
+          return;
+        }
+      }
+    }
+
+    const type = this._ovSelectedType;
+    const registryTypes = ['spell', 'item', 'class', 'race'];
+    try {
+      if (registryTypes.includes(type)) {
+        const pluralType = type + 's';
+        await API.upsertRegistryEntry(pluralType === 'classs' ? 'classes' : pluralType, this._ovSelectedItem);
+      } else if (type === 'player') {
+        await API.editPlayer({ playerId: this._ovSelectedItem.id, ...this._ovSelectedItem });
+      } else if (type === 'room') {
+        await API.upsertRoomFixture(this._ovSelectedItem);
+      }
+      const messages = this.$('ov-chat-messages');
+      if (messages) {
+        messages.innerHTML += `<div class="dm-ai-msg system">Saved.</div>`;
+        messages.classList.remove('hidden');
+        messages.scrollTop = messages.scrollHeight;
+      }
+    } catch (err) {
+      alert('Save failed: ' + err.message);
+    }
+  },
+
+  async _ovDelete() {
+    if (!this._ovSelectedItem || !this._ovSelectedType) return;
+    if (!confirm(`Delete "${this._ovSelectedItem.name || this._ovSelectedItem.id}"?`)) return;
+    const type = this._ovSelectedType;
+    try {
+      if (['spell', 'item', 'class', 'race'].includes(type)) {
+        const plural = type + 's';
+        await API.deleteRegistryEntry(plural === 'classs' ? 'classes' : plural, this._ovSelectedItem.id);
+      } else if (type === 'player') {
+        await API.deletePlayer(this._ovSelectedItem.id);
+      } else if (type === 'room') {
+        await API.deleteRoom(this._ovSelectedItem.id);
+      }
+      const panel = this.$('overview-detail-panel');
+      if (panel) panel.innerHTML = '<div class="dm-detail-empty"><p>Item deleted.</p></div>';
+      this._ovSelectedItem = null;
+    } catch (err) {
+      alert('Delete failed: ' + err.message);
+    }
+  },
+
+  async _ovFetchAndSelect(id, type) {
+    try {
+      let item;
+      const registryTypes = { spell: 'spells', item: 'items', class: 'classes', race: 'races' };
+      if (registryTypes[type]) {
+        item = await API.getRegistryEntry(registryTypes[type], id);
+      } else if (type === 'player') {
+        item = await API.getPlayer(id);
+      } else if (type === 'room') {
+        item = await API.getRoom(id);
+      } else if (type === 'npc') {
+        const rooms = await API.getRooms();
+        for (const rm of rooms) {
+          const npc = (rm.npcs || []).find(n => n.id === id);
+          if (npc) { item = npc; item._roomId = rm.id; break; }
+        }
+      }
+      if (item) this.ovSelectItem(item, type);
+    } catch (err) {
+      console.error('Overview: failed to fetch item', err);
+    }
+  },
+
+  wireOverviewBrowser() {
+    const searchInput = this.$('overview-search-input');
+    const searchBtn = this.$('btn-overview-search');
+    const resultsEl = this.$('overview-results');
+
+    if (searchInput) {
+      searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') this.ovSearch(searchInput.value);
+      });
+      searchInput.addEventListener('input', () => {
+        if (!searchInput.value.trim()) this._ovShowWelcome();
+      });
+    }
+    if (searchBtn) {
+      searchBtn.addEventListener('click', () => this.ovSearch(this.$('overview-search-input')?.value || ''));
+    }
+
+    if (resultsEl) {
+      resultsEl.addEventListener('click', async (e) => {
+        // Quick browse buttons
+        const quickBtn = e.target.closest('[data-ov-quick]');
+        if (quickBtn) {
+          this.ovBrowse(quickBtn.dataset.ovQuick);
+          return;
+        }
+
+        // Result card click — load full object and show detail
+        const card = e.target.closest('[data-ov-id]');
+        if (card) {
+          const id = card.dataset.ovId;
+          const type = card.dataset.ovType;
+          await this._ovFetchAndSelect(id, type);
+        }
+      });
+    }
+  },
+
+  renderAdminPlayers(players, currentPlayerId, session) {
+    // No longer renders the entity browser — overview uses search now.
+    // Keep for compatibility (still populates select options, portal, etc.)
+    this._adminPlayers = players;
+    this._adminCurrentPlayerId = currentPlayerId;
   },
 
   renderRoomCatalogue(rooms) {
-    const container = this.$('admin-rooms-list');
-    if (!rooms.length) {
-      container.innerHTML = '<div class="empty-state">No rooms available.</div>';
-      return;
-    }
-
-    container.innerHTML = rooms.map((room) => `
-      <div class="room-card">
-        <div class="room-card-top">
-          <span class="room-card-title">${this.esc(room.name)}</span>
-          <span class="role-chip ${room.isDiscovered ? 'active' : ''}">${room.isDiscovered ? 'Discovered' : 'Seeded only'}</span>
-          <button class="room-card-delete" data-room-delete-id="${this.esc(room.id)}" data-room-delete-name="${this.esc(room.name)}" type="button">Del</button>
-        </div>
-        <div class="room-card-meta">${this.esc(room.id)} | Exits ${room.exitCount ?? Object.keys(room.exits || {}).length} | NPCs ${room.npcCount ?? (room.npcs || []).length} | Items ${room.itemCount ?? (room.items || []).length}</div>
-        <div class="room-card-description">${this.esc(room.description || 'No description available.')}</div>
-      </div>
-    `).join('');
+    // No longer renders the entity browser — overview uses search now.
   },
 
   // ── World Management rendering ──
@@ -1298,6 +1655,12 @@ const UI = {
     return div.innerHTML;
   },
 
+  formatNarration(text) {
+    let safe = this.esc(text);
+    safe = safe.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    return safe;
+  },
+
   _summarizeCounts(entities) {
     if (!entities.length) return '';
     const counts = {};
@@ -1403,6 +1766,15 @@ const UI = {
     return parts.join('');
   },
 
+  _mechanicalSubsumedByNarration(normalizedMechanical, normalizedNarration) {
+    // Check if the mechanical summary's key sentences are already covered by the narration.
+    // Split mechanical into sentences and check if most are contained in narration.
+    const sentences = normalizedMechanical.split(/[.!?]+/).map((s) => s.trim()).filter((s) => s.length > 15);
+    if (sentences.length === 0) return false;
+    const covered = sentences.filter((sentence) => normalizedNarration.includes(sentence));
+    return covered.length >= sentences.length * 0.6;
+  },
+
   _stripRoomMetadata(text) {
     if (!text) {
       return '';
@@ -1411,6 +1783,9 @@ const UI = {
     const room = this._roomContext;
     const roomName = room?.name ? this._normalizeRoomLine(room.name) : '';
     const roomDescription = room?.description ? this._normalizeRoomLine(room.description) : '';
+    const roomNpcNames = new Set((room?.npcs || []).map((npc) => this._normalizeRoomLine(npc.name)).filter(Boolean));
+    const roomItemNames = new Set((room?.items || []).map((item) => this._normalizeRoomLine(item.name)).filter(Boolean));
+    const roomExitNames = new Set(Object.keys(room?.exits || {}).map((exit) => this._normalizeRoomLine(exit)).filter(Boolean));
     const lines = String(text).split('\n');
     const metadataIndexes = lines
       .map((line, index) => ({ line: this._normalizeRoomLine(line), index }))
@@ -1418,6 +1793,26 @@ const UI = {
       .map(({ index }) => index);
     const looksLikeRoomBlock = metadataIndexes.length >= 2 && metadataIndexes[0] <= 2;
     const filtered = [];
+    let metadataSection = '';
+
+    const normalizeListLine = (value) => this._normalizeRoomLine(
+      value
+        .replace(/^\s*(?:[-*•!$]+|\d+[.)])\s*/, '')
+        .replace(/\s+\(x\d+\)$/i, '')
+    );
+    const isMetadataListLine = (value, pool) => {
+      const normalizedValue = normalizeListLine(value);
+      if (!normalizedValue) {
+        return false;
+      }
+
+      if (pool.has(normalizedValue)) {
+        return true;
+      }
+
+      const commaParts = normalizedValue.split(',').map((part) => this._normalizeRoomLine(part)).filter(Boolean);
+      return commaParts.length > 0 && commaParts.every((part) => pool.has(part));
+    };
 
     for (let index = 0; index < lines.length; index += 1) {
       const line = lines[index];
@@ -1432,8 +1827,28 @@ const UI = {
         continue;
       }
 
-      if (/^(Exits?|You see|Items?|NPCs?|Creatures?|Objects?|Nearby)\s*:/i.test(normalized)) {
+      if (/^(NPCs?|Creatures?|Objects?|Items?)\s*:/i.test(normalized)) {
+        metadataSection = 'entities';
         continue;
+      }
+
+      if (/^(Exits?|You see|Nearby)\s*:/i.test(normalized)) {
+        metadataSection = 'exits';
+        continue;
+      }
+
+      if (metadataSection === 'entities') {
+        if (isMetadataListLine(trimmed, roomNpcNames) || isMetadataListLine(trimmed, roomItemNames)) {
+          continue;
+        }
+        metadataSection = '';
+      }
+
+      if (metadataSection === 'exits') {
+        if (isMetadataListLine(trimmed, roomExitNames)) {
+          continue;
+        }
+        metadataSection = '';
       }
 
       if (roomName && normalized === roomName) {
@@ -1441,6 +1856,10 @@ const UI = {
       }
 
       if (roomDescription && normalized === roomDescription) {
+        continue;
+      }
+
+      if (isMetadataListLine(trimmed, roomNpcNames) || isMetadataListLine(trimmed, roomItemNames)) {
         continue;
       }
 
@@ -1454,16 +1873,36 @@ const UI = {
         continue;
       }
 
+      // Strip standalone entity marker lines (engine-generated NPC/item list lines from room dumps)
+      // Matches: "$ NpcName" (shopkeeper), "! NpcName" (hostile) — engine-specific markers
+      if (/^[$!]\s+\S/.test(trimmed)) {
+        continue;
+      }
+
+      // Strip short entity list lines: "- NpcName", "* ItemName (x2)" from room dumps
+      // Only short lines (< 50 chars) starting with - or * followed by a capitalized word
+      if (/^[-*]\s+[A-Z]/.test(trimmed) && trimmed.length < 50) {
+        continue;
+      }
+
+      // Strip exit summary lines from room dumps
+      if (/^\*\*Exits?:\*\*/i.test(trimmed)) {
+        continue;
+      }
+
       filtered.push(line);
     }
 
-    return filtered.join('\n').trim();
+    // Strip trailing inline entity lists (e.g., "...gates. - NpcA - NpcB * ItemA * ItemB")
+    let result = filtered.join('\n').trim();
+    result = result.replace(/(?:\s[-*$!]\s[A-Z][A-Za-z']+(?:\s[A-Za-z']+)*){2,}\s*$/, '');
+    return result.trim();
   },
 
   _normalizeRoomLine(text) {
     return String(text || '')
       .trim()
-      .replace(/^\*\*(.*)\*\*$/, '$1')
+      .replace(/\*\*(.*?)\*\*/g, '$1')
       .replace(/\s+/g, ' ')
       .trim();
   },
@@ -1767,6 +2206,8 @@ const UI = {
   _dmBuildCardRows(item, type) {
     const row = (label, value, cls) => value != null && value !== ''
       ? `<tr><td class="dm-card-label">${this.esc(label)}</td><td class="${cls || ''}">${this.esc(String(value))}</td></tr>` : '';
+    const rawRow = (label, html, cls) => html != null && html !== ''
+      ? `<tr><td class="dm-card-label">${this.esc(label)}</td><td class="${cls || ''}">${html}</td></tr>` : '';
     const statRow = (label, value, color) => value != null
       ? `<td><span class="dm-stat-label">${this.esc(label)}</span><span class="dm-stat-val" style="color:${color || 'var(--text)'}">${this.esc(String(value))}</span></td>` : '';
 
@@ -1796,9 +2237,19 @@ const UI = {
           + row('Items', (item.items || []).map(i => i.name).join(', '))
           + row('Tags', (item.environmentTags || []).join(', '));
       case 'player': {
+        const equipmentEntries = this._ovGetEquipmentEntries(item.equipment || {});
+        const inventoryEntries = this._ovGetInventoryEntries(item.inventory || []);
+        const equipmentSummary = equipmentEntries.length
+          ? equipmentEntries.map(entry => `${entry.slot}: ${entry.name}`).join(' | ')
+          : 'None';
+        const inventorySummary = `${inventoryEntries.length} item${inventoryEntries.length === 1 ? '' : 's'}`;
         const base = row('Race', item.race) + row('Class', item.class)
           + row('Level', item.level, 'dm-val-accent') + row('HP', `${item.hp}/${item.maxHp}`, 'dm-val-hp') + row('MP', `${item.mp}/${item.maxMp}`, 'dm-val-mp')
-          + row('Gold', item.gold, 'dm-val-gold') + row('XP', item.xp, 'dm-val-xp') + row('Room', item.currentRoomId);
+          + row('Gold', item.gold, 'dm-val-gold') + row('XP', item.xp, 'dm-val-xp') + row('Room', item.currentRoomId)
+          + row('World', item.activeWorldId) + row('Equipment', equipmentSummary)
+          + row('Inventory', inventorySummary) + row('Discord', item.discordId || 'not linked')
+          + rawRow('Equipped Items', this._ovRenderPlayerItemChips(equipmentEntries, 'unequip', 'No equipment equipped.'))
+          + rawRow('Inventory Items', this._ovRenderPlayerItemChips(inventoryEntries, 'remove', 'Inventory empty.'));
         const stats = `<tr><td class="dm-card-label">Stats</td><td class="dm-stat-grid">` +
           `<table class="dm-stats-inline"><tr>${statRow('STR', item.str)}${statRow('DEX', item.dex)}${statRow('CON', item.con)}</tr>` +
           `<tr>${statRow('INT', item.int)}${statRow('WIS', item.wis)}${statRow('CHA', item.cha)}</tr></table></td></tr>`;
@@ -2032,6 +2483,10 @@ const UI = {
     if (searchInput) {
       searchInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') this.dmSearch(searchInput.value);
+      });
+      // Show quick links when search is cleared
+      searchInput.addEventListener('input', () => {
+        if (!searchInput.value.trim()) this._dmShowWelcome();
       });
     }
     if (searchBtn) {

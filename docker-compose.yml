@@ -18,7 +18,6 @@ services:
       DashboardAuth__Admin__Username: "${GAE_DASHBOARD_ADMIN_USERNAME:-admin}"
       DashboardAuth__Admin__Password: "${GAE_DASHBOARD_ADMIN_PASSWORD:-GAE-Admin-Local!123}"
       ConnectionStrings__GameDatabase: "Host=postgres;Port=5432;Database=gae;Username=gae_app;Password=${GAE_DB_PASSWORD:-gae_dev_password}"
-      Persistence__UsePostgres: "true"
     volumes:
       - gae_data:/app/data
       - ./config:/app/config:ro

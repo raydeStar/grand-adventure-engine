@@ -360,7 +360,7 @@ public class ContentSeedService
             ArmorValue = item.ArmorValue,
             IsEquippable = item.IsEquippable ?? GAE.Core.Models.InventoryItem.IsEquippableType(itemType),
             IsConsumable = item.IsConsumable ?? false,
-            IsTwoHanded = item.IsTwoHanded ?? false,
+            IsTwoHanded = ResolveIsTwoHanded(item),
             Effect = item.Effect,
             Value = item.Value,
             StatBonuses = item.StatBonuses ?? new(),
@@ -391,6 +391,11 @@ public class ContentSeedService
         }
 
         return items;
+    }
+
+    private static bool ResolveIsTwoHanded(LoreItemDto item)
+    {
+        return item.IsTwoHanded ?? item.Properties?.TwoHanded ?? false;
     }
 
     private static ItemType ParseItemType(string? type) => type?.ToLowerInvariant() switch
@@ -457,5 +462,11 @@ public class ContentSeedService
         public int RequiredLevel { get; set; } = 1;
         public string? Rarity { get; set; }
         public List<string>? Tags { get; set; }
+        public LoreItemProperties? Properties { get; set; }
+    }
+
+    private class LoreItemProperties
+    {
+        public bool? TwoHanded { get; set; }
     }
 }

@@ -80,12 +80,15 @@ public class EfCoreStateManager : IStateManager
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var worldId = _worldContext.GetCurrentWorldOrDefault();
-        var entity = await db.Rooms.AsNoTracking()
-            .FirstOrDefaultAsync(r => r.Id == roomId && r.WorldIds.Contains(worldId), ct);
+        var candidates = await db.Rooms.AsNoTracking()
+            .Where(r => r.Id == roomId)
+            .ToListAsync(ct);
+
+        var entity = candidates.FirstOrDefault(r => IsTaggedForWorld(r.WorldIds, worldId));
 
         // Backward-compatible fallback for legacy/untagged room records.
         if (entity is null)
-            entity = await db.Rooms.AsNoTracking().FirstOrDefaultAsync(r => r.Id == roomId, ct);
+            entity = candidates.FirstOrDefault();
 
         return entity?.ToDomain();
     }
@@ -95,9 +98,13 @@ public class EfCoreStateManager : IStateManager
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var worldId = _worldContext.GetCurrentWorldOrDefault();
         var entities = await db.Rooms.AsNoTracking()
-            .Where(r => r.IsTemplate && r.WorldIds.Contains(worldId))
+            .Where(r => r.IsTemplate)
             .ToListAsync(ct);
-        return entities.Select(e => e.ToDomain()).ToList();
+
+        return entities
+            .Where(r => IsTaggedForWorld(r.WorldIds, worldId))
+            .Select(e => e.ToDomain())
+            .ToList();
     }
 
     public async Task SaveRoomAsync(Room room, CancellationToken ct = default)
@@ -159,6 +166,16 @@ public class EfCoreStateManager : IStateManager
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         await db.Rooms.ExecuteDeleteAsync(ct);
         await db.PlayerRooms.ExecuteDeleteAsync(ct);
+    }
+
+    private static bool IsTaggedForWorld(IReadOnlyCollection<string>? worldIds, string worldId)
+    {
+        if (worldIds is null || worldIds.Count == 0)
+        {
+            return true;
+        }
+
+        return worldIds.Contains(worldId, StringComparer.OrdinalIgnoreCase);
     }
 
     // ── Per-player room instances ──────────────────────────────────

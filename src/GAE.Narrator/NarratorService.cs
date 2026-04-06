@@ -884,6 +884,7 @@ public class NarratorService : INarratorService
             - For stage transitions, write a "stageDescription" capturing the narrative beat.
             - NEVER invent quest IDs. Only use IDs from the QUEST CONTEXT provided.
             - If the NPC has no quests or the player doesn't ask, omit questUpdates entirely.
+            {{Prompts.QuestPrompts.QuestOfferNarratorHint}}
 
             Conversation history:
             {{string.Join("\n", interaction.Context.TakeLast(15))}}
@@ -919,7 +920,7 @@ public class NarratorService : INarratorService
             Player: {{player.Name}} (Lv.{{player.Level}} {{player.Race}} {{player.Class}})
             {{player.FormatStatsCompact()}}
             Location: {{room.Name}} — {{room.Description}}
-            Turn {{interaction.TurnCount + 1}} of conversation with {{npc.Name}}.
+            Turn {{interaction.CurrentTurnNumber}} of conversation with {{npc.Name}}.
             Player says/does: "{{rawInput}}"
             {{worldContext}}
             {{npcKnowledge}}
@@ -1143,7 +1144,7 @@ public class NarratorService : INarratorService
             {{player.FormatStatsCompact()}}
             Weapon: {{player.Equipment.MainHand?.Name ?? "Fists"}} ({{player.Equipment.MainHand?.DamageDice ?? "1d4"}})
             Location: {{room.Name}}
-            Combat turn {{interaction.TurnCount + 1}} vs {{enemy.Name}} (HP: {{enemy.Hp ?? 0}}/{{enemy.MaxHp ?? 0}}, Defense: {{enemy.Defense ?? 10}})
+            Combat turn {{interaction.CurrentTurnNumber}} vs {{enemy.Name}} (HP: {{enemy.Hp ?? 0}}/{{enemy.MaxHp ?? 0}}, Defense: {{enemy.Defense ?? 10}})
             Player action: "{{rawInput}}"
             {{worldContext}}
             {{loreContext}}
@@ -1173,7 +1174,7 @@ public class NarratorService : INarratorService
                 Mode = InteractionMode.Combat,
                 CombatStatus = "ongoing",
                 EnemyUpdate = new Dictionary<string, int> { ["hp"] = -3 },
-                Context = [$"Turn {interaction.TurnCount + 1}: {player.Name} acted ({rawInput}). Both sides exchanged blows."]
+                Context = [$"Turn {interaction.CurrentTurnNumber}: {player.Name} acted ({rawInput}). Both sides exchanged blows."]
             }
         };
     }
@@ -1905,7 +1906,7 @@ public class NarratorService : INarratorService
             }
         }
 
-        sb.AppendLine("If the player's action completes a custom quest objective, include it in questUpdates.completedCustomObjectives.");
+        sb.AppendLine(Prompts.QuestPrompts.FreeFormQuestInstructions);
         return sb.ToString();
     }
 

@@ -53,64 +53,41 @@ var gameRules = !string.IsNullOrEmpty(rulesYaml)
 builder.Services.AddSingleton(gameRules);
 
 // State management — feature-flagged: PostgreSQL (default) or file-based (fallback)
-var dataDir = builder.Environment.IsProduction() && Directory.Exists("/app/data")
-    ? "/app/data"
-    : Path.Combine(builder.Environment.ContentRootPath, "..", "..", "data");
+var dataDir = builder.Configuration["DataDir"]
+    ?? (builder.Environment.IsProduction() && Directory.Exists("/app/data")
+        ? "/app/data"
+        : Path.Combine(builder.Environment.ContentRootPath, "..", "..", "data"));
 Directory.CreateDirectory(dataDir);
 
-var usePostgres = builder.Configuration.GetValue("Persistence:UsePostgres", true);
-
-if (usePostgres)
+// PostgreSQL via EF Core — the only persistence path.
+// Connection string is resolved from IConfiguration at service-resolution time
+// so that test factory overrides (via ConfigureAppConfiguration) are visible.
+builder.Services.AddDbContextFactory<GaeDbContext>((sp, options) =>
 {
-    // PostgreSQL via EF Core — DbContext factory allows singleton state managers
-    var connectionString = builder.Configuration.GetConnectionString("GameDatabase")
+    var config = sp.GetRequiredService<IConfiguration>();
+    var cs = config.GetConnectionString("GameDatabase")
         ?? "Host=localhost;Port=5432;Database=gae;Username=gae_app;Password=gae_dev_password";
-    builder.Services.AddDbContextFactory<GaeDbContext>(options =>
-        options.UseNpgsql(connectionString, npgsql =>
-            npgsql.MigrationsAssembly("GAE.Engine")));
+    options.UseNpgsql(cs, npgsql => npgsql.MigrationsAssembly("GAE.Engine"));
+});
 
-    builder.Services.AddSingleton<IStateManager, EfCoreStateManager>();
-    builder.Services.AddSingleton<IConversationLogger, EfCoreConversationLogger>();
-    builder.Services.AddSingleton<IWorldRepository, EfCoreWorldRepository>();
-    builder.Services.AddSingleton<ContentSeedService>();
+builder.Services.AddSingleton<IStateManager, EfCoreStateManager>();
+builder.Services.AddSingleton<IConversationLogger, EfCoreConversationLogger>();
+builder.Services.AddSingleton<IWorldRepository, EfCoreWorldRepository>();
+builder.Services.AddSingleton<ContentSeedService>();
 
-    // Keep file-based services available for data migration
-    builder.Services.AddSingleton<InMemoryStateManager>();
-    builder.Services.AddSingleton<IStateJournal>(sp =>
-        new FileStateJournal(
-            Path.Combine(dataDir, "journal.jsonl"),
-            sp.GetRequiredService<ILogger<FileStateJournal>>()));
-    builder.Services.AddSingleton<IStateCheckpointStore>(sp =>
-        new FileStateCheckpointStore(
-            Path.Combine(dataDir, "checkpoints"),
-            sp.GetRequiredService<ILogger<FileStateCheckpointStore>>()));
-    builder.Services.AddSingleton<StateReplayService>();
-    builder.Services.AddSingleton<IStateReplayService>(sp => sp.GetRequiredService<StateReplayService>());
-    builder.Services.AddSingleton<DataMigrationService>();
-}
-else
-{
-    // Legacy file-based persistence — singleton in-memory + journaled
-    builder.Services.AddSingleton<IConversationLogger>(sp =>
-        new FileConversationLogger(
-            Path.Combine(dataDir, "conversations.jsonl"),
-            sp.GetRequiredService<ILogger<FileConversationLogger>>()));
-
-    builder.Services.AddSingleton<InMemoryStateManager>();
-    builder.Services.AddSingleton<IStateJournal>(sp =>
-        new FileStateJournal(
-            Path.Combine(dataDir, "journal.jsonl"),
-            sp.GetRequiredService<ILogger<FileStateJournal>>()));
-    builder.Services.AddSingleton<IStateCheckpointStore>(sp =>
-        new FileStateCheckpointStore(
-            Path.Combine(dataDir, "checkpoints"),
-            sp.GetRequiredService<ILogger<FileStateCheckpointStore>>()));
-    builder.Services.AddSingleton<StateReplayService>();
-    builder.Services.AddSingleton<IStateReplayService>(sp => sp.GetRequiredService<StateReplayService>());
-    builder.Services.AddSingleton<JournaledStateManager>();
-    builder.Services.AddSingleton<IStateManager>(sp => sp.GetRequiredService<JournaledStateManager>());
-    builder.Services.AddSingleton<IWorldRepository, InMemoryWorldRepository>();
-}
+// File-based services — only used by DataMigrationService for one-time file→DB import
+builder.Services.AddSingleton<InMemoryStateManager>();
+builder.Services.AddSingleton<IStateJournal>(sp =>
+    new FileStateJournal(
+        Path.Combine(dataDir, "journal.jsonl"),
+        sp.GetRequiredService<ILogger<FileStateJournal>>()));
+builder.Services.AddSingleton<IStateCheckpointStore>(sp =>
+    new FileStateCheckpointStore(
+        Path.Combine(dataDir, "checkpoints"),
+        sp.GetRequiredService<ILogger<FileStateCheckpointStore>>()));
+builder.Services.AddSingleton<StateReplayService>();
+builder.Services.AddSingleton<IStateReplayService>(sp => sp.GetRequiredService<StateReplayService>());
+builder.Services.AddSingleton<DataMigrationService>();
 
 builder.Services.AddSingleton<WorldBootstrapService>();
 
@@ -236,17 +213,16 @@ foreach (var warning in authService.GetStartupWarnings())
     app.Logger.LogWarning("{Warning}", warning);
 }
 
-// State recovery: mode-dependent startup
-if (usePostgres)
+// State recovery — apply EF Core migrations
 {
-    // Apply EF Core migrations automatically
-    {
-        var dbFactory = app.Services.GetRequiredService<IDbContextFactory<GaeDbContext>>();
-        await using var db = await dbFactory.CreateDbContextAsync();
-        await db.Database.MigrateAsync();
-        app.Logger.LogInformation("Database migrations applied");
+    var dbFactory = app.Services.GetRequiredService<IDbContextFactory<GaeDbContext>>();
+    await using var db = await dbFactory.CreateDbContextAsync();
+    await db.Database.MigrateAsync();
+    app.Logger.LogInformation("Database migrations applied");
 
-        // One-time data migration from file-based state (if any exists and DB is empty)
+    // One-time data migration from file-based state (skip in test — no real data to import)
+    if (!app.Environment.IsEnvironment("Test"))
+    {
         var migrator = app.Services.GetRequiredService<DataMigrationService>();
         await migrator.MigrateAsync();
 
@@ -258,20 +234,6 @@ if (usePostgres)
         var conversationsPath = Path.Combine(dataDir, "conversations.jsonl");
         if (File.Exists(conversationsPath) && !await db.ConversationLogs.AnyAsync())
             await migrator.ImportConversationHistoryAsync(conversationsPath);
-    }
-}
-else
-{
-    // Legacy file-based: replay from checkpoint + journal
-    var replayService = app.Services.GetRequiredService<StateReplayService>();
-    try
-    {
-        await replayService.ReplayAsync();
-        app.Logger.LogInformation("State recovery complete");
-    }
-    catch (Exception ex)
-    {
-        app.Logger.LogWarning(ex, "State recovery encountered issues — starting with fresh state");
     }
 }
 
@@ -291,56 +253,20 @@ catch
 // ── Load content registries ──────────────────────────────────────────
 var registryService = app.Services.GetRequiredService<ContentRegistryService>();
 
-if (usePostgres)
-{
-    // PostgreSQL: seed from YAML on first run, then always load from DB
-    var contentSeed = app.Services.GetRequiredService<ContentSeedService>();
-    await contentSeed.SeedAndLoadAsync(registryService, configDir);
+// Seed content from YAML on first run, then always load from DB
+var contentSeed = app.Services.GetRequiredService<ContentSeedService>();
+await contentSeed.SeedAndLoadAsync(registryService, configDir);
 
-    // Load GameRulesConfig from DB (seeding from YAML if DB is empty)
-    var dbRules = await contentSeed.SeedAndLoadGameRulesAsync(configDir);
-    gameRules.CharacterCreation = dbRules.CharacterCreation;
-    gameRules.Stats = dbRules.Stats;
-    gameRules.Combat = dbRules.Combat;
-    gameRules.SkillChecks = dbRules.SkillChecks;
-    gameRules.Rest = dbRules.Rest;
-    gameRules.Death = dbRules.Death;
-    gameRules.Loot = dbRules.Loot;
-    gameRules.Leveling = dbRules.Leveling;
-}
-else
-{
-    // Legacy: load from YAML seed files directly
-    var spellsPath = Path.Combine(configDir, "spells-seed.yaml");
-    if (File.Exists(spellsPath))
-        RegistrySeedLoader.LoadSpells(registryService.Spells, await File.ReadAllTextAsync(spellsPath), app.Logger);
-
-    var classesPath = Path.Combine(configDir, "classes-seed.yaml");
-    if (File.Exists(classesPath))
-        RegistrySeedLoader.LoadClasses(registryService.Classes, await File.ReadAllTextAsync(classesPath), app.Logger);
-
-    var racesPath = Path.Combine(configDir, "races-seed.yaml");
-    if (File.Exists(racesPath))
-        RegistrySeedLoader.LoadRaces(registryService.Races, await File.ReadAllTextAsync(racesPath), app.Logger);
-
-    var loreSeedPath = Path.Combine(configDir, "lore-seed.yaml");
-    if (File.Exists(loreSeedPath))
-        RegistrySeedLoader.LoadItemsFromLoreSeed(registryService.Items, await File.ReadAllTextAsync(loreSeedPath), app.Logger);
-
-    var dungeonItemsPath = Path.Combine(configDir, "dungeon-items.yaml");
-    if (File.Exists(dungeonItemsPath))
-        RegistrySeedLoader.LoadItems(registryService.Items, await File.ReadAllTextAsync(dungeonItemsPath), app.Logger);
-
-    var monstersPath = Path.Combine(configDir, "monsters.yaml");
-    if (File.Exists(monstersPath))
-        RegistrySeedLoader.LoadMonsters(registryService.Monsters, await File.ReadAllTextAsync(monstersPath), app.Logger);
-
-    var questsPath = Path.Combine(configDir, "quests.yaml");
-    if (File.Exists(questsPath))
-        RegistrySeedLoader.LoadQuests(registryService.Quests, registryService.Items, await File.ReadAllTextAsync(questsPath), app.Logger);
-
-    registryService.LogRegistrySummary();
-}
+// Load GameRulesConfig from DB (seeding from YAML if DB is empty)
+var dbRules = await contentSeed.SeedAndLoadGameRulesAsync(configDir);
+gameRules.CharacterCreation = dbRules.CharacterCreation;
+gameRules.Stats = dbRules.Stats;
+gameRules.Combat = dbRules.Combat;
+gameRules.SkillChecks = dbRules.SkillChecks;
+gameRules.Rest = dbRules.Rest;
+gameRules.Death = dbRules.Death;
+gameRules.Loot = dbRules.Loot;
+gameRules.Leveling = dbRules.Leveling;
 
 // Seed world from lore-seed.yaml if spawn room is not already present
 using (var seedScope = app.Services.CreateScope())
@@ -397,6 +323,27 @@ app.MapGet("/health/ready", async (IStateManager sm) =>
     }
 });
 
+// Database: is the PostgreSQL backend reachable?
+app.MapGet("/health/db", async (IServiceProvider sp) =>
+{
+    var factory = sp.GetService<IDbContextFactory<GaeDbContext>>();
+    if (factory is null)
+        return Results.Ok(new { status = "skipped", note = "PostgreSQL not configured" });
+
+    try
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        var canConnect = await db.Database.CanConnectAsync();
+        return canConnect
+            ? Results.Ok(new { status = "healthy", service = "postgres" })
+            : Results.Json(new { status = "unhealthy", service = "postgres", note = "CanConnect returned false" }, statusCode: 503);
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { status = "unhealthy", service = "postgres", error = ex.Message }, statusCode: 503);
+    }
+});
+
 IResult? narratorHealthCache = null;
 DateTimeOffset narratorHealthCacheExpiry = default;
 
@@ -420,18 +367,6 @@ app.MapGet("/health/narrator", async (HttpClient httpClient) =>
     narratorHealthCacheExpiry = DateTimeOffset.UtcNow.AddSeconds(60);
     return narratorHealthCache;
 });
-
-// Flush checkpoint on shutdown (only for file-based persistence)
-if (!usePostgres)
-{
-    var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
-    var replayService = app.Services.GetRequiredService<StateReplayService>();
-    lifetime.ApplicationStopping.Register(() =>
-    {
-        app.Logger.LogInformation("Flushing state checkpoint on shutdown...");
-        replayService.FlushAsync().GetAwaiter().GetResult();
-    });
-}
 
 app.Run();
 
@@ -537,7 +472,7 @@ static GAE.Core.Models.InventoryItem ConvertLoreItem(LoreItem li)
         ArmorValue = Math.Max(0, li.ArmorValue),
         IsEquippable = li.IsEquippable ?? GAE.Core.Models.InventoryItem.IsEquippableType(itemType),
         IsConsumable = li.IsConsumable ?? itemType is GAE.Core.Models.ItemType.Potion or GAE.Core.Models.ItemType.Scroll,
-        IsTwoHanded = li.IsTwoHanded,
+        IsTwoHanded = li.IsTwoHanded || li.Properties?.TwoHanded == true,
         Effect = li.Effect,
         StatBonuses = li.StatBonuses ?? new()
     };
@@ -571,6 +506,7 @@ public class LoreRoom
     public List<LoreNpc>? Npcs { get; set; }
     public List<LoreItem>? Items { get; set; }
     public List<string>? EnvironmentTags { get; set; }
+    public List<string>? WorldIds { get; set; }
 }
 public class LoreNpc
 {
@@ -590,6 +526,7 @@ public class LoreNpc
     public bool IsShopkeeper { get; set; }
     public List<LoreItem>? ShopInventory { get; set; }
     public List<string>? QuestsOffered { get; set; }
+    public List<string>? WorldIds { get; set; }
 }
 public class LoreItem
 {
@@ -607,6 +544,11 @@ public class LoreItem
     public bool IsTwoHanded { get; set; }
     public string? Effect { get; set; }
     public Dictionary<string, int>? StatBonuses { get; set; }
+    public LoreItemProperties? Properties { get; set; }
+}
+public class LoreItemProperties
+{
+    public bool? TwoHanded { get; set; }
 }
 public class LoreFaction { public string? Id { get; set; } public string? Name { get; set; } public string? Description { get; set; } }
 

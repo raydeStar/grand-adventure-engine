@@ -1,6 +1,7 @@
 using GAE.Core.Interfaces;
 using GAE.Core.Models;
-using GAE.Engine.State;
+using GAE.Engine.Data;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace GAE.Integration.Tests;
@@ -112,24 +113,40 @@ public class StatePipelineTests : IClassFixture<GaeWebApplicationFactory>
     }
 
     [Fact]
-    public async Task JournaledStateManager_WritesJournal()
+    public async Task PostgreSQL_PersistsState_AcrossScopes()
     {
-        using var scope = _factory.Services.CreateScope();
-        var journal = scope.ServiceProvider.GetRequiredService<IStateJournal>();
+        var roomId = $"pg-persist-{Guid.NewGuid():N}";
 
-        var seqBefore = await journal.GetLatestSequenceNumberAsync();
-
-        // Save something through state manager to trigger journal write
-        var state = scope.ServiceProvider.GetRequiredService<IStateManager>();
-        await state.SaveRoomAsync(new Room
+        // Save in one scope
+        using (var scope = _factory.Services.CreateScope())
         {
-            Id = $"journal-test-{Guid.NewGuid():N}",
-            Name = "Journal Test Room",
-            Description = "Verifies journal writes."
-        });
+            var state = scope.ServiceProvider.GetRequiredService<IStateManager>();
+            await state.SaveRoomAsync(new Room
+            {
+                Id = roomId,
+                Name = "Persistence Test Room",
+                Description = "Verifies state survives across scopes via PostgreSQL."
+            });
+        }
 
-        var seqAfter = await journal.GetLatestSequenceNumberAsync();
-        Assert.True(seqAfter > seqBefore, "Journal sequence should advance after state mutation");
+        // Retrieve in a fresh scope — proves data is in the database, not just in memory
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var state = scope.ServiceProvider.GetRequiredService<IStateManager>();
+            var retrieved = await state.GetRoomAsync(roomId);
+
+            Assert.NotNull(retrieved);
+            Assert.Equal("Persistence Test Room", retrieved.Name);
+        }
+
+        // Also verify at the DB level
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<GaeDbContext>>();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            var exists = await db.Rooms.AnyAsync(r => r.Id == roomId);
+            Assert.True(exists, "Room should exist in PostgreSQL");
+        }
     }
 
     [Fact]

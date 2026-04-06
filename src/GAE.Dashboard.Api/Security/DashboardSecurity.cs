@@ -52,7 +52,7 @@ public sealed class DashboardAccountOptions
 
 public sealed record DashboardAccount(string Username, string Password, string Role, string DisplayName);
 
-public sealed record DashboardLoginHint(string Username, string Role, string DisplayName);
+public sealed record DashboardLoginHint(string Username, string Password, string Role, string DisplayName);
 
 public sealed record DashboardSessionDescriptor(string Username, string Role, string DisplayName, bool IsAdmin);
 
@@ -88,7 +88,7 @@ public sealed class DashboardAuthService : IDashboardAuthService
     public IReadOnlyList<DashboardLoginHint> GetLoginHints()
     {
         return GetAccounts()
-            .Select(account => new DashboardLoginHint(account.Username, account.Role, account.DisplayName))
+            .Select(account => new DashboardLoginHint(account.Username, account.Password, account.Role, account.DisplayName))
             .ToArray();
     }
 

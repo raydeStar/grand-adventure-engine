@@ -42,6 +42,14 @@
     'ops-check': ['help', 'rest', 'look']
   };
 
+  function appendOverviewMessage(text) {
+    const messages = UI.$('ov-chat-messages');
+    if (!messages) return;
+    messages.innerHTML += `<div class="dm-ai-msg system">${UI.esc(text)}</div>`;
+    messages.classList.remove('hidden');
+    messages.scrollTop = messages.scrollHeight;
+  }
+
   async function init() {
     UI.restoreTheme();
     bindEvents();
@@ -66,17 +74,16 @@
 
     const session = await API.getSession();
     if (!session) {
-      UI.setPortalMessage('Sign in to unlock gameplay, admin workflows, and protected endpoints.', 'info');
       return;
     }
 
-    await onAuthenticated(session, { announce: false });
+    await onAuthenticated(session);
   }
 
   function bindEvents() {
     UI.$('auth-form').addEventListener('submit', handleLogin);
-    UI.$('btn-fill-user').addEventListener('click', () => fillUsername('user'));
-    UI.$('btn-fill-admin').addEventListener('click', () => fillUsername('admin'));
+    UI.$('btn-fill-user').addEventListener('click', () => fillCredentials('user'));
+    UI.$('btn-fill-admin').addEventListener('click', () => fillCredentials('admin'));
     UI.$('btn-logout-header').addEventListener('click', () => void handleLogout());
     UI.$('btn-logout-portal').addEventListener('click', () => void handleLogout());
 
@@ -85,12 +92,9 @@
     if (themeBtn) themeBtn.addEventListener('click', () => UI.toggleTheme());
 
     UI.$('btn-new-char').addEventListener('click', () => {
-      if (!ensureAuthenticated()) return;
-      UI.setPortalMessage('');
       UI.showCreateForm(true);
     });
     UI.$('btn-cancel-create').addEventListener('click', () => UI.showCreateForm(false));
-    UI.$('btn-open-admin').addEventListener('click', () => openDashboard('admin'));
     UI.$('btn-open-portal').addEventListener('click', () => {
       UI.showPortal(true);
       UI.showDashboard(false);
@@ -100,7 +104,6 @@
       void refreshAll().catch((error) => handleError(error, { portal: true, logId: 'workflow-log' }));
       UI.appendActivity('workflow-log', 'Manual refresh requested.', 'info');
     });
-    UI.$('btn-seed-demo').addEventListener('click', () => void seedDemoCharacters(false));
     UI.$('btn-seed-demo-admin').addEventListener('click', () => void seedDemoCharacters(false));
     UI.$('btn-llm-refresh').addEventListener('click', () => void refreshLlmModels());
     UI.$('llm-models-list').addEventListener('click', handleLlmModelClick);
@@ -121,6 +124,9 @@
     UI.$('btn-reseed-world')?.addEventListener('click', () => void handleReseedWorld());
     UI.$('btn-seed-demo-world')?.addEventListener('click', () => void handleSeedDemoWorld());
     UI.$('btn-reset-world')?.addEventListener('click', () => void handleResetWorld());
+    UI.$('btn-export-world')?.addEventListener('click', () => void handleExportWorld());
+    UI.$('btn-import-world')?.addEventListener('click', () => handleImportWorldClick());
+    UI.$('import-world-file')?.addEventListener('change', (e) => void handleImportWorldFile(e));
 
     // World management events
     UI.$('btn-create-world')?.addEventListener('click', showCreateWorldForm);
@@ -151,17 +157,14 @@
       });
     });
 
-    document.querySelectorAll('[data-scenario]').forEach((button) => {
-      button.addEventListener('click', () => void runScenario(button.dataset.scenario || ''));
-    });
-
     // Admin tab switching
     document.querySelectorAll('[data-admin-tab]').forEach((tab) => {
       tab.addEventListener('click', () => switchAdminTab(tab.dataset.adminTab));
     });
-    // Restore persisted admin tab
+    // Restore persisted admin tab styling without triggering protected loads before auth.
     const savedTab = localStorage.getItem('gae.admin.tab');
-    if (savedTab) switchAdminTab(savedTab);
+    const validTabs = new Set([...document.querySelectorAll('[data-admin-tab]')].map(t => t.dataset.adminTab));
+    if (savedTab && validTabs.has(savedTab)) switchAdminTab(savedTab);
 
     // Wire up AI logs tab events
     UI.wireLogsTab();
@@ -172,96 +175,138 @@
     // Wire up content registry tab
     UI.wireRegistryTab();
 
-    // Admin character edit form
-    UI.$('btn-admin-edit-char').addEventListener('click', () => {
-      if (!state.currentPlayer) return;
-      const p = state.currentPlayer;
-      UI.$('edit-name').value = p.name || '';
-      UI.$('edit-race').value = p.race || '';
-      UI.$('edit-class').value = p.class || '';
-      UI.$('edit-room').value = p.currentRoomId || '';
-      UI.$('edit-discordid').value = p.discordId || '';
-      UI.$('edit-threadid').value = p.threadId ?? '';
-      UI.$('edit-hp').value = p.hp ?? 0;
-      UI.$('edit-maxhp').value = p.maxHp ?? 0;
-      UI.$('edit-mp').value = p.mp ?? 0;
-      UI.$('edit-maxmp').value = p.maxMp ?? 0;
-      UI.$('edit-gold').value = p.gold ?? 0;
-      UI.$('edit-xp').value = p.xp ?? 0;
-      UI.$('edit-level').value = p.level ?? 1;
-      UI.$('edit-str').value = p.str ?? 10;
-      UI.$('edit-dex').value = p.dex ?? 10;
-      UI.$('edit-con').value = p.con ?? 10;
-      UI.$('edit-int').value = p.int ?? 10;
-      UI.$('edit-wis').value = p.wis ?? 10;
-      UI.$('edit-cha').value = p.cha ?? 10;
-      UI.$('edit-luck').value = p.luck ?? 10;
-      UI.$('admin-edit-form').classList.remove('hidden');
+    // Wire up overview browser (players + rooms)
+    UI.wireOverviewBrowser();
+
+    // Handle play-as-player from overview detail panel
+    document.addEventListener('overview-play-player', async (e) => {
+      const { playerId } = e.detail;
+      if (playerId) void activatePlayer(playerId, 'user');
     });
 
-    UI.$('btn-admin-cancel-edit').addEventListener('click', () => {
-      UI.$('admin-edit-form').classList.add('hidden');
-    });
-
-    UI.$('btn-admin-save-char').addEventListener('click', async () => {
-      if (!state.currentPlayerId) return;
-      try {
-        const payload = { playerId: state.currentPlayerId };
-        const p = state.currentPlayer;
-
-        // Only send changed fields
-        const fields = [
-          ['name', 'edit-name', 'string'], ['race', 'edit-race', 'string'],
-          ['class', 'edit-class', 'string'], ['currentRoomId', 'edit-room', 'string'],
-          ['discordId', 'edit-discordid', 'string'], ['threadId', 'edit-threadid', 'int'],
-          ['hp', 'edit-hp', 'int'], ['maxHp', 'edit-maxhp', 'int'],
-          ['mp', 'edit-mp', 'int'], ['maxMp', 'edit-maxmp', 'int'],
-          ['gold', 'edit-gold', 'int'], ['xp', 'edit-xp', 'int'], ['level', 'edit-level', 'int'],
-          ['str', 'edit-str', 'int'], ['dex', 'edit-dex', 'int'], ['con', 'edit-con', 'int'],
-          ['int', 'edit-int', 'int'], ['wis', 'edit-wis', 'int'], ['cha', 'edit-cha', 'int'],
-          ['luck', 'edit-luck', 'int']
-        ];
-
-        for (const [key, elId, type] of fields) {
-          const val = type === 'int' ? parseInt(UI.$(elId).value) : UI.$(elId).value;
-          const current = p[key];
-          if (val !== current && val !== '' && !Number.isNaN(val)) {
-            payload[key] = val;
-          }
+    // Smoke test from overview
+    document.addEventListener('overview-smoke-player', async (e) => {
+      const { playerId } = e.detail;
+      if (!playerId || !ensureAdmin()) return;
+      const messages = UI.$('ov-chat-messages');
+      if (messages) { messages.classList.remove('hidden'); }
+      const commands = workflowScenarios['smoke-user'];
+      for (const command of commands) {
+        try {
+          if (messages) messages.innerHTML += `<div class="dm-ai-msg system">${UI.esc(playerId)} &gt; ${UI.esc(command)}</div>`;
+          const result = await API.sendCommand(playerId, command);
+          if (result.actionId) state.recentActionIds.add(result.actionId);
+          const summary = result.mechanicalSummary || 'OK';
+          if (messages) messages.innerHTML += `<div class="dm-ai-msg ai">${UI.esc(summary)}</div>`;
+          if (playerId === state.currentPlayerId) UI.appendStoryEntry(result, result.success ? 'success' : 'failure');
+          await afterCommand(playerId, result);
+        } catch (err) {
+          if (messages) messages.innerHTML += `<div class="dm-ai-msg system">Error: ${UI.esc(err.message)}</div>`;
+          break;
         }
-
-        if (Object.keys(payload).length <= 1) {
-          UI.appendActivity('admin-edit-log', 'No changes detected.', 'info');
-          return;
-        }
-
-        const result = await API.editPlayer(payload);
-        UI.appendActivity('admin-edit-log', result.summary, 'success');
-        UI.$('admin-edit-form').classList.add('hidden');
-        await refreshCurrentPlayer();
-        await refreshPlayers();
-      } catch (err) {
-        UI.appendActivity('admin-edit-log', `Error: ${err.message}`, 'error');
+      }
+      if (messages) {
+        messages.innerHTML += `<div class="dm-ai-msg system">Smoke test complete.</div>`;
+        messages.scrollTop = messages.scrollHeight;
       }
     });
 
-    UI.$('existing-players').addEventListener('click', handlePortalPlayerClick);
-    UI.$('admin-players-table').addEventListener('click', handleAdminRegistryClick);
-
-    UI.$('admin-rooms-list')?.addEventListener('click', async (e) => {
-      const delBtn = e.target.closest('[data-room-delete-id]');
-      if (!delBtn) return;
-      const roomId = delBtn.dataset.roomDeleteId;
-      const roomName = delBtn.dataset.roomDeleteName || roomId;
-      if (!confirm(`Delete room "${roomName}"?`)) return;
+    // Teleport to spawn from overview
+    document.addEventListener('overview-teleport-spawn', async (e) => {
+      const { playerId } = e.detail;
+      if (!playerId || !ensureAdmin()) return;
       try {
-        await API.deleteRoom(roomId);
-        UI.appendActivity('admin-command-log', `Deleted room ${roomName}.`, 'success');
-        await refreshRooms();
+        await API.teleportPlayer({ playerId, roomId: 'spawn' });
+        const messages = UI.$('ov-chat-messages');
+        if (messages) {
+          messages.innerHTML += `<div class="dm-ai-msg system">Teleported to spawn.</div>`;
+          messages.classList.remove('hidden');
+          messages.scrollTop = messages.scrollHeight;
+        }
+        if (playerId === state.currentPlayerId) await refreshCurrentPlayer();
+        // Refresh the card data
+        await UI._ovFetchAndSelect(playerId, 'player');
       } catch (err) {
-        UI.appendActivity('admin-command-log', `Error deleting room: ${err.message}`, 'error');
+        alert('Teleport failed: ' + err.message);
       }
     });
+
+    // Send Discord message from overview
+    document.addEventListener('overview-discord-msg', async (e) => {
+      const { playerId, message } = e.detail;
+      if (!playerId || !message || !ensureAdmin()) return;
+      try {
+        await API.sendMessage({ playerId, message });
+        const messages = UI.$('ov-chat-messages');
+        if (messages) {
+          messages.innerHTML += `<div class="dm-ai-msg system">Discord message sent.</div>`;
+          messages.classList.remove('hidden');
+          messages.scrollTop = messages.scrollHeight;
+        }
+      } catch (err) {
+        alert('Discord send failed: ' + err.message);
+      }
+    });
+
+    // Add item from overview item picker
+    document.addEventListener('overview-add-item', async (e) => {
+      const { playerId, template, autoEquip } = e.detail;
+      if (!playerId || !template || !ensureAdmin()) return;
+      try {
+        const result = await API.grantItem({
+          playerId,
+          name: template.name,
+          type: template.type || 'Misc',
+          quantity: 1,
+          value: template.value || 0,
+          description: template.description || '',
+          damageDice: template.damageDice || null,
+          damageStat: template.damageStat || null,
+          armorValue: template.armorValue || 0,
+          isEquippable: template.isEquippable,
+          isConsumable: template.isConsumable,
+          isTwoHanded: template.isTwoHanded || false,
+          effect: template.effect || null,
+          statBonuses: template.statBonuses || {},
+          autoEquip
+        });
+        const summary = result.summary || `Granted ${template.name}.`;
+        if (playerId === state.currentPlayerId) await refreshCurrentPlayer();
+        await UI._ovFetchAndSelect(playerId, 'player');
+        appendOverviewMessage(summary);
+      } catch (err) {
+        const messages = UI.$('ov-chat-messages');
+        if (messages) {
+          messages.innerHTML += `<div class="dm-ai-msg system">Error: ${UI.esc(err.message)}</div>`;
+          messages.classList.remove('hidden');
+        } else {
+          alert('Grant item failed: ' + err.message);
+        }
+      }
+    });
+
+    document.addEventListener('overview-item-action', async (e) => {
+      const { playerId, itemId, action } = e.detail;
+      if (!playerId || !itemId || !action || !ensureAdmin()) return;
+      try {
+        const result = await API.itemAction({ playerId, itemId, action });
+        const summary = result.summary || 'Item updated.';
+        if (playerId === state.currentPlayerId) await refreshCurrentPlayer();
+        await UI._ovFetchAndSelect(playerId, 'player');
+        appendOverviewMessage(summary);
+      } catch (err) {
+        const messages = UI.$('ov-chat-messages');
+        if (messages) {
+          messages.innerHTML += `<div class="dm-ai-msg system">Error: ${UI.esc(err.message)}</div>`;
+          messages.classList.remove('hidden');
+          messages.scrollTop = messages.scrollHeight;
+        } else {
+          alert('Item update failed: ' + err.message);
+        }
+      }
+    });
+
+    UI.$('resume-form').addEventListener('submit', handleResumeCharacter);
 
     document.addEventListener('click', (event) => {
       const exit = event.target.closest('[data-room-exit]');
@@ -281,18 +326,23 @@
     state.session = session;
     UI.setSession(state.session, state.loginHints);
     UI.setAuthMessage('');
-    state.mode = UI.setMode(state.mode, state.session);
+    state.mode = UI.setMode(session.isAdmin ? 'admin' : 'user', state.session);
     localStorage.setItem('gae.operator.mode', state.mode);
     UI.renderNoActivePlayer(true);
     UI.setConnectionStatus('connecting');
 
-    await refreshAll();
+    // Enter the authenticated shell immediately; background data loads can finish after the
+    // dashboard is visible instead of keeping the user on the signed-in portal.
+    openDashboard(state.mode);
+
+    try {
+      await refreshAll();
+    } catch (error) {
+      await handleError(error, { logId: 'workflow-log' });
+    }
+
     startRefreshLoop();
     void GameHub.connect();
-
-    if (options.announce !== false) {
-      UI.setPortalMessage(`Signed in as ${session.username}.`, 'success');
-    }
   }
 
   async function handleLogin(event) {
@@ -354,17 +404,17 @@
     UI.renderRoomCatalogue([]);
     UI.renderSummary(null, state.transportLabel, null);
     UI.clearActivity('workflow-log');
-    UI.clearActivity('admin-command-log');
     UI.clearActivity('mutation-log');
     UI.setPortalMessage(message, tone);
   }
 
-  function fillUsername(role) {
+  function fillCredentials(role) {
     const hint = state.loginHints.find((entry) => entry.role === role);
     if (!hint) return;
 
     UI.$('auth-username').value = hint.username;
-    UI.$('auth-password').focus();
+    UI.$('auth-password').value = hint.password;
+    UI.$('auth-form').requestSubmit();
   }
 
   function ensureAuthenticated() {
@@ -396,6 +446,7 @@
     UI.showPortal(false);
     if (mode === 'user' && !state.currentPlayerId) {
       UI.renderNoActivePlayer(true);
+      UI.showPlayerSelect(true);
     }
   }
 
@@ -407,6 +458,10 @@
       panel.classList.toggle('active', panel.dataset.adminPanel === tabName);
     });
     localStorage.setItem('gae.admin.tab', tabName);
+
+    if (!state.session?.isAdmin) {
+      return;
+    }
 
     // Auto-load conversation logs when switching to the logs tab
     if (tabName === 'logs') {
@@ -596,6 +651,7 @@
     setMode(mode);
     UI.showDashboard(true);
     UI.showPortal(false);
+    UI.showPlayerSelect(false);
     await GameHub.joinPlayerFeed(playerId);
     await refreshCurrentPlayer();
     await refreshStory();
@@ -611,7 +667,6 @@
     const submit = UI.$('create-submit');
     submit.disabled = true;
     submit.textContent = 'Creating...';
-    UI.setPortalMessage('');
 
     try {
       const player = await API.createCharacter({
@@ -625,14 +680,13 @@
 
       UI.$('create-form').reset();
       UI.showCreateForm(false);
-      UI.setPortalMessage(`Created ${player.name} (${player.id}).`, 'success');
       await refreshAll();
-      await activatePlayer(player.id, state.session?.isAdmin && state.mode === 'admin' ? 'admin' : 'user');
+      await activatePlayer(player.id, 'user');
     } catch (error) {
-      await handleError(error, { portal: true });
+      UI.setResumeMessage(error.message || 'Failed to create character.', 'error');
     } finally {
       submit.disabled = false;
-      submit.textContent = 'Create Character';
+      submit.textContent = 'Create';
     }
   }
 
@@ -652,41 +706,16 @@
     }
   }
 
-  function handlePortalPlayerClick(event) {
-    const button = event.target.closest('[data-portal-action]');
-    if (!button) return;
-    void activatePlayer(button.dataset.playerId || '', button.dataset.portalAction || 'user');
-  }
-
-  function handleAdminRegistryClick(event) {
-    const button = event.target.closest('[data-admin-action]');
-    if (!button) return;
-
-    const playerId = button.dataset.playerId || '';
-    const action = button.dataset.adminAction || '';
-
-    if (action === 'copy-id') {
-      navigator.clipboard?.writeText(playerId);
-      UI.appendActivity('admin-command-log', `Copied player id ${playerId}.`, 'info');
-      return;
+  async function handleResumeCharacter(event) {
+    event.preventDefault();
+    if (!ensureAuthenticated()) return;
+    const playerId = UI.$('resume-player-id')?.value.trim() || '';
+    if (!playerId) return;
+    try {
+      await activatePlayer(playerId, 'user');
+    } catch (error) {
+      UI.setResumeMessage(error.message || 'Could not find that character.', 'error');
     }
-
-    if (action === 'delete-player') {
-      const playerName = button.dataset.playerName || playerId;
-      if (!confirm(`Delete player "${playerName}"?`)) return;
-      (async () => {
-        try {
-          await API.deletePlayer(playerId);
-          UI.appendActivity('admin-command-log', `Deleted player ${playerName}.`, 'success');
-          await refreshPlayers();
-        } catch (err) {
-          UI.appendActivity('admin-command-log', `Error deleting player: ${err.message}`, 'error');
-        }
-      })();
-      return;
-    }
-
-    void activatePlayer(playerId, action === 'user' ? 'user' : 'admin');
   }
 
   function handleCommandKeydown(e) {
@@ -1305,6 +1334,36 @@
       resultEl.textContent = keepPlayers ? 'World reset! Players preserved at spawn.' : 'Full world reset complete.';
       resultEl.className = 'world-action-result';
       await refreshAll();
+    } catch (e) { resultEl.textContent = `Error: ${e.message}`; resultEl.className = 'world-action-result error'; }
+  }
+
+  async function handleExportWorld() {
+    if (!ensureAuthenticated() || !ensureAdmin()) return;
+    const worldId = state.selectedWorldId;
+    if (!worldId) { alert('Select a world first.'); return; }
+    const resultEl = UI.$('export-world-result');
+    resultEl.textContent = 'Exporting...'; resultEl.className = 'world-action-result';
+    try {
+      await API.exportWorldYaml(worldId);
+      resultEl.textContent = `Exported world "${worldId}" as YAML.`; resultEl.className = 'world-action-result';
+    } catch (e) { resultEl.textContent = `Error: ${e.message}`; resultEl.className = 'world-action-result error'; }
+  }
+
+  function handleImportWorldClick() {
+    if (!ensureAuthenticated() || !ensureAdmin()) return;
+    UI.$('import-world-file').value = '';
+    UI.$('import-world-file').click();
+  }
+
+  async function handleImportWorldFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const resultEl = UI.$('import-world-result');
+    resultEl.textContent = 'Importing...'; resultEl.className = 'world-action-result';
+    try {
+      const result = await API.importWorldYaml(file);
+      resultEl.textContent = result.summary; resultEl.className = 'world-action-result';
+      await refreshWorlds();
     } catch (e) { resultEl.textContent = `Error: ${e.message}`; resultEl.className = 'world-action-result error'; }
   }
 

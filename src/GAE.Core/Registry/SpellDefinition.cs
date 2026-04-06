@@ -1,3 +1,5 @@
+using GAE.Core.Models;
+
 namespace GAE.Core.Registry;
 
 /// <summary>
@@ -9,6 +11,7 @@ public class SpellDefinition : IRegistryEntry
     public string Id { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
+    public List<string> WorldIds { get; set; } = [WorldDefaults.DefaultWorldId];
 
     /// <summary>Spell school (evocation, restoration, illusion, conjuration, necromancy, abjuration, divination, transmutation).</summary>
     public string School { get; set; } = "evocation";

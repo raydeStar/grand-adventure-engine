@@ -1,17 +1,22 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using GAE.Core.Interfaces;
+using GAE.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace GAE.Integration.Tests;
 
 public class AdminConsoleTests : IClassFixture<GaeWebApplicationFactory>
 {
+    private readonly GaeWebApplicationFactory _factory;
     private readonly HttpClient _anonymousClient;
     private readonly HttpClient _userClient;
     private readonly HttpClient _adminClient;
 
     public AdminConsoleTests(GaeWebApplicationFactory factory)
     {
+        _factory = factory;
         _anonymousClient = factory.CreateClient();
         _userClient = factory.CreateUserClient();
         _adminClient = factory.CreateAdminClient();
@@ -26,7 +31,7 @@ public class AdminConsoleTests : IClassFixture<GaeWebApplicationFactory>
         var html = await response.Content.ReadAsStringAsync();
         Assert.Contains("Grand Adventure Engine", html);
         Assert.Contains("Admin Console", html);
-        Assert.Contains("User Workspace", html);
+        Assert.Contains("User Flow", html);
     }
 
     [Fact]
@@ -172,6 +177,36 @@ public class AdminConsoleTests : IClassFixture<GaeWebApplicationFactory>
         // Debug Blade replaces Iron Sword in main hand (weapons always go to main hand)
         Assert.Equal("Debug Blade", player.GetProperty("equipment").GetProperty("mainHand").GetProperty("name").GetString());
         Assert.Contains(player.GetProperty("statusEffects").EnumerateArray(), effect => effect.GetProperty("name").GetString() == "Inspired");
+
+        var equippedBladeId = player.GetProperty("equipment").GetProperty("mainHand").GetProperty("id").GetString();
+        var unequipResponse = await _adminClient.PostAsJsonAsync("/api/dashboard/admin/mutations/item-action", new
+        {
+            playerId = "mutation-player-1",
+            itemId = equippedBladeId,
+            action = "unequip"
+        });
+        unequipResponse.EnsureSuccessStatusCode();
+
+        playerResponse = await _userClient.GetAsync("/api/dashboard/players/mutation-player-1");
+        playerResponse.EnsureSuccessStatusCode();
+        player = await playerResponse.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(JsonValueKind.Null, player.GetProperty("equipment").GetProperty("mainHand").ValueKind);
+        Assert.Contains(player.GetProperty("inventory").EnumerateArray(), item => item.GetProperty("name").GetString() == "Debug Blade");
+
+        var removeResponse = await _adminClient.PostAsJsonAsync("/api/dashboard/admin/mutations/item-action", new
+        {
+            playerId = "mutation-player-1",
+            itemId = equippedBladeId,
+            action = "remove"
+        });
+        removeResponse.EnsureSuccessStatusCode();
+
+        playerResponse = await _userClient.GetAsync("/api/dashboard/players/mutation-player-1");
+        playerResponse.EnsureSuccessStatusCode();
+        player = await playerResponse.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.DoesNotContain(player.GetProperty("inventory").EnumerateArray(), item => item.GetProperty("name").GetString() == "Debug Blade");
     }
 
     [Fact]
@@ -218,5 +253,81 @@ public class AdminConsoleTests : IClassFixture<GaeWebApplicationFactory>
         Assert.Contains(room.GetProperty("environmentTags").EnumerateArray(), tag => tag.GetString() == "qa");
         Assert.Contains(room.GetProperty("items").EnumerateArray(), item => item.GetProperty("name").GetString() == "Inspection Token");
         Assert.Contains(room.GetProperty("npcs").EnumerateArray(), npc => npc.GetProperty("name").GetString() == "Sentinel");
+    }
+
+    [Fact]
+    public async Task AdminRegistryItemUpsert_AcceptsCamelCaseTwoHandedPayload()
+    {
+        var response = await _adminClient.PostAsJsonAsync("/api/dashboard/admin/registry/items", new
+        {
+            id = "itest-two-handed-blade",
+            name = "Integration Claymore",
+            description = "Two-handed registry upsert coverage.",
+            type = "Weapon",
+            value = 99,
+            isEquippable = true,
+            isTwoHanded = true
+        });
+        response.EnsureSuccessStatusCode();
+
+        var created = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(created.GetProperty("isTwoHanded").GetBoolean());
+
+        var getResponse = await _adminClient.GetAsync("/api/dashboard/admin/registry/items/itest-two-handed-blade");
+        getResponse.EnsureSuccessStatusCode();
+
+        var item = await getResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(item.GetProperty("isTwoHanded").GetBoolean());
+    }
+
+    [Fact]
+    public async Task AdminTeleport_ClearsActiveInteractionState()
+    {
+        await _userClient.PostAsJsonAsync("/api/dashboard/characters", new
+        {
+            playerId = "mutation-player-3",
+            name = "Conversation Target",
+            race = "Human",
+            @class = "Warrior",
+            statMethod = "StandardArray"
+        });
+
+        var talkResponse = await _userClient.PostAsJsonAsync("/api/dashboard/action", new
+        {
+            playerId = "mutation-player-3",
+            command = "talk to mara"
+        });
+        talkResponse.EnsureSuccessStatusCode();
+
+        var teleportResponse = await _adminClient.PostAsJsonAsync("/api/dashboard/admin/mutations/teleport", new
+        {
+            playerId = "mutation-player-3",
+            roomId = "qa-reset-room",
+            roomName = "QA Reset Room",
+            roomDescription = "Admin-created reset room.",
+            createRoomIfMissing = true,
+            connectFromCurrentRoom = false
+        });
+        teleportResponse.EnsureSuccessStatusCode();
+
+        using var scope = _factory.Services.CreateScope();
+        var stateManager = scope.ServiceProvider.GetRequiredService<IStateManager>();
+        var player = await stateManager.GetPlayerAsync("mutation-player-3");
+
+        Assert.NotNull(player);
+        Assert.Equal(InteractionMode.Explore, player!.Interaction.Mode);
+        Assert.Null(player.Interaction.Target);
+
+        var lookResponse = await _userClient.PostAsJsonAsync("/api/dashboard/action", new
+        {
+            playerId = "mutation-player-3",
+            command = "look"
+        });
+        lookResponse.EnsureSuccessStatusCode();
+
+        var lookResult = await lookResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var summary = lookResult.GetProperty("mechanicalSummary").GetString()!;
+        Assert.Contains("QA Reset Room", summary);
+        Assert.DoesNotContain("Conversation with", summary);
     }
 }

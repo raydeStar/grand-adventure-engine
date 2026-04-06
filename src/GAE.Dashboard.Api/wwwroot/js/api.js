@@ -89,6 +89,10 @@ const API = {
     return this.postJson(`${this.base}/admin/mutations/grant-item`, data);
   },
 
+  async itemAction(data) {
+    return this.postJson(`${this.base}/admin/mutations/item-action`, data);
+  },
+
   async applyStatus(data) {
     return this.postJson(`${this.base}/admin/mutations/status`, data);
   },
@@ -248,6 +252,32 @@ const API = {
 
   async transferPlayerToWorld(playerId, destinationWorldId) {
     return this.postJson(`${this.base}/admin/worlds/transfer`, { playerId, destinationWorldId });
+  },
+
+  async exportWorldYaml(worldId) {
+    const res = await fetch(`${this.base}/admin/worlds/${encodeURIComponent(worldId)}/export`, { credentials: 'same-origin' });
+    if (!res.ok) throw this.createHttpError(res, await this.readError(res));
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `world-${worldId}.yaml`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  },
+
+  async importWorldYaml(file) {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(`${this.base}/admin/worlds/import`, {
+      method: 'POST',
+      credentials: 'same-origin',
+      body: form
+    });
+    if (!res.ok) throw this.createHttpError(res, await this.readError(res));
+    return res.json();
   },
 
   async getJson(url) {

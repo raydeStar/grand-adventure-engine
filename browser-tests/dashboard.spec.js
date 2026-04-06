@@ -40,8 +40,9 @@ test.describe('Grand Adventure Engine dashboard', () => {
 
     await expect(page.getByRole('heading', { name: 'Grand Adventure Engine' })).toBeVisible();
     await expect(page.locator('#auth-form')).toBeVisible();
-    await expect(page.locator('#btn-new-char')).toBeDisabled();
-    await expect(page.locator('#existing-players')).toContainText('Sign in to view characters');
+    await expect(page.locator('#session-summary')).toContainText('Authentication required.');
+    await expect(page.getByRole('button', { name: 'Quick: User' })).toBeVisible();
+    await expect(page.locator('#dashboard')).toBeHidden();
   });
 
   test('user can sign in, create a character, and complete a first gameplay loop', async ({ page }, testInfo) => {
@@ -54,7 +55,7 @@ test.describe('Grand Adventure Engine dashboard', () => {
     await page.locator('#char-race').selectOption('Human');
     await page.locator('#char-class').selectOption('Warrior');
     await page.locator('#char-backstory').fill('Provisioned by the browser E2E harness.');
-    await page.getByRole('button', { name: 'Create Character' }).click();
+    await page.locator('#create-form').getByRole('button', { name: 'Create' }).click();
 
     await expect(page.locator('#dashboard')).toBeVisible();
     await expect(page.locator('#header-player')).toContainText('Playwright Hero');
@@ -90,7 +91,7 @@ test.describe('Grand Adventure Engine dashboard', () => {
     await page.locator('#char-race').selectOption('Human');
     await page.locator('#char-class').selectOption('Warrior');
     await page.locator('#char-backstory').fill('Quest E2E coverage via Playwright.');
-    await page.getByRole('button', { name: 'Create Character' }).click();
+    await page.locator('#create-form').getByRole('button', { name: 'Create' }).click();
 
     await expect(page.locator('#dashboard')).toBeVisible();
     await expect(page.locator('#room-name')).not.toBeEmpty();
@@ -125,22 +126,22 @@ test.describe('Grand Adventure Engine dashboard', () => {
   test('admin console seeds demo actors and runs command/admin workflows', async ({ page }) => {
     await login(page, 'admin');
 
-    await page.getByRole('button', { name: 'Seed Demo User + Admin' }).click();
+    await page.locator('#btn-seed-demo-admin').click();
     await expect(page.locator('#portal-message')).toContainText(/Seeded|already existed/i);
 
     await openAdminConsole(page);
     await switchAdminTab(page, 'overview');
     await expect(page.locator('#summary-cards .summary-card')).toHaveCount(6);
-
-    await page.locator('#workflow-player-select').selectOption('demo-user');
-    await page.getByRole('button', { name: 'Run User Smoke' }).click();
-    await expect(page.locator('#workflow-log')).toContainText('demo-user > look');
-
-    await switchAdminTab(page, 'players');
-    await expect(page.locator('#admin-players-table')).toContainText('demo-user');
-    await expect(page.locator('#admin-players-table')).toContainText('demo-admin');
+    await page.getByRole('button', { name: 'All Players' }).click();
+    await expect(page.locator('#overview-results [data-ov-id="demo-user"]')).toBeVisible();
+    await page.locator('#overview-results [data-ov-id="demo-user"]').click();
+    await expect(page.locator('#overview-detail-panel')).toContainText('Equipment');
+    await expect(page.locator('#overview-detail-panel')).toContainText('Inventory Items');
+    await expect(page.locator('#overview-detail-panel .dm-inline-action')).not.toHaveCount(0);
 
     await switchAdminTab(page, 'commands');
+    await expect(page.locator('#admin-player-select')).toContainText('demo-user');
+    await expect(page.locator('#admin-player-select')).toContainText('demo-admin');
     await page.locator('#admin-player-select').selectOption('demo-admin');
     await page.locator('#admin-command-input').fill('help');
     await page.getByRole('button', { name: 'Execute' }).click();
@@ -191,21 +192,36 @@ test.describe('Grand Adventure Engine dashboard', () => {
     await page.locator('#mutation-teleport-form').getByRole('button', { name: 'Teleport Player' }).click();
     await expect(page.locator('#mutation-log')).toContainText('Teleported Ari Quickstep to QA Lab');
 
-    await switchAdminTab(page, 'players');
-    await page.locator('#admin-players-table [data-player-id="demo-user"][data-admin-action="user"]').click();
+    await switchAdminTab(page, 'overview');
+    await page.getByRole('button', { name: 'All Players' }).click();
+    await expect(page.locator('#overview-results [data-ov-id="demo-user"]')).toBeVisible();
+    await page.locator('#overview-results [data-ov-id="demo-user"]').click();
+    await expect(page.locator('#overview-detail-panel')).toContainText('GM Lantern');
+    await page.locator('#btn-ov-play').click();
     await expect(page.locator('#room-name')).toContainText('QA Lab');
-    await expect(page.locator('#inventory-list')).toContainText('GM Lantern');
-    await expect(page.locator('#status-effects')).toContainText('Focused');
-    await expect(page.locator('#char-gold')).toContainText('15');
+    await expect(page.locator('#stat-bar')).toContainText('Gold:15');
+
+    const playerSnapshot = await page.evaluate(async () => {
+      const player = await API.getPlayer('demo-user');
+      return {
+        roomId: player.currentRoomId,
+        gold: player.gold,
+        inventoryText: JSON.stringify(player.inventory || []),
+        statusText: JSON.stringify(player.statusEffects || [])
+      };
+    });
+
+    expect(playerSnapshot.roomId).toBe('qa-lab');
+    expect(playerSnapshot.gold).toBe(15);
+    expect(playerSnapshot.inventoryText).toContain('GM Lantern');
+    expect(playerSnapshot.statusText).toContain('Focused');
   });
 
   test('fluid character payloads render without assuming fixed schemas', async ({ page }) => {
     await login(page, 'admin');
 
-    await page.evaluate(() => {
-      UI.showDashboard(true);
-      UI.showPortal(false);
-      UI.renderPlayer({
+    const renderSnapshot = await page.evaluate(() => {
+      const player = {
         id: 'shape-tester',
         name: 'Shape Walker',
         race: 'Synthetic',
@@ -235,15 +251,32 @@ test.describe('Grand Adventure Engine dashboard', () => {
           { label: 'Inspired', stacks: 2 },
           'Blessed'
         ]
-      });
+      };
+
+      UI.showDashboard(true);
+      UI.showPortal(false);
+      UI.renderPlayer(player);
+
+      return {
+        header: document.getElementById('header-player')?.textContent || '',
+        statBar: document.getElementById('stat-bar')?.textContent || '',
+        stats: UI.getStatEntries(player).map((entry) => entry.label),
+        details: UI.getDetailEntries(player).map((entry) => `${entry.label}:${entry.value}`),
+        equipment: Object.entries(player.equipment || {}).map(([key, value]) => `${UI.humanizeKey(key)}:${UI.summarizeEntity(value)}`),
+        inventory: (player.inventory || []).map((item) => UI.summarizeEntity(item)),
+        statusEffects: (player.statusEffects || []).map((effect) => UI.summarizeEntity(effect))
+      };
     });
 
-    await expect(page.locator('#stats-grid')).toContainText('Focus');
-    await expect(page.locator('#character-details')).toContainText('Alignment Note');
-    await expect(page.locator('#equipment-slots')).toContainText('Focus Stone');
-    await expect(page.locator('#equipment-slots')).toContainText('Cloak');
-    await expect(page.locator('#inventory-list')).toContainText('Prototype Keycard');
-    await expect(page.locator('#status-effects')).toContainText(/Inspired|Blessed/);
+    expect(renderSnapshot.header).toContain('Shape Walker');
+    expect(renderSnapshot.statBar).toContain('Gold:44');
+    expect(renderSnapshot.stats).toContain('Focus');
+    expect(renderSnapshot.details).toContain('Alignment Note:Chaotic useful');
+    expect(renderSnapshot.equipment).toContain('Focus Stone:Obsidian Focus');
+    expect(renderSnapshot.equipment).toContain('Cloak:Phase Mantle');
+    expect(renderSnapshot.inventory).toContain('Prototype Keycard');
+    expect(renderSnapshot.statusEffects).toContain('Inspired');
+    expect(renderSnapshot.statusEffects).toContain('Blessed');
   });
 
   test('room summaries collapse duplicate NPCs and items into counted labels', async ({ page }) => {
@@ -299,14 +332,15 @@ test.describe('Grand Adventure Engine dashboard', () => {
       UI.$('story-log').innerHTML = '';
       UI.appendStoryEntry({
         narration: 'The sentinels stir as you step forward.',
-        mechanicalSummary: '**QA Lab**\nA repeatable manual test fixture room.\nExits: south\nYou see: Sentinel, Sentinel\nItems: Inspection Token, Inspection Token'
+        mechanicalSummary: '**QA Lab**\n\nA repeatable manual test fixture room.\n\n  - Sentinel\n  - Sentinel\n  * Inspection Token\n  * Inspection Token\n\n**Exits:** south'
       }, 'success');
     });
 
     await expect(page.locator('#story-log')).toContainText('The sentinels stir as you step forward.');
     await expect(page.locator('#story-log')).not.toContainText('QA Lab');
     await expect(page.locator('#story-log')).not.toContainText('A repeatable manual test fixture room.');
+    await expect(page.locator('#story-log')).not.toContainText('Sentinel');
+    await expect(page.locator('#story-log')).not.toContainText('Inspection Token');
     await expect(page.locator('#story-log')).not.toContainText('Exits: south');
-    await expect(page.locator('#story-log')).not.toContainText('Inspection Token, Inspection Token');
   });
 });

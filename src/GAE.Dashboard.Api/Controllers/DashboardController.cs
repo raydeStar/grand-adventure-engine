@@ -7,6 +7,9 @@ using GAE.Engine.Data;
 using GAE.Engine.Worlds;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using YamlDotNet.Serialization;
+using YamlDotNet.Serialization.NamingConventions;
 
 namespace GAE.Dashboard.Api.Controllers;
 
@@ -30,6 +33,7 @@ public class DashboardController : ControllerBase
     private readonly IWorldContext _worldContext;
     private readonly IRealmTravelService _realmTravelService;
     private readonly IWorldRepository _worldRepository;
+    private readonly IDbContextFactory<GaeDbContext>? _dbContextFactory;
 
     private static readonly TimeSpan NarratorCacheDuration = TimeSpan.FromSeconds(60);
     private static object? _narratorCachedResult;
@@ -49,6 +53,7 @@ public class DashboardController : ControllerBase
         IWorldContext worldContext,
         IRealmTravelService realmTravelService,
         IWorldRepository worldRepository,
+        IDbContextFactory<GaeDbContext>? dbContextFactory = null,
         IDiscordNotifier? discordNotifier = null,
         ContentSeedService? contentSeed = null)
     {
@@ -65,6 +70,7 @@ public class DashboardController : ControllerBase
         _worldContext = worldContext;
         _realmTravelService = realmTravelService;
         _worldRepository = worldRepository;
+        _dbContextFactory = dbContextFactory;
         _discordNotifier = discordNotifier;
         _contentSeed = contentSeed;
     }
@@ -84,9 +90,11 @@ public class DashboardController : ControllerBase
     }
 
     [HttpGet("rooms")]
-    public async Task<IActionResult> GetRooms(CancellationToken ct)
+    public async Task<IActionResult> GetRooms([FromQuery] string? worldId = null, CancellationToken ct = default)
     {
         var rooms = await _stateManager.GetAllRoomsAsync(ct);
+        if (!string.IsNullOrWhiteSpace(worldId))
+            return Ok(rooms.Where(r => r.WorldIds.Contains(worldId, StringComparer.OrdinalIgnoreCase)));
         return Ok(rooms);
     }
 
@@ -98,9 +106,11 @@ public class DashboardController : ControllerBase
     }
 
     [HttpGet("story")]
-    public async Task<IActionResult> GetStory([FromQuery] string? playerId = null, [FromQuery] int limit = 50, CancellationToken ct = default)
+    public async Task<IActionResult> GetStory([FromQuery] string? playerId = null, [FromQuery] string? worldId = null, [FromQuery] int limit = 50, CancellationToken ct = default)
     {
         var entries = await _stateManager.GetStoryEntriesAsync(playerId, limit, ct);
+        if (!string.IsNullOrWhiteSpace(worldId))
+            return Ok(entries.Where(e => string.Equals(e.WorldId, worldId, StringComparison.OrdinalIgnoreCase)));
         return Ok(entries);
     }
 
@@ -125,6 +135,23 @@ public class DashboardController : ControllerBase
                 timestamp = DateTimeOffset.UtcNow
             }
         };
+
+        // Database health check
+        if (_dbContextFactory is not null)
+        {
+            try
+            {
+                await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+                var canConnect = await db.Database.CanConnectAsync(ct);
+                checks["health/db"] = canConnect
+                    ? new { ok = true, status = "healthy", service = "postgres" }
+                    : new { ok = false, status = "unhealthy", service = "postgres", note = "CanConnect returned false" };
+            }
+            catch (Exception ex)
+            {
+                checks["health/db"] = new { ok = false, status = "unhealthy", service = "postgres", error = ex.Message };
+            }
+        }
 
         if (_narratorCachedResult is not null && DateTimeOffset.UtcNow < _narratorCacheExpiry)
         {
@@ -322,6 +349,7 @@ public class DashboardController : ControllerBase
         var players = await _stateManager.GetAllPlayersAsync(ct);
         var rooms = await _stateManager.GetAllRoomsAsync(ct);
         var storyEntries = await _stateManager.GetStoryEntriesAsync(limit: 500, ct: ct);
+        var worlds = await _worldRepository.GetAllWorldsAsync(ct);
         var activeThreshold = DateTimeOffset.UtcNow.AddMinutes(-30);
 
         return Ok(new
@@ -331,6 +359,7 @@ public class DashboardController : ControllerBase
             roomCount = rooms.Count,
             discoveredRoomCount = rooms.Count(room => room.IsDiscovered),
             storyEntryCount = storyEntries.Count,
+            worldCount = worlds.Count,
             players = players
                 .OrderBy(player => player.Name)
                 .Select(player => new
@@ -663,6 +692,12 @@ public class DashboardController : ControllerBase
         if (lr.EnvironmentTags is not null)
             room.EnvironmentTags.AddRange(lr.EnvironmentTags);
 
+        if (lr.WorldIds is { Count: > 0 })
+        {
+            room.WorldIds.Clear();
+            room.WorldIds.AddRange(lr.WorldIds);
+        }
+
         return room;
     }
 
@@ -686,6 +721,12 @@ public class DashboardController : ControllerBase
 
         if (n.KnowledgeScopes is not null)
             npc.KnowledgeScopes.AddRange(n.KnowledgeScopes);
+
+        if (n.WorldIds is { Count: > 0 })
+        {
+            npc.WorldIds.Clear();
+            npc.WorldIds.AddRange(n.WorldIds);
+        }
 
         if (n.Loot is not null)
             npc.LootTable.AddRange(n.Loot.Select(ConvertLoreItem));
@@ -799,7 +840,13 @@ public class DashboardController : ControllerBase
         if (request.Cha.HasValue) { player.Cha = Math.Max(1, request.Cha.Value); changes.Add("cha"); }
         if (request.Luck.HasValue) { player.Luck = Math.Max(1, request.Luck.Value); changes.Add("luck"); }
 
-        if (request.CurrentRoomId is not null) { player.CurrentRoomId = request.CurrentRoomId.Trim(); changes.Add("room"); }
+        if (request.CurrentRoomId is not null)
+        {
+            var updatedRoomId = request.CurrentRoomId.Trim();
+            ResetInteractionForForcedRoomChange(player, updatedRoomId);
+            player.CurrentRoomId = updatedRoomId;
+            changes.Add("room");
+        }
         if (request.DiscordId is not null) { player.DiscordId = request.DiscordId.Trim(); changes.Add("discordId"); }
         if (request.ThreadId.HasValue) { player.ThreadId = request.ThreadId.Value == 0 ? null : request.ThreadId.Value; changes.Add("threadId"); }
 
@@ -911,6 +958,7 @@ public class DashboardController : ControllerBase
 
         await _stateManager.SaveRoomAsync(room, ct);
 
+        ResetInteractionForForcedRoomChange(player, room.Id);
         player.CurrentRoomId = room.Id;
         player.LastActiveAt = DateTimeOffset.UtcNow;
         await _stateManager.SavePlayerAsync(player, ct);
@@ -1003,6 +1051,90 @@ public class DashboardController : ControllerBase
             player,
             item,
             equippedSlot
+        });
+    }
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpPost("admin/mutations/item-action")]
+    public async Task<IActionResult> ApplyItemAction([FromBody] PlayerItemActionRequest request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.ItemId))
+            return BadRequest(new { error = "itemId is required." });
+
+        var action = request.Action.Trim().ToLowerInvariant();
+        if (action is not ("remove" or "unequip"))
+            return BadRequest(new { error = $"Unknown item action '{request.Action}'." });
+
+        var player = await RequirePlayerAsync(request.PlayerId, ct);
+        if (player is null)
+            return NotFound(new { error = $"Player '{request.PlayerId}' was not found." });
+
+        var itemId = request.ItemId.Trim();
+        var inventoryItem = player.Inventory.FirstOrDefault(i => string.Equals(i.Id, itemId, StringComparison.OrdinalIgnoreCase));
+
+        InventoryItem? item;
+        string source;
+        string summary;
+        string mutation;
+
+        if (inventoryItem is not null)
+        {
+            if (action == "unequip")
+                return BadRequest(new { error = $"Item '{inventoryItem.Name}' is already in inventory." });
+
+            player.Inventory.Remove(inventoryItem);
+            item = inventoryItem;
+            source = "inventory";
+            mutation = "remove-item";
+            summary = $"Removed {item.Name} from {player.Name}'s inventory.";
+        }
+        else
+        {
+            item = player.Equipment.AllEquipped().FirstOrDefault(i => string.Equals(i.Id, itemId, StringComparison.OrdinalIgnoreCase));
+            if (item is null)
+                return NotFound(new { error = $"Item '{request.ItemId}' was not found on player '{request.PlayerId}'." });
+
+            if (!player.Equipment.Unequip(item))
+                return Conflict(new { error = $"Unable to update item '{item.Name}'." });
+
+            source = "equipment";
+            if (action == "unequip")
+            {
+                player.Inventory.Add(item);
+                mutation = "unequip-item";
+                summary = $"Unequipped {item.Name} from {player.Name} and moved it to inventory.";
+            }
+            else
+            {
+                mutation = "remove-item";
+                summary = $"Removed equipped {item.Name} from {player.Name}.";
+            }
+        }
+
+        player.LastActiveAt = DateTimeOffset.UtcNow;
+        await _stateManager.SavePlayerAsync(player, ct);
+
+        await BroadcastAdminMutationAsync(
+            summary: summary,
+            playerId: player.Id,
+            roomId: player.CurrentRoomId,
+            data: new Dictionary<string, object?>
+            {
+                ["player"] = player,
+                ["item"] = item,
+                ["action"] = action,
+                ["source"] = source,
+                ["mutation"] = mutation
+            },
+            ct: ct);
+
+        return Ok(new
+        {
+            summary,
+            player,
+            item,
+            action,
+            source
         });
     }
 
@@ -1175,6 +1307,12 @@ public class DashboardController : ControllerBase
             summary = created ? $"Created room fixture {room.Name}." : $"Updated room fixture {room.Name}.",
             room
         });
+    }
+
+    private static void ResetInteractionForForcedRoomChange(PlayerCharacter player, string targetRoomId)
+    {
+        if (!string.Equals(player.CurrentRoomId, targetRoomId, StringComparison.OrdinalIgnoreCase))
+            player.Interaction.Reset();
     }
 
     private static string? ValidateCreateCharacterRequest(CreateCharacterRequest request)
@@ -1581,7 +1719,6 @@ public class DashboardController : ControllerBase
         {
             var options = new System.Text.Json.JsonSerializerOptions
             {
-                PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower,
                 PropertyNameCaseInsensitive = true
             };
 
@@ -1902,6 +2039,370 @@ public class DashboardController : ControllerBase
         await _worldRepository.SaveWorldAsync(world, ct);
         return Ok(new { success = true, id = portalId });
     }
+
+    // ─── World Import / Export ───
+
+    /// <summary>
+    /// Exports a world definition (metadata, rules, rooms, NPCs) as a YAML file download.
+    /// </summary>
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpGet("admin/worlds/{worldId}/export")]
+    public async Task ExportWorldYaml(string worldId, CancellationToken ct)
+    {
+        var world = await _worldRepository.GetWorldAsync(worldId, ct);
+        if (world is null)
+        {
+            Response.StatusCode = 404;
+            return;
+        }
+
+        // Gather rooms belonging to this world
+        var allRooms = await _stateManager.GetAllRoomsAsync(ct);
+        var worldRooms = allRooms
+            .Where(r => r.WorldIds.Contains(worldId, StringComparer.OrdinalIgnoreCase))
+            .ToList();
+
+        var exportDto = new WorldExportDto
+        {
+            World = new WorldExportMetadata
+            {
+                Id = world.Id,
+                Name = world.Name,
+                Description = world.Description,
+                SpawnRoomId = world.SpawnRoomId,
+                IsActive = world.IsActive,
+                Tags = world.Tags.Count > 0 ? world.Tags : null
+            },
+            Rules = world.Rules,
+            Portals = world.Portals.Count > 0 ? world.Portals.Select(p => new PortalExportDto
+            {
+                SourceRoomId = p.SourceRoomId,
+                DestinationWorldId = p.DestinationWorldId,
+                DestinationRoomId = p.DestinationRoomId,
+                Description = p.Description,
+                NarratorHint = p.NarratorHint,
+                IsAdminOnly = p.IsAdminOnly ? true : null,
+                MinLevel = p.MinLevel,
+                RequiredCompletedQuests = p.RequiredCompletedQuests.Count > 0 ? p.RequiredCompletedQuests : null
+            }).ToList() : null,
+            Rooms = worldRooms.Count > 0 ? worldRooms.Select(r => new RoomExportDto
+            {
+                Id = r.Id,
+                Name = r.Name,
+                Description = r.Description,
+                Exits = r.Exits.Count > 0 ? r.Exits : null,
+                EnvironmentTags = r.EnvironmentTags.Count > 0 ? r.EnvironmentTags : null,
+                Npcs = r.Npcs.Count > 0 ? r.Npcs.Select(n => new NpcExportDto
+                {
+                    Id = n.Id,
+                    Name = n.Name,
+                    Personality = !string.IsNullOrEmpty(n.Personality) ? n.Personality : null,
+                    Faction = n.Faction != "neutral" ? n.Faction : null,
+                    KnowledgeScopes = n.KnowledgeScopes.Count > 0 ? n.KnowledgeScopes : null,
+                    IsHostile = n.IsHostile ? true : null,
+                    IsShopkeeper = n.IsShopkeeper ? true : null,
+                    Level = n.Level > 1 ? n.Level : null,
+                    Hp = n.Hp,
+                    MaxHp = n.MaxHp,
+                    AttackBonus = n.AttackBonus,
+                    DamageDice = n.DamageDice,
+                    Defense = n.Defense,
+                    Loot = n.LootTable.Count > 0 ? n.LootTable.Select(ToItemExportDto).ToList() : null,
+                    ShopInventory = n.ShopInventory.Count > 0 ? n.ShopInventory.Select(ToItemExportDto).ToList() : null
+                }).ToList() : null,
+                Items = r.Items.Count > 0 ? r.Items.Select(ToItemExportDto).ToList() : null
+            }).ToList() : null
+        };
+
+        var serializer = new SerializerBuilder()
+            .WithNamingConvention(UnderscoredNamingConvention.Instance)
+            .ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitNull)
+            .Build();
+
+        var yaml = serializer.Serialize(exportDto);
+
+        Response.ContentType = "application/x-yaml";
+        Response.Headers["Content-Disposition"] = $"attachment; filename=\"world-{worldId}.yaml\"";
+        await Response.WriteAsync(yaml, ct);
+    }
+
+    /// <summary>
+    /// Imports a world definition from an uploaded YAML file, creating or updating the world and its rooms.
+    /// </summary>
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpPost("admin/worlds/import")]
+    [RequestSizeLimit(5 * 1024 * 1024)] // 5 MB cap
+    public async Task<IActionResult> ImportWorldYaml(IFormFile file, CancellationToken ct)
+    {
+        if (file is null || file.Length == 0)
+            return BadRequest(new { error = "A YAML file is required." });
+
+        string yamlContent;
+        using (var reader = new StreamReader(file.OpenReadStream()))
+            yamlContent = await reader.ReadToEndAsync(ct);
+
+        var deserializer = new DeserializerBuilder()
+            .WithNamingConvention(UnderscoredNamingConvention.Instance)
+            .IgnoreUnmatchedProperties()
+            .Build();
+
+        WorldExportDto dto;
+        try
+        {
+            dto = deserializer.Deserialize<WorldExportDto>(yamlContent);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = $"Invalid YAML: {ex.Message}" });
+        }
+
+        if (dto?.World is null || string.IsNullOrWhiteSpace(dto.World.Name))
+            return BadRequest(new { error = "YAML must contain a 'world' section with at least a 'name'." });
+
+        // Resolve world ID
+        var worldId = dto.World.Id?.Trim();
+        if (string.IsNullOrWhiteSpace(worldId))
+            worldId = dto.World.Name.Trim().ToLowerInvariant().Replace(' ', '_').Replace("'", "");
+
+        var existing = await _worldRepository.GetWorldAsync(worldId, ct);
+        var world = existing ?? new World { Id = worldId, CreatedBy = User.Identity?.Name ?? "admin", CreatedAt = DateTimeOffset.UtcNow };
+
+        world.Name = dto.World.Name.Trim();
+        if (dto.World.Description is not null) world.Description = dto.World.Description.Trim();
+        if (dto.World.SpawnRoomId is not null) world.SpawnRoomId = dto.World.SpawnRoomId.Trim();
+        if (dto.World.IsActive.HasValue) world.IsActive = dto.World.IsActive.Value;
+        if (dto.World.Tags is not null) world.Tags = dto.World.Tags;
+        if (dto.Rules is not null) world.Rules = dto.Rules;
+        world.UpdatedAt = DateTimeOffset.UtcNow;
+
+        // Import portals
+        if (dto.Portals is not null)
+        {
+            world.Portals.Clear();
+            foreach (var p in dto.Portals)
+            {
+                world.Portals.Add(new WorldPortal
+                {
+                    Id = Guid.NewGuid().ToString("N"),
+                    SourceWorldId = worldId,
+                    SourceRoomId = p.SourceRoomId ?? string.Empty,
+                    DestinationWorldId = p.DestinationWorldId ?? string.Empty,
+                    DestinationRoomId = p.DestinationRoomId,
+                    Description = p.Description,
+                    NarratorHint = p.NarratorHint,
+                    IsAdminOnly = p.IsAdminOnly ?? false,
+                    MinLevel = p.MinLevel,
+                    RequiredCompletedQuests = p.RequiredCompletedQuests ?? []
+                });
+            }
+        }
+
+        await _worldRepository.SaveWorldAsync(world, ct);
+
+        // Import rooms
+        var roomsImported = 0;
+        if (dto.Rooms is not null)
+        {
+            foreach (var roomDto in dto.Rooms)
+            {
+                var room = ConvertExportRoom(roomDto, worldId);
+                await _stateManager.SaveRoomAsync(room, ct);
+                roomsImported++;
+            }
+        }
+
+        return Ok(new
+        {
+            summary = existing is not null
+                ? $"Updated world '{world.Name}' with {roomsImported} room(s)."
+                : $"Created world '{world.Name}' with {roomsImported} room(s).",
+            worldId = world.Id,
+            worldName = world.Name,
+            roomsImported,
+            isUpdate = existing is not null
+        });
+    }
+
+    private static ItemExportDto ToItemExportDto(InventoryItem item) => new()
+    {
+        Id = item.Id,
+        Name = item.Name,
+        Description = !string.IsNullOrEmpty(item.Description) ? item.Description : null,
+        Type = item.Type.ToString().ToLowerInvariant(),
+        Quantity = item.Quantity > 1 ? item.Quantity : null,
+        Value = item.Value > 0 ? item.Value : null,
+        DamageDice = item.DamageDice,
+        DamageStat = item.DamageStat,
+        ArmorValue = item.ArmorValue > 0 ? item.ArmorValue : null,
+        IsEquippable = item.IsEquippable ? true : null,
+        IsConsumable = item.IsConsumable ? true : null,
+        IsTwoHanded = item.IsTwoHanded ? true : null,
+        Effect = item.Effect,
+        StatBonuses = item.StatBonuses?.Count > 0 ? item.StatBonuses : null
+    };
+
+    private static Room ConvertExportRoom(RoomExportDto dto, string worldId)
+    {
+        var room = new Room
+        {
+            Id = dto.Id ?? Guid.NewGuid().ToString("N"),
+            Name = dto.Name ?? "Unknown Room",
+            Description = dto.Description ?? "An unremarkable room.",
+            IsDiscovered = true,
+            DiscoveredAt = DateTimeOffset.UtcNow,
+            WorldIds = [worldId]
+        };
+
+        if (dto.Exits is not null)
+            foreach (var exit in dto.Exits)
+                room.Exits[exit.Key] = exit.Value;
+
+        if (dto.Npcs is not null)
+            room.Npcs.AddRange(dto.Npcs.Select(n => ConvertExportNpc(n, worldId)));
+
+        if (dto.Items is not null)
+            room.Items.AddRange(dto.Items.Select(ConvertExportItem));
+
+        if (dto.EnvironmentTags is not null)
+            room.EnvironmentTags.AddRange(dto.EnvironmentTags);
+
+        return room;
+    }
+
+    private static Npc ConvertExportNpc(NpcExportDto n, string worldId)
+    {
+        var npc = new Npc
+        {
+            Id = n.Id ?? Guid.NewGuid().ToString("N"),
+            Name = n.Name ?? "Unknown",
+            Personality = n.Personality ?? "",
+            Faction = n.Faction ?? "neutral",
+            IsHostile = n.IsHostile ?? false,
+            IsShopkeeper = n.IsShopkeeper ?? false,
+            Level = n.Level ?? 1,
+            Hp = n.Hp,
+            MaxHp = n.MaxHp,
+            AttackBonus = n.AttackBonus,
+            DamageDice = n.DamageDice,
+            Defense = n.Defense,
+            WorldIds = [worldId]
+        };
+
+        if (n.KnowledgeScopes is not null)
+            npc.KnowledgeScopes.AddRange(n.KnowledgeScopes);
+
+        if (n.Loot is not null)
+            npc.LootTable.AddRange(n.Loot.Select(ConvertExportItem));
+
+        if (n.ShopInventory is not null)
+            npc.ShopInventory.AddRange(n.ShopInventory.Select(ConvertExportItem));
+
+        return npc;
+    }
+
+    private static InventoryItem ConvertExportItem(ItemExportDto li)
+    {
+        var itemType = Enum.TryParse<ItemType>(li.Type, true, out var parsed)
+            ? parsed
+            : ItemType.Misc;
+
+        return new InventoryItem
+        {
+            Id = li.Id ?? Guid.NewGuid().ToString("N"),
+            Name = li.Name ?? "Unknown Item",
+            Description = li.Description ?? "",
+            Type = itemType,
+            Quantity = Math.Max(1, li.Quantity ?? 1),
+            Value = Math.Max(0, li.Value ?? 0),
+            DamageDice = li.DamageDice,
+            DamageStat = li.DamageStat,
+            ArmorValue = Math.Max(0, li.ArmorValue ?? 0),
+            IsEquippable = li.IsEquippable ?? InventoryItem.IsEquippableType(itemType),
+            IsConsumable = li.IsConsumable ?? itemType is ItemType.Potion or ItemType.Scroll,
+            IsTwoHanded = li.IsTwoHanded ?? false,
+            Effect = li.Effect,
+            StatBonuses = li.StatBonuses ?? new()
+        };
+    }
+}
+
+// ── World Export/Import DTOs ─────────────────────────────
+public class WorldExportDto
+{
+    public WorldExportMetadata? World { get; set; }
+    public GameRulesConfig? Rules { get; set; }
+    public List<PortalExportDto>? Portals { get; set; }
+    public List<RoomExportDto>? Rooms { get; set; }
+}
+
+public class WorldExportMetadata
+{
+    public string? Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string? SpawnRoomId { get; set; }
+    public bool? IsActive { get; set; }
+    public List<string>? Tags { get; set; }
+}
+
+public class PortalExportDto
+{
+    public string? SourceRoomId { get; set; }
+    public string? DestinationWorldId { get; set; }
+    public string? DestinationRoomId { get; set; }
+    public string? Description { get; set; }
+    public string? NarratorHint { get; set; }
+    public bool? IsAdminOnly { get; set; }
+    public int? MinLevel { get; set; }
+    public List<string>? RequiredCompletedQuests { get; set; }
+}
+
+public class RoomExportDto
+{
+    public string? Id { get; set; }
+    public string? Name { get; set; }
+    public string? Description { get; set; }
+    public Dictionary<string, string>? Exits { get; set; }
+    public List<NpcExportDto>? Npcs { get; set; }
+    public List<ItemExportDto>? Items { get; set; }
+    public List<string>? EnvironmentTags { get; set; }
+}
+
+public class NpcExportDto
+{
+    public string? Id { get; set; }
+    public string? Name { get; set; }
+    public string? Personality { get; set; }
+    public string? Faction { get; set; }
+    public List<string>? KnowledgeScopes { get; set; }
+    public bool? IsHostile { get; set; }
+    public bool? IsShopkeeper { get; set; }
+    public int? Level { get; set; }
+    public int? Hp { get; set; }
+    public int? MaxHp { get; set; }
+    public int? AttackBonus { get; set; }
+    public string? DamageDice { get; set; }
+    public int? Defense { get; set; }
+    public List<ItemExportDto>? Loot { get; set; }
+    public List<ItemExportDto>? ShopInventory { get; set; }
+}
+
+public class ItemExportDto
+{
+    public string? Id { get; set; }
+    public string? Name { get; set; }
+    public string? Description { get; set; }
+    public string? Type { get; set; }
+    public int? Quantity { get; set; }
+    public int? Value { get; set; }
+    public string? DamageDice { get; set; }
+    public string? DamageStat { get; set; }
+    public int? ArmorValue { get; set; }
+    public bool? IsEquippable { get; set; }
+    public bool? IsConsumable { get; set; }
+    public bool? IsTwoHanded { get; set; }
+    public string? Effect { get; set; }
+    public Dictionary<string, int>? StatBonuses { get; set; }
 }
 
 public class CreateWorldRequest
@@ -2054,6 +2555,13 @@ public class GrantItemRequest
     public string? Effect { get; set; }
     public Dictionary<string, int>? StatBonuses { get; set; }
     public bool AutoEquip { get; set; }
+}
+
+public class PlayerItemActionRequest
+{
+    public string PlayerId { get; set; } = string.Empty;
+    public string ItemId { get; set; } = string.Empty;
+    public string Action { get; set; } = "remove";
 }
 
 public class ApplyStatusRequest

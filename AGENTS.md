@@ -180,6 +180,57 @@ Vanilla JS, no framework. Key files:
 
 ---
 
+## Multi-World System
+
+The engine supports multiple parallel worlds, each with its own rules, stats, rooms, and NPCs.
+
+**Core architecture:**
+```
+World (id, name, rules, portals, tags)
+  → GameRulesConfig (per-world stats, combat, leveling)
+  → WorldPortal[] (connections between worlds)
+  → WorldNpcState (per-world NPC disposition)
+```
+
+**Key classes:**
+- `World` / `WorldPortal` — [src/GAE.Engine/Worlds/WorldModels.cs](src/GAE.Engine/Worlds/WorldModels.cs)
+- `IWorldRepository` / `InMemoryWorldRepository` — CRUD for worlds, portals, NPC state
+- `IWorldContext` / `WorldContextMiddleware` — scoped service resolving current world from `?worldId=`, `X-World-Id` header, or `player.ActiveWorldId`
+- `RealmTravelService` — stat translation, snapshot save/restore, portal travel
+- `WorldBootstrapService` — ensures default world exists, backfills existing content
+
+**Player world tracking:**
+- `PlayerCharacter.ActiveWorldId` — which world the player is currently in
+- `PlayerCharacter.HomeWorldId` — the player's origin world (for stat restoration)
+- `WorldStatSnapshot` — frozen copy of player stats when leaving a world
+- `StatTranslationHistory` — cached AI stat translations between world pairs
+
+**WorldNpcState:**
+NPC disposition is **world-scoped**. The same NPC in two different worlds can have different feelings toward a player. `OverlayWorldNpcStateAsync()` loads per-world disposition before conversations; `PersistWorldNpcStateAsync()` saves it after each turn.
+
+**Stat translation:**
+When a player travels to a world with different rules, `RealmTravelService.TransferPlayerAsync()`:
+1. Snapshots current stats (`WorldStatSnapshot`)
+2. Calls `NarratorService.TranslateStatsAsync()` — AI maps stats using `SemanticTags`
+3. Applies translated stats and moves player to the destination world
+4. On return home, restores original stats (with level-up adjustments)
+
+**Portal mechanics:**
+- `WorldPortal` defines connections between rooms in different worlds
+- `CommandParser.PortalTravelRegex()` detects portal commands
+- Portals can have restrictions: `MinLevel`, `RequiredCompletedQuests`, `IsAdminOnly`
+
+**Content scoping:**
+- `Room.WorldIds`, `Npc.WorldIds`, `QuestDefinition.WorldIds` — entities belong to one or more worlds
+- All registry types (`SpellDefinition`, `ClassDefinition`, `RaceDefinition`, `ItemTemplate`, `MonsterTemplate`) have `WorldIds`
+- `StoryEntry.WorldId` and `CombatState.WorldId` ensure state isolation per world
+- YAML seed files support `world_ids:` field (defaults to `["default-world"]` if omitted)
+
+**Narrator world context:**
+All four narrator methods inject world context (name, description, rules summary) via `BuildWorldContextBlock()` or `GetCurrentWorldContextBlockAsync()`. Story history is fetched with world filtering via `GetRecentStoryForRoomAsync(roomId, worldId)`.
+
+---
+
 ## Testing
 
 ```bash
@@ -221,3 +272,7 @@ npm run test:e2e:update-snapshots:safe  # Update visual baselines
 8. **NPC knowledge is scoped.** Never give an NPC access to wiki knowledge outside their `KnowledgeScopes`. Use `BuildScopedContextAsync()` for conversations, `BuildContextAsync()` for generic narration.
 9. **Dynamically generated NPCs must have KnowledgeScopes and DispositionState.** Infer scopes from faction + environment tags. Initialize DispositionState with sensible defaults (see `GenerateNpcAsync` for the pattern).
 10. **Wiki is the narrator's memory.** If a significant world event occurs (NPC death, faction shift, discovery), consider writing it to the wiki so future narrator calls have context.
+11. **WorldNpcState is world-scoped.** NPC disposition differs per world. Always call `OverlayWorldNpcStateAsync()` before conversation and `PersistWorldNpcStateAsync()` after each turn. Never assume NPC feelings are global.
+12. **Content must be world-tagged.** New rooms, NPCs, quests, and registry items must have `WorldIds` set. Default to `[WorldDefaults.DefaultWorldId]` if unspecified.
+13. **Stat translation is AI-driven.** When transferring players between worlds with different stat systems, use `RealmTravelService` — never manually map stats. SemanticTags on StatConfig guide the AI translation.
+14. **Portal restrictions are enforced.** Check `MinLevel`, `RequiredCompletedQuests`, and `IsAdminOnly` before allowing portal travel. The engine handles this in `GameEngine.TravelToWorldAsync()`.

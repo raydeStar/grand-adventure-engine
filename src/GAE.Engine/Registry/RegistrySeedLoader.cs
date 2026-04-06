@@ -160,13 +160,14 @@ public static class RegistrySeedLoader
                 ArmorValue = item.ArmorValue,
                 IsEquippable = item.IsEquippable ?? InventoryItem.IsEquippableType(ParseItemType(item.Type)),
                 IsConsumable = item.IsConsumable ?? false,
-                IsTwoHanded = item.IsTwoHanded ?? false,
+                IsTwoHanded = ResolveIsTwoHanded(item),
                 Effect = item.Effect,
                 Value = item.Value,
                 RequiredLevel = item.RequiredLevel,
                 Rarity = item.Rarity ?? "common",
                 Tags = item.Tags ?? [],
                 StatBonuses = item.StatBonuses ?? new(),
+                WorldIds = item.WorldIds is { Count: > 0 } ? item.WorldIds : [WorldDefaults.DefaultWorldId],
             });
             count++;
         }
@@ -229,15 +230,21 @@ public static class RegistrySeedLoader
             ArmorValue = item.ArmorValue,
             IsEquippable = item.IsEquippable ?? InventoryItem.IsEquippableType(itemType),
             IsConsumable = item.IsConsumable ?? false,
-            IsTwoHanded = item.IsTwoHanded ?? false,
+            IsTwoHanded = ResolveIsTwoHanded(item),
             Effect = item.Effect,
             Value = item.Value,
             StatBonuses = item.StatBonuses ?? new(),
             RequiredLevel = item.RequiredLevel,
             Rarity = string.IsNullOrWhiteSpace(item.Rarity) ? "common" : item.Rarity,
-            Tags = item.Tags ?? []
+            Tags = item.Tags ?? [],
+            WorldIds = item.WorldIds is { Count: > 0 } ? item.WorldIds : [WorldDefaults.DefaultWorldId],
         });
         count++;
+    }
+
+    private static bool ResolveIsTwoHanded(LoreItemDto item)
+    {
+        return item.IsTwoHanded ?? item.Properties?.TwoHanded ?? false;
     }
 
     private static ItemType ParseItemType(string? type) => type?.ToLowerInvariant() switch
@@ -311,5 +318,12 @@ public static class RegistrySeedLoader
         public int RequiredLevel { get; set; } = 1;
         public string? Rarity { get; set; }
         public List<string>? Tags { get; set; }
+        public List<string>? WorldIds { get; set; }
+        public LoreItemProperties? Properties { get; set; }
+    }
+
+    private class LoreItemProperties
+    {
+        public bool? TwoHanded { get; set; }
     }
 }

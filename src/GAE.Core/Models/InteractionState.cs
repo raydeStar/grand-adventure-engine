@@ -6,9 +6,13 @@ public class InteractionState
     public string? Target { get; set; }
     public List<string> Context { get; set; } = [];
     public int TurnCount { get; set; }
+    /// <summary>Counts completed player turns separately from raw context entries.</summary>
+    public int PlayerTurnCount { get; set; }
     public string? NpcDisposition { get; set; }
     public bool CanLeave { get; set; } = true;
     public string? LeaveConsequence { get; set; }
+
+    public int CurrentTurnNumber => Math.Max(1, PlayerTurnCount);
 
     /// <summary>Max context entries kept before oldest are trimmed.</summary>
     public const int MaxContextEntries = 20;
@@ -21,12 +25,19 @@ public class InteractionState
         TurnCount++;
     }
 
+    /// <summary>Advances the player-facing turn counter for the active interaction.</summary>
+    public void AdvancePlayerTurn()
+    {
+        PlayerTurnCount++;
+    }
+
     public void Reset()
     {
         Mode = InteractionMode.Explore;
         Target = null;
         Context.Clear();
         TurnCount = 0;
+        PlayerTurnCount = 0;
         NpcDisposition = null;
         CanLeave = true;
         LeaveConsequence = null;

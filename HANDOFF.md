@@ -102,3 +102,29 @@ Check the layout component in wwwroot/ for conditional rendering bugs.
 - **No database.** State is in-memory, journaled to disk. `InMemoryStateManager` / `JournaledStateManager`.
 - **WorldKnowledgeBuilder is nullable** in NarratorService — if wiki is down, narrator still works, just without lore context.
 - **Disposition is dual-layer** — always keep `Npc.Disposition` (flat string) and `Npc.DispositionState` (rich object) in sync.
+
+## Multi-World System (Branch: multi-world-phase-1)
+
+The engine supports multiple parallel worlds with independent rules, stats, and portals.
+
+### Key Components
+- **World model** — `src/GAE.Engine/Worlds/WorldModels.cs` (World, WorldPortal, WorldStatSnapshot, StatTranslationHistory, WorldNpcState)
+- **IWorldRepository** — CRUD for worlds, portals, per-world NPC state (`InMemoryWorldRepository`)
+- **IWorldContext + Middleware** — resolves current world from `?worldId=`, `X-World-Id` header, or `player.ActiveWorldId`
+- **RealmTravelService** — stat translation via AI, snapshot save/restore, portal travel with restriction checks
+- **WorldBootstrapService** — ensures `default-world` exists, backfills existing players/content
+
+### How It Works
+1. Players have `ActiveWorldId` and `HomeWorldId` on `PlayerCharacter`
+2. All entities (rooms, NPCs, quests, registry items) have `WorldIds` for content scoping
+3. `StoryEntry.WorldId` and `CombatState.WorldId` isolate state per world
+4. NPC disposition is world-scoped via `WorldNpcState` — loaded before conversation (`OverlayWorldNpcStateAsync`), saved after each turn (`PersistWorldNpcStateAsync`)
+5. Stat translation is AI-driven: `NarratorService.TranslateStatsAsync()` uses `SemanticTags` on `StatConfig`
+6. Portals connect rooms across worlds with restrictions (`MinLevel`, `RequiredCompletedQuests`, `IsAdminOnly`)
+7. All four narrator methods inject world context via `BuildWorldContextBlock()` / `GetCurrentWorldContextBlockAsync()`
+
+### Admin Dashboard
+- World CRUD (browser, create/edit form, detail panel) in the World Actions tab
+- Portal manager with CRUD forms
+- Realm transfer UI for admin teleport between worlds
+- Room list supports `?worldId=` filtering; room cards show world badges

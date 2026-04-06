@@ -50,11 +50,34 @@ public class InteractionStateMachineTests
         var result = await engine.ProcessActionAsync(PlayerId, followUp);
 
         Assert.True(result.Success);
+        Assert.Contains("[Conversation with Mara, turn 1]", result.MechanicalSummary);
 
         var player = await stateManager.GetPlayerAsync(PlayerId);
         Assert.NotNull(player);
         Assert.Equal(InteractionMode.Conversation, player.Interaction.Mode);
         Assert.True(player.Interaction.TurnCount >= 1);
+        Assert.Equal(1, player.Interaction.PlayerTurnCount);
+    }
+
+    [Fact]
+    public async Task Conversation_TurnLabels_AdvancePerPlayerInput()
+    {
+        var npc = new Npc { Id = "mara", Name = "Mara", Disposition = "friendly" };
+        var stateManager = await CreateStateAsync(npc: npc);
+        var narrator = CreateConversationNarrator(npc);
+        var engine = CreateEngine(stateManager, narrator.Object);
+
+        await engine.ProcessActionAsync(PlayerId, engine.ParseCommand(PlayerId, "talk to mara"));
+
+        var firstTurn = await engine.ProcessActionAsync(PlayerId, engine.ParseCommand(PlayerId, "hello mara"));
+        var secondTurn = await engine.ProcessActionAsync(PlayerId, engine.ParseCommand(PlayerId, "tell me more"));
+
+        Assert.Contains("[Conversation with Mara, turn 1]", firstTurn.MechanicalSummary);
+        Assert.Contains("[Conversation with Mara, turn 2]", secondTurn.MechanicalSummary);
+
+        var player = await stateManager.GetPlayerAsync(PlayerId);
+        Assert.NotNull(player);
+        Assert.Equal(2, player.Interaction.PlayerTurnCount);
     }
 
     [Fact]
@@ -177,6 +200,7 @@ public class InteractionStateMachineTests
         Assert.Equal(20, state.Context.Count);
         Assert.Equal("Entry 5", state.Context[0]); // Oldest 5 trimmed
         Assert.Equal("Entry 24", state.Context[^1]);
+        Assert.Equal(0, state.PlayerTurnCount);
     }
 
     [Fact]
@@ -188,6 +212,7 @@ public class InteractionStateMachineTests
             Target = "Goblin",
             NpcDisposition = "hostile",
             TurnCount = 5,
+            PlayerTurnCount = 3,
             CanLeave = false,
             LeaveConsequence = "flee_penalty"
         };
@@ -200,6 +225,7 @@ public class InteractionStateMachineTests
         Assert.Null(state.Target);
         Assert.Empty(state.Context);
         Assert.Equal(0, state.TurnCount);
+        Assert.Equal(0, state.PlayerTurnCount);
         Assert.Null(state.NpcDisposition);
         Assert.True(state.CanLeave);
         Assert.Null(state.LeaveConsequence);
