@@ -36,6 +36,16 @@ public partial class CommandParser
             return action;
         }
 
+        var portalTravelMatch = PortalTravelRegex().Match(input);
+        if (portalTravelMatch.Success)
+        {
+            action.Type = ActionType.TravelWorld;
+            if (portalTravelMatch.Groups["world"].Success)
+                action.Target = portalTravelMatch.Groups["world"].Value.Trim();
+            action.Parameters["travelMode"] = "portal";
+            return action;
+        }
+
         // Movement — "go north", "head south", or just bare "north", "n", etc.
         var moveMatch = MoveRegex().Match(input);
         if (moveMatch.Success)
@@ -313,6 +323,9 @@ public partial class CommandParser
 
     [GeneratedRegex(@"^(?:(?:travel|shift|jump)\s+(?:to\s+)?(?:world|realm)\s+|(?:world|realm)\s+(?:travel|shift|jump)\s+)(?<world>[a-zA-Z0-9][a-zA-Z0-9_-]{1,63})$", RegexOptions.IgnoreCase)]
     private static partial Regex TravelWorldRegex();
+
+    [GeneratedRegex(@"^(?:enter|use|take|step\s+through)\s+(?:the\s+)?(?:portal|gate|rift)(?:\s+to\s+(?<world>[a-zA-Z0-9][a-zA-Z0-9_-]{1,63}))?$", RegexOptions.IgnoreCase)]
+    private static partial Regex PortalTravelRegex();
 
     [GeneratedRegex(@"^(?<dir>north|south|east|west|up|down|n|s|e|w|u|d)$", RegexOptions.IgnoreCase)]
     private static partial Regex BareDirectionRegex();

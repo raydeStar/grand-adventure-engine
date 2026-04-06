@@ -20,6 +20,7 @@ public class GameEngine : IGameEngine
     private readonly QuestEngine? _questEngine;
     private readonly QuestTracker? _questTracker;
     private readonly IRealmTravelService? _realmTravelService;
+    private readonly IWorldRepository? _worldRepository;
 
 
     public GameEngine(
@@ -32,7 +33,8 @@ public class GameEngine : IGameEngine
         IContentRegistryService? registry = null,
         QuestEngine? questEngine = null,
         QuestTracker? questTracker = null,
-        IRealmTravelService? realmTravelService = null)
+        IRealmTravelService? realmTravelService = null,
+        IWorldRepository? worldRepository = null)
     {
         _stateManager = stateManager;
         _dice = dice;
@@ -44,6 +46,7 @@ public class GameEngine : IGameEngine
         _questEngine = questEngine;
         _questTracker = questTracker;
         _realmTravelService = realmTravelService;
+        _worldRepository = worldRepository;
     }
 
     public GameAction ParseCommand(string playerId, string rawInput)
@@ -141,7 +144,7 @@ public class GameEngine : IGameEngine
         result.RawInput = action.RawInput;
 
         // Save player state after any mutation
-        if (result.Success && result.StateChanges.Count > 0)
+        if (result.Success && result.StateChanges.Count > 0 && action.Type != ActionType.TravelWorld)
         {
             player.LastActiveAt = DateTimeOffset.UtcNow;
             await _stateManager.SavePlayerAsync(player, ct);
@@ -410,6 +413,12 @@ public class GameEngine : IGameEngine
             };
         }
 
+        if (string.Equals(action.Parameters.GetValueOrDefault("travelMode"), "portal", StringComparison.OrdinalIgnoreCase)
+            && string.IsNullOrWhiteSpace(action.Target))
+        {
+            return await ProcessPortalTravelAsync(player, action, ct);
+        }
+
         if (string.IsNullOrWhiteSpace(action.Target))
         {
             return new ActionResult
@@ -423,6 +432,79 @@ public class GameEngine : IGameEngine
         var result = await _realmTravelService.TransferPlayerAsync(player.Id, action.Target.Trim(), "player-command", ct);
         result.ActionId = action.Id;
         return result;
+    }
+
+    private async Task<ActionResult> ProcessPortalTravelAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
+    {
+        if (_realmTravelService is null)
+        {
+            return new ActionResult
+            {
+                ActionId = action.Id,
+                Success = false,
+                MechanicalSummary = "Realm travel service is not available."
+            };
+        }
+
+        if (_worldRepository is null)
+        {
+            return new ActionResult
+            {
+                ActionId = action.Id,
+                Success = false,
+                MechanicalSummary = "World repository is unavailable for portal lookup."
+            };
+        }
+
+        var world = await _worldRepository.GetWorldAsync(player.ActiveWorldId, ct);
+        if (world is null)
+        {
+            return new ActionResult
+            {
+                ActionId = action.Id,
+                Success = false,
+                MechanicalSummary = $"Current world '{player.ActiveWorldId}' was not found."
+            };
+        }
+
+        var completedQuestIds = player.QuestLog
+            .Where(q => q.Status == QuestStatus.Completed)
+            .Select(q => q.QuestId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var eligiblePortals = world.Portals
+            .Where(p => string.Equals(p.SourceWorldId, player.ActiveWorldId, StringComparison.OrdinalIgnoreCase))
+            .Where(p => string.Equals(p.SourceRoomId, player.CurrentRoomId, StringComparison.OrdinalIgnoreCase))
+            .Where(p => !p.IsAdminOnly)
+            .Where(p => !p.MinLevel.HasValue || player.Level >= p.MinLevel.Value)
+            .Where(p => p.RequiredCompletedQuests.All(q => completedQuestIds.Contains(q)))
+            .ToList();
+
+        if (eligiblePortals.Count == 0)
+        {
+            return new ActionResult
+            {
+                ActionId = action.Id,
+                Success = false,
+                MechanicalSummary = "No active portal here can be used right now."
+            };
+        }
+
+        if (eligiblePortals.Count > 1)
+        {
+            var options = string.Join(", ", eligiblePortals.Select(p => p.DestinationWorldId));
+            return new ActionResult
+            {
+                ActionId = action.Id,
+                Success = false,
+                MechanicalSummary = $"Multiple portals shimmer here. Choose a destination: {options}."
+            };
+        }
+
+        var portal = eligiblePortals[0];
+        var transfer = await _realmTravelService.TransferPlayerAsync(player.Id, portal.DestinationWorldId, "room-portal", ct);
+        transfer.ActionId = action.Id;
+        return transfer;
     }
 
     // --- Action processors ---
@@ -3466,6 +3548,7 @@ public class GameEngine : IGameEngine
                 `accept <quest>` -- Accept a quest
                 `abandon <quest>` -- Abandon an active quest
                 `travel to world <world-id>` -- Transfer to another world
+                `enter portal` -- Use an active portal in the current room
                 `help` -- Show this help message
 
                 You can also type anything in natural language and the narrator will try to interpret it!

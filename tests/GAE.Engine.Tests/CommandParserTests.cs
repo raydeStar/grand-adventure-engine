@@ -41,6 +41,19 @@ public class CommandParserTests
     }
 
     [Theory]
+    [InlineData("enter portal")]
+    [InlineData("use the portal")]
+    [InlineData("step through gate")]
+    public void Parse_PortalTravelCommands_ReturnsTravelWorldWithPortalMode(string input)
+    {
+        var action = _parser.Parse("player1", input);
+        Assert.Equal(ActionType.TravelWorld, action.Type);
+        Assert.True(action.Parameters.TryGetValue("travelMode", out var mode));
+        Assert.Equal("portal", mode);
+        Assert.Null(action.Target);
+    }
+
+    [Theory]
     [InlineData("look", ActionType.Look)]
     [InlineData("examine", ActionType.Look)]
     [InlineData("l", ActionType.Look)]
