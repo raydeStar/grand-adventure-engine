@@ -224,6 +224,14 @@ var registryService = app.Services.GetRequiredService<ContentRegistryService>();
     if (File.Exists(loreSeedPath))
         RegistrySeedLoader.LoadItemsFromLoreSeed(registryService.Items, await File.ReadAllTextAsync(loreSeedPath), app.Logger);
 
+    var dungeonItemsPath = Path.Combine(configDir, "dungeon-items.yaml");
+    if (File.Exists(dungeonItemsPath))
+        RegistrySeedLoader.LoadItems(registryService.Items, await File.ReadAllTextAsync(dungeonItemsPath), app.Logger);
+
+    var monstersPath = Path.Combine(configDir, "monsters.yaml");
+    if (File.Exists(monstersPath))
+        RegistrySeedLoader.LoadMonsters(registryService.Monsters, await File.ReadAllTextAsync(monstersPath), app.Logger);
+
     registryService.LogRegistrySummary();
 }
 

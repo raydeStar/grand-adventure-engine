@@ -22,6 +22,9 @@ test-results/
 *.swp
 *.swo
 
+## AI agent working memory (contains local paths and personal context)
+.claude/
+
 ## OS
 Thumbs.db
 .DS_Store

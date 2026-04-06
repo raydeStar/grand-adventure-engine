@@ -15,6 +15,7 @@ public class ContentRegistryService : IContentRegistryService
     public IContentRegistry<ClassDefinition> Classes { get; } = new ContentRegistry<ClassDefinition>();
     public IContentRegistry<RaceDefinition> Races { get; } = new ContentRegistry<RaceDefinition>();
     public IContentRegistry<ItemTemplate> Items { get; } = new ContentRegistry<ItemTemplate>();
+    public IContentRegistry<MonsterTemplate> Monsters { get; } = new ContentRegistry<MonsterTemplate>();
 
     public ContentRegistryService(ILogger<ContentRegistryService> logger)
     {
@@ -75,7 +76,7 @@ public class ContentRegistryService : IContentRegistryService
 
     public void LogRegistrySummary()
     {
-        _logger.LogInformation("Content registries loaded: {Spells} spells, {Classes} classes, {Races} races, {Items} items",
-            Spells.Count, Classes.Count, Races.Count, Items.Count);
+        _logger.LogInformation("Content registries loaded: {Spells} spells, {Classes} classes, {Races} races, {Items} items, {Monsters} monsters",
+            Spells.Count, Classes.Count, Races.Count, Items.Count, Monsters.Count);
     }
 }

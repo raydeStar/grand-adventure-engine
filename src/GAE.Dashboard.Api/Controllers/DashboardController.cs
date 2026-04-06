@@ -984,7 +984,8 @@ public class DashboardController : ControllerBase
                 AttackBonus = npcRequest.AttackBonus,
                 DamageDice = npcRequest.DamageDice,
                 Defense = npcRequest.Defense,
-                Level = npcRequest.Level
+                Level = npcRequest.Level,
+                KnowledgeScopes = npcRequest.KnowledgeScopes ?? []
             });
         }
 
@@ -1643,4 +1644,5 @@ public class RoomFixtureNpcRequest
     public string? DamageDice { get; set; }
     public int? Defense { get; set; }
     public int Level { get; set; } = 1;
+    public List<string>? KnowledgeScopes { get; set; }
 }

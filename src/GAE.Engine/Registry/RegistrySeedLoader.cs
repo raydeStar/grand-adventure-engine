@@ -44,6 +44,53 @@ public static class RegistrySeedLoader
         logger?.LogInformation("Loaded {Count} races from seed", seed.Races.Count);
     }
 
+    public static void LoadMonsters(IContentRegistry<MonsterTemplate> registry, string yamlContent, ILogger? logger = null)
+    {
+        var deserializer = BuildDeserializer();
+        var seed = deserializer.Deserialize<MonsterSeedFile>(yamlContent);
+        if (seed?.Monsters is null) return;
+
+        foreach (var m in seed.Monsters)
+            registry.Register(m);
+
+        logger?.LogInformation("Loaded {Count} monster templates from seed", seed.Monsters.Count);
+    }
+
+    public static void LoadItems(IContentRegistry<ItemTemplate> registry, string yamlContent, ILogger? logger = null)
+    {
+        var deserializer = BuildDeserializer();
+        var seed = deserializer.Deserialize<ItemSeedFile>(yamlContent);
+        if (seed?.Items is null) return;
+
+        int count = 0;
+        foreach (var item in seed.Items)
+        {
+            if (string.IsNullOrWhiteSpace(item.Id) || registry.Exists(item.Id)) continue;
+            registry.Register(new ItemTemplate
+            {
+                Id = item.Id,
+                Name = item.Name ?? item.Id,
+                Description = item.Description,
+                Type = ParseItemType(item.Type),
+                DamageDice = item.DamageDice,
+                DamageStat = item.DamageStat,
+                ArmorValue = item.ArmorValue,
+                IsEquippable = item.IsEquippable ?? InventoryItem.IsEquippableType(ParseItemType(item.Type)),
+                IsConsumable = item.IsConsumable ?? false,
+                IsTwoHanded = item.IsTwoHanded ?? false,
+                Effect = item.Effect,
+                Value = item.Value,
+                RequiredLevel = item.RequiredLevel,
+                Rarity = item.Rarity ?? "common",
+                Tags = item.Tags ?? [],
+                StatBonuses = item.StatBonuses ?? new(),
+            });
+            count++;
+        }
+
+        logger?.LogInformation("Loaded {Count} item templates from item seed", count);
+    }
+
     public static void LoadItemsFromLoreSeed(IContentRegistry<ItemTemplate> registry, string loreSeedYaml, ILogger? logger = null)
     {
         var deserializer = BuildDeserializer();
@@ -145,6 +192,8 @@ public static class RegistrySeedLoader
     private class SpellSeedFile { public List<SpellDefinition>? Spells { get; set; } }
     private class ClassSeedFile { public List<ClassDefinition>? Classes { get; set; } }
     private class RaceSeedFile { public List<RaceDefinition>? Races { get; set; } }
+    private class MonsterSeedFile { public List<MonsterTemplate>? Monsters { get; set; } }
+    private class ItemSeedFile { public List<LoreItemDto>? Items { get; set; } }
 
     // Lightweight DTOs to extract items from lore-seed without pulling in the full LoreSeed
     private class LoreSeedForItems
@@ -179,5 +228,8 @@ public static class RegistrySeedLoader
         public bool? IsTwoHanded { get; set; }
         public string? Effect { get; set; }
         public Dictionary<string, int>? StatBonuses { get; set; }
+        public int RequiredLevel { get; set; } = 1;
+        public string? Rarity { get; set; }
+        public List<string>? Tags { get; set; }
     }
 }

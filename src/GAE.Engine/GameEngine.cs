@@ -1973,7 +1973,11 @@ public class GameEngine : IGameEngine
             var dungeonId = $"generated_dungeon_{Guid.NewGuid().ToString("N")[..8]}";
 
             // Use the procedural generator — creates entire multi-floor dungeon upfront
-            var entrance = await DungeonGenerator.GenerateFullDungeonAsync(
+            // Pulls items and enemies from the content registry, scaling by player level
+            var generator = _registry is not null
+                ? new DungeonGenerator(_registry, _logger)
+                : throw new InvalidOperationException("Content registry is required for dungeon generation");
+            var entrance = await generator.GenerateFullDungeonAsync(
                 dungeonId, player.Level, room, _stateManager, ct);
 
             // Add exit from current room to the dungeon

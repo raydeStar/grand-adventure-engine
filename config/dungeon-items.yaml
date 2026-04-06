@@ -1,0 +1,494 @@
+# DUNGEON ITEM REGISTRY — Level-tiered equipment for dungeon generation
+# Items are organized by type and required_level for the dungeon generator to query.
+
+items:
+  # ── Tier 1 Weapons (Level 1-3) ────────────────────────────────────
+
+  - id: "rusty_shortsword"
+    name: "Rusty Shortsword"
+    description: "Pitted and dull, but functional."
+    type: "Weapon"
+    damage_dice: "1d6"
+    value: 10
+    required_level: 1
+    rarity: "common"
+    tags: ["dungeon_loot", "tier1"]
+
+  - id: "cracked_mace"
+    name: "Cracked Mace"
+    description: "Splintered handle, heavy head."
+    type: "Weapon"
+    damage_dice: "1d6"
+    value: 12
+    required_level: 1
+    rarity: "common"
+    tags: ["dungeon_loot", "tier1"]
+
+  - id: "hunting_bow"
+    name: "Hunting Bow"
+    description: "A simple shortbow with a frayed string."
+    type: "Weapon"
+    damage_dice: "1d6"
+    damage_stat: "dex"
+    value: 14
+    required_level: 1
+    rarity: "common"
+    tags: ["dungeon_loot", "tier1", "ranged"]
+
+  - id: "goblin_shiv"
+    name: "Goblin Shiv"
+    description: "A crude blade made from a sharpened bone."
+    type: "Weapon"
+    damage_dice: "1d4+1"
+    value: 6
+    required_level: 1
+    rarity: "common"
+    tags: ["dungeon_loot", "tier1"]
+
+  # ── Tier 2 Weapons (Level 3-6) ────────────────────────────────────
+
+  - id: "steel_longsword"
+    name: "Steel Longsword"
+    description: "Well-balanced and sharp."
+    type: "Weapon"
+    damage_dice: "1d8+1"
+    value: 35
+    required_level: 3
+    rarity: "uncommon"
+    tags: ["dungeon_loot", "tier2"]
+
+  - id: "war_hammer"
+    name: "War Hammer"
+    description: "Dwarven make, dented but deadly."
+    type: "Weapon"
+    damage_dice: "1d10"
+    value: 40
+    required_level: 3
+    rarity: "uncommon"
+    tags: ["dungeon_loot", "tier2"]
+
+  - id: "crossbow_of_precision"
+    name: "Crossbow of Precision"
+    description: "A finely machined crossbow with iron sights."
+    type: "Weapon"
+    damage_dice: "1d10"
+    damage_stat: "dex"
+    value: 45
+    required_level: 4
+    rarity: "uncommon"
+    tags: ["dungeon_loot", "tier2", "ranged"]
+
+  - id: "serrated_battleaxe"
+    name: "Serrated Battleaxe"
+    description: "Jagged teeth along the blade cause grievous wounds."
+    type: "Weapon"
+    damage_dice: "1d10+1"
+    value: 50
+    required_level: 4
+    rarity: "uncommon"
+    tags: ["dungeon_loot", "tier2"]
+
+  - id: "arcane_staff"
+    name: "Arcane Staff"
+    description: "A gnarled wooden staff humming with latent energy."
+    type: "Weapon"
+    damage_dice: "1d6+2"
+    damage_stat: "int"
+    value: 38
+    required_level: 3
+    rarity: "uncommon"
+    tags: ["dungeon_loot", "tier2", "magical"]
+
+  # ── Tier 3 Weapons (Level 6-9) ────────────────────────────────────
+
+  - id: "enchanted_blade"
+    name: "Enchanted Blade"
+    description: "Faint runes pulse along the edge."
+    type: "Weapon"
+    damage_dice: "2d6+2"
+    value: 120
+    required_level: 6
+    rarity: "rare"
+    tags: ["dungeon_loot", "tier3", "magical"]
+
+  - id: "flamberge_of_ash"
+    name: "Flamberge of Ash"
+    description: "The blade smolders with residual heat."
+    type: "Weapon"
+    damage_dice: "2d8"
+    value: 150
+    required_level: 7
+    rarity: "rare"
+    tags: ["dungeon_loot", "tier3", "fire"]
+
+  - id: "frostbite_halberd"
+    name: "Frostbite Halberd"
+    description: "Ice crystals form along the blade, numbing anything it touches."
+    type: "Weapon"
+    damage_dice: "2d6+3"
+    is_two_handed: true
+    value: 140
+    required_level: 6
+    rarity: "rare"
+    tags: ["dungeon_loot", "tier3", "ice"]
+
+  - id: "shadow_dagger"
+    name: "Shadow Dagger"
+    description: "A blade forged from condensed darkness. Hard to see, harder to dodge."
+    type: "Weapon"
+    damage_dice: "2d6+1"
+    damage_stat: "dex"
+    value: 130
+    required_level: 7
+    rarity: "rare"
+    tags: ["dungeon_loot", "tier3", "shadow"]
+
+  # ── Tier 4 Weapons (Level 9-12) ───────────────────────────────────
+
+  - id: "demonslayer_greatsword"
+    name: "Demonslayer Greatsword"
+    description: "Forged in hellfire, quenched in holy water."
+    type: "Weapon"
+    damage_dice: "3d8+4"
+    is_two_handed: true
+    value: 400
+    required_level: 9
+    rarity: "epic"
+    tags: ["dungeon_loot", "tier4", "holy"]
+
+  - id: "soulreaver"
+    name: "Soulreaver"
+    description: "The blade hums with stolen life force."
+    type: "Weapon"
+    damage_dice: "4d6+3"
+    value: 500
+    required_level: 10
+    rarity: "epic"
+    tags: ["dungeon_loot", "tier4", "dark"]
+
+  - id: "thundercaller_warhammer"
+    name: "Thundercaller Warhammer"
+    description: "Lightning arcs between the runes etched into the head."
+    type: "Weapon"
+    damage_dice: "3d6+5"
+    is_two_handed: true
+    value: 450
+    required_level: 9
+    rarity: "epic"
+    tags: ["dungeon_loot", "tier4", "lightning"]
+
+  - id: "voidtouched_bow"
+    name: "Voidtouched Bow"
+    description: "Arrows fired from this bow briefly phase through reality."
+    type: "Weapon"
+    damage_dice: "3d6+4"
+    damage_stat: "dex"
+    value: 420
+    required_level: 10
+    rarity: "epic"
+    tags: ["dungeon_loot", "tier4", "ranged", "void"]
+
+  # ── Tier 1 Armor (Level 1-3) ──────────────────────────────────────
+
+  - id: "leather_cap"
+    name: "Leather Cap"
+    description: "Scuffed but protective."
+    type: "Helmet"
+    armor_value: 1
+    value: 8
+    required_level: 1
+    rarity: "common"
+    tags: ["dungeon_loot", "tier1"]
+
+  - id: "padded_vest"
+    name: "Padded Vest"
+    description: "Quilted linen over leather."
+    type: "Armor"
+    armor_value: 1
+    value: 15
+    required_level: 1
+    rarity: "common"
+    tags: ["dungeon_loot", "tier1"]
+
+  - id: "wooden_buckler"
+    name: "Wooden Buckler"
+    description: "A small round shield, good for deflecting blows."
+    type: "Shield"
+    armor_value: 1
+    value: 10
+    required_level: 1
+    rarity: "common"
+    tags: ["dungeon_loot", "tier1"]
+
+  - id: "hide_boots"
+    name: "Hide Boots"
+    description: "Rough leather boots that keep your feet dry."
+    type: "Boots"
+    armor_value: 0
+    value: 5
+    required_level: 1
+    rarity: "common"
+    stat_bonuses:
+      dex: 1
+    tags: ["dungeon_loot", "tier1"]
+
+  # ── Tier 2 Armor (Level 3-6) ──────────────────────────────────────
+
+  - id: "chainmail_shirt"
+    name: "Chainmail Shirt"
+    description: "Interlocking iron rings."
+    type: "Armor"
+    armor_value: 3
+    value: 50
+    required_level: 3
+    rarity: "uncommon"
+    tags: ["dungeon_loot", "tier2"]
+
+  - id: "iron_shield"
+    name: "Iron Shield"
+    description: "Battered but solid."
+    type: "Shield"
+    armor_value: 2
+    value: 30
+    required_level: 3
+    rarity: "uncommon"
+    tags: ["dungeon_loot", "tier2"]
+
+  - id: "iron_helm"
+    name: "Iron Helm"
+    description: "A simple but effective iron helmet."
+    type: "Helmet"
+    armor_value: 2
+    value: 25
+    required_level: 3
+    rarity: "uncommon"
+    tags: ["dungeon_loot", "tier2"]
+
+  - id: "studded_leather_armor"
+    name: "Studded Leather Armor"
+    description: "Reinforced leather with iron rivets."
+    type: "Armor"
+    armor_value: 2
+    value: 35
+    required_level: 3
+    rarity: "uncommon"
+    tags: ["dungeon_loot", "tier2"]
+
+  - id: "ring_of_fortitude"
+    name: "Ring of Fortitude"
+    description: "A bronze ring that bolsters the wearer's resilience."
+    type: "Ring"
+    armor_value: 0
+    value: 40
+    required_level: 4
+    rarity: "uncommon"
+    stat_bonuses:
+      con: 2
+    tags: ["dungeon_loot", "tier2", "magical"]
+
+  # ── Tier 3 Armor (Level 6-9) ──────────────────────────────────────
+
+  - id: "plate_greaves"
+    name: "Plate Greaves"
+    description: "Forged steel leg protection."
+    type: "Armor"
+    armor_value: 5
+    value: 100
+    required_level: 6
+    rarity: "rare"
+    tags: ["dungeon_loot", "tier3"]
+
+  - id: "tower_shield"
+    name: "Tower Shield"
+    description: "Nearly as tall as you."
+    type: "Shield"
+    armor_value: 4
+    value: 90
+    required_level: 6
+    rarity: "rare"
+    tags: ["dungeon_loot", "tier3"]
+
+  - id: "mithril_chainmail"
+    name: "Mithril Chainmail"
+    description: "Impossibly light and strong. The links shimmer like starlight."
+    type: "Armor"
+    armor_value: 4
+    value: 130
+    required_level: 7
+    rarity: "rare"
+    stat_bonuses:
+      dex: 1
+    tags: ["dungeon_loot", "tier3", "magical"]
+
+  - id: "helm_of_clarity"
+    name: "Helm of Clarity"
+    description: "A silver helm that sharpens the mind."
+    type: "Helmet"
+    armor_value: 3
+    value: 110
+    required_level: 7
+    rarity: "rare"
+    stat_bonuses:
+      int: 2
+    tags: ["dungeon_loot", "tier3", "magical"]
+
+  - id: "cloak_of_shadows"
+    name: "Cloak of Shadows"
+    description: "The fabric seems to drink in light."
+    type: "Cloak"
+    armor_value: 1
+    value: 95
+    required_level: 6
+    rarity: "rare"
+    stat_bonuses:
+      dex: 2
+    tags: ["dungeon_loot", "tier3", "shadow"]
+
+  # ── Tier 4 Armor (Level 9-12) ─────────────────────────────────────
+
+  - id: "dragonscale_armor"
+    name: "Dragonscale Armor"
+    description: "Scales shimmer with inner fire."
+    type: "Armor"
+    armor_value: 7
+    value: 350
+    required_level: 9
+    rarity: "epic"
+    tags: ["dungeon_loot", "tier4", "dragon"]
+
+  - id: "aegis_of_the_fallen"
+    name: "Aegis of the Fallen"
+    description: "A shield that whispers warnings."
+    type: "Shield"
+    armor_value: 6
+    value: 300
+    required_level: 9
+    rarity: "epic"
+    tags: ["dungeon_loot", "tier4", "magical"]
+
+  - id: "crown_of_the_damned"
+    name: "Crown of the Damned"
+    description: "A circlet of dark iron that pulses with unholy power."
+    type: "Helmet"
+    armor_value: 4
+    value: 280
+    required_level: 10
+    rarity: "epic"
+    stat_bonuses:
+      int: 3
+      cha: 2
+    tags: ["dungeon_loot", "tier4", "dark"]
+
+  - id: "boots_of_the_windwalker"
+    name: "Boots of the Windwalker"
+    description: "You barely touch the ground when you walk."
+    type: "Boots"
+    armor_value: 2
+    value: 260
+    required_level: 9
+    rarity: "epic"
+    stat_bonuses:
+      dex: 3
+    tags: ["dungeon_loot", "tier4", "magical"]
+
+  - id: "ring_of_undying"
+    name: "Ring of Undying"
+    description: "A black band that pulses with faint warmth."
+    type: "Ring"
+    armor_value: 0
+    value: 400
+    required_level: 10
+    rarity: "epic"
+    stat_bonuses:
+      con: 4
+    tags: ["dungeon_loot", "tier4", "magical"]
+
+  # ── Potions (All Levels) ──────────────────────────────────────────
+
+  - id: "minor_healing_potion"
+    name: "Minor Healing Potion"
+    description: "Restores a small amount of health."
+    type: "Potion"
+    value: 10
+    is_consumable: true
+    effect: "heal:1d4+2"
+    required_level: 1
+    rarity: "common"
+    tags: ["dungeon_loot", "potion", "healing"]
+
+  - id: "healing_potion"
+    name: "Healing Potion"
+    description: "Warm red liquid that mends wounds."
+    type: "Potion"
+    value: 25
+    is_consumable: true
+    effect: "heal:2d4+4"
+    required_level: 1
+    rarity: "common"
+    tags: ["dungeon_loot", "potion", "healing"]
+
+  - id: "greater_healing_potion"
+    name: "Greater Healing Potion"
+    description: "A deep crimson elixir that heals grievous wounds."
+    type: "Potion"
+    value: 60
+    is_consumable: true
+    effect: "heal:4d4+8"
+    required_level: 5
+    rarity: "uncommon"
+    tags: ["dungeon_loot", "potion", "healing"]
+
+  - id: "supreme_healing_potion"
+    name: "Supreme Healing Potion"
+    description: "Liquid light that restores even mortal wounds."
+    type: "Potion"
+    value: 150
+    is_consumable: true
+    effect: "heal:8d4+16"
+    required_level: 9
+    rarity: "rare"
+    tags: ["dungeon_loot", "potion", "healing"]
+
+  - id: "mana_potion"
+    name: "Mana Potion"
+    description: "Shimmering blue tonic restores magical energy."
+    type: "Potion"
+    value: 20
+    is_consumable: true
+    effect: "mp:1d6+3"
+    required_level: 1
+    rarity: "common"
+    tags: ["dungeon_loot", "potion", "mana"]
+
+  - id: "greater_mana_potion"
+    name: "Greater Mana Potion"
+    description: "A swirling azure draught that surges with arcane power."
+    type: "Potion"
+    value: 50
+    is_consumable: true
+    effect: "mp:2d6+6"
+    required_level: 5
+    rarity: "uncommon"
+    tags: ["dungeon_loot", "potion", "mana"]
+
+  - id: "elixir_of_strength"
+    name: "Elixir of Strength"
+    description: "Muscles swell and veins bulge after drinking this amber brew."
+    type: "Potion"
+    value: 30
+    is_consumable: true
+    effect: "buff:str:2:3"
+    required_level: 3
+    rarity: "uncommon"
+    tags: ["dungeon_loot", "potion", "buff"]
+
+  - id: "potion_of_stoneskin"
+    name: "Potion of Stoneskin"
+    description: "Your skin hardens like granite for a short time."
+    type: "Potion"
+    value: 35
+    is_consumable: true
+    effect: "buff:def:3:3"
+    required_level: 4
+    rarity: "uncommon"
+    tags: ["dungeon_loot", "potion", "buff"]
