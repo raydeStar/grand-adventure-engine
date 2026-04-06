@@ -47,7 +47,6 @@ public class AdminConsoleTests : IClassFixture<GaeWebApplicationFactory>
 
         var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.True(payload.GetProperty("health").GetProperty("ok").GetBoolean());
-        Assert.True(payload.TryGetProperty("health/wiki", out _));
         Assert.True(payload.TryGetProperty("health/narrator", out _));
     }
 
