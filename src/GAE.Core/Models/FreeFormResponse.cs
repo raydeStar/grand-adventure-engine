@@ -10,6 +10,7 @@ public class FreeFormResponse
     public bool CombatInitiated { get; set; }
     public RoomChange? RoomChanges { get; set; }
     public InteractionUpdate? InteractionUpdate { get; set; }
+    public QuestUpdates? QuestUpdates { get; set; }
 }
 
 public class InventoryChange

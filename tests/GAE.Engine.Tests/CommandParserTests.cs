@@ -149,4 +149,50 @@ public class CommandParserTests
         Assert.Equal("player1", action.PlayerId);
         Assert.Equal("go north", action.RawInput);
     }
+
+    [Theory]
+    [InlineData("journal")]
+    [InlineData("quests")]
+    [InlineData("quest log")]
+    [InlineData("my quests")]
+    [InlineData("quest journal")]
+    [InlineData("log")]
+    public void Parse_JournalCommands_ReturnsJournal(string input)
+    {
+        var action = _parser.Parse("player1", input);
+        Assert.Equal(ActionType.Journal, action.Type);
+    }
+
+    [Theory]
+    [InlineData("quest rat problem", "rat problem")]
+    [InlineData("quest info the lost sword", "the lost sword")]
+    [InlineData("check quest brams patrol", "brams patrol")]
+    public void Parse_QuestInfoCommands_ReturnsQuestInfoWithTarget(string input, string expectedTarget)
+    {
+        var action = _parser.Parse("player1", input);
+        Assert.Equal(ActionType.QuestInfo, action.Type);
+        Assert.Equal(expectedTarget, action.Target);
+    }
+
+    [Theory]
+    [InlineData("accept rat problem", "rat problem")]
+    [InlineData("take quest the lost sword", "the lost sword")]
+    [InlineData("accept quest brams patrol", "brams patrol")]
+    public void Parse_AcceptQuestCommands_ReturnsAcceptQuestWithTarget(string input, string expectedTarget)
+    {
+        var action = _parser.Parse("player1", input);
+        Assert.Equal(ActionType.AcceptQuest, action.Type);
+        Assert.Equal(expectedTarget, action.Target);
+    }
+
+    [Theory]
+    [InlineData("abandon rat problem", "rat problem")]
+    [InlineData("drop quest the lost sword", "the lost sword")]
+    [InlineData("cancel quest brams patrol", "brams patrol")]
+    public void Parse_AbandonQuestCommands_ReturnsAbandonQuestWithTarget(string input, string expectedTarget)
+    {
+        var action = _parser.Parse("player1", input);
+        Assert.Equal(ActionType.AbandonQuest, action.Type);
+        Assert.Equal(expectedTarget, action.Target);
+    }
 }

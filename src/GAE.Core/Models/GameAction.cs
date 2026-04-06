@@ -39,5 +39,9 @@ public enum ActionType
     AimedStrike,
     Flee,
     Spellbook,
+    Journal,
+    QuestInfo,
+    AcceptQuest,
+    AbandonQuest,
     Unknown
 }

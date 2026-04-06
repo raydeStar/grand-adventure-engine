@@ -1,3 +1,4 @@
+using GAE.Core.Models;
 using GAE.Core.Registry;
 using Microsoft.Extensions.Logging;
 
@@ -16,6 +17,7 @@ public class ContentRegistryService : IContentRegistryService
     public IContentRegistry<RaceDefinition> Races { get; } = new ContentRegistry<RaceDefinition>();
     public IContentRegistry<ItemTemplate> Items { get; } = new ContentRegistry<ItemTemplate>();
     public IContentRegistry<MonsterTemplate> Monsters { get; } = new ContentRegistry<MonsterTemplate>();
+    public IContentRegistry<QuestDefinition> Quests { get; } = new ContentRegistry<QuestDefinition>();
 
     public ContentRegistryService(ILogger<ContentRegistryService> logger)
     {
@@ -76,7 +78,7 @@ public class ContentRegistryService : IContentRegistryService
 
     public void LogRegistrySummary()
     {
-        _logger.LogInformation("Content registries loaded: {Spells} spells, {Classes} classes, {Races} races, {Items} items, {Monsters} monsters",
-            Spells.Count, Classes.Count, Races.Count, Items.Count, Monsters.Count);
+        _logger.LogInformation("Content registries loaded: {Spells} spells, {Classes} classes, {Races} races, {Items} items, {Monsters} monsters, {Quests} quests",
+            Spells.Count, Classes.Count, Races.Count, Items.Count, Monsters.Count, Quests.Count);
     }
 }

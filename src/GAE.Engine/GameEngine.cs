@@ -16,6 +16,8 @@ public class GameEngine : IGameEngine
     private readonly GameRulesConfig _rules;
     private readonly ILogger<GameEngine> _logger;
     private readonly IContentRegistryService? _registry;
+    private readonly QuestEngine? _questEngine;
+    private readonly QuestTracker? _questTracker;
 
 
     public GameEngine(
@@ -25,7 +27,9 @@ public class GameEngine : IGameEngine
         CommandParser parser,
         GameRulesConfig rules,
         ILogger<GameEngine> logger,
-        IContentRegistryService? registry = null)
+        IContentRegistryService? registry = null,
+        QuestEngine? questEngine = null,
+        QuestTracker? questTracker = null)
     {
         _stateManager = stateManager;
         _dice = dice;
@@ -34,6 +38,8 @@ public class GameEngine : IGameEngine
         _rules = rules;
         _logger = logger;
         _registry = registry;
+        _questEngine = questEngine;
+        _questTracker = questTracker;
     }
 
     public GameAction ParseCommand(string playerId, string rawInput)
@@ -119,6 +125,10 @@ public class GameEngine : IGameEngine
             ActionType.Spellbook => ProcessSpellbook(player, action),
             ActionType.Help => ProcessHelp(action),
             ActionType.Map => await ProcessMapAsync(player, action, ct),
+            ActionType.Journal => ProcessJournal(player, action),
+            ActionType.QuestInfo => ProcessQuestInfo(player, action),
+            ActionType.AcceptQuest => await ProcessAcceptQuestAsync(player, action, ct),
+            ActionType.AbandonQuest => ProcessAbandonQuest(player, action),
             _ => await ProcessFreeFormActionAsync(player, action, ct)
         };
 
@@ -139,6 +149,10 @@ public class GameEngine : IGameEngine
             && action.Type != ActionType.Cast
             && action.Type != ActionType.Spellbook
             && action.Type != ActionType.Shop
+            && action.Type != ActionType.Journal
+            && action.Type != ActionType.QuestInfo
+            && action.Type != ActionType.AcceptQuest
+            && action.Type != ActionType.AbandonQuest
             && action.Type != ActionType.Unknown;
 
         if (shouldNarrate)
@@ -438,7 +452,12 @@ public class GameEngine : IGameEngine
         var oldRoomId = player.CurrentRoomId;
         player.CurrentRoomId = simpleTargetId;
 
+        // Quest tracking: room entered
+        var questUpdate = _questTracker?.OnRoomEntered(player, simpleTargetId);
+
         var moveSummary = BuildRoomSummary($"You move {direction} to **{targetRoom.Name}**.", targetRoom);
+        if (questUpdate is not null)
+            moveSummary += $"\n📜 {questUpdate}";
 
         return new ActionResult
         {
@@ -672,6 +691,12 @@ public class GameEngine : IGameEngine
             room.Npcs.Remove(target);
             player.Interaction.Reset();
             result.InteractionUpdate = new InteractionUpdate { Mode = InteractionMode.Explore, CombatStatus = "victory" };
+
+            // Quest tracking: enemy killed
+            var questUpdate = _questTracker?.OnEnemyKilled(player, target.Id, target.Name);
+            if (questUpdate is not null)
+                result.MechanicalSummary += $"\n📜 {questUpdate}";
+
             await _stateManager.SaveRoomAsync(room, ct);
         }
         else if (target.Hp.HasValue && target.Hp.Value > 0)
@@ -726,13 +751,35 @@ public class GameEngine : IGameEngine
         // Apply interaction update from AI
         ApplyInteractionUpdate(player, room, target, freeForm);
 
+        // Quest tracking: conversation started (TalkTo + Deliver objectives)
+        var questUpdate = _questTracker?.OnConversationStarted(player, target);
+
+        // Process quest updates from narrator response
+        string? narratorQuestSummary = null;
+        QuestReward? questReward = null;
+        if (freeForm.QuestUpdates is not null && _questTracker is not null)
+        {
+            (narratorQuestSummary, questReward) = _questTracker.ProcessNarratorQuestUpdates(player, freeForm.QuestUpdates, target);
+        }
+
         await _stateManager.SavePlayerAsync(player, ct);
+
+        var mechanicalSummary = $"You approach {target.Name}.";
+        if (questUpdate is not null)
+            mechanicalSummary += $"\n📜 {questUpdate}";
+        if (narratorQuestSummary is not null)
+            mechanicalSummary += $"\n📜 {narratorQuestSummary}";
+        if (questReward is not null)
+        {
+            if (questReward.Xp > 0) mechanicalSummary += $"\n⭐ +{questReward.Xp} XP";
+            if (questReward.Gold > 0) mechanicalSummary += $"\n💰 +{questReward.Gold} gold";
+        }
 
         var result = new ActionResult
         {
             ActionId = action.Id,
             Success = true,
-            MechanicalSummary = $"You approach {target.Name}.",
+            MechanicalSummary = mechanicalSummary,
             Narration = freeForm.Narration,
             InteractionUpdate = freeForm.InteractionUpdate
         };
@@ -849,6 +896,9 @@ public class GameEngine : IGameEngine
 
         await _stateManager.SaveRoomAsync(room, ct);
 
+        // Quest tracking: item collected
+        var questUpdate = _questTracker?.OnItemCollected(player, item.Id, item.Name, actualQuantity);
+
         int totalInInventory = existingStack?.Quantity ?? actualQuantity;
         var itemLabel = actualQuantity > 1 ? $"{item.Name} (x{actualQuantity})" : item.Name;
         var inventoryNote = totalInInventory > actualQuantity
@@ -863,11 +913,13 @@ public class GameEngine : IGameEngine
             takeChanges.Add(new StateChange { EntityType = "Player", EntityId = player.Id, Property = "Equipment", NewValue = $"equipped {item.Name}" });
 
 
+        var questNote = questUpdate is not null ? $"\n📜 {questUpdate}" : "";
+
         return new ActionResult
         {
             ActionId = action.Id,
             Success = true,
-            MechanicalSummary = $"{itemLabel} added to inventory.{inventoryNote}{autoEquipNote}",
+            MechanicalSummary = $"{itemLabel} added to inventory.{inventoryNote}{autoEquipNote}{questNote}",
             ItemsGained = [takenItem],
             StateChanges = takeChanges
         };
@@ -1602,6 +1654,22 @@ public class GameEngine : IGameEngine
                 foreach (var (dir, target) in freeForm.RoomChanges.NewExits)
                     room.Exits[dir] = target;
             }
+        }
+
+        // Process quest updates from narrator response
+        string? narratorQuestSummary = null;
+        QuestReward? questReward = null;
+        if (freeForm.QuestUpdates is not null && _questTracker is not null)
+        {
+            (narratorQuestSummary, questReward) = _questTracker.ProcessNarratorQuestUpdates(player, freeForm.QuestUpdates, currentNpc: null);
+        }
+
+        if (narratorQuestSummary is not null)
+            result.MechanicalSummary += $"\n📜 {narratorQuestSummary}";
+        if (questReward is not null)
+        {
+            if (questReward.Xp > 0) result.MechanicalSummary += $"\n⭐ +{questReward.Xp} XP";
+            if (questReward.Gold > 0) result.MechanicalSummary += $"\n💰 +{questReward.Gold} gold";
         }
 
         // Persist mutations
@@ -3097,6 +3165,106 @@ public class GameEngine : IGameEngine
         return sb.ToString();
     }
 
+    private ActionResult ProcessJournal(PlayerCharacter player, GameAction action)
+    {
+        if (_questEngine is null)
+            return new ActionResult { ActionId = action.Id, Success = true, MechanicalSummary = "Quest system not available." };
+
+        return new ActionResult
+        {
+            ActionId = action.Id,
+            Success = true,
+            MechanicalSummary = _questEngine.FormatJournal(player)
+        };
+    }
+
+    private ActionResult ProcessQuestInfo(PlayerCharacter player, GameAction action)
+    {
+        if (_questEngine is null || string.IsNullOrWhiteSpace(action.Target))
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "Usage: quest <name>" };
+
+        return new ActionResult
+        {
+            ActionId = action.Id,
+            Success = true,
+            MechanicalSummary = _questEngine.FormatQuestInfo(player, action.Target)
+        };
+    }
+
+    private async Task<ActionResult> ProcessAcceptQuestAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
+    {
+        if (_questEngine is null || string.IsNullOrWhiteSpace(action.Target))
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "Usage: accept <quest name>" };
+
+        // Find the quest by name or ID
+        var quest = FindQuestByNameOrId(action.Target);
+        if (quest is null)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"No quest matching '{action.Target}' found." };
+
+        // Check if the quest giver is in the current room
+        var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
+        var giver = room?.Npcs.FirstOrDefault(n => n.Id.Equals(quest.GiverId, StringComparison.OrdinalIgnoreCase));
+        if (giver is null)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "The quest giver is not in this room." };
+
+        var (canAccept, reason) = _questEngine.CanAcceptQuest(player, quest.Id);
+        if (!canAccept)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = reason ?? "Cannot accept this quest." };
+
+        var progress = _questEngine.AcceptQuest(player, quest.Id);
+        if (progress is null)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "Failed to accept quest." };
+
+        await _stateManager.SavePlayerAsync(player, ct);
+
+        return new ActionResult
+        {
+            ActionId = action.Id,
+            Success = true,
+            MechanicalSummary = $"📜 Quest accepted: **{quest.Name}**\n{quest.Description}",
+            StateChanges = [new StateChange { EntityType = "Player", EntityId = player.Id, Property = "QuestLog", NewValue = $"accepted {quest.Name}" }]
+        };
+    }
+
+    private ActionResult ProcessAbandonQuest(PlayerCharacter player, GameAction action)
+    {
+        if (_questEngine is null || string.IsNullOrWhiteSpace(action.Target))
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "Usage: abandon <quest name>" };
+
+        // Find by name or ID in the player's active quests
+        var progress = player.QuestLog.FirstOrDefault(q =>
+            q.Status == QuestStatus.Active &&
+            (q.QuestId.Equals(action.Target, StringComparison.OrdinalIgnoreCase) ||
+             (_registry?.Quests.GetById(q.QuestId)?.Name.Contains(action.Target, StringComparison.OrdinalIgnoreCase) == true)));
+
+        if (progress is null)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"No active quest matching '{action.Target}'." };
+
+        var quest = _registry?.Quests.GetById(progress.QuestId);
+        _questEngine.AbandonQuest(player, progress.QuestId);
+
+        return new ActionResult
+        {
+            ActionId = action.Id,
+            Success = true,
+            MechanicalSummary = $"📜 Quest abandoned: **{quest?.Name ?? progress.QuestId}**",
+            StateChanges = [new StateChange { EntityType = "Player", EntityId = player.Id, Property = "QuestLog", NewValue = $"abandoned {quest?.Name ?? progress.QuestId}" }]
+        };
+    }
+
+    private QuestDefinition? FindQuestByNameOrId(string nameOrId)
+    {
+        if (_registry is null) return null;
+
+        // Try by ID first
+        var quest = _registry.Quests.GetById(nameOrId);
+        if (quest is not null) return quest;
+
+        // Try by name (partial match)
+        return _registry.Quests.GetAll()
+            .FirstOrDefault(q => q.Name.Contains(nameOrId, StringComparison.OrdinalIgnoreCase));
+    }
+
     private static ActionResult ProcessHelp(GameAction action)
     {
         return new ActionResult
@@ -3127,6 +3295,10 @@ public class GameEngine : IGameEngine
                 `inventory` -- View your inventory
                 `stats` -- View your character stats
                 `map` -- View ASCII world map of discovered rooms
+                `journal` / `quests` -- View your quest journal
+                `quest <name>` -- View details for a specific quest
+                `accept <quest>` -- Accept a quest
+                `abandon <quest>` -- Abandon an active quest
                 `help` -- Show this help message
 
                 You can also type anything in natural language and the narrator will try to interpret it!

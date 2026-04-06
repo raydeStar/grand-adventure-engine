@@ -1,3 +1,5 @@
+using GAE.Core.Models;
+
 namespace GAE.Core.Registry;
 
 /// <summary>Aggregate service holding all content registries for the game world.</summary>
@@ -8,6 +10,7 @@ public interface IContentRegistryService
     IContentRegistry<RaceDefinition> Races { get; }
     IContentRegistry<ItemTemplate> Items { get; }
     IContentRegistry<MonsterTemplate> Monsters { get; }
+    IContentRegistry<QuestDefinition> Quests { get; }
 
     /// <summary>Get the maximum improvised spell power level a character can attempt.</summary>
     int GetImprovisedSpellCap(string className, int level);

@@ -1,0 +1,215 @@
+# QUEST SEED — Starter solo quests for Thornwall
+# "A quest is merely a problem that requires walking." — Sir Thaddeus
+#
+# Quests are the structural skeleton. The narrator enriches descriptions,
+# flavors objectives, and generates reward flavor text at runtime.
+# Keep authored text brief — the AI fills in the poetry.
+
+quests:
+  # ── QUEST 1: Mara's Rat Problem ──────────────────────────
+  - id: "rat_problem"
+    name: "The Rat Problem"
+    description: "Mara's cellar has a rat infestation. Clear them out before they ruin the ale supply."
+    giver_id: "innkeeper_mara"
+    turn_in_npc_id: "innkeeper_mara"
+    min_level: 1
+    is_one_time: true
+    tags: ["side", "combat", "beginner"]
+    stages:
+      - id: "kill_rats"
+        name: "Clear the Cellar"
+        description: "Descend into the tavern cellar and deal with the rat infestation."
+        narrator_hint: "The player is hunting rats in the cellar for Mara. Make it visceral and slightly comic — these are huge, angry rats."
+        objectives:
+          - id: "kill_giant_rat"
+            type: Kill
+            target_id: "giant_rat"
+            required_count: 1
+            description: "Kill the giant rat in the cellar"
+        next_stage_id: "return_to_mara"
+      - id: "return_to_mara"
+        name: "Report Back"
+        description: "Tell Mara the cellar is clear."
+        narrator_hint: "Mara is relieved and grateful. She pours the player a drink on the house."
+        objectives:
+          - id: "talk_mara_done"
+            type: TalkTo
+            target_id: "innkeeper_mara"
+            description: "Report back to Mara"
+    rewards:
+      xp: 25
+      gold: 10
+      disposition_shift: 10
+      memory_flags: ["helped-with-rats"]
+
+  # ── QUEST 2: Pete's Lost Courage ─────────────────────────
+  - id: "petes_courage"
+    name: "Pete's Lost Courage"
+    description: "Stumbling Pete swears he dropped something valuable in the back alley. Help him find it — or at least humor the old drunk."
+    giver_id: "drunk_pete"
+    turn_in_npc_id: "drunk_pete"
+    min_level: 1
+    is_one_time: true
+    tags: ["side", "fetch", "beginner"]
+    stages:
+      - id: "find_bottle"
+        name: "Search the Alley"
+        description: "Look for whatever Pete lost in the back alley."
+        narrator_hint: "Pete is vague about what he lost. The player finds a discarded bottle — Pete insists it's his 'lucky bottle' and is overjoyed."
+        objectives:
+          - id: "collect_bottle"
+            type: Collect
+            target_id: "discarded_bottle"
+            required_count: 1
+            description: "Find Pete's lost item in the back alley"
+        next_stage_id: "return_to_pete"
+      - id: "return_to_pete"
+        name: "Return to Pete"
+        description: "Bring the item back to Pete."
+        narrator_hint: "Pete is pathetically grateful. He offers a 'secret' about the dungeon as thanks — it may or may not be useful."
+        objectives:
+          - id: "deliver_to_pete"
+            type: Deliver
+            target_id: "drunk_pete"
+            required_count: 1
+            description: "Deliver the item to Pete"
+    rewards:
+      xp: 15
+      gold: 5
+      disposition_shift: 15
+      memory_flags: ["helped-pete"]
+
+  # ── QUEST 3: Guard Bram's Patrol ─────────────────────────
+  - id: "brams_patrol"
+    name: "Eyes on the Perimeter"
+    description: "Guard Bram wants someone to scout the town's perimeter and report what they see."
+    giver_id: "guard_bram"
+    turn_in_npc_id: "guard_bram"
+    min_level: 1
+    is_one_time: true
+    tags: ["side", "exploration", "beginner"]
+    stages:
+      - id: "scout_locations"
+        name: "Scout the Perimeter"
+        description: "Visit key locations around Thornwall to check for threats."
+        narrator_hint: "The player is doing a patrol on Bram's behalf. Each location should feel like a quick reconnaissance — note anything suspicious in the narration."
+        objectives:
+          - id: "visit_gate"
+            type: Discover
+            target_id: "town_gate"
+            description: "Check the eastern gate"
+          - id: "visit_alley"
+            type: Discover
+            target_id: "back_alley"
+            description: "Sweep the back alley"
+          - id: "visit_market"
+            type: Discover
+            target_id: "market_stalls"
+            description: "Check the morning market"
+        next_stage_id: "report_bram"
+      - id: "report_bram"
+        name: "Report to Bram"
+        description: "Report your findings to Guard Bram."
+        narrator_hint: "Bram is grudgingly impressed that someone actually followed through. He's still gruff, but there's a hint of respect."
+        objectives:
+          - id: "talk_bram_done"
+            type: TalkTo
+            target_id: "guard_bram"
+            description: "Report back to Guard Bram"
+    rewards:
+      xp: 30
+      gold: 15
+      disposition_shift: 10
+      memory_flags: ["militia-ally"]
+
+  # ── QUEST 4: Korga's Test ────────────────────────────────
+  - id: "korgas_test"
+    name: "Korga's Test of Steel"
+    description: "Korga Ironjaw doesn't sell her best work to just anyone. Prove you're worth her finest blade."
+    giver_id: "blacksmith_korga"
+    turn_in_npc_id: "blacksmith_korga"
+    min_level: 1
+    prerequisites: ["rat_problem"]
+    is_one_time: true
+    tags: ["side", "combat", "custom"]
+    stages:
+      - id: "prove_yourself"
+        name: "Earn Korga's Respect"
+        description: "Show Korga you're a real fighter, not just another tourist with coin."
+        narrator_hint: "Korga is testing the player's mettle. She wants to see combat experience and toughness, not just gold."
+        objectives:
+          - id: "impress_korga"
+            type: Custom
+            custom_condition: "The player has demonstrated combat prowess or told a convincing war story to Korga during conversation. Bragging without substance should not count."
+            description: "Impress Korga with your fighting spirit"
+        next_stage_id: "claim_reward"
+      - id: "claim_reward"
+        name: "Claim Your Prize"
+        description: "Talk to Korga to receive your reward."
+        narrator_hint: "Korga gives a rare, approving nod. She unlocks the special stock."
+        objectives:
+          - id: "talk_korga_reward"
+            type: TalkTo
+            target_id: "blacksmith_korga"
+            description: "Speak with Korga to claim your reward"
+    rewards:
+      xp: 40
+      gold: 0
+      items:
+        - item_id: "iron_sword"
+          quantity: 1
+      disposition_shift: 15
+      memory_flags: ["korga-approved"]
+
+  # ── QUEST 5: Lena's Brother ──────────────────────────────
+  - id: "lenas_brother"
+    name: "Into the Whisperwood"
+    description: "Gate Guard Lena's brother went into the forest and never came back. She wants answers."
+    giver_id: "gate_guard_lena"
+    turn_in_npc_id: "gate_guard_lena"
+    min_level: 1
+    is_one_time: true
+    tags: ["main", "exploration", "story"]
+    stages:
+      - id: "enter_forest"
+        name: "Search the Forest Edge"
+        description: "Head into the Whisperwood and look for signs of Lena's brother."
+        narrator_hint: "The player is searching for a missing militia member. The forest is eerie and threatening. Build tension — something is wrong here."
+        objectives:
+          - id: "reach_forest"
+            type: Discover
+            target_id: "forest_edge"
+            description: "Enter the Whisperwood"
+    rewards:
+      xp: 50
+      gold: 20
+      disposition_shift: 20
+      memory_flags: ["lena-trusted", "!whisperwood-explorer"]
+
+  # ── QUEST 6: Father Aldric's Blessing ────────────────────
+  - id: "aldrics_blessing"
+    name: "The Silver Light's Favor"
+    description: "Father Aldric senses darkness gathering. He wants to bless a worthy adventurer before they face what's coming."
+    giver_id: "priest_aldric"
+    turn_in_npc_id: "priest_aldric"
+    min_level: 1
+    is_one_time: true
+    tags: ["side", "story", "custom"]
+    stages:
+      - id: "seek_blessing"
+        name: "Receive the Blessing"
+        description: "Speak with Father Aldric about the darkness he senses."
+        narrator_hint: "Aldric is earnest and slightly manic. He genuinely believes the player is chosen. The blessing ceremony should feel real and weighty despite Aldric's eccentricities."
+        objectives:
+          - id: "listen_aldric"
+            type: Custom
+            custom_condition: "The player has listened to Father Aldric's concerns about the darkness and accepted his offer of a blessing during conversation. Simply asking about shop inventory does not count."
+            description: "Listen to Aldric's warning and accept his blessing"
+    rewards:
+      xp: 20
+      gold: 0
+      items:
+        - item_id: "silver_holy_symbol"
+          quantity: 1
+      disposition_shift: 15
+      memory_flags: ["blessed-by-aldric"]

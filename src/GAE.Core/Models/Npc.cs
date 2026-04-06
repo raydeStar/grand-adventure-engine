@@ -20,6 +20,9 @@ public class Npc
     public bool IsShopkeeper { get; set; }
     public List<InventoryItem> ShopInventory { get; set; } = [];
     public Dictionary<string, string> Dialogue { get; set; } = new();
+
+    /// <summary>Quest definition IDs this NPC can offer to players.</summary>
+    public List<string> QuestsOffered { get; set; } = [];
 }
 
 public class NpcDispositionState

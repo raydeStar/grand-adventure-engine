@@ -56,6 +56,92 @@ public static class RegistrySeedLoader
         logger?.LogInformation("Loaded {Count} monster templates from seed", seed.Monsters.Count);
     }
 
+    public static void LoadQuests(IContentRegistry<QuestDefinition> registry, IContentRegistry<ItemTemplate> items, string yamlContent, ILogger? logger = null)
+    {
+        var deserializer = BuildDeserializer();
+        var seed = deserializer.Deserialize<QuestSeedFile>(yamlContent);
+        if (seed?.Quests is null) return;
+
+        var errors = new List<string>();
+        var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var quest in seed.Quests)
+        {
+            // Duplicate quest ID check
+            if (!seenIds.Add(quest.Id))
+            {
+                errors.Add($"Duplicate quest ID: '{quest.Id}'");
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(quest.GiverId))
+                errors.Add($"Quest '{quest.Id}' has no giver_id");
+
+            if (quest.IsPartyQuest)
+                logger?.LogWarning("Quest '{QuestId}' is marked as party quest — party quests are not implemented in v1", quest.Id);
+
+            // Validate stages
+            var stageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var stage in quest.Stages)
+            {
+                if (!stageIds.Add(stage.Id))
+                    errors.Add($"Quest '{quest.Id}' has duplicate stage ID: '{stage.Id}'");
+
+                if (stage.NextStageId is not null && !quest.Stages.Any(s => s.Id.Equals(stage.NextStageId, StringComparison.OrdinalIgnoreCase)))
+                    errors.Add($"Quest '{quest.Id}' stage '{stage.Id}' references unknown next_stage_id: '{stage.NextStageId}'");
+
+                // Validate objectives
+                var objIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var obj in stage.Objectives)
+                {
+                    if (!objIds.Add(obj.Id))
+                        errors.Add($"Quest '{quest.Id}' stage '{stage.Id}' has duplicate objective ID: '{obj.Id}'");
+
+                    if (obj.Type == ObjectiveType.Custom && string.IsNullOrWhiteSpace(obj.CustomCondition))
+                        errors.Add($"Quest '{quest.Id}' objective '{obj.Id}' is Custom but has no custom_condition");
+                }
+            }
+
+            // Check for circular stage references
+            if (HasCircularStages(quest))
+                errors.Add($"Quest '{quest.Id}' has circular stage references");
+
+            // Validate reward item IDs exist in the item registry
+            foreach (var rewardItem in quest.Rewards.Items)
+            {
+                if (!items.Exists(rewardItem.ItemId))
+                    logger?.LogWarning("Quest '{QuestId}' reward references unknown item: '{ItemId}'", quest.Id, rewardItem.ItemId);
+            }
+
+            if (errors.Count == 0 || !errors.Any(e => e.Contains(quest.Id)))
+                registry.Register(quest);
+        }
+
+        if (errors.Count > 0)
+        {
+            foreach (var error in errors)
+                logger?.LogError("Quest seed validation error: {Error}", error);
+        }
+
+        logger?.LogInformation("Loaded {Count} quest definitions from seed", registry.Count);
+    }
+
+    private static bool HasCircularStages(QuestDefinition quest)
+    {
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var stage in quest.Stages)
+        {
+            visited.Clear();
+            var current = stage.Id;
+            while (current is not null)
+            {
+                if (!visited.Add(current)) return true;
+                current = quest.Stages.FirstOrDefault(s => s.Id.Equals(current, StringComparison.OrdinalIgnoreCase))?.NextStageId;
+            }
+        }
+        return false;
+    }
+
     public static void LoadItems(IContentRegistry<ItemTemplate> registry, string yamlContent, ILogger? logger = null)
     {
         var deserializer = BuildDeserializer();
@@ -194,6 +280,7 @@ public static class RegistrySeedLoader
     private class RaceSeedFile { public List<RaceDefinition>? Races { get; set; } }
     private class MonsterSeedFile { public List<MonsterTemplate>? Monsters { get; set; } }
     private class ItemSeedFile { public List<LoreItemDto>? Items { get; set; } }
+    private class QuestSeedFile { public List<QuestDefinition>? Quests { get; set; } }
 
     // Lightweight DTOs to extract items from lore-seed without pulling in the full LoreSeed
     private class LoreSeedForItems

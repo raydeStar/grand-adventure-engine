@@ -16,15 +16,17 @@ public class NarratorService : INarratorService
     private readonly ILogger<NarratorService> _logger;
     private readonly WorldKnowledgeBuilder? _knowledge;
     private readonly IConversationLogger? _conversationLogger;
+    private readonly IContentRegistryService? _registry;
     private string _model;
     private bool _modelResolved;
 
-    public NarratorService(HttpClient httpClient, ILogger<NarratorService> logger, string model = "default", WorldKnowledgeBuilder? knowledge = null, IConversationLogger? conversationLogger = null)
+    public NarratorService(HttpClient httpClient, ILogger<NarratorService> logger, string model = "default", WorldKnowledgeBuilder? knowledge = null, IConversationLogger? conversationLogger = null, IContentRegistryService? registry = null)
     {
         _httpClient = httpClient;
         _logger = logger;
         _knowledge = knowledge;
         _conversationLogger = conversationLogger;
+        _registry = registry;
         _model = model;
         _modelResolved = !string.Equals(model, "default", StringComparison.OrdinalIgnoreCase);
     }
@@ -693,7 +695,8 @@ public class NarratorService : INarratorService
               "inventoryChanges": [{ "action": "add", "itemName": "Rusty Key", "quantity": 1 }],
               "entityChanges": [{ "entityType": "npc", "action": "remove", "name": "Goblin Scout", "properties": {} }],
               "combatInitiated": false,
-              "roomChanges": null
+              "roomChanges": null,
+              "questUpdates": null
             }
 
             Fields:
@@ -702,6 +705,7 @@ public class NarratorService : INarratorService
             - entityChanges: array of {entityType: "npc"|"item", action: "add"|"remove"|"update", name, properties}. Empty array if none.
             - combatInitiated: true only if the action triggers combat with someone.
             - roomChanges: null unless the action changes the room description or reveals new exits.
+            - questUpdates: null unless the action completes a custom quest objective. Shape: { "completedCustomObjectives": ["objective_id"] }.
             """;
 
         var recentLines = recentStory.Count > 0
@@ -730,6 +734,7 @@ public class NarratorService : INarratorService
             : "None";
 
         var loreContext = await GetRoomKnowledgeAsync(room, ct);
+        var questContext = BuildFreeFormQuestContext(player);
 
         var userPrompt = $"""
             Character Definition Card
@@ -757,6 +762,7 @@ public class NarratorService : INarratorService
             Recent history:
             {recentLines}
             {loreContext}
+            {questContext}
 
             Player action: "{rawInput}"
             """;
@@ -856,6 +862,17 @@ public class NarratorService : INarratorService
             - Faction: {{npc.Faction}}
             - Current Disposition: {{interaction.NpcDisposition ?? npc.Disposition}}
 
+            QUEST INTERACTIONS:
+            This NPC may offer quests, accept quest turn-ins, or discuss quest progress.
+            - If the player ACCEPTS a quest during conversation, return "acceptedQuestId" with the quest ID.
+            - If the player DECLINES a quest, return "declinedQuestId" with the quest ID.
+            - If the player is TURNING IN a completed quest, return "turnInQuestId" with the quest ID.
+            - If a custom objective is met during this conversation, list its ID in "completedCustomObjectives".
+            - If you provide a quest, write a rich "questDescription" (2-3 sentences, in character).
+            - For stage transitions, write a "stageDescription" capturing the narrative beat.
+            - NEVER invent quest IDs. Only use IDs from the QUEST CONTEXT provided.
+            - If the NPC has no quests or the player doesn't ask, omit questUpdates entirely.
+
             Conversation history:
             {{string.Join("\n", interaction.Context.TakeLast(15))}}
 
@@ -877,11 +894,13 @@ public class NarratorService : INarratorService
                 "enemyUpdate": {},
                 "memoryFlags": [],
                 "factionMoodShift": 0
-              }
+              },
+              "questUpdates": null
             }
             """;
 
         var npcKnowledge = await GetNpcKnowledgeAsync(npc, room, ct);
+        var questContext = BuildConversationQuestContext(npc, player);
 
         var userPrompt = $$"""
             Player: {{player.Name}} (Lv.{{player.Level}} {{player.Race}} {{player.Class}})
@@ -890,6 +909,7 @@ public class NarratorService : INarratorService
             Turn {{interaction.TurnCount + 1}} of conversation with {{npc.Name}}.
             Player says/does: "{{rawInput}}"
             {{npcKnowledge}}
+            {{questContext}}
             """;
 
         string? rawCompletion = null;
@@ -1278,7 +1298,7 @@ public class NarratorService : INarratorService
         // Known keys in FreeFormResponse (camelCase as serialized)
         string[] nextKeys = ["success", "statChanges", "inventoryChanges",
                              "entityChanges", "combatInitiated", "roomChanges",
-                             "interactionUpdate"];
+                             "interactionUpdate", "questUpdates"];
 
         int bestNextKey = json.Length;
 
@@ -1674,6 +1694,128 @@ public class NarratorService : INarratorService
             _logger.LogWarning(ex, "NPC knowledge context build failed for {NpcId}", npc.Id);
             return "";
         }
+    }
+
+    /// <summary>
+    /// Builds quest context for conversation prompts — what quests this NPC offers,
+    /// what quests the player has active that involve this NPC, and turn-in readiness.
+    /// </summary>
+    private string BuildConversationQuestContext(Npc npc, PlayerCharacter player)
+    {
+        if (_registry is null) return "";
+
+        var sb = new StringBuilder();
+        var offeredQuests = new List<QuestDefinition>();
+
+        // Quests this NPC offers
+        foreach (var questId in npc.QuestsOffered)
+        {
+            var quest = _registry.Quests.GetById(questId);
+            if (quest is not null)
+                offeredQuests.Add(quest);
+        }
+
+        // Player's active quests involving this NPC (as giver or turn-in target)
+        var relevantActive = player.QuestLog
+            .Where(q => q.Status == QuestStatus.Active || q.Status == QuestStatus.ReadyToTurnIn)
+            .Select(q => (Progress: q, Definition: _registry.Quests.GetById(q.QuestId)))
+            .Where(x => x.Definition is not null &&
+                   (x.Definition!.GiverId.Equals(npc.Id, StringComparison.OrdinalIgnoreCase) ||
+                    (x.Definition.TurnInNpcId ?? x.Definition.GiverId).Equals(npc.Id, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+        if (offeredQuests.Count == 0 && relevantActive.Count == 0)
+            return "";
+
+        sb.AppendLine("\nQUEST CONTEXT:");
+
+        // Available quests from this NPC
+        foreach (var quest in offeredQuests)
+        {
+            var alreadyActive = player.QuestLog.Any(q => q.QuestId == quest.Id && q.Status == QuestStatus.Active);
+            var alreadyCompleted = player.QuestLog.Any(q => q.QuestId == quest.Id && q.Status == QuestStatus.Completed);
+
+            if (alreadyCompleted)
+                continue; // Don't re-offer completed quests
+
+            if (alreadyActive)
+            {
+                sb.AppendLine($"- Quest \"{quest.Name}\" (id: {quest.Id}): Player has already accepted this quest.");
+            }
+            else
+            {
+                sb.AppendLine($"- Quest \"{quest.Name}\" (id: {quest.Id}): {quest.Description}");
+                var firstStageHint = quest.Stages.FirstOrDefault()?.NarratorHint;
+                if (!string.IsNullOrWhiteSpace(firstStageHint))
+                    sb.AppendLine($"  Narrator hint: {firstStageHint}");
+            }
+        }
+
+        // Active/ready-to-turn-in quests
+        foreach (var (progress, definition) in relevantActive)
+        {
+            if (progress.Status == QuestStatus.ReadyToTurnIn)
+            {
+                sb.AppendLine($"- Quest \"{definition!.Name}\" (id: {definition.Id}): READY TO TURN IN. The player has completed all objectives.");
+                sb.AppendLine($"  If the player mentions completing this quest, return turnInQuestId: \"{definition.Id}\"");
+            }
+            else
+            {
+                var stage = definition!.Stages.FirstOrDefault(s => s.Id == progress.CurrentStageId);
+                if (stage is not null)
+                {
+                    sb.AppendLine($"- Quest \"{definition.Name}\" (id: {definition.Id}): In progress, stage \"{stage.Name}\".");
+                    sb.AppendLine($"  {stage.Description}");
+                }
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Builds quest context for the free-form narrator prompt — lists active quests and progress
+    /// so the AI can reference them when narrating free-form actions.
+    /// </summary>
+    private string BuildFreeFormQuestContext(PlayerCharacter player)
+    {
+        if (_registry is null) return "";
+
+        var activeQuests = player.QuestLog
+            .Where(q => q.Status == QuestStatus.Active || q.Status == QuestStatus.ReadyToTurnIn)
+            .Select(q => (Progress: q, Definition: _registry.Quests.GetById(q.QuestId)))
+            .Where(x => x.Definition is not null)
+            .ToList();
+
+        if (activeQuests.Count == 0) return "";
+
+        var sb = new StringBuilder();
+        sb.AppendLine("\nACTIVE QUESTS:");
+
+        foreach (var (progress, definition) in activeQuests)
+        {
+            if (progress.Status == QuestStatus.ReadyToTurnIn)
+            {
+                sb.AppendLine($"- \"{definition!.Name}\" (id: {definition.Id}): All objectives complete — ready to turn in.");
+            }
+            else
+            {
+                var stage = definition!.Stages.FirstOrDefault(s => s.Id == progress.CurrentStageId);
+                if (stage is not null)
+                {
+                    sb.AppendLine($"- \"{definition.Name}\" (id: {definition.Id}): Stage \"{stage.Name}\" — {stage.Description}");
+                    foreach (var obj in stage.Objectives)
+                    {
+                        var objProgress = progress.Objectives.FirstOrDefault(o => o.ObjectiveId == obj.Id);
+                        var status = objProgress?.IsComplete == true ? "✓" : $"{objProgress?.CurrentCount ?? 0}/{obj.RequiredCount}";
+                        sb.AppendLine($"  • {obj.Description ?? obj.Id} [{status}]");
+                    }
+                }
+            }
+        }
+
+        sb.AppendLine("If the player's action completes a custom quest objective, include it in questUpdates.completedCustomObjectives.");
+        return sb.ToString();
     }
 
     private static bool TryBuildDeterministicLookNarration(NarratorContext context, out string narration)

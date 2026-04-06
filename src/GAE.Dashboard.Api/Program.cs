@@ -90,6 +90,8 @@ builder.Services.AddSingleton<CommandParser>();
 builder.Services.AddSingleton<ContentRegistryService>();
 builder.Services.AddSingleton<IContentRegistryService>(sp => sp.GetRequiredService<ContentRegistryService>());
 
+builder.Services.AddSingleton<QuestEngine>();
+builder.Services.AddSingleton<QuestTracker>();
 builder.Services.AddSingleton<IGameEngine, GameEngine>();
 
 // Narrator — LM Studio HTTP client
@@ -107,7 +109,8 @@ builder.Services.AddSingleton<INarratorService>(sp =>
     var logger = sp.GetRequiredService<ILogger<NarratorService>>();
     var knowledge = sp.GetRequiredService<WorldKnowledgeBuilder>();
     var conversationLogger = sp.GetRequiredService<IConversationLogger>();
-    return new NarratorService(httpClient, logger, lmStudioModel, knowledge, conversationLogger);
+    var registry = sp.GetRequiredService<IContentRegistryService>();
+    return new NarratorService(httpClient, logger, lmStudioModel, knowledge, conversationLogger, registry);
 });
 
 // Discord bot
@@ -231,6 +234,10 @@ var registryService = app.Services.GetRequiredService<ContentRegistryService>();
     var monstersPath = Path.Combine(configDir, "monsters.yaml");
     if (File.Exists(monstersPath))
         RegistrySeedLoader.LoadMonsters(registryService.Monsters, await File.ReadAllTextAsync(monstersPath), app.Logger);
+
+    var questsPath = Path.Combine(configDir, "quests.yaml");
+    if (File.Exists(questsPath))
+        RegistrySeedLoader.LoadQuests(registryService.Quests, registryService.Items, await File.ReadAllTextAsync(questsPath), app.Logger);
 
     registryService.LogRegistrySummary();
 }

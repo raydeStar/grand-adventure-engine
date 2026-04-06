@@ -391,9 +391,9 @@ public class DungeonGenerator
 
     private static ItemTemplate GenerateWeaponTemplate(DifficultyProfile profile)
     {
-        var prefix = Pick(WeaponPrefixes);
-        var noun = Pick(WeaponNouns);
-        var name = $"{prefix} {noun}";
+        var tierIndex = Array.IndexOf(Profiles, profile);
+        var name = Pick(TierWeaponNames[tierIndex]);
+        var desc = Pick(TierWeaponDescs[tierIndex]);
         var dice = Pick(profile.DamageDice);
         var level = Rng.Next(profile.MinLevel, profile.MaxLevel + 1);
         var value = profile.Tier switch
@@ -415,7 +415,7 @@ public class DungeonGenerator
         {
             Id = $"gen_wpn_{Guid.NewGuid().ToString("N")[..8]}",
             Name = name,
-            Description = $"A {rarity} weapon forged for dungeon combat.",
+            Description = desc,
             Type = ItemType.Weapon,
             DamageDice = dice,
             IsEquippable = true,
@@ -428,9 +428,9 @@ public class DungeonGenerator
 
     private static ItemTemplate GenerateArmorTemplate(DifficultyProfile profile)
     {
-        var prefix = Pick(ArmorPrefixes);
-        var noun = Pick(ArmorNouns);
-        var name = $"{prefix} {noun}";
+        var tierIndex = Array.IndexOf(Profiles, profile);
+        var name = Pick(TierArmorNames[tierIndex]);
+        var desc = Pick(TierArmorDescs[tierIndex]);
         var level = Rng.Next(profile.MinLevel, profile.MaxLevel + 1);
 
         var (armorValue, itemType) = profile.Tier switch
@@ -459,7 +459,7 @@ public class DungeonGenerator
         {
             Id = $"gen_arm_{Guid.NewGuid().ToString("N")[..8]}",
             Name = name,
-            Description = $"A {rarity} piece of protective equipment.",
+            Description = desc,
             Type = itemType,
             ArmorValue = armorValue,
             IsEquippable = true,

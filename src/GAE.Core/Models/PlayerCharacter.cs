@@ -39,6 +39,9 @@ public class PlayerCharacter
     public List<StatusEffect> StatusEffects { get; set; } = [];
     public List<LearnedSpell> Spellbook { get; set; } = [];
 
+    // Quest log
+    public List<QuestProgress> QuestLog { get; set; } = [];
+
     // Timestamps
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset LastActiveAt { get; set; } = DateTimeOffset.UtcNow;

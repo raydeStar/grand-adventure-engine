@@ -62,11 +62,13 @@ starting_room:
       personality: "Warm and flirtatious, but sharp as a knife. Knows every secret in Thornwall. Has a soft spot for adventurers with good stories. Lonely since her husband left."
       faction: "merchants_guild"
       knowledge_scopes: ["rumors", "town", "whisperwood", "dread_hollow", "merchants_guild"]
+      quests_offered: ["rat_problem"]
     - id: "drunk_pete"
       name: "Stumbling Pete"
       personality: "Town drunk. Cowardly, gullible, and desperate for coin. Claims he saw the dungeon boss once. Nobody believes him. Surprisingly honest when sober, which is never."
       faction: "neutral"
       knowledge_scopes: ["rumors", "dread_hollow"]
+      quests_offered: ["petes_courage"]
   items:
     - id: "chipped_mug"
       name: "Chipped Mug"
@@ -109,6 +111,7 @@ rooms:
         personality: "Stern, gruff, and suspicious. Devoted to his post. Extremely hard to charm or bribe. Respects strength and directness. Hates adventurers who cause trouble."
         faction: "thornwall_militia"
         knowledge_scopes: ["town", "militia", "whisperwood", "security"]
+        quests_offered: ["brams_patrol"]
       - id: "dungeon_master_garrick"
         name: "Garrick the Dungeoneer"
         personality: "A weathered old adventurer with a patch over one eye and a scarred grin. Claims he knows the location of every lost dungeon in the realm. For a price, he'll tell you where to find one suited to your skill level. Dramatic storyteller, loves embellishing danger."
@@ -144,6 +147,7 @@ rooms:
         faction: "merchants_guild"
         knowledge_scopes: ["weapons", "armor", "combat", "mercenary_life"]
         is_shopkeeper: true
+        quests_offered: ["korgas_test"]
         shop_inventory:
           - id: "thunderstrike_blade"
             name: "Thunderstrike Blade"
@@ -425,6 +429,7 @@ rooms:
         personality: "Young, nervous, and eager to prove herself. Recently joined the militia after her brother went missing in the Whisperwood. Brave but inexperienced. Easy to talk to, hard to intimidate because she's already scared of everything. Will ask the player to look for her brother's journal if they're heading into the forest."
         faction: "thornwall_militia"
         knowledge_scopes: ["militia", "whisperwood", "monsters", "missing_people"]
+        quests_offered: ["lenas_brother"]
     items:
       - id: "discarded_torch"
         name: "Discarded Torch"
@@ -459,6 +464,7 @@ rooms:
         personality: "A kindly but slightly unhinged priest who claims to hear the voice of the Silver Light directly. Blesses items for adventurers with genuine enthusiasm. Tends to trail off mid-sentence to listen to 'guidance' no one else can hear. Harmless, generous, and deeply convinced the apocalypse is next Tuesday."
         faction: "neutral"
         knowledge_scopes: ["religion", "blessings", "undead", "holy_relics", "town"]
+        quests_offered: ["aldrics_blessing"]
     items:
       - id: "prayer_candle"
         name: "Prayer Candle"

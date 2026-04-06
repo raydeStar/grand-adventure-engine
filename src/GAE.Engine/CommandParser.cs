@@ -114,6 +114,40 @@ public partial class CommandParser
             return action;
         }
 
+        // Journal / Quest log (before take/drop to avoid conflicts)
+        if (JournalRegex().IsMatch(input))
+        {
+            action.Type = ActionType.Journal;
+            return action;
+        }
+
+        // Quest info — "quest <name>"
+        var questInfoMatch = QuestInfoRegex().Match(input);
+        if (questInfoMatch.Success)
+        {
+            action.Type = ActionType.QuestInfo;
+            action.Target = questInfoMatch.Groups["quest"].Value.Trim();
+            return action;
+        }
+
+        // Accept quest — before Take so "take quest <name>" routes here
+        var acceptMatch = AcceptQuestRegex().Match(input);
+        if (acceptMatch.Success)
+        {
+            action.Type = ActionType.AcceptQuest;
+            action.Target = acceptMatch.Groups["quest"].Value.Trim();
+            return action;
+        }
+
+        // Abandon quest — before Drop so "drop quest <name>" routes here
+        var abandonMatch = AbandonQuestRegex().Match(input);
+        if (abandonMatch.Success)
+        {
+            action.Type = ActionType.AbandonQuest;
+            action.Target = abandonMatch.Groups["quest"].Value.Trim();
+            return action;
+        }
+
         // Take / pick up
         var takeMatch = TakeRegex().Match(input);
         if (takeMatch.Success)
@@ -360,6 +394,18 @@ public partial class CommandParser
 
     [GeneratedRegex(@"^(?:spellbook|spells|known\s+spells|my\s+spells)$", RegexOptions.IgnoreCase)]
     private static partial Regex SpellbookRegex();
+
+    [GeneratedRegex(@"^(?:journal|quests|quest\s+log|my\s+quests|quest\s+journal|log)$", RegexOptions.IgnoreCase)]
+    private static partial Regex JournalRegex();
+
+    [GeneratedRegex(@"^(?:quest\s+info|check\s+quest|quest)\s+(?<quest>.+)$", RegexOptions.IgnoreCase)]
+    private static partial Regex QuestInfoRegex();
+
+    [GeneratedRegex(@"^(?:accept\s+(?:quest\s+)?|take\s+quest\s+)(?<quest>.+)$", RegexOptions.IgnoreCase)]
+    private static partial Regex AcceptQuestRegex();
+
+    [GeneratedRegex(@"^(?:abandon\s+(?:quest\s+)?|drop\s+quest\s+|cancel\s+(?:quest\s+)?)(?<quest>.+)$", RegexOptions.IgnoreCase)]
+    private static partial Regex AbandonQuestRegex();
 
     [GeneratedRegex(@"^(?:help|h|\?)$", RegexOptions.IgnoreCase)]
     private static partial Regex HelpRegex();
