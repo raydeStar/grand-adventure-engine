@@ -41,4 +41,9 @@ public interface IStateManager
     Task SaveCombatStateAsync(CombatState combat, CancellationToken ct = default);
     Task RemoveCombatStateAsync(string roomId, CancellationToken ct = default);
     Task RemoveAllCombatStatesAsync(CancellationToken ct = default);
+
+    // Party quest operations
+    Task<PartyQuestProgress?> GetPartyQuestAsync(string groupId, CancellationToken ct = default);
+    Task SavePartyQuestAsync(PartyQuestProgress progress, CancellationToken ct = default);
+    Task RemovePartyQuestAsync(string groupId, CancellationToken ct = default);
 }

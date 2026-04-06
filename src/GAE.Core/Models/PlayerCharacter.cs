@@ -6,6 +6,7 @@ public class PlayerCharacter
     public string Name { get; set; } = string.Empty;
     public string Race { get; set; } = string.Empty;
     public string Class { get; set; } = string.Empty;
+    public string Faction { get; set; } = "neutral";
     public string Backstory { get; set; } = string.Empty;
     public string? DiscordId { get; set; }
     public ulong? ThreadId { get; set; }

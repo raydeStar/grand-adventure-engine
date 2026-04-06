@@ -24,6 +24,9 @@ public class QuestProgress
     /// <summary>When the quest was completed, if applicable.</summary>
     public DateTimeOffset? CompletedAt { get; set; }
 
+    /// <summary>Shared party quest group ID when this progress is pooled with other players.</summary>
+    public string? PartyQuestGroupId { get; set; }
+
     /// <summary>
     /// AI-generated quest description that enriches the authored skeleton.
     /// Set when the quest is offered/accepted via narrator conversation.

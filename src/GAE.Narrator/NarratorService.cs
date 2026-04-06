@@ -868,6 +868,7 @@ public class NarratorService : INarratorService
             - If the player DECLINES a quest, return "declinedQuestId" with the quest ID.
             - If the player is TURNING IN a completed quest, return "turnInQuestId" with the quest ID.
             - If a custom objective is met during this conversation, list its ID in "completedCustomObjectives".
+            - If the player clearly ruins, betrays, or invalidates a quest, you may set questUpdates.failureRecommended as { "quest_id": "reason" }.
             - If you provide a quest, write a rich "questDescription" (2-3 sentences, in character).
             - For stage transitions, write a "stageDescription" capturing the narrative beat.
             - NEVER invent quest IDs. Only use IDs from the QUEST CONTEXT provided.
@@ -1745,6 +1746,14 @@ public class NarratorService : INarratorService
             else
             {
                 sb.AppendLine($"- Quest \"{quest.Name}\" (id: {quest.Id}): {quest.Description}");
+                if (!string.IsNullOrWhiteSpace(quest.OfferHint))
+                    sb.AppendLine($"  Offer hint: {quest.OfferHint}");
+                if (quest.MinDisposition.HasValue)
+                    sb.AppendLine($"  Minimum trust threshold: {quest.MinDisposition.Value}");
+                if (!string.IsNullOrWhiteSpace(quest.RequiredFaction))
+                    sb.AppendLine($"  Required faction: {quest.RequiredFaction}");
+                if (quest.IsPartyQuest)
+                    sb.AppendLine("  This is a shared party quest — multiple players may contribute to progress.");
                 var firstStageHint = quest.Stages.FirstOrDefault()?.NarratorHint;
                 if (!string.IsNullOrWhiteSpace(firstStageHint))
                     sb.AppendLine($"  Narrator hint: {firstStageHint}");
@@ -1757,6 +1766,8 @@ public class NarratorService : INarratorService
             if (progress.Status == QuestStatus.ReadyToTurnIn)
             {
                 sb.AppendLine($"- Quest \"{definition!.Name}\" (id: {definition.Id}): READY TO TURN IN. The player has completed all objectives.");
+                if (!string.IsNullOrWhiteSpace(definition.CompletionHint))
+                    sb.AppendLine($"  Completion hint: {definition.CompletionHint}");
                 sb.AppendLine($"  If the player mentions completing this quest, return turnInQuestId: \"{definition.Id}\"");
             }
             else
@@ -1766,6 +1777,10 @@ public class NarratorService : INarratorService
                 {
                     sb.AppendLine($"- Quest \"{definition.Name}\" (id: {definition.Id}): In progress, stage \"{stage.Name}\".");
                     sb.AppendLine($"  {stage.Description}");
+                    if (!string.IsNullOrWhiteSpace(stage.NarratorHint))
+                        sb.AppendLine($"  Stage narrator hint: {stage.NarratorHint}");
+                    if (!string.IsNullOrWhiteSpace(definition.FailureHint))
+                        sb.AppendLine($"  Failure stakes: {definition.FailureHint}");
                 }
             }
         }
@@ -1804,11 +1819,15 @@ public class NarratorService : INarratorService
                 if (stage is not null)
                 {
                     sb.AppendLine($"- \"{definition.Name}\" (id: {definition.Id}): Stage \"{stage.Name}\" — {stage.Description}");
+                    if (!string.IsNullOrWhiteSpace(stage.NarratorHint))
+                        sb.AppendLine($"  Stage hint: {stage.NarratorHint}");
                     foreach (var obj in stage.Objectives)
                     {
                         var objProgress = progress.Objectives.FirstOrDefault(o => o.ObjectiveId == obj.Id);
                         var status = objProgress?.IsComplete == true ? "✓" : $"{objProgress?.CurrentCount ?? 0}/{obj.RequiredCount}";
-                        sb.AppendLine($"  • {obj.Description ?? obj.Id} [{status}]");
+                        var targetName = obj.TargetName ?? obj.TargetId;
+                        var location = string.IsNullOrWhiteSpace(obj.LocationConstraint) ? string.Empty : $" @ {obj.LocationConstraint}";
+                        sb.AppendLine($"  • {obj.Description ?? obj.Id} [{status}] {(string.IsNullOrWhiteSpace(targetName) ? string.Empty : $"target: {targetName}")}{location}".TrimEnd());
                     }
                 }
             }

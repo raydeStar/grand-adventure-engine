@@ -77,9 +77,6 @@ public static class RegistrySeedLoader
             if (string.IsNullOrWhiteSpace(quest.GiverId))
                 errors.Add($"Quest '{quest.Id}' has no giver_id");
 
-            if (quest.IsPartyQuest)
-                logger?.LogWarning("Quest '{QuestId}' is marked as party quest — party quests are not implemented in v1", quest.Id);
-
             // Validate stages
             var stageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var stage in quest.Stages)

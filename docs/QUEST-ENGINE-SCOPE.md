@@ -139,6 +139,7 @@ public class QuestDefinition : IRegistryEntry
     // Prerequisites
     public List<string> RequiredCompletedQuests { get; set; } = [];
     public int MinLevel { get; set; } = 1;
+    public int? MinDisposition { get; set; }       // Min NPC disposition to offer (null = no gate)
     public string? RequiredFaction { get; set; }
 
     // Stages (for multi-stage quests; simple quests have exactly one stage)
@@ -567,17 +568,19 @@ Serialized as JSON alongside existing player state files.
 
 ---
 
-## 13. Open Questions for GHC
+## 13. Resolved Design Decisions
 
-1. **Custom objectives and AI judgment:** The `Custom` objective type relies on the narrator AI evaluating free-form conditions. How much latency is acceptable for this check? Should it run every turn or only when the player explicitly asks?
+These were reviewed and decided by the project owner on 2026-04-05:
 
-2. **Quest failure triggers:** Should quest failure only occur from explicit conditions (escort NPC dies), or should the narrator have authority to fail quests based on player behavior (e.g., insulting the quest giver mid-quest)?
+1. **Custom objectives and AI judgment:** Custom objective conditions are included in every narrator turn while the quest is active. The AI evaluates and **recommends** completion, but the **engine makes the final call** — the narrator's `quest_updates.custom_objective_met` is a recommendation flag that the `QuestEngine` validates before applying. Cache the evaluation: if the game state hasn't changed since the last check, skip the re-evaluation.
 
-3. **Disposition gating:** Should some quests require a minimum NPC disposition to be offered? (e.g., Marta only asks for help if disposition > 30). The model supports it via `RequiredFaction` but doesn't currently have a `MinDisposition` field.
+2. **Quest failure triggers:** The narrator can **recommend** quest failure (e.g., player insults the quest giver, destroys a key item), but the engine validates against explicit failure conditions before applying. The narrator flags `quest_updates.failure_recommended: { "quest_id": "reason" }` and the engine decides. This preserves the organic feel without risking hallucinated failures.
 
-4. **Journal persistence across sessions:** Quest progress journaling follows the existing file-based pattern. Is there any plan to migrate to a database before this ships? If so, the `IStateManager` interface abstracts it, but the schema should be considered now.
+3. **Disposition gating:** **Yes.** Add a `MinDisposition` field to `QuestDefinition`. NPCs will only offer quests to players whose disposition meets the threshold. This creates gameplay incentive to build NPC relationships. Default value: `null` (no requirement). Add to YAML schema as `min_disposition: 30`.
 
-5. **Quest item inventory behavior:** Should quest items (`ItemType.QuestItem`) be droppable/sellable? Currently the `QuestItem` enum exists but has no special handling. Recommendation: make them non-droppable, non-sellable, zero-weight.
+4. **Database migration:** The Quest Engine ships **after** the PostgreSQL migration (see DATABASE-MIGRATION-SCOPE.md). Quest state will persist via EF Core from day one. The `IStateManager` quest methods defined in Section 10 will be implemented directly in `EfCoreStateManager`, not in the file-based system.
+
+5. **Quest item inventory behavior:** Quest items (`ItemType.QuestItem`) are **locked** — non-droppable, non-sellable, zero weight. Add enforcement in the `Drop` and `Sell` action handlers in `GameEngine.cs`. If a player attempts to drop/sell a quest item, the narrator responds in-character: "Something tells you this is important. You'd better hold onto it."
 
 ---
 

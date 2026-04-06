@@ -126,9 +126,10 @@ public class GameEngine : IGameEngine
             ActionType.Help => ProcessHelp(action),
             ActionType.Map => await ProcessMapAsync(player, action, ct),
             ActionType.Journal => ProcessJournal(player, action),
+            ActionType.CompletedQuests => ProcessCompletedQuests(player, action),
             ActionType.QuestInfo => ProcessQuestInfo(player, action),
             ActionType.AcceptQuest => await ProcessAcceptQuestAsync(player, action, ct),
-            ActionType.AbandonQuest => ProcessAbandonQuest(player, action),
+            ActionType.AbandonQuest => await ProcessAbandonQuest(player, action, ct),
             _ => await ProcessFreeFormActionAsync(player, action, ct)
         };
 
@@ -473,13 +474,23 @@ public class GameEngine : IGameEngine
             npc.Disposition = npc.DispositionState.ToFlatDisposition();
         }
 
+        var escortedNpcNames = MoveEscortedNpcs(player, room, targetRoom);
+        if (escortedNpcNames.Count > 0)
+            await _stateManager.SaveRoomAsync(room, ct);
+
+        await _stateManager.SaveRoomAsync(targetRoom, ct);
+
         var oldRoomId = player.CurrentRoomId;
         player.CurrentRoomId = simpleTargetId;
 
         // Quest tracking: room entered
-        var questUpdate = _questTracker?.OnRoomEntered(player, simpleTargetId);
+        var questUpdate = _questTracker is not null
+            ? await _questTracker.OnRoomEnteredAsync(player, targetRoom, ct)
+            : null;
 
         var moveSummary = BuildRoomSummary($"You move {direction} to **{targetRoom.Name}**.", targetRoom);
+        if (escortedNpcNames.Count > 0)
+            moveSummary += $"\n🧭 {string.Join(", ", escortedNpcNames)} keeps pace with you.";
         if (questUpdate is not null)
             moveSummary += $"\n📜 {questUpdate}";
 
@@ -495,6 +506,41 @@ public class GameEngine : IGameEngine
                 Property = "CurrentRoomId", OldValue = oldRoomId, NewValue = targetRoomId
             }]
         };
+    }
+
+    private List<string> MoveEscortedNpcs(PlayerCharacter player, Room sourceRoom, Room targetRoom)
+    {
+        if (_registry is null)
+            return [];
+
+        var moved = new List<string>();
+        foreach (var progress in player.QuestLog.Where(q => q.Status == QuestStatus.Active))
+        {
+            var quest = _registry.Quests.GetById(progress.QuestId);
+            var stage = quest?.Stages.FirstOrDefault(s => s.Id == progress.CurrentStageId);
+            if (stage is null)
+                continue;
+
+            foreach (var objective in stage.Objectives.Where(o => o.Type == ObjectiveType.Escort))
+            {
+                var objectiveProgress = progress.Objectives.FirstOrDefault(o => o.ObjectiveId == objective.Id);
+                if (objectiveProgress?.IsComplete == true || string.IsNullOrWhiteSpace(objective.TargetId))
+                    continue;
+
+                var escortNpc = sourceRoom.Npcs.FirstOrDefault(n => n.Id.Equals(objective.TargetId, StringComparison.OrdinalIgnoreCase));
+                if (escortNpc is null || (escortNpc.Hp.HasValue && escortNpc.Hp.Value <= 0))
+                    continue;
+
+                if (!targetRoom.Npcs.Any(n => n.Id.Equals(escortNpc.Id, StringComparison.OrdinalIgnoreCase)))
+                {
+                    sourceRoom.Npcs.Remove(escortNpc);
+                    targetRoom.Npcs.Add(escortNpc);
+                    moved.Add(escortNpc.Name);
+                }
+            }
+        }
+
+        return moved.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
 
     private async Task<ActionResult> ProcessLookAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
@@ -643,6 +689,11 @@ public class GameEngine : IGameEngine
                 var hostiles = room.Npcs.Where(n => n.IsHostile || n == target).Distinct().ToList();
                 await EnterCombatAsync(player, room, hostiles, ct);
                 result.InteractionUpdate = new InteractionUpdate { Mode = InteractionMode.Combat, CombatStatus = "ongoing" };
+                var surviveUpdate = _questTracker is not null
+                    ? await _questTracker.OnCombatRoundSurvivedAsync(player, room.Id, ct)
+                    : null;
+                if (surviveUpdate is not null)
+                    result.MechanicalSummary += $"\n📜 {surviveUpdate}";
                 await _stateManager.SavePlayerAsync(player, ct);
             }
             return result;
@@ -717,7 +768,9 @@ public class GameEngine : IGameEngine
             result.InteractionUpdate = new InteractionUpdate { Mode = InteractionMode.Explore, CombatStatus = "victory" };
 
             // Quest tracking: enemy killed
-            var questUpdate = _questTracker?.OnEnemyKilled(player, target.Id, target.Name);
+            var questUpdate = _questTracker is not null
+                ? await _questTracker.OnEnemyKilledAsync(player, target.Id, target.Name, ct)
+                : null;
             if (questUpdate is not null)
                 result.MechanicalSummary += $"\n📜 {questUpdate}";
 
@@ -729,6 +782,11 @@ public class GameEngine : IGameEngine
             var hostiles = room.Npcs.Where(n => n.IsHostile || n == target).Distinct().ToList();
             await EnterCombatAsync(player, room, hostiles, ct);
             result.InteractionUpdate = new InteractionUpdate { Mode = InteractionMode.Combat, CombatStatus = "ongoing" };
+            var surviveUpdate = _questTracker is not null
+                ? await _questTracker.OnCombatRoundSurvivedAsync(player, room.Id, ct)
+                : null;
+            if (surviveUpdate is not null)
+                result.MechanicalSummary += $"\n📜 {surviveUpdate}";
             await _stateManager.SavePlayerAsync(player, ct);
         }
 
@@ -776,14 +834,16 @@ public class GameEngine : IGameEngine
         ApplyInteractionUpdate(player, room, target, freeForm);
 
         // Quest tracking: conversation started (TalkTo + Deliver objectives)
-        var questUpdate = _questTracker?.OnConversationStarted(player, target);
+        var questUpdate = _questTracker is not null
+            ? await _questTracker.OnConversationStartedAsync(player, target, ct)
+            : null;
 
         // Process quest updates from narrator response
         string? narratorQuestSummary = null;
         QuestReward? questReward = null;
         if (freeForm.QuestUpdates is not null && _questTracker is not null)
         {
-            (narratorQuestSummary, questReward) = _questTracker.ProcessNarratorQuestUpdates(player, freeForm.QuestUpdates, target);
+            (narratorQuestSummary, questReward) = await _questTracker.ProcessNarratorQuestUpdatesAsync(player, freeForm.QuestUpdates, target, ct);
         }
 
         await _stateManager.SavePlayerAsync(player, ct);
@@ -921,7 +981,9 @@ public class GameEngine : IGameEngine
         await _stateManager.SaveRoomAsync(room, ct);
 
         // Quest tracking: item collected
-        var questUpdate = _questTracker?.OnItemCollected(player, item.Id, item.Name, actualQuantity);
+        var questUpdate = _questTracker is not null
+            ? await _questTracker.OnItemCollectedAsync(player, item.Id, item.Name, actualQuantity, ct)
+            : null;
 
         int totalInInventory = existingStack?.Quantity ?? actualQuantity;
         var itemLabel = actualQuantity > 1 ? $"{item.Name} (x{actualQuantity})" : item.Name;
@@ -1022,6 +1084,16 @@ public class GameEngine : IGameEngine
 
         if (item is null)
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"Drop target '{action.Target}' was not found in your inventory." };
+
+        if (item.Type == ItemType.QuestItem)
+        {
+            return new ActionResult
+            {
+                ActionId = action.Id,
+                Success = false,
+                MechanicalSummary = "Something tells you this is important. You'd better hold onto it."
+            };
+        }
 
         var quantityToDrop = requestedQuantity ?? Math.Max(1, item.Quantity);
         if (quantityToDrop <= 0)
@@ -1685,7 +1757,7 @@ public class GameEngine : IGameEngine
         QuestReward? questReward = null;
         if (freeForm.QuestUpdates is not null && _questTracker is not null)
         {
-            (narratorQuestSummary, questReward) = _questTracker.ProcessNarratorQuestUpdates(player, freeForm.QuestUpdates, currentNpc: null);
+            (narratorQuestSummary, questReward) = await _questTracker.ProcessNarratorQuestUpdatesAsync(player, freeForm.QuestUpdates, currentNpc: null, ct);
         }
 
         if (narratorQuestSummary is not null)
@@ -3209,6 +3281,31 @@ public class GameEngine : IGameEngine
         };
     }
 
+    private ActionResult ProcessCompletedQuests(PlayerCharacter player, GameAction action)
+    {
+        var completed = player.QuestLog.Where(q => q.Status == QuestStatus.Completed).ToList();
+        if (_registry is null || completed.Count == 0)
+        {
+            return new ActionResult
+            {
+                ActionId = action.Id,
+                Success = true,
+                MechanicalSummary = "You have not completed any quests yet."
+            };
+        }
+
+        var lines = completed
+            .Select(q => $"  ✅ {_registry.Quests.GetById(q.QuestId)?.Name ?? q.QuestId}")
+            .ToList();
+
+        return new ActionResult
+        {
+            ActionId = action.Id,
+            Success = true,
+            MechanicalSummary = $"📕 **Completed Quests** ({completed.Count})\n" + string.Join("\n", lines)
+        };
+    }
+
     private ActionResult ProcessQuestInfo(PlayerCharacter player, GameAction action)
     {
         if (_questEngine is null || string.IsNullOrWhiteSpace(action.Target))
@@ -3238,11 +3335,11 @@ public class GameEngine : IGameEngine
         if (giver is null)
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "The quest giver is not in this room." };
 
-        var (canAccept, reason) = _questEngine.CanAcceptQuest(player, quest.Id);
+        var (canAccept, reason) = _questEngine.CanAcceptQuest(player, quest.Id, giver);
         if (!canAccept)
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = reason ?? "Cannot accept this quest." };
 
-        var progress = _questEngine.AcceptQuest(player, quest.Id);
+        var progress = await _questEngine.AcceptQuestAsync(player, quest.Id, narratorDescription: null, ct);
         if (progress is null)
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "Failed to accept quest." };
 
@@ -3257,7 +3354,7 @@ public class GameEngine : IGameEngine
         };
     }
 
-    private ActionResult ProcessAbandonQuest(PlayerCharacter player, GameAction action)
+    private async Task<ActionResult> ProcessAbandonQuest(PlayerCharacter player, GameAction action, CancellationToken ct)
     {
         if (_questEngine is null || string.IsNullOrWhiteSpace(action.Target))
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "Usage: abandon <quest name>" };
@@ -3272,7 +3369,7 @@ public class GameEngine : IGameEngine
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"No active quest matching '{action.Target}'." };
 
         var quest = _registry?.Quests.GetById(progress.QuestId);
-        _questEngine.AbandonQuest(player, progress.QuestId);
+        await _questEngine.AbandonQuestAsync(player, progress.QuestId, ct);
 
         return new ActionResult
         {
@@ -3579,6 +3676,16 @@ public class GameEngine : IGameEngine
         var item = FindNamedEntity(player.Inventory, i => i.Name, action.Target);
         if (item is null)
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"You don't have any '{action.Target}' to sell." };
+
+        if (item.Type == ItemType.QuestItem)
+        {
+            return new ActionResult
+            {
+                ActionId = action.Id,
+                Success = false,
+                MechanicalSummary = "Something tells you this is important. You'd better hold onto it."
+            };
+        }
 
         int sellPrice = Math.Max(1, item.Value / 2);
 

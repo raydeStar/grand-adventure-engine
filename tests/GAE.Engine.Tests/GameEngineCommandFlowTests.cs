@@ -1,6 +1,7 @@
 using GAE.Core.Interfaces;
 using GAE.Core.Models;
 using GAE.Engine.Configuration;
+using GAE.Engine.Registry;
 using GAE.Engine.State;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -88,6 +89,75 @@ public class GameEngineCommandFlowTests
     }
 
     [Fact]
+    public async Task ProcessActionAsync_Move_UsesDestinationRoomForDiscoverQuestProgress()
+    {
+        var stateManager = await CreateStateAsync(room: new Room
+        {
+            Id = "spawn",
+            Name = "Crossroads",
+            Description = "A crossroads.",
+            Exits = new Dictionary<string, string> { ["east"] = "grove" }
+        });
+        await stateManager.SaveRoomAsync(new Room
+        {
+            Id = "grove",
+            Name = "Moonlit Grove",
+            Description = "A silver grove.",
+            Exits = new Dictionary<string, string> { ["west"] = "spawn" }
+        });
+
+        var narrator = new Mock<INarratorService>();
+        narrator
+            .Setup(service => service.NarrateActionAsync(It.IsAny<NarratorContext>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("Narrated move.");
+
+        var registry = new ContentRegistryService(NullLogger<ContentRegistryService>.Instance);
+        registry.Quests.Register(new QuestDefinition
+        {
+            Id = "discover_grove",
+            Name = "Scout the Grove",
+            GiverId = "guide",
+            Stages =
+            [
+                new QuestStage
+                {
+                    Id = "discover_stage",
+                    Name = "Reach the Grove",
+                    Objectives = [new QuestObjective { Id = "reach_grove", Type = ObjectiveType.Discover, TargetId = "grove", Description = "Reach the grove" }]
+                }
+            ]
+        });
+        var questEngine = new QuestEngine(registry, NullLogger<QuestEngine>.Instance);
+        var questTracker = new QuestTracker(questEngine, registry, NullLogger<QuestTracker>.Instance);
+
+        var parser = new CommandParser(NullLogger<CommandParser>.Instance);
+        var dice = new Mock<IProbabilityEngine>(MockBehavior.Strict);
+        var engine = new GameEngine(
+            stateManager,
+            dice.Object,
+            narrator.Object,
+            parser,
+            new GameRulesConfig(),
+            NullLogger<GameEngine>.Instance,
+            registry,
+            questEngine,
+            questTracker);
+
+        var player = (await stateManager.GetPlayerAsync(PlayerId))!;
+        questEngine.AcceptQuest(player, "discover_grove");
+        await stateManager.SavePlayerAsync(player);
+
+        var action = engine.ParseCommand(PlayerId, "go east");
+        var result = await engine.ProcessActionAsync(PlayerId, action);
+
+        Assert.True(result.Success);
+        Assert.Contains("Objective complete", result.MechanicalSummary, StringComparison.OrdinalIgnoreCase);
+
+        var updatedPlayer = (await stateManager.GetPlayerAsync(PlayerId))!;
+        Assert.Equal(QuestStatus.ReadyToTurnIn, updatedPlayer.QuestLog[0].Status);
+    }
+
+    [Fact]
     public async Task ProcessActionAsync_FreeFormFallback_RemainsPlayableAndPersistsStory()
     {
         var stateManager = await CreateStateAsync(room: new Room
@@ -147,6 +217,70 @@ public class GameEngineCommandFlowTests
         var droppedItem = Assert.Single(updatedRoom.Items);
         Assert.Equal("Silken Rope", droppedItem.Name);
         Assert.Equal(1, droppedItem.Quantity);
+    }
+
+    [Fact]
+    public async Task ProcessActionAsync_DropQuestItem_IsRejected()
+    {
+        var stateManager = await CreateStateAsync(room: new Room
+        {
+            Id = "gate",
+            Name = "Ironhold Gate",
+            Description = "A rusted war gate with iron plates."
+        });
+
+        var player = (await stateManager.GetPlayerAsync(PlayerId))!;
+        player.Inventory.Add(new InventoryItem { Id = "sealed-letter", Name = "Sealed Letter", Quantity = 1, Type = ItemType.QuestItem });
+        await stateManager.SavePlayerAsync(player);
+
+        var narrator = new Mock<INarratorService>();
+        narrator
+            .Setup(service => service.NarrateActionAsync(It.IsAny<NarratorContext>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("Narrated rejection.");
+
+        var engine = CreateEngine(stateManager, narrator.Object);
+        var action = engine.ParseCommand(PlayerId, "drop sealed letter");
+
+        var result = await engine.ProcessActionAsync(PlayerId, action);
+
+        Assert.False(result.Success);
+        Assert.Contains("hold onto it", result.MechanicalSummary, StringComparison.OrdinalIgnoreCase);
+
+        var updatedPlayer = (await stateManager.GetPlayerAsync(PlayerId))!;
+        Assert.Single(updatedPlayer.Inventory);
+    }
+
+    [Fact]
+    public async Task ProcessActionAsync_SellQuestItem_IsRejected()
+    {
+        var stateManager = await CreateStateAsync(room: new Room
+        {
+            Id = "gate",
+            Name = "Ironhold Gate",
+            Description = "A rusted war gate with iron plates.",
+            Npcs = [new Npc { Id = "merchant", Name = "Merchant", IsShopkeeper = true }]
+        });
+
+        var player = (await stateManager.GetPlayerAsync(PlayerId))!;
+        player.Inventory.Add(new InventoryItem { Id = "sealed-letter", Name = "Sealed Letter", Quantity = 1, Type = ItemType.QuestItem, Value = 10 });
+        await stateManager.SavePlayerAsync(player);
+
+        var narrator = new Mock<INarratorService>();
+        narrator
+            .Setup(service => service.NarrateActionAsync(It.IsAny<NarratorContext>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("Narrated rejection.");
+
+        var engine = CreateEngine(stateManager, narrator.Object);
+        var action = engine.ParseCommand(PlayerId, "sell sealed letter");
+
+        var result = await engine.ProcessActionAsync(PlayerId, action);
+
+        Assert.False(result.Success);
+        Assert.Contains("hold onto it", result.MechanicalSummary, StringComparison.OrdinalIgnoreCase);
+
+        var updatedPlayer = (await stateManager.GetPlayerAsync(PlayerId))!;
+        Assert.Single(updatedPlayer.Inventory);
+        Assert.Equal(0, result.GoldChange);
     }
 
     [Fact]

@@ -178,6 +178,30 @@ public class JournaledStateManager : IStateManager
         }, ct);
     }
 
+    public Task<PartyQuestProgress?> GetPartyQuestAsync(string groupId, CancellationToken ct = default)
+        => _inner.GetPartyQuestAsync(groupId, ct);
+
+    public async Task SavePartyQuestAsync(PartyQuestProgress progress, CancellationToken ct = default)
+    {
+        await _inner.SavePartyQuestAsync(progress, ct);
+        await _journal.AppendAsync(new GameEvent
+        {
+            Type = GameEventType.SystemMessage,
+            Summary = $"Party quest {progress.QuestId} saved for group {progress.GroupId}",
+            Data = new Dictionary<string, object?> { ["partyQuest"] = progress }
+        }, ct);
+    }
+
+    public async Task RemovePartyQuestAsync(string groupId, CancellationToken ct = default)
+    {
+        await _inner.RemovePartyQuestAsync(groupId, ct);
+        await _journal.AppendAsync(new GameEvent
+        {
+            Type = GameEventType.SystemMessage,
+            Summary = $"Party quest group {groupId} removed"
+        }, ct);
+    }
+
     // Per-player room instances
     public async Task<Room?> GetPlayerRoomAsync(string playerId, string roomId, CancellationToken ct = default)
     {

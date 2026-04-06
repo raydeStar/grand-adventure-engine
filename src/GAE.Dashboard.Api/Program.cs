@@ -7,11 +7,13 @@ using GAE.Discord;
 using GAE.Core.Registry;
 using GAE.Engine;
 using GAE.Engine.Configuration;
+using GAE.Engine.Data;
 using GAE.Engine.Registry;
 using GAE.Engine.State;
 using GAE.Narrator;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.EntityFrameworkCore;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
@@ -49,31 +51,63 @@ var gameRules = !string.IsNullOrEmpty(rulesYaml)
     : new GameRulesConfig();
 builder.Services.AddSingleton(gameRules);
 
-// State management — single-writer model
+// State management — feature-flagged: PostgreSQL (default) or file-based (fallback)
 var dataDir = builder.Environment.IsProduction() && Directory.Exists("/app/data")
     ? "/app/data"
     : Path.Combine(builder.Environment.ContentRootPath, "..", "..", "data");
 Directory.CreateDirectory(dataDir);
 
-// Conversation logger — append-only JSONL for training-data export
-builder.Services.AddSingleton<IConversationLogger>(sp =>
-    new FileConversationLogger(
-        Path.Combine(dataDir, "conversations.jsonl"),
-        sp.GetRequiredService<ILogger<FileConversationLogger>>()));
+var usePostgres = builder.Configuration.GetValue("Persistence:UsePostgres", true);
 
-builder.Services.AddSingleton<InMemoryStateManager>();
-builder.Services.AddSingleton<IStateJournal>(sp =>
-    new FileStateJournal(
-        Path.Combine(dataDir, "journal.jsonl"),
-        sp.GetRequiredService<ILogger<FileStateJournal>>()));
-builder.Services.AddSingleton<IStateCheckpointStore>(sp =>
-    new FileStateCheckpointStore(
-        Path.Combine(dataDir, "checkpoints"),
-        sp.GetRequiredService<ILogger<FileStateCheckpointStore>>()));
-builder.Services.AddSingleton<StateReplayService>();
-builder.Services.AddSingleton<IStateReplayService>(sp => sp.GetRequiredService<StateReplayService>());
-builder.Services.AddSingleton<JournaledStateManager>();
-builder.Services.AddSingleton<IStateManager>(sp => sp.GetRequiredService<JournaledStateManager>());
+if (usePostgres)
+{
+    // PostgreSQL via EF Core — DbContext factory allows singleton state managers
+    var connectionString = builder.Configuration.GetConnectionString("GameDatabase")
+        ?? "Host=localhost;Port=5432;Database=gae;Username=gae_app;Password=gae_dev_password";
+    builder.Services.AddDbContextFactory<GaeDbContext>(options =>
+        options.UseNpgsql(connectionString, npgsql =>
+            npgsql.MigrationsAssembly("GAE.Engine")));
+
+    builder.Services.AddSingleton<IStateManager, EfCoreStateManager>();
+    builder.Services.AddSingleton<IConversationLogger, EfCoreConversationLogger>();
+    builder.Services.AddSingleton<ContentSeedService>();
+
+    // Keep file-based services available for data migration
+    builder.Services.AddSingleton<InMemoryStateManager>();
+    builder.Services.AddSingleton<IStateJournal>(sp =>
+        new FileStateJournal(
+            Path.Combine(dataDir, "journal.jsonl"),
+            sp.GetRequiredService<ILogger<FileStateJournal>>()));
+    builder.Services.AddSingleton<IStateCheckpointStore>(sp =>
+        new FileStateCheckpointStore(
+            Path.Combine(dataDir, "checkpoints"),
+            sp.GetRequiredService<ILogger<FileStateCheckpointStore>>()));
+    builder.Services.AddSingleton<StateReplayService>();
+    builder.Services.AddSingleton<IStateReplayService>(sp => sp.GetRequiredService<StateReplayService>());
+    builder.Services.AddSingleton<DataMigrationService>();
+}
+else
+{
+    // Legacy file-based persistence — singleton in-memory + journaled
+    builder.Services.AddSingleton<IConversationLogger>(sp =>
+        new FileConversationLogger(
+            Path.Combine(dataDir, "conversations.jsonl"),
+            sp.GetRequiredService<ILogger<FileConversationLogger>>()));
+
+    builder.Services.AddSingleton<InMemoryStateManager>();
+    builder.Services.AddSingleton<IStateJournal>(sp =>
+        new FileStateJournal(
+            Path.Combine(dataDir, "journal.jsonl"),
+            sp.GetRequiredService<ILogger<FileStateJournal>>()));
+    builder.Services.AddSingleton<IStateCheckpointStore>(sp =>
+        new FileStateCheckpointStore(
+            Path.Combine(dataDir, "checkpoints"),
+            sp.GetRequiredService<ILogger<FileStateCheckpointStore>>()));
+    builder.Services.AddSingleton<StateReplayService>();
+    builder.Services.AddSingleton<IStateReplayService>(sp => sp.GetRequiredService<StateReplayService>());
+    builder.Services.AddSingleton<JournaledStateManager>();
+    builder.Services.AddSingleton<IStateManager>(sp => sp.GetRequiredService<JournaledStateManager>());
+}
 
 // World seeding config — used by admin reset endpoint
 builder.Services.AddSingleton(new WorldSeedConfig
@@ -183,16 +217,43 @@ foreach (var warning in authService.GetStartupWarnings())
     app.Logger.LogWarning("{Warning}", warning);
 }
 
-// State recovery: replay from checkpoint + journal
-var replayService = app.Services.GetRequiredService<StateReplayService>();
-try
+// State recovery: mode-dependent startup
+if (usePostgres)
 {
-    await replayService.ReplayAsync();
-    app.Logger.LogInformation("State recovery complete");
+    // Apply EF Core migrations automatically
+    {
+        var dbFactory = app.Services.GetRequiredService<IDbContextFactory<GaeDbContext>>();
+        await using var db = await dbFactory.CreateDbContextAsync();
+        await db.Database.MigrateAsync();
+        app.Logger.LogInformation("Database migrations applied");
+
+        // One-time data migration from file-based state (if any exists and DB is empty)
+        var migrator = app.Services.GetRequiredService<DataMigrationService>();
+        await migrator.MigrateAsync();
+
+        // Optionally import historical journal and conversation logs
+        var journalPath = Path.Combine(dataDir, "journal.jsonl");
+        if (File.Exists(journalPath) && !await db.GameEvents.AnyAsync())
+            await migrator.ImportJournalHistoryAsync(journalPath);
+
+        var conversationsPath = Path.Combine(dataDir, "conversations.jsonl");
+        if (File.Exists(conversationsPath) && !await db.ConversationLogs.AnyAsync())
+            await migrator.ImportConversationHistoryAsync(conversationsPath);
+    }
 }
-catch (Exception ex)
+else
 {
-    app.Logger.LogWarning(ex, "State recovery encountered issues — starting with fresh state");
+    // Legacy file-based: replay from checkpoint + journal
+    var replayService = app.Services.GetRequiredService<StateReplayService>();
+    try
+    {
+        await replayService.ReplayAsync();
+        app.Logger.LogInformation("State recovery complete");
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "State recovery encountered issues — starting with fresh state");
+    }
 }
 
 // Probe external services and log degraded mode warnings
@@ -208,9 +269,29 @@ catch
     app.Logger.LogWarning("LM Studio unreachable at {Endpoint} — narration will use fallback text", lmStudioEndpoint);
 }
 
-// ── Load content registries from seed files ──────────────────────────
+// ── Load content registries ──────────────────────────────────────────
 var registryService = app.Services.GetRequiredService<ContentRegistryService>();
+
+if (usePostgres)
 {
+    // PostgreSQL: seed from YAML on first run, then always load from DB
+    var contentSeed = app.Services.GetRequiredService<ContentSeedService>();
+    await contentSeed.SeedAndLoadAsync(registryService, configDir);
+
+    // Load GameRulesConfig from DB (seeding from YAML if DB is empty)
+    var dbRules = await contentSeed.SeedAndLoadGameRulesAsync(configDir);
+    gameRules.CharacterCreation = dbRules.CharacterCreation;
+    gameRules.Stats = dbRules.Stats;
+    gameRules.Combat = dbRules.Combat;
+    gameRules.SkillChecks = dbRules.SkillChecks;
+    gameRules.Rest = dbRules.Rest;
+    gameRules.Death = dbRules.Death;
+    gameRules.Loot = dbRules.Loot;
+    gameRules.Leveling = dbRules.Leveling;
+}
+else
+{
+    // Legacy: load from YAML seed files directly
     var spellsPath = Path.Combine(configDir, "spells-seed.yaml");
     if (File.Exists(spellsPath))
         RegistrySeedLoader.LoadSpells(registryService.Spells, await File.ReadAllTextAsync(spellsPath), app.Logger);
@@ -243,19 +324,22 @@ var registryService = app.Services.GetRequiredService<ContentRegistryService>();
 }
 
 // Seed world from lore-seed.yaml if spawn room is not already present
-var stateManager = app.Services.GetRequiredService<IStateManager>();
-var startRoom = await stateManager.GetRoomAsync("spawn");
-if (startRoom is null)
+using (var seedScope = app.Services.CreateScope())
 {
-    var lorePath = Path.Combine(configDir, "lore-seed.yaml");
-    if (File.Exists(lorePath))
+    var stateManager = seedScope.ServiceProvider.GetRequiredService<IStateManager>();
+    var startRoom = await stateManager.GetRoomAsync("spawn");
+    if (startRoom is null)
     {
-        var loreYaml = await File.ReadAllTextAsync(lorePath);
-        var lore = yamlDeserializer.Deserialize<LoreSeed>(loreYaml);
-        var seeded = await SeedWorldFromLore(lore, stateManager);
-        app.Logger.LogInformation("Seeded {Count} rooms from lore-seed.yaml", seeded);
+        var lorePath = Path.Combine(configDir, "lore-seed.yaml");
+        if (File.Exists(lorePath))
+        {
+            var loreYaml = await File.ReadAllTextAsync(lorePath);
+            var lore = yamlDeserializer.Deserialize<LoreSeed>(loreYaml);
+            var seeded = await SeedWorldFromLore(lore, stateManager);
+            app.Logger.LogInformation("Seeded {Count} rooms from lore-seed.yaml", seeded);
+        }
     }
-}
+} // end seedScope
 
 app.UseDefaultFiles();
 app.UseStaticFiles(new StaticFileOptions
@@ -314,13 +398,17 @@ app.MapGet("/health/narrator", async (HttpClient httpClient) =>
     return narratorHealthCache;
 });
 
-// Flush checkpoint on shutdown
-var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
-lifetime.ApplicationStopping.Register(() =>
+// Flush checkpoint on shutdown (only for file-based persistence)
+if (!usePostgres)
 {
-    app.Logger.LogInformation("Flushing state checkpoint on shutdown...");
-    replayService.FlushAsync().GetAwaiter().GetResult();
-});
+    var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
+    var replayService = app.Services.GetRequiredService<StateReplayService>();
+    lifetime.ApplicationStopping.Register(() =>
+    {
+        app.Logger.LogInformation("Flushing state checkpoint on shutdown...");
+        replayService.FlushAsync().GetAwaiter().GetResult();
+    });
+}
 
 app.Run();
 

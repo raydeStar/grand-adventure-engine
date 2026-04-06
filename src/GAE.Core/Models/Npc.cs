@@ -23,6 +23,9 @@ public class Npc
 
     /// <summary>Quest definition IDs this NPC can offer to players.</summary>
     public List<string> QuestsOffered { get; set; } = [];
+
+    /// <summary>Higher values make this NPC's quest hooks take precedence in narrator context.</summary>
+    public int QuestGiverPriority { get; set; }
 }
 
 public class NpcDispositionState

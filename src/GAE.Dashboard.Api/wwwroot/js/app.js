@@ -718,9 +718,11 @@
     } catch (error) {
       await handleError(error, { story: true });
     } finally {
-      input.disabled = false;
-      UI.$('command-submit').disabled = false;
-      input.focus();
+      if (!UI._streamNode) {
+        input.disabled = false;
+        UI.$('command-submit').disabled = false;
+        input.focus();
+      }
     }
   }
 

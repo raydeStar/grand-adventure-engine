@@ -1,6 +1,7 @@
 using GAE.Core.Models;
 using GAE.Core.Registry;
 using GAE.Engine.Registry;
+using GAE.Engine.State;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace GAE.Engine.Tests;
@@ -93,6 +94,56 @@ public class QuestEngineTests
         Assert.Contains("level", reason!);
     }
 
+    [Fact]
+    public void AcceptQuest_FailsIfFactionDoesNotMatch()
+    {
+        var player = CreatePlayer();
+
+        var (canAccept, reason) = _engine.CanAcceptQuest(player, "faction_quest");
+
+        Assert.False(canAccept);
+        Assert.Contains("faction", reason!, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void AcceptQuest_FailsIfDispositionTooLow()
+    {
+        var player = CreatePlayer();
+        var giver = new Npc
+        {
+            Id = "innkeeper_mara",
+            Name = "Mara",
+            DispositionState = new NpcDispositionState { Intensity = 10 }
+        };
+
+        var (canAccept, reason) = _engine.CanAcceptQuest(player, "trust_quest", giver);
+
+        Assert.False(canAccept);
+        Assert.Contains("trust", reason!, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void AcceptQuest_FailsIfQuestHasNotBeenUnlocked()
+    {
+        var player = CreatePlayer();
+
+        var (canAccept, reason) = _engine.CanAcceptQuest(player, "locked_followup");
+
+        Assert.False(canAccept);
+        Assert.Contains("unlock", reason!, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void AcceptQuest_SucceedsAfterUnlockingQuestCompleted()
+    {
+        var player = CreatePlayer();
+        player.QuestLog.Add(new QuestProgress { QuestId = "unlocker_quest", Status = QuestStatus.Completed });
+
+        var progress = _engine.AcceptQuest(player, "locked_followup");
+
+        Assert.NotNull(progress);
+    }
+
     // ── Abandon ──
 
     [Fact]
@@ -183,6 +234,20 @@ public class QuestEngineTests
         Assert.Equal(QuestStatus.ReadyToTurnIn, player.QuestLog[0].Status);
     }
 
+    [Fact]
+    public void AdvanceObjective_AdvancesStageWhenAnyObjectiveCompletes_ForOrStage()
+    {
+        var player = CreatePlayer();
+        _engine.AcceptQuest(player, "or_stage_quest");
+
+        _engine.AdvanceObjective(player, "or_stage_quest", "talk_guard", 1);
+
+        var progress = player.QuestLog[0];
+        Assert.Equal("resolution", progress.CurrentStageId);
+        Assert.Single(progress.Objectives);
+        Assert.Equal("report_back", progress.Objectives[0].ObjectiveId);
+    }
+
     // ── Custom Objectives ──
 
     [Fact]
@@ -266,6 +331,80 @@ public class QuestEngineTests
         var quests = _engine.GetAvailableQuests(player, npc);
 
         Assert.Empty(quests);
+    }
+
+    [Fact]
+    public async Task AcceptQuestAsync_JoinsExistingPartyQuestAndPoolsProgress()
+    {
+        var stateManager = new InMemoryStateManager();
+        var partyEngine = new QuestEngine(_registry, NullLogger<QuestEngine>.Instance, stateManager);
+        var playerOne = CreatePlayer();
+        playerOne.Id = "player-one";
+        var playerTwo = CreatePlayer();
+        playerTwo.Id = "player-two";
+
+        await stateManager.SavePlayerAsync(playerOne);
+        await stateManager.SavePlayerAsync(playerTwo);
+
+        var first = await partyEngine.AcceptQuestAsync(playerOne, "party_hunt");
+        Assert.NotNull(first);
+        await stateManager.SavePlayerAsync(playerOne);
+
+        var second = await partyEngine.AcceptQuestAsync(playerTwo, "party_hunt");
+        Assert.NotNull(second);
+        await stateManager.SavePlayerAsync(playerTwo);
+
+        Assert.Equal(first!.PartyQuestGroupId, second!.PartyQuestGroupId);
+
+        await partyEngine.AdvanceObjectiveAsync(playerOne, "party_hunt", "party_wolves", 2);
+        await partyEngine.AdvanceObjectiveAsync(playerTwo, "party_hunt", "party_wolves", 1);
+
+        var updatedOne = (await stateManager.GetPlayerAsync(playerOne.Id))!;
+        var updatedTwo = (await stateManager.GetPlayerAsync(playerTwo.Id))!;
+        var objectiveOne = Assert.Single(updatedOne.QuestLog[0].Objectives);
+        var objectiveTwo = Assert.Single(updatedTwo.QuestLog[0].Objectives);
+
+        Assert.Equal(3, objectiveOne.CurrentCount);
+        Assert.True(objectiveOne.IsComplete);
+        Assert.Equal(QuestStatus.ReadyToTurnIn, updatedOne.QuestLog[0].Status);
+        Assert.Equal(3, objectiveTwo.CurrentCount);
+        Assert.True(objectiveTwo.IsComplete);
+        Assert.Equal(QuestStatus.ReadyToTurnIn, updatedTwo.QuestLog[0].Status);
+    }
+
+    [Fact]
+    public async Task TurnInQuestAsync_DistributesRewardsToAllPartyParticipants()
+    {
+        var stateManager = new InMemoryStateManager();
+        var partyEngine = new QuestEngine(_registry, NullLogger<QuestEngine>.Instance, stateManager);
+        var playerOne = CreatePlayer();
+        playerOne.Id = "player-one";
+        var playerTwo = CreatePlayer();
+        playerTwo.Id = "player-two";
+
+        await stateManager.SavePlayerAsync(playerOne);
+        await stateManager.SavePlayerAsync(playerTwo);
+
+        await partyEngine.AcceptQuestAsync(playerOne, "party_hunt");
+        await stateManager.SavePlayerAsync(playerOne);
+        await partyEngine.AcceptQuestAsync(playerTwo, "party_hunt");
+        await stateManager.SavePlayerAsync(playerTwo);
+
+        await partyEngine.AdvanceObjectiveAsync(playerOne, "party_hunt", "party_wolves", 3);
+
+        var reward = await partyEngine.TurnInQuestAsync(playerOne, "party_hunt", new Npc { Id = "innkeeper_mara", Name = "Mara" });
+
+        Assert.NotNull(reward);
+
+        var updatedOne = (await stateManager.GetPlayerAsync(playerOne.Id))!;
+        var updatedTwo = (await stateManager.GetPlayerAsync(playerTwo.Id))!;
+
+        Assert.Equal(QuestStatus.Completed, updatedOne.QuestLog[0].Status);
+        Assert.Equal(QuestStatus.Completed, updatedTwo.QuestLog[0].Status);
+        Assert.Equal(130, updatedOne.Gold);
+        Assert.Equal(130, updatedTwo.Gold);
+        Assert.Equal(90, updatedOne.Xp);
+        Assert.Equal(90, updatedTwo.Xp);
     }
 
     // ── Journal Formatting ──
@@ -432,6 +571,129 @@ public class QuestEngineTests
                 }
             ],
             Rewards = new QuestReward { Xp = 25 }
+        });
+
+        registry.Quests.Register(new QuestDefinition
+        {
+            Id = "faction_quest",
+            Name = "Faction Quest",
+            Description = "Only for the resistance.",
+            GiverId = "innkeeper_mara",
+            RequiredFaction = "dalmascan_resistance",
+            Stages =
+            [
+                new QuestStage
+                {
+                    Id = "faction_stage",
+                    Name = "Faction Work",
+                    Objectives = [new QuestObjective { Id = "faction_obj", Type = ObjectiveType.TalkTo, TargetId = "innkeeper_mara" }]
+                }
+            ]
+        });
+
+        registry.Quests.Register(new QuestDefinition
+        {
+            Id = "trust_quest",
+            Name = "Trust Quest",
+            Description = "Requires trust.",
+            GiverId = "innkeeper_mara",
+            MinDisposition = 25,
+            Stages =
+            [
+                new QuestStage
+                {
+                    Id = "trust_stage",
+                    Name = "Earn Trust",
+                    Objectives = [new QuestObjective { Id = "trust_obj", Type = ObjectiveType.TalkTo, TargetId = "innkeeper_mara" }]
+                }
+            ]
+        });
+
+        registry.Quests.Register(new QuestDefinition
+        {
+            Id = "unlocker_quest",
+            Name = "Unlocker Quest",
+            Description = "Unlocks the follow-up.",
+            GiverId = "innkeeper_mara",
+            Stages =
+            [
+                new QuestStage
+                {
+                    Id = "unlock_stage",
+                    Name = "Do the Unlock",
+                    Objectives = [new QuestObjective { Id = "unlock_obj", Type = ObjectiveType.TalkTo, TargetId = "innkeeper_mara" }]
+                }
+            ],
+            Rewards = new QuestReward { UnlockQuestId = "locked_followup" }
+        });
+
+        registry.Quests.Register(new QuestDefinition
+        {
+            Id = "locked_followup",
+            Name = "Locked Follow-up",
+            Description = "Only appears after the unlocker.",
+            GiverId = "innkeeper_mara",
+            Stages =
+            [
+                new QuestStage
+                {
+                    Id = "locked_stage",
+                    Name = "Follow Up",
+                    Objectives = [new QuestObjective { Id = "locked_obj", Type = ObjectiveType.TalkTo, TargetId = "innkeeper_mara" }]
+                }
+            ]
+        });
+
+        registry.Quests.Register(new QuestDefinition
+        {
+            Id = "or_stage_quest",
+            Name = "Either Or",
+            Description = "One lead is enough.",
+            GiverId = "innkeeper_mara",
+            Stages =
+            [
+                new QuestStage
+                {
+                    Id = "lead_stage",
+                    Name = "Find a Lead",
+                    RequireAllObjectives = false,
+                    NextStageId = "resolution",
+                    Objectives =
+                    [
+                        new QuestObjective { Id = "talk_guard", Type = ObjectiveType.TalkTo, TargetId = "guard_bram" },
+                        new QuestObjective { Id = "talk_beggar", Type = ObjectiveType.TalkTo, TargetId = "beggar_syl" }
+                    ]
+                },
+                new QuestStage
+                {
+                    Id = "resolution",
+                    Name = "Report Back",
+                    Objectives = [new QuestObjective { Id = "report_back", Type = ObjectiveType.TalkTo, TargetId = "innkeeper_mara" }]
+                }
+            ]
+        });
+
+        registry.Quests.Register(new QuestDefinition
+        {
+            Id = "party_hunt",
+            Name = "Party Hunt",
+            Description = "A shared bounty.",
+            GiverId = "innkeeper_mara",
+            TurnInNpcId = "innkeeper_mara",
+            IsPartyQuest = true,
+            Stages =
+            [
+                new QuestStage
+                {
+                    Id = "hunt_stage",
+                    Name = "Thin the Pack",
+                    Objectives =
+                    [
+                        new QuestObjective { Id = "party_wolves", Type = ObjectiveType.Kill, TargetId = "dire_wolf", RequiredCount = 3 }
+                    ]
+                }
+            ],
+            Rewards = new QuestReward { Xp = 90, Gold = 30 }
         });
     }
 }

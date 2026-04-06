@@ -10,6 +10,24 @@ const {
 } = require('./helpers');
 
 test.describe('Grand Adventure Engine dashboard', () => {
+  async function sendCommand(page, command) {
+    const responsePromise = page.waitForResponse((response) => {
+      if (!response.url().includes('/api/dashboard/action')) return false;
+      if (response.request().method() !== 'POST') return false;
+      return (response.request().postData() || '').includes(command);
+    });
+
+    await page.locator('#command-input').fill(command);
+    await page.getByRole('button', { name: 'Send' }).click();
+    const actionResponse = await responsePromise;
+    const result = await actionResponse.json();
+    await page.waitForFunction(() => {
+      const input = document.getElementById('command-input');
+      return !!input && !input.disabled && (!window.UI || !window.UI._streamNode);
+    }, null, { timeout: 30_000 });
+    return result;
+  }
+
   // Clean up test-created players after each test
   test.afterEach(async ({ request }) => {
     try {
@@ -60,6 +78,48 @@ test.describe('Grand Adventure Engine dashboard', () => {
     await expect(page.locator('#command-input')).toBeEnabled({ timeout: 30_000 });
 
     await expect(page.getByRole('button', { name: 'Open Admin Console' })).toHaveCount(0);
+  });
+
+  test('user can accept, review, and abandon a seeded quest through the dashboard', async ({ page }, testInfo) => {
+    const playerId = uniqueId('pw-quest', testInfo.project.name);
+
+    await login(page, 'user');
+    await openCreateCharacter(page);
+    await page.locator('#char-name').fill('Quest Browser');
+    await page.locator('#char-player-id').fill(playerId);
+    await page.locator('#char-race').selectOption('Human');
+    await page.locator('#char-class').selectOption('Warrior');
+    await page.locator('#char-backstory').fill('Quest E2E coverage via Playwright.');
+    await page.getByRole('button', { name: 'Create Character' }).click();
+
+    await expect(page.locator('#dashboard')).toBeVisible();
+    await expect(page.locator('#room-name')).not.toBeEmpty();
+
+    await page.evaluate(() => {
+      const maxId = window.setInterval(() => {}, 100000);
+      for (let i = 1; i <= maxId; i++) window.clearInterval(i);
+    });
+
+    const acceptResult = await sendCommand(page, 'accept quest The Waterway Infestation');
+    expect(acceptResult.success).toBeTruthy();
+    expect(acceptResult.mechanicalSummary).toContain('The Waterway Infestation');
+    await expect(page.locator('#story-log')).toContainText('accept quest The Waterway Infestation');
+
+    const journalResult = await sendCommand(page, 'journal');
+    expect(journalResult.success).toBeTruthy();
+    expect(journalResult.mechanicalSummary).toContain('Active Quests');
+    expect(journalResult.mechanicalSummary).toContain('The Waterway Infestation');
+    await expect(page.locator('#story-log')).toContainText('> journal');
+
+    const abandonResult = await sendCommand(page, 'abandon quest The Waterway Infestation');
+    expect(abandonResult.success).toBeTruthy();
+    expect(abandonResult.mechanicalSummary).toMatch(/abandoned/i);
+    await expect(page.locator('#story-log')).toContainText('abandon quest The Waterway Infestation');
+
+    const emptyJournalResult = await sendCommand(page, 'journal');
+    expect(emptyJournalResult.success).toBeTruthy();
+    expect(emptyJournalResult.mechanicalSummary).toMatch(/quest journal is empty/i);
+    await expect(page.locator('#story-log')).toContainText('> journal');
   });
 
   test('admin console seeds demo actors and runs command/admin workflows', async ({ page }) => {

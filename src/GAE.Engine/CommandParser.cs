@@ -121,6 +121,12 @@ public partial class CommandParser
             return action;
         }
 
+        if (CompletedQuestsRegex().IsMatch(input))
+        {
+            action.Type = ActionType.CompletedQuests;
+            return action;
+        }
+
         // Quest info — "quest <name>"
         var questInfoMatch = QuestInfoRegex().Match(input);
         if (questInfoMatch.Success)
@@ -397,6 +403,9 @@ public partial class CommandParser
 
     [GeneratedRegex(@"^(?:journal|quests|quest\s+log|my\s+quests|quest\s+journal|log)$", RegexOptions.IgnoreCase)]
     private static partial Regex JournalRegex();
+
+    [GeneratedRegex(@"^(?:completed|done|finished|completed\s+quests)$", RegexOptions.IgnoreCase)]
+    private static partial Regex CompletedQuestsRegex();
 
     [GeneratedRegex(@"^(?:quest\s+info|check\s+quest|quest)\s+(?<quest>.+)$", RegexOptions.IgnoreCase)]
     private static partial Regex QuestInfoRegex();

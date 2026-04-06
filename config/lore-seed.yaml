@@ -1,4 +1,4 @@
-# ══════════════════════════════════════════════════════════════════
+﻿# ══════════════════════════════════════════════════════════════════
 # FINAL FANTASY-THEMED LORE SEED
 # "Kupo! Another adventurer wanders into our story." — Mog
 #
@@ -52,7 +52,7 @@ rooms:
         personality: "Warm, confident, and effortlessly cool. Runs the Seventh Heaven with charm and steel. Knows everyone's secrets and trades them like currency. Flirtatious with adventurers she finds interesting. Used to run with a resistance cell before settling down. Still keeps a gunblade behind the bar."
         faction: "merchants_guild"
         knowledge_scopes: ["rumors", "town", "golmore", "pharos", "merchants_guild", "dalmascan_resistance"]
-        quests_offered: ["waterway_infestation"]
+        quests_offered: ["waterway_infestation", "cactuar_hunt"]
       - id: "drunk_pete"
         name: "Wedge"
         personality: "One half of Biggs & Wedge — except Biggs shipped out weeks ago and Wedge has been drinking ever since. Hapless, good-hearted, and terrible at his job. Claims he once piloted an airship. Nobody believes him. Surprisingly loyal to anyone who shows him kindness."
@@ -102,6 +102,7 @@ rooms:
         faction: "dalmascan_resistance"
         knowledge_scopes: ["dungeons", "monsters", "treasure", "adventure", "lore", "airships", "technology"]
         level: 5
+        quests_offered: ["cid_airship_parts"]
     items:
       - id: "loose_cobblestone"
         name: "Cracked Paving Stone"
@@ -328,6 +329,7 @@ rooms:
         personality: "A flamboyant, self-proclaimed legendary swordsman who runs a black market arms dealership from Lowtown. Dramatic, boastful, and surprisingly knowledgeable about weapons — though most of his 'legendary collection' is knockoffs. Buys and sells anything with theatrical flair. Claims to have crossed dimensions. Speaks about himself in the third person when excited."
         faction: "merchants_guild"
         knowledge_scopes: ["black_market", "rumors", "pharos", "occuria_cult", "weapons", "dimensions"]
+        quests_offered: ["gilgamesh_challenge", "tonberry_grudge"]
         is_shopkeeper: true
         shop_inventory:
           - id: "shadow_dagger"
@@ -418,7 +420,7 @@ rooms:
         personality: "A Viera exile who left the Golmore Jungle decades ago, estranged from her people. Quiet, perceptive, and deadly with a bow. Joined the Rabanastre guard because she has nowhere else to go. Recently heard rumors that a kinsman — her younger sister Mjrn — has gone missing in the jungle. Stoic exterior, deep worry beneath. Hard to read, but responds to sincerity."
         faction: "dalmascan_resistance"
         knowledge_scopes: ["dalmascan_resistance", "golmore", "monsters", "missing_people", "viera"]
-        quests_offered: ["fran_missing_kin"]
+        quests_offered: ["fran_missing_kin", "rangers_retreat"]
     items:
       - id: "discarded_torch"
         name: "Spent Torch"
@@ -448,7 +450,7 @@ rooms:
         personality: "A legendary White Mage who claims the Crystals speak to him directly. Kind, gentle, and slightly unhinged. Blesses adventurers with genuine enthusiasm. Tends to trail off mid-sentence to listen to 'crystal guidance' no one else can hear. Deeply convinced the world's destruction cycle is approaching — 'The Void stirs again, kupo... wait, I'm not a moogle.' Generous with healing magic."
         faction: "dalmascan_resistance"
         knowledge_scopes: ["religion", "blessings", "undead", "holy_relics", "town", "crystals", "espers"]
-        quests_offered: ["crystal_blessing"]
+        quests_offered: ["crystal_blessing", "esper_call"]
     items:
       - id: "prayer_candle"
         name: "Crystal Shard"
@@ -577,6 +579,7 @@ rooms:
         personality: "A black-and-white cat wearing a tiny gold crown and a red cape. Speaks in a thick accent. Claims to be a fortune-teller but his predictions are spectacularly wrong 90% of the time. Actually appears to be a sentient magical construct rather than a real cat. Cannot be recruited, but will tell your fortune (badly) if asked. Rides an invisible moogle, apparently."
         faction: "merchants_guild"
         knowledge_scopes: ["fortune_telling", "rumors", "moogles", "ancient_lore"]
+        quests_offered: ["moogle_mail"]
     items:
       - id: "mossy_coin"
         name: "Ancient Gil"

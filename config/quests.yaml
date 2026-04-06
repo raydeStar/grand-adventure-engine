@@ -37,6 +37,7 @@ quests:
     rewards:
       xp: 25
       gold: 10
+      unlocks_quest: "cactuar_hunt"
       disposition_shift: 10
       memory_flags: ["helped-with-rats"]
 
@@ -69,6 +70,7 @@ quests:
           - id: "deliver_to_wedge"
             type: Deliver
             target_id: "drunk_pete"
+            required_item_id: "discarded_bottle"
             required_count: 1
             description: "Deliver the bottle to Wedge"
     rewards:
@@ -184,6 +186,47 @@ quests:
       disposition_shift: 20
       memory_flags: ["fran-trusted", "!golmore-explorer"]
 
+  # ── QUEST 5B: Red XIII Escort ─────────────────────────────
+  - id: "rangers_retreat"
+    name: "Ranger's Retreat"
+    description: "Fran has lost contact with Red XIII at the jungle edge. Find him, steady him, and bring him back to the gate before the Mist worsens."
+    giver_id: "gate_guard_lena"
+    turn_in_npc_id: "gate_guard_lena"
+    min_level: 1
+    is_one_time: true
+    tags: ["side", "escort", "forest"]
+    offer_hint: "Fran keeps her worry sheathed behind discipline. She asks for help like a soldier issuing orders because admitting fear would cost too much."
+    completion_hint: "Fran's relief is quiet but unmistakable. The gate feels safer with Red XIII back beneath its stone arch."
+    failure_hint: "If Red XIII is lost in the Mist, Fran takes it as a personal failing and the jungle grows that much more hostile."
+    stages:
+      - id: "find_red"
+        name: "Find Red XIII"
+        description: "Reach the Golmore Entrance and speak with Red XIII."
+        narrator_hint: "The jungle edge is uneasy, thick with Mist and half-heard movement. Red XIII is alert, proud, and reluctant to withdraw."
+        objectives:
+          - id: "talk_red"
+            type: TalkTo
+            target_id: "ranger_thorne"
+            target_name: "Red XIII"
+            description: "Find Red XIII at the Golmore Entrance"
+        next_stage_id: "bring_red_home"
+      - id: "bring_red_home"
+        name: "Bring Red XIII Back"
+        description: "Escort Red XIII safely back to the city gate."
+        narrator_hint: "Red XIII yields only when the danger becomes undeniable. The retreat should feel tense, disciplined, and one step ahead of something hungry in the trees."
+        objectives:
+          - id: "escort_red"
+            type: Escort
+            target_id: "ranger_thorne"
+            target_name: "Red XIII"
+            location_constraint: "town_gate"
+            description: "Escort Red XIII back to the gate"
+    rewards:
+      xp: 35
+      gold: 20
+      disposition_shift: 10
+      memory_flags: ["helped-red-xiii"]
+
   # ── QUEST 6: Crystal Blessing ────────────────────────────
   - id: "crystal_blessing"
     name: "The Crystal's Favor"
@@ -223,6 +266,7 @@ quests:
     giver_id: "innkeeper_mara"
     turn_in_npc_id: "innkeeper_mara"
     min_level: 2
+    is_party_quest: true
     is_one_time: true
     tags: ["side", "combat", "hunt"]
     stages:
@@ -356,8 +400,9 @@ quests:
         narrator_hint: "Gilgamesh makes an absurdly dramatic entrance speech. He pulls out four swords at once (somehow). The duel is theatrical — Gilgamesh is actually dangerous but treats it like performance art. If the player survives, Gilgamesh concedes with zero shame."
         objectives:
           - id: "fight_gilgamesh"
-            type: Custom
-            custom_condition: "The player has accepted and survived a duel with Gilgamesh in Lowtown. The combat should be winnable but challenging."
+            type: Survive
+            target_id: "back_alley"
+            required_count: 3
             description: "Survive three rounds against Gilgamesh"
         next_stage_id: "claim_prize"
       - id: "claim_prize"

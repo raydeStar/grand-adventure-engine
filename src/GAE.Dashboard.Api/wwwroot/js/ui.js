@@ -628,9 +628,11 @@ const UI = {
     const escaped = this.esc(text);
     const log = this.$('story-log');
     const input = this.$('command-input');
+    const submit = this.$('command-submit');
 
     // Disable input while streaming
     if (input) input.disabled = true;
+    if (submit) submit.disabled = true;
 
     this._streamNode = parentNode;
 
@@ -660,6 +662,7 @@ const UI = {
         input.disabled = false;
         input.focus();
       }
+      if (submit) submit.disabled = false;
       if (log) log.scrollTop = log.scrollHeight;
     };
 
@@ -707,6 +710,8 @@ const UI = {
     // Re-enable input in case it was locked
     const input = this.$('command-input');
     if (input) input.disabled = false;
+    const submit = this.$('command-submit');
+    if (submit) submit.disabled = false;
   },
 
   renderPlayersList(players, currentPlayerId, session) {

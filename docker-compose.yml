@@ -17,12 +17,33 @@ services:
       DashboardAuth__User__Password: "${GAE_DASHBOARD_USER_PASSWORD:-GAE-User-Local!123}"
       DashboardAuth__Admin__Username: "${GAE_DASHBOARD_ADMIN_USERNAME:-admin}"
       DashboardAuth__Admin__Password: "${GAE_DASHBOARD_ADMIN_PASSWORD:-GAE-Admin-Local!123}"
+      ConnectionStrings__GameDatabase: "Host=postgres;Port=5432;Database=gae;Username=gae_app;Password=${GAE_DB_PASSWORD:-gae_dev_password}"
+      Persistence__UsePostgres: "true"
     volumes:
       - gae_data:/app/data
       - ./config:/app/config:ro
     depends_on:
+      postgres:
+        condition: service_healthy
       wikijs:
         condition: service_started
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: gae
+      POSTGRES_USER: gae_app
+      POSTGRES_PASSWORD: ${GAE_DB_PASSWORD:-gae_dev_password}
+    ports:
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gae_app -d gae"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
 
   wikijs:
@@ -39,3 +60,4 @@ services:
 volumes:
   wikijs_data:
   gae_data:
+  pgdata:

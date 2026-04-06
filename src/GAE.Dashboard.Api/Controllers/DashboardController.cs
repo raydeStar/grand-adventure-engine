@@ -3,6 +3,7 @@ using GAE.Core.Models;
 using GAE.Core.Registry;
 using GAE.Dashboard.Api.Security;
 using GAE.Engine.Configuration;
+using GAE.Engine.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -24,6 +25,7 @@ public class DashboardController : ControllerBase
     private readonly GameRulesConfig _rules;
     private readonly IContentRegistryService _registry;
     private readonly IDiscordNotifier? _discordNotifier;
+    private readonly ContentSeedService? _contentSeed;
 
     private static readonly TimeSpan NarratorCacheDuration = TimeSpan.FromSeconds(60);
     private static object? _narratorCachedResult;
@@ -40,7 +42,8 @@ public class DashboardController : ControllerBase
         WorldSeedConfig worldSeedConfig,
         GameRulesConfig rules,
         IContentRegistryService registry,
-        IDiscordNotifier? discordNotifier = null)
+        IDiscordNotifier? discordNotifier = null,
+        ContentSeedService? contentSeed = null)
     {
         _stateManager = stateManager;
         _engine = engine;
@@ -53,6 +56,7 @@ public class DashboardController : ControllerBase
         _rules = rules;
         _registry = registry;
         _discordNotifier = discordNotifier;
+        _contentSeed = contentSeed;
     }
 
     [HttpGet("players")]
@@ -1479,6 +1483,8 @@ public class DashboardController : ControllerBase
             "classes" => Ok(_registry.Classes.GetAll()),
             "races" => Ok(_registry.Races.GetAll()),
             "items" => Ok(_registry.Items.GetAll()),
+            "monsters" => Ok(_registry.Monsters.GetAll()),
+            "quests" => Ok(_registry.Quests.GetAll()),
             _ => NotFound(new { error = $"Unknown registry type: {type}" })
         };
     }
@@ -1493,6 +1499,8 @@ public class DashboardController : ControllerBase
             "classes" => _registry.Classes.GetById(id),
             "races" => _registry.Races.GetById(id),
             "items" => _registry.Items.GetById(id),
+            "monsters" => _registry.Monsters.GetById(id),
+            "quests" => _registry.Quests.GetById(id),
             _ => null
         };
         return entry is not null ? Ok(entry) : NotFound();
@@ -1516,7 +1524,7 @@ public class DashboardController : ControllerBase
 
     [Authorize(Policy = DashboardPolicies.AdminAccess)]
     [HttpPost("admin/registry/{type}")]
-    public IActionResult UpsertRegistryEntry(string type, [FromBody] System.Text.Json.JsonElement body)
+    public async Task<IActionResult> UpsertRegistryEntry(string type, [FromBody] System.Text.Json.JsonElement body, CancellationToken ct)
     {
         try
         {
@@ -1532,22 +1540,38 @@ public class DashboardController : ControllerBase
                     var spell = System.Text.Json.JsonSerializer.Deserialize<SpellDefinition>(body.GetRawText(), options);
                     if (spell is null || string.IsNullOrWhiteSpace(spell.Id)) return BadRequest(new { error = "Invalid spell data" });
                     _registry.Spells.Register(spell);
+                    if (_contentSeed is not null) await _contentSeed.SaveEntryAsync("spell", spell, ct);
                     return Ok(spell);
                 case "classes":
                     var cls = System.Text.Json.JsonSerializer.Deserialize<ClassDefinition>(body.GetRawText(), options);
                     if (cls is null || string.IsNullOrWhiteSpace(cls.Id)) return BadRequest(new { error = "Invalid class data" });
                     _registry.Classes.Register(cls);
+                    if (_contentSeed is not null) await _contentSeed.SaveEntryAsync("class", cls, ct);
                     return Ok(cls);
                 case "races":
                     var race = System.Text.Json.JsonSerializer.Deserialize<RaceDefinition>(body.GetRawText(), options);
                     if (race is null || string.IsNullOrWhiteSpace(race.Id)) return BadRequest(new { error = "Invalid race data" });
                     _registry.Races.Register(race);
+                    if (_contentSeed is not null) await _contentSeed.SaveEntryAsync("race", race, ct);
                     return Ok(race);
                 case "items":
                     var item = System.Text.Json.JsonSerializer.Deserialize<ItemTemplate>(body.GetRawText(), options);
                     if (item is null || string.IsNullOrWhiteSpace(item.Id)) return BadRequest(new { error = "Invalid item data" });
                     _registry.Items.Register(item);
+                    if (_contentSeed is not null) await _contentSeed.SaveEntryAsync("item", item, ct);
                     return Ok(item);
+                case "monsters":
+                    var monster = System.Text.Json.JsonSerializer.Deserialize<MonsterTemplate>(body.GetRawText(), options);
+                    if (monster is null || string.IsNullOrWhiteSpace(monster.Id)) return BadRequest(new { error = "Invalid monster data" });
+                    _registry.Monsters.Register(monster);
+                    if (_contentSeed is not null) await _contentSeed.SaveEntryAsync("monster", monster, ct);
+                    return Ok(monster);
+                case "quests":
+                    var quest = System.Text.Json.JsonSerializer.Deserialize<QuestDefinition>(body.GetRawText(), options);
+                    if (quest is null || string.IsNullOrWhiteSpace(quest.Id)) return BadRequest(new { error = "Invalid quest data" });
+                    _registry.Quests.Register(quest);
+                    if (_contentSeed is not null) await _contentSeed.SaveEntryAsync("quest", quest, ct);
+                    return Ok(quest);
                 default:
                     return NotFound(new { error = $"Unknown registry type: {type}" });
             }
@@ -1560,16 +1584,21 @@ public class DashboardController : ControllerBase
 
     [Authorize(Policy = DashboardPolicies.AdminAccess)]
     [HttpDelete("admin/registry/{type}/{id}")]
-    public IActionResult DeleteRegistryEntry(string type, string id)
+    public async Task<IActionResult> DeleteRegistryEntry(string type, string id, CancellationToken ct)
     {
+        string? contentType = null;
         switch (type.ToLowerInvariant())
         {
-            case "spells": _registry.Spells.Remove(id); break;
-            case "classes": _registry.Classes.Remove(id); break;
-            case "races": _registry.Races.Remove(id); break;
-            case "items": _registry.Items.Remove(id); break;
+            case "spells": _registry.Spells.Remove(id); contentType = "spell"; break;
+            case "classes": _registry.Classes.Remove(id); contentType = "class"; break;
+            case "races": _registry.Races.Remove(id); contentType = "race"; break;
+            case "items": _registry.Items.Remove(id); contentType = "item"; break;
+            case "monsters": _registry.Monsters.Remove(id); contentType = "monster"; break;
+            case "quests": _registry.Quests.Remove(id); contentType = "quest"; break;
             default: return NotFound(new { error = $"Unknown registry type: {type}" });
         }
+        if (_contentSeed is not null && contentType is not null)
+            await _contentSeed.RemoveEntryAsync(contentType, id, ct);
         return Ok(new { success = true, id });
     }
 

@@ -32,4 +32,10 @@ public class QuestUpdates
     /// Stored in QuestProgress.StageNarrations for the journal.
     /// </summary>
     public string? StageDescription { get; set; }
+
+    /// <summary>
+    /// Optional quest failure recommendations from the narrator. The engine still validates
+    /// whether the recommendation should actually mark the quest as failed.
+    /// </summary>
+    public Dictionary<string, string> FailureRecommended { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }

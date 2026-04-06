@@ -40,6 +40,7 @@ public enum ActionType
     Flee,
     Spellbook,
     Journal,
+    CompletedQuests,
     QuestInfo,
     AcceptQuest,
     AbandonQuest,

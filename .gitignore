@@ -35,7 +35,7 @@ config/appsettings.Production.json
 .env
 
 ## Local runtime data and build artifacts
-data/
+/data/
 src/GAE.Dashboard.Api/artifacts/
 ux-scout-dashboard.png
 

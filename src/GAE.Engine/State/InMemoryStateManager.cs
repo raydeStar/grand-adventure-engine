@@ -16,6 +16,7 @@ public class InMemoryStateManager : IStateManager
     private readonly ConcurrentDictionary<string, Room> _rooms = new();
     private readonly ConcurrentDictionary<string, Room> _playerRooms = new();
     private readonly ConcurrentDictionary<string, CombatState> _combats = new();
+    private readonly ConcurrentDictionary<string, PartyQuestProgress> _partyQuests = new();
     private readonly List<StoryEntry> _storyEntries = [];
     private readonly Lock _storyLock = new();
 
@@ -187,6 +188,21 @@ public class InMemoryStateManager : IStateManager
     public Task RemoveAllCombatStatesAsync(CancellationToken ct = default)
     {
         _combats.Clear();
+        return Task.CompletedTask;
+    }
+
+    public Task<PartyQuestProgress?> GetPartyQuestAsync(string groupId, CancellationToken ct = default)
+        => Task.FromResult(_partyQuests.GetValueOrDefault(groupId));
+
+    public Task SavePartyQuestAsync(PartyQuestProgress progress, CancellationToken ct = default)
+    {
+        _partyQuests[progress.GroupId] = progress;
+        return Task.CompletedTask;
+    }
+
+    public Task RemovePartyQuestAsync(string groupId, CancellationToken ct = default)
+    {
+        _partyQuests.TryRemove(groupId, out _);
         return Task.CompletedTask;
     }
 
