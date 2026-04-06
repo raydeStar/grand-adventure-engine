@@ -30,6 +30,17 @@ public class CommandParserTests
     }
 
     [Theory]
+    [InlineData("travel to world default-world", "default-world")]
+    [InlineData("travel world shadow_market", "shadow_market")]
+    [InlineData("realm jump ironhold", "ironhold")]
+    public void Parse_TravelWorldCommands_ReturnsTravelWorld(string input, string expectedWorld)
+    {
+        var action = _parser.Parse("player1", input);
+        Assert.Equal(ActionType.TravelWorld, action.Type);
+        Assert.Equal(expectedWorld, action.Target);
+    }
+
+    [Theory]
     [InlineData("look", ActionType.Look)]
     [InlineData("examine", ActionType.Look)]
     [InlineData("l", ActionType.Look)]

@@ -131,6 +131,7 @@ builder.Services.AddSingleton<IContentRegistryService>(sp => sp.GetRequiredServi
 
 builder.Services.AddSingleton<QuestEngine>();
 builder.Services.AddSingleton<QuestTracker>();
+builder.Services.AddSingleton<IRealmTravelService, RealmTravelService>();
 builder.Services.AddSingleton<IGameEngine, GameEngine>();
 
 // Narrator — LM Studio HTTP client
@@ -173,6 +174,7 @@ if (!string.IsNullOrEmpty(discordToken) && discordToken != "YOUR_DISCORD_BOT_TOK
 // SignalR + Controllers
 builder.Services.AddSignalR();
 builder.Services.AddControllers();
+builder.Services.AddSingleton<IWorldContext, WorldContext>();
 builder.Services.AddSingleton<IGameEventBroadcaster, SignalRGameEventBroadcaster>();
 builder.Services.Configure<DashboardAuthOptions>(builder.Configuration.GetSection(DashboardAuthOptions.SectionName));
 builder.Services.AddSingleton<IDashboardAuthService, DashboardAuthService>();
@@ -359,6 +361,7 @@ app.UseStaticFiles(new StaticFileOptions
 });
 app.UseCors();
 app.UseAuthentication();
+app.UseMiddleware<WorldContextMiddleware>();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHub<GameHub>("/hubs/game");

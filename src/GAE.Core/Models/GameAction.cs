@@ -44,5 +44,6 @@ public enum ActionType
     QuestInfo,
     AcceptQuest,
     AbandonQuest,
+    TravelWorld,
     Unknown
 }

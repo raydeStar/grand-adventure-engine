@@ -16,11 +16,16 @@ public class EfCoreStateManager : IStateManager
 {
     private readonly IDbContextFactory<GaeDbContext> _dbFactory;
     private readonly ILogger<EfCoreStateManager> _logger;
+    private readonly IWorldContext _worldContext;
 
-    public EfCoreStateManager(IDbContextFactory<GaeDbContext> dbFactory, ILogger<EfCoreStateManager> logger)
+    public EfCoreStateManager(
+        IDbContextFactory<GaeDbContext> dbFactory,
+        ILogger<EfCoreStateManager> logger,
+        IWorldContext worldContext)
     {
         _dbFactory = dbFactory;
         _logger = logger;
+        _worldContext = worldContext;
     }
 
     // ── Player operations ──────────────────────────────────────────
@@ -74,14 +79,24 @@ public class EfCoreStateManager : IStateManager
     public async Task<Room?> GetRoomAsync(string roomId, CancellationToken ct = default)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
-        var entity = await db.Rooms.AsNoTracking().FirstOrDefaultAsync(r => r.Id == roomId, ct);
+        var worldId = _worldContext.GetCurrentWorldOrDefault();
+        var entity = await db.Rooms.AsNoTracking()
+            .FirstOrDefaultAsync(r => r.Id == roomId && r.WorldIds.Contains(worldId), ct);
+
+        // Backward-compatible fallback for legacy/untagged room records.
+        if (entity is null)
+            entity = await db.Rooms.AsNoTracking().FirstOrDefaultAsync(r => r.Id == roomId, ct);
+
         return entity?.ToDomain();
     }
 
     public async Task<IReadOnlyList<Room>> GetAllRoomsAsync(CancellationToken ct = default)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
-        var entities = await db.Rooms.AsNoTracking().Where(r => r.IsTemplate).ToListAsync(ct);
+        var worldId = _worldContext.GetCurrentWorldOrDefault();
+        var entities = await db.Rooms.AsNoTracking()
+            .Where(r => r.IsTemplate && r.WorldIds.Contains(worldId))
+            .ToListAsync(ct);
         return entities.Select(e => e.ToDomain()).ToList();
     }
 
@@ -228,7 +243,9 @@ public class EfCoreStateManager : IStateManager
     public async Task<IReadOnlyList<StoryEntry>> GetStoryEntriesAsync(string? playerId = null, int limit = 50, CancellationToken ct = default)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var worldId = _worldContext.GetCurrentWorldOrDefault();
         IQueryable<StoryEntryEntity> query = db.StoryEntries.AsNoTracking()
+            .Where(e => e.WorldId == worldId)
             .OrderByDescending(e => e.Timestamp);
 
         if (playerId is not null)

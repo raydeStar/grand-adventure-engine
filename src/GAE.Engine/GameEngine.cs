@@ -3,6 +3,7 @@ using GAE.Core.Interfaces;
 using GAE.Core.Models;
 using GAE.Core.Registry;
 using GAE.Engine.Configuration;
+using GAE.Engine.Worlds;
 using Microsoft.Extensions.Logging;
 
 namespace GAE.Engine;
@@ -18,6 +19,7 @@ public class GameEngine : IGameEngine
     private readonly IContentRegistryService? _registry;
     private readonly QuestEngine? _questEngine;
     private readonly QuestTracker? _questTracker;
+    private readonly IRealmTravelService? _realmTravelService;
 
 
     public GameEngine(
@@ -29,7 +31,8 @@ public class GameEngine : IGameEngine
         ILogger<GameEngine> logger,
         IContentRegistryService? registry = null,
         QuestEngine? questEngine = null,
-        QuestTracker? questTracker = null)
+        QuestTracker? questTracker = null,
+        IRealmTravelService? realmTravelService = null)
     {
         _stateManager = stateManager;
         _dice = dice;
@@ -40,6 +43,7 @@ public class GameEngine : IGameEngine
         _registry = registry;
         _questEngine = questEngine;
         _questTracker = questTracker;
+        _realmTravelService = realmTravelService;
     }
 
     public GameAction ParseCommand(string playerId, string rawInput)
@@ -130,6 +134,7 @@ public class GameEngine : IGameEngine
             ActionType.QuestInfo => ProcessQuestInfo(player, action),
             ActionType.AcceptQuest => await ProcessAcceptQuestAsync(player, action, ct),
             ActionType.AbandonQuest => await ProcessAbandonQuest(player, action, ct),
+            ActionType.TravelWorld => await ProcessTravelWorldAsync(player, action, ct),
             _ => await ProcessFreeFormActionAsync(player, action, ct)
         };
 
@@ -392,6 +397,33 @@ public class GameEngine : IGameEngine
 
     public async Task<CombatState?> GetActiveCombatAsync(string roomId, string worldId, CancellationToken ct = default)
         => await _stateManager.GetCombatStateAsync(roomId, worldId, ct);
+
+    private async Task<ActionResult> ProcessTravelWorldAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
+    {
+        if (_realmTravelService is null)
+        {
+            return new ActionResult
+            {
+                ActionId = action.Id,
+                Success = false,
+                MechanicalSummary = "Realm travel service is not available."
+            };
+        }
+
+        if (string.IsNullOrWhiteSpace(action.Target))
+        {
+            return new ActionResult
+            {
+                ActionId = action.Id,
+                Success = false,
+                MechanicalSummary = "Specify a destination world ID. Example: travel to world default-world"
+            };
+        }
+
+        var result = await _realmTravelService.TransferPlayerAsync(player.Id, action.Target.Trim(), "player-command", ct);
+        result.ActionId = action.Id;
+        return result;
+    }
 
     // --- Action processors ---
 
@@ -3433,6 +3465,7 @@ public class GameEngine : IGameEngine
                 `quest <name>` -- View details for a specific quest
                 `accept <quest>` -- Accept a quest
                 `abandon <quest>` -- Abandon an active quest
+                `travel to world <world-id>` -- Transfer to another world
                 `help` -- Show this help message
 
                 You can also type anything in natural language and the narrator will try to interpret it!

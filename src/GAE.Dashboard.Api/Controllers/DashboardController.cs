@@ -4,6 +4,7 @@ using GAE.Core.Registry;
 using GAE.Dashboard.Api.Security;
 using GAE.Engine.Configuration;
 using GAE.Engine.Data;
+using GAE.Engine.Worlds;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -26,6 +27,8 @@ public class DashboardController : ControllerBase
     private readonly IContentRegistryService _registry;
     private readonly IDiscordNotifier? _discordNotifier;
     private readonly ContentSeedService? _contentSeed;
+    private readonly IWorldContext _worldContext;
+    private readonly IRealmTravelService _realmTravelService;
 
     private static readonly TimeSpan NarratorCacheDuration = TimeSpan.FromSeconds(60);
     private static object? _narratorCachedResult;
@@ -42,6 +45,8 @@ public class DashboardController : ControllerBase
         WorldSeedConfig worldSeedConfig,
         GameRulesConfig rules,
         IContentRegistryService registry,
+        IWorldContext worldContext,
+        IRealmTravelService realmTravelService,
         IDiscordNotifier? discordNotifier = null,
         ContentSeedService? contentSeed = null)
     {
@@ -55,6 +60,8 @@ public class DashboardController : ControllerBase
         _worldSeedConfig = worldSeedConfig;
         _rules = rules;
         _registry = registry;
+        _worldContext = worldContext;
+        _realmTravelService = realmTravelService;
         _discordNotifier = discordNotifier;
         _contentSeed = contentSeed;
     }
@@ -97,7 +104,8 @@ public class DashboardController : ControllerBase
     [HttpGet("story/room/{roomId}")]
     public async Task<IActionResult> GetRoomStory(string roomId, [FromQuery] string? worldId = null, [FromQuery] int limit = 10, CancellationToken ct = default)
     {
-        var entries = await _stateManager.GetRecentStoryForRoomAsync(roomId, worldId ?? WorldDefaults.DefaultWorldId, limit, ct);
+        var resolvedWorldId = string.IsNullOrWhiteSpace(worldId) ? _worldContext.GetCurrentWorldOrDefault() : worldId;
+        var entries = await _stateManager.GetRecentStoryForRoomAsync(roomId, resolvedWorldId, limit, ct);
         return Ok(entries);
     }
 
@@ -166,9 +174,45 @@ public class DashboardController : ControllerBase
         return Ok(new { active = _narrator.GetActiveModel(), summary = $"Model switched to {request.Model}." });
     }
 
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpPost("admin/worlds/transfer")]
+    public async Task<IActionResult> TransferPlayerToWorld([FromBody] TransferPlayerWorldRequest request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.PlayerId) || string.IsNullOrWhiteSpace(request.DestinationWorldId))
+            return BadRequest(new { error = "playerId and destinationWorldId are required." });
+
+        var transfer = await _realmTravelService.TransferPlayerAsync(
+            request.PlayerId,
+            request.DestinationWorldId,
+            "admin-dashboard",
+            ct);
+
+        if (!transfer.Success)
+            return BadRequest(new { error = transfer.MechanicalSummary });
+
+        await BroadcastAdminMutationAsync(
+            summary: transfer.MechanicalSummary,
+            playerId: request.PlayerId,
+            data: new Dictionary<string, object?>
+            {
+                ["playerId"] = request.PlayerId,
+                ["destinationWorldId"] = request.DestinationWorldId,
+                ["mutation"] = "transfer-player-world"
+            },
+            ct: ct);
+
+        return Ok(transfer);
+    }
+
     public class SetModelRequest
     {
         public string Model { get; set; } = string.Empty;
+    }
+
+    public class TransferPlayerWorldRequest
+    {
+        public string PlayerId { get; set; } = string.Empty;
+        public string DestinationWorldId { get; set; } = string.Empty;
     }
 
     [HttpPost("action")]
@@ -176,6 +220,10 @@ public class DashboardController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(request.PlayerId) || string.IsNullOrWhiteSpace(request.Command))
             return BadRequest(new { error = "playerId and command are required." });
+
+        var player = await _stateManager.GetPlayerAsync(request.PlayerId, ct);
+        if (player is not null)
+            _worldContext.SetCurrentWorld(player.ActiveWorldId);
 
         var action = _engine.ParseCommand(request.PlayerId, request.Command);
         var result = await _engine.ProcessActionAsync(request.PlayerId, action, ct);

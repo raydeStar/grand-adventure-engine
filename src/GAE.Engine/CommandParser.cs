@@ -28,6 +28,14 @@ public partial class CommandParser
             return action;
         }
 
+        var travelWorldMatch = TravelWorldRegex().Match(input);
+        if (travelWorldMatch.Success)
+        {
+            action.Type = ActionType.TravelWorld;
+            action.Target = travelWorldMatch.Groups["world"].Value.Trim();
+            return action;
+        }
+
         // Movement — "go north", "head south", or just bare "north", "n", etc.
         var moveMatch = MoveRegex().Match(input);
         if (moveMatch.Success)
@@ -302,6 +310,9 @@ public partial class CommandParser
 
     [GeneratedRegex(@"^(?:go|move|walk|head|travel)\s+(?<dir>north|south|east|west|up|down|n|s|e|w|u|d)$", RegexOptions.IgnoreCase)]
     private static partial Regex MoveRegex();
+
+    [GeneratedRegex(@"^(?:(?:travel|shift|jump)\s+(?:to\s+)?(?:world|realm)\s+|(?:world|realm)\s+(?:travel|shift|jump)\s+)(?<world>[a-zA-Z0-9][a-zA-Z0-9_-]{1,63})$", RegexOptions.IgnoreCase)]
+    private static partial Regex TravelWorldRegex();
 
     [GeneratedRegex(@"^(?<dir>north|south|east|west|up|down|n|s|e|w|u|d)$", RegexOptions.IgnoreCase)]
     private static partial Regex BareDirectionRegex();
