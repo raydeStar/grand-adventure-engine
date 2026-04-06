@@ -21,7 +21,11 @@
     interactionMode: 'explore',
     interactionTarget: '',
     llmActive: '',
-    llmModels: []
+    llmModels: [],
+    worlds: [],
+    selectedWorldId: localStorage.getItem('gae.admin.world') || '',
+    selectedWorld: null,
+    selectedWorldPlayers: []
   };
 
   // C# InteractionMode enum serializes as int — map to lowercase strings
@@ -117,6 +121,19 @@
     UI.$('btn-reseed-world')?.addEventListener('click', () => void handleReseedWorld());
     UI.$('btn-seed-demo-world')?.addEventListener('click', () => void handleSeedDemoWorld());
     UI.$('btn-reset-world')?.addEventListener('click', () => void handleResetWorld());
+
+    // World management events
+    UI.$('btn-create-world')?.addEventListener('click', showCreateWorldForm);
+    UI.$('world-form')?.addEventListener('submit', handleWorldFormSubmit);
+    UI.$('world-form-cancel')?.addEventListener('click', hideWorldForm);
+    UI.$('btn-edit-world')?.addEventListener('click', showEditWorldForm);
+    UI.$('btn-delete-world')?.addEventListener('click', () => void handleDeleteWorld());
+    UI.$('btn-create-portal')?.addEventListener('click', showCreatePortalForm);
+    UI.$('portal-form')?.addEventListener('submit', handlePortalFormSubmit);
+    UI.$('portal-form-cancel')?.addEventListener('click', hidePortalForm);
+    UI.$('btn-realm-transfer')?.addEventListener('click', () => void handleRealmTransfer());
+    UI.$('world-list')?.addEventListener('click', handleWorldListClick);
+    UI.$('portal-list')?.addEventListener('click', handlePortalListClick);
 
     document.querySelectorAll('[data-role-choice]').forEach((button) => {
       button.addEventListener('click', () => openDashboard(button.dataset.roleChoice || 'user'));
@@ -399,6 +416,10 @@
     if (tabName === 'registry') {
       UI.loadRegistry();
     }
+    // Auto-load worlds when switching to the world tab
+    if (tabName === 'world-actions') {
+      void refreshWorlds();
+    }
   }
 
   async function refreshAll() {
@@ -409,7 +430,8 @@
       refreshRooms(),
       refreshSummary(),
       refreshHealth(),
-      refreshLlmModels()
+      refreshLlmModels(),
+      refreshWorlds()
     ]);
 
     if (state.currentPlayerId) {
@@ -946,6 +968,273 @@
       resultEl.textContent = `Error: ${error.message}`;
       resultEl.style.color = 'var(--bad)';
       UI.appendActivity('mutation-log', `Send message failed: ${error.message}`, 'error');
+    }
+  }
+
+  // ── World Management handlers ──
+
+  async function refreshWorlds() {
+    if (!state.session?.isAdmin) return;
+    try {
+      state.worlds = await API.getWorlds();
+      UI.renderWorldList(state.worlds, state.selectedWorldId);
+      UI.populateWorldSelects(state.worlds, state.selectedWorldId);
+      UI.populateTransferPlayerSelect(state.players);
+
+      // Re-select world if previously selected
+      if (state.selectedWorldId) {
+        await selectWorld(state.selectedWorldId);
+      }
+    } catch { /* ignore if not admin */ }
+  }
+
+  async function selectWorld(worldId) {
+    state.selectedWorldId = worldId;
+    localStorage.setItem('gae.admin.world', worldId);
+    UI.renderWorldList(state.worlds, worldId);
+
+    if (!worldId) {
+      state.selectedWorld = null;
+      state.selectedWorldPlayers = [];
+      UI.renderWorldDetail(null);
+      UI.renderPortalList(null);
+      UI.populateWorldSelects(state.worlds, null);
+      return;
+    }
+
+    try {
+      const [world, players] = await Promise.all([
+        API.getWorld(worldId),
+        API.getWorldPlayers(worldId)
+      ]);
+      state.selectedWorld = world;
+      state.selectedWorldPlayers = players || [];
+      UI.renderWorldDetail(world, state.selectedWorldPlayers);
+      UI.renderPortalList(world?.portals || [], state.worlds);
+      UI.populateWorldSelects(state.worlds, worldId);
+    } catch (e) {
+      state.selectedWorld = null;
+      state.selectedWorldPlayers = [];
+      UI.renderWorldDetail(null);
+      UI.renderPortalList(null);
+    }
+  }
+
+  function handleWorldListClick(event) {
+    const card = event.target.closest('[data-world-id]');
+    if (!card) return;
+    const worldId = card.dataset.worldId;
+    void selectWorld(worldId === state.selectedWorldId ? '' : worldId);
+  }
+
+  function showCreateWorldForm() {
+    const panel = UI.$('world-form-panel');
+    if (!panel) return;
+    panel.classList.remove('hidden');
+    UI.$('world-form-title').textContent = 'Create World';
+    UI.$('world-form-submit').textContent = 'Create World';
+    UI.$('world-form-id').value = '';
+    UI.$('world-form-name').value = '';
+    UI.$('world-form-desc').value = '';
+    UI.$('world-form-spawn').value = '';
+    UI.$('world-form-tags').value = '';
+    UI.$('world-form-result').textContent = '';
+  }
+
+  function showEditWorldForm() {
+    if (!state.selectedWorld) return;
+    const w = state.selectedWorld;
+    const panel = UI.$('world-form-panel');
+    if (!panel) return;
+    panel.classList.remove('hidden');
+    UI.$('world-form-title').textContent = 'Edit World';
+    UI.$('world-form-submit').textContent = 'Save Changes';
+    UI.$('world-form-id').value = w.id;
+    UI.$('world-form-name').value = w.name || '';
+    UI.$('world-form-desc').value = w.description || '';
+    UI.$('world-form-spawn').value = w.spawnRoomId || '';
+    UI.$('world-form-tags').value = (w.tags || []).join(', ');
+    UI.$('world-form-result').textContent = '';
+  }
+
+  function hideWorldForm() {
+    UI.$('world-form-panel')?.classList.add('hidden');
+  }
+
+  async function handleWorldFormSubmit(event) {
+    event.preventDefault();
+    if (!ensureAdmin()) return;
+    const resultEl = UI.$('world-form-result');
+    const editId = UI.$('world-form-id').value;
+    const name = UI.$('world-form-name').value.trim();
+    const description = UI.$('world-form-desc').value.trim();
+    const spawnRoomId = UI.$('world-form-spawn').value.trim() || 'spawn';
+    const tags = UI.$('world-form-tags').value.split(',').map(t => t.trim()).filter(Boolean);
+
+    resultEl.textContent = editId ? 'Saving...' : 'Creating...';
+    resultEl.className = 'world-action-result';
+
+    try {
+      if (editId) {
+        await API.updateWorld(editId, { name, description, spawnRoomId, tags });
+        resultEl.textContent = 'World updated!';
+      } else {
+        await API.createWorld({ name, description, spawnRoomId, tags });
+        resultEl.textContent = 'World created!';
+      }
+      hideWorldForm();
+      await refreshWorlds();
+    } catch (e) {
+      resultEl.textContent = `Error: ${e.message}`;
+      resultEl.className = 'world-action-result error';
+    }
+  }
+
+  async function handleDeleteWorld() {
+    if (!state.selectedWorldId || !ensureAdmin()) return;
+    const worldName = state.selectedWorld?.name || state.selectedWorldId;
+    if (!confirm(`Delete world "${worldName}"? This cannot be undone.`)) return;
+
+    try {
+      await API.deleteWorld(state.selectedWorldId);
+      state.selectedWorldId = '';
+      state.selectedWorld = null;
+      localStorage.removeItem('gae.admin.world');
+      UI.renderWorldDetail(null);
+      UI.renderPortalList(null);
+      await refreshWorlds();
+    } catch (e) {
+      alert(`Cannot delete: ${e.message}`);
+    }
+  }
+
+  // ── Portal handlers ──
+
+  function showCreatePortalForm() {
+    const wrapper = UI.$('portal-form-wrapper');
+    if (!wrapper) return;
+    wrapper.classList.remove('hidden');
+    UI.$('portal-form-title').textContent = 'Create Portal';
+    UI.$('portal-form-submit').textContent = 'Create Portal';
+    UI.$('portal-form-id').value = '';
+    UI.$('portal-form-source-room').value = '';
+    UI.$('portal-form-dest-world').value = '';
+    UI.$('portal-form-dest-room').value = '';
+    UI.$('portal-form-desc').value = '';
+    UI.$('portal-form-hint').value = '';
+    UI.$('portal-form-min-level').value = '';
+    UI.$('portal-form-admin-only').checked = false;
+    UI.$('portal-form-result').textContent = '';
+  }
+
+  function hidePortalForm() {
+    UI.$('portal-form-wrapper')?.classList.add('hidden');
+  }
+
+  function handlePortalListClick(event) {
+    const editBtn = event.target.closest('[data-portal-edit]');
+    if (editBtn) {
+      const portalId = editBtn.dataset.portalEdit;
+      const portal = (state.selectedWorld?.portals || []).find(p => p.id === portalId);
+      if (portal) showEditPortalForm(portal);
+      return;
+    }
+    const delBtn = event.target.closest('[data-portal-delete]');
+    if (delBtn) {
+      const portalId = delBtn.dataset.portalDelete;
+      void handleDeletePortal(portalId);
+    }
+  }
+
+  function showEditPortalForm(portal) {
+    const wrapper = UI.$('portal-form-wrapper');
+    if (!wrapper) return;
+    wrapper.classList.remove('hidden');
+    UI.$('portal-form-title').textContent = 'Edit Portal';
+    UI.$('portal-form-submit').textContent = 'Save Portal';
+    UI.$('portal-form-id').value = portal.id;
+    UI.$('portal-form-source-room').value = portal.sourceRoomId || '';
+    UI.$('portal-form-dest-world').value = portal.destinationWorldId || '';
+    UI.$('portal-form-dest-room').value = portal.destinationRoomId || '';
+    UI.$('portal-form-desc').value = portal.description || '';
+    UI.$('portal-form-hint').value = portal.narratorHint || '';
+    UI.$('portal-form-min-level').value = portal.minLevel || '';
+    UI.$('portal-form-admin-only').checked = portal.isAdminOnly || false;
+    UI.$('portal-form-result').textContent = '';
+  }
+
+  async function handlePortalFormSubmit(event) {
+    event.preventDefault();
+    if (!state.selectedWorldId || !ensureAdmin()) return;
+    const resultEl = UI.$('portal-form-result');
+    const editId = UI.$('portal-form-id').value;
+    const data = {
+      sourceRoomId: UI.$('portal-form-source-room').value.trim(),
+      destinationWorldId: UI.$('portal-form-dest-world').value,
+      destinationRoomId: UI.$('portal-form-dest-room').value.trim() || null,
+      description: UI.$('portal-form-desc').value.trim() || null,
+      narratorHint: UI.$('portal-form-hint').value.trim() || null,
+      minLevel: parseInt(UI.$('portal-form-min-level').value) || null,
+      isAdminOnly: UI.$('portal-form-admin-only').checked
+    };
+
+    resultEl.textContent = editId ? 'Saving...' : 'Creating...';
+    resultEl.className = 'world-action-result';
+
+    try {
+      if (editId) {
+        await API.updatePortal(state.selectedWorldId, editId, data);
+        resultEl.textContent = 'Portal updated!';
+      } else {
+        await API.createPortal(state.selectedWorldId, data);
+        resultEl.textContent = 'Portal created!';
+      }
+      hidePortalForm();
+      await selectWorld(state.selectedWorldId);
+    } catch (e) {
+      resultEl.textContent = `Error: ${e.message}`;
+      resultEl.className = 'world-action-result error';
+    }
+  }
+
+  async function handleDeletePortal(portalId) {
+    if (!state.selectedWorldId || !ensureAdmin()) return;
+    if (!confirm('Delete this portal?')) return;
+    try {
+      await API.deletePortal(state.selectedWorldId, portalId);
+      await selectWorld(state.selectedWorldId);
+    } catch (e) {
+      alert(`Error: ${e.message}`);
+    }
+  }
+
+  // ── Realm Transfer ──
+
+  async function handleRealmTransfer() {
+    if (!ensureAdmin()) return;
+    const resultEl = UI.$('realm-transfer-result');
+    const playerId = UI.$('transfer-player-select').value;
+    const destWorldId = UI.$('transfer-world-select').value;
+
+    if (!playerId || !destWorldId) {
+      resultEl.textContent = 'Select both a player and destination world.';
+      resultEl.className = 'world-action-result error';
+      return;
+    }
+
+    if (!confirm(`Transfer this player to another world? This triggers stat translation.`)) return;
+
+    resultEl.textContent = 'Transferring...';
+    resultEl.className = 'world-action-result';
+
+    try {
+      await API.transferPlayerToWorld(playerId, destWorldId);
+      resultEl.textContent = 'Transfer complete!';
+      resultEl.className = 'world-action-result';
+      await Promise.all([refreshPlayers(), refreshWorlds()]);
+    } catch (e) {
+      resultEl.textContent = `Error: ${e.message}`;
+      resultEl.className = 'world-action-result error';
     }
   }
 

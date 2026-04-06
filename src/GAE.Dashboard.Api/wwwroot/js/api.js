@@ -187,6 +187,69 @@ const API = {
     return this.postJson(`${this.base}/admin/registry/generate`, { contentType, description, existingJson });
   },
 
+  // ── World Management ───────────────────────────────────
+  async getWorlds() {
+    return this.getJson(`${this.base}/admin/worlds`);
+  },
+
+  async getWorld(worldId) {
+    return this.getOptionalJson(`${this.base}/admin/worlds/${encodeURIComponent(worldId)}`);
+  },
+
+  async createWorld(data) {
+    return this.postJson(`${this.base}/admin/worlds`, data);
+  },
+
+  async updateWorld(worldId, data) {
+    return this.putJson(`${this.base}/admin/worlds/${encodeURIComponent(worldId)}`, data);
+  },
+
+  async deleteWorld(worldId) {
+    const res = await fetch(`${this.base}/admin/worlds/${encodeURIComponent(worldId)}`, {
+      method: 'DELETE',
+      credentials: 'same-origin'
+    });
+    if (!res.ok) throw this.createHttpError(res, await this.readError(res));
+    return res.json();
+  },
+
+  async activateWorld(worldId) {
+    return this.postJson(`${this.base}/admin/worlds/${encodeURIComponent(worldId)}/activate`, {});
+  },
+
+  async deactivateWorld(worldId) {
+    return this.postJson(`${this.base}/admin/worlds/${encodeURIComponent(worldId)}/deactivate`, {});
+  },
+
+  async getWorldPlayers(worldId) {
+    return this.getJson(`${this.base}/admin/worlds/${encodeURIComponent(worldId)}/players`);
+  },
+
+  async getWorldPortals(worldId) {
+    return this.getJson(`${this.base}/admin/worlds/${encodeURIComponent(worldId)}/portals`);
+  },
+
+  async createPortal(worldId, data) {
+    return this.postJson(`${this.base}/admin/worlds/${encodeURIComponent(worldId)}/portals`, data);
+  },
+
+  async updatePortal(worldId, portalId, data) {
+    return this.putJson(`${this.base}/admin/worlds/${encodeURIComponent(worldId)}/portals/${encodeURIComponent(portalId)}`, data);
+  },
+
+  async deletePortal(worldId, portalId) {
+    const res = await fetch(`${this.base}/admin/worlds/${encodeURIComponent(worldId)}/portals/${encodeURIComponent(portalId)}`, {
+      method: 'DELETE',
+      credentials: 'same-origin'
+    });
+    if (!res.ok) throw this.createHttpError(res, await this.readError(res));
+    return res.json();
+  },
+
+  async transferPlayerToWorld(playerId, destinationWorldId) {
+    return this.postJson(`${this.base}/admin/worlds/transfer`, { playerId, destinationWorldId });
+  },
+
   async getJson(url) {
     const res = await fetch(url, { credentials: 'same-origin' });
     if (!res.ok) throw this.createHttpError(res, await this.readError(res));
@@ -203,6 +266,18 @@ const API = {
   async postJson(url, data) {
     const res = await fetch(url, {
       method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+
+    if (!res.ok) throw this.createHttpError(res, await this.readError(res));
+    return res.json();
+  },
+
+  async putJson(url, data) {
+    const res = await fetch(url, {
+      method: 'PUT',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)

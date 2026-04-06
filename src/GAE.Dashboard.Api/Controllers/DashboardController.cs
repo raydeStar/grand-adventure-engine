@@ -29,6 +29,7 @@ public class DashboardController : ControllerBase
     private readonly ContentSeedService? _contentSeed;
     private readonly IWorldContext _worldContext;
     private readonly IRealmTravelService _realmTravelService;
+    private readonly IWorldRepository _worldRepository;
 
     private static readonly TimeSpan NarratorCacheDuration = TimeSpan.FromSeconds(60);
     private static object? _narratorCachedResult;
@@ -47,6 +48,7 @@ public class DashboardController : ControllerBase
         IContentRegistryService registry,
         IWorldContext worldContext,
         IRealmTravelService realmTravelService,
+        IWorldRepository worldRepository,
         IDiscordNotifier? discordNotifier = null,
         ContentSeedService? contentSeed = null)
     {
@@ -62,6 +64,7 @@ public class DashboardController : ControllerBase
         _registry = registry;
         _worldContext = worldContext;
         _realmTravelService = realmTravelService;
+        _worldRepository = worldRepository;
         _discordNotifier = discordNotifier;
         _contentSeed = contentSeed;
     }
@@ -1660,6 +1663,278 @@ public class DashboardController : ControllerBase
         var result = await _narrator.GenerateContentAsync(request.ContentType, request.Description, request.ExistingJson, ct);
         return Ok(new { json = result });
     }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  WORLD MANAGEMENT ENDPOINTS
+    // ═══════════════════════════════════════════════════════════════════
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpGet("admin/worlds")]
+    public async Task<IActionResult> GetWorlds(CancellationToken ct)
+    {
+        var worlds = await _worldRepository.GetAllWorldsAsync(ct);
+        var players = await _stateManager.GetAllPlayersAsync(ct);
+        var result = worlds.Select(w => new
+        {
+            w.Id, w.Name, w.Description, w.SpawnRoomId, w.IsActive,
+            w.Tags, w.CreatedBy, w.CreatedAt, w.UpdatedAt,
+            portalCount = w.Portals.Count,
+            playerCount = players.Count(p =>
+                string.Equals(p.ActiveWorldId, w.Id, StringComparison.OrdinalIgnoreCase) ||
+                (string.IsNullOrEmpty(p.ActiveWorldId) && string.Equals(w.Id, WorldDefaults.DefaultWorldId, StringComparison.OrdinalIgnoreCase))),
+            statCount = w.Rules.Stats.Count(s =>
+                !string.Equals(s.Value.Category, "resource", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(s.Value.Category, "currency", StringComparison.OrdinalIgnoreCase))
+        });
+        return Ok(result);
+    }
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpGet("admin/worlds/{worldId}")]
+    public async Task<IActionResult> GetWorld(string worldId, CancellationToken ct)
+    {
+        var world = await _worldRepository.GetWorldAsync(worldId, ct);
+        if (world is null) return NotFound(new { error = $"World '{worldId}' not found." });
+        return Ok(world);
+    }
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpPost("admin/worlds")]
+    public async Task<IActionResult> CreateWorld([FromBody] CreateWorldRequest request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name))
+            return BadRequest(new { error = "World name is required." });
+
+        var id = request.Id?.Trim();
+        if (string.IsNullOrWhiteSpace(id))
+            id = request.Name.Trim().ToLowerInvariant().Replace(' ', '_').Replace("'", "");
+
+        var existing = await _worldRepository.GetWorldAsync(id, ct);
+        if (existing is not null)
+            return Conflict(new { error = $"World '{id}' already exists." });
+
+        var world = new World
+        {
+            Id = id,
+            Name = request.Name.Trim(),
+            Description = request.Description?.Trim() ?? string.Empty,
+            SpawnRoomId = request.SpawnRoomId?.Trim() ?? "spawn",
+            IsActive = request.IsActive,
+            Tags = request.Tags ?? [],
+            CreatedBy = User.Identity?.Name ?? "admin",
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+
+        if (request.Rules is not null)
+            world.Rules = request.Rules;
+
+        await _worldRepository.SaveWorldAsync(world, ct);
+        return Ok(world);
+    }
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpPut("admin/worlds/{worldId}")]
+    public async Task<IActionResult> UpdateWorld(string worldId, [FromBody] UpdateWorldRequest request, CancellationToken ct)
+    {
+        var world = await _worldRepository.GetWorldAsync(worldId, ct);
+        if (world is null) return NotFound(new { error = $"World '{worldId}' not found." });
+
+        if (!string.IsNullOrWhiteSpace(request.Name)) world.Name = request.Name.Trim();
+        if (request.Description is not null) world.Description = request.Description.Trim();
+        if (!string.IsNullOrWhiteSpace(request.SpawnRoomId)) world.SpawnRoomId = request.SpawnRoomId.Trim();
+        if (request.IsActive.HasValue) world.IsActive = request.IsActive.Value;
+        if (request.Tags is not null) world.Tags = request.Tags;
+        if (request.Rules is not null) world.Rules = request.Rules;
+        world.UpdatedAt = DateTimeOffset.UtcNow;
+
+        await _worldRepository.SaveWorldAsync(world, ct);
+        return Ok(world);
+    }
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpDelete("admin/worlds/{worldId}")]
+    public async Task<IActionResult> DeleteWorld(string worldId, CancellationToken ct)
+    {
+        var world = await _worldRepository.GetWorldAsync(worldId, ct);
+        if (world is null) return NotFound(new { error = $"World '{worldId}' not found." });
+
+        if (string.Equals(worldId, WorldDefaults.DefaultWorldId, StringComparison.OrdinalIgnoreCase))
+            return BadRequest(new { error = "Cannot delete the default world." });
+
+        var players = await _stateManager.GetAllPlayersAsync(ct);
+        var stuck = players.Where(p =>
+            string.Equals(p.ActiveWorldId, worldId, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        if (stuck.Count > 0)
+            return Conflict(new
+            {
+                error = $"{stuck.Count} player(s) are still in this world. Transfer them first.",
+                players = stuck.Select(p => new { p.Id, p.Name })
+            });
+
+        await _worldRepository.RemoveWorldAsync(worldId, ct);
+        return Ok(new { success = true, id = worldId });
+    }
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpPost("admin/worlds/{worldId}/activate")]
+    public async Task<IActionResult> ActivateWorld(string worldId, CancellationToken ct)
+    {
+        var world = await _worldRepository.GetWorldAsync(worldId, ct);
+        if (world is null) return NotFound(new { error = $"World '{worldId}' not found." });
+        world.IsActive = true;
+        world.UpdatedAt = DateTimeOffset.UtcNow;
+        await _worldRepository.SaveWorldAsync(world, ct);
+        return Ok(new { success = true, id = worldId, isActive = true });
+    }
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpPost("admin/worlds/{worldId}/deactivate")]
+    public async Task<IActionResult> DeactivateWorld(string worldId, CancellationToken ct)
+    {
+        var world = await _worldRepository.GetWorldAsync(worldId, ct);
+        if (world is null) return NotFound(new { error = $"World '{worldId}' not found." });
+        world.IsActive = false;
+        world.UpdatedAt = DateTimeOffset.UtcNow;
+        await _worldRepository.SaveWorldAsync(world, ct);
+        return Ok(new { success = true, id = worldId, isActive = false });
+    }
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpGet("admin/worlds/{worldId}/players")]
+    public async Task<IActionResult> GetWorldPlayers(string worldId, CancellationToken ct)
+    {
+        var players = await _stateManager.GetAllPlayersAsync(ct);
+        var inWorld = players.Where(p =>
+            string.Equals(p.ActiveWorldId, worldId, StringComparison.OrdinalIgnoreCase) ||
+            (string.IsNullOrEmpty(p.ActiveWorldId) && string.Equals(worldId, WorldDefaults.DefaultWorldId, StringComparison.OrdinalIgnoreCase)))
+            .Select(p => new
+            {
+                p.Id, p.Name, p.Class, p.Race, p.Level,
+                p.Hp, p.MaxHp, p.Mp, p.MaxMp,
+                p.CurrentRoomId, p.ActiveWorldId, p.HomeWorldId
+            });
+        return Ok(inWorld);
+    }
+
+    // ─── Portal Management ───
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpGet("admin/worlds/{worldId}/portals")]
+    public async Task<IActionResult> GetWorldPortals(string worldId, CancellationToken ct)
+    {
+        var world = await _worldRepository.GetWorldAsync(worldId, ct);
+        if (world is null) return NotFound(new { error = $"World '{worldId}' not found." });
+        return Ok(world.Portals);
+    }
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpPost("admin/worlds/{worldId}/portals")]
+    public async Task<IActionResult> CreatePortal(string worldId, [FromBody] CreatePortalRequest request, CancellationToken ct)
+    {
+        var world = await _worldRepository.GetWorldAsync(worldId, ct);
+        if (world is null) return NotFound(new { error = $"World '{worldId}' not found." });
+
+        if (string.IsNullOrWhiteSpace(request.SourceRoomId) || string.IsNullOrWhiteSpace(request.DestinationWorldId))
+            return BadRequest(new { error = "sourceRoomId and destinationWorldId are required." });
+
+        var destWorld = await _worldRepository.GetWorldAsync(request.DestinationWorldId, ct);
+        if (destWorld is null)
+            return BadRequest(new { error = $"Destination world '{request.DestinationWorldId}' not found." });
+
+        var portal = new WorldPortal
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            SourceWorldId = worldId,
+            SourceRoomId = request.SourceRoomId.Trim(),
+            DestinationWorldId = request.DestinationWorldId.Trim(),
+            DestinationRoomId = request.DestinationRoomId?.Trim(),
+            Description = request.Description?.Trim(),
+            NarratorHint = request.NarratorHint?.Trim(),
+            IsAdminOnly = request.IsAdminOnly,
+            MinLevel = request.MinLevel,
+            RequiredCompletedQuests = request.RequiredCompletedQuests ?? []
+        };
+
+        world.Portals.Add(portal);
+        world.UpdatedAt = DateTimeOffset.UtcNow;
+        await _worldRepository.SaveWorldAsync(world, ct);
+
+        return Ok(portal);
+    }
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpPut("admin/worlds/{worldId}/portals/{portalId}")]
+    public async Task<IActionResult> UpdatePortal(string worldId, string portalId, [FromBody] CreatePortalRequest request, CancellationToken ct)
+    {
+        var world = await _worldRepository.GetWorldAsync(worldId, ct);
+        if (world is null) return NotFound(new { error = $"World '{worldId}' not found." });
+
+        var portal = world.Portals.FirstOrDefault(p => string.Equals(p.Id, portalId, StringComparison.OrdinalIgnoreCase));
+        if (portal is null) return NotFound(new { error = $"Portal '{portalId}' not found in world '{worldId}'." });
+
+        if (!string.IsNullOrWhiteSpace(request.SourceRoomId)) portal.SourceRoomId = request.SourceRoomId.Trim();
+        if (!string.IsNullOrWhiteSpace(request.DestinationWorldId)) portal.DestinationWorldId = request.DestinationWorldId.Trim();
+        if (request.DestinationRoomId is not null) portal.DestinationRoomId = request.DestinationRoomId.Trim();
+        if (request.Description is not null) portal.Description = request.Description.Trim();
+        if (request.NarratorHint is not null) portal.NarratorHint = request.NarratorHint.Trim();
+        portal.IsAdminOnly = request.IsAdminOnly;
+        if (request.MinLevel.HasValue) portal.MinLevel = request.MinLevel;
+        if (request.RequiredCompletedQuests is not null) portal.RequiredCompletedQuests = request.RequiredCompletedQuests;
+
+        world.UpdatedAt = DateTimeOffset.UtcNow;
+        await _worldRepository.SaveWorldAsync(world, ct);
+        return Ok(portal);
+    }
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpDelete("admin/worlds/{worldId}/portals/{portalId}")]
+    public async Task<IActionResult> DeletePortal(string worldId, string portalId, CancellationToken ct)
+    {
+        var world = await _worldRepository.GetWorldAsync(worldId, ct);
+        if (world is null) return NotFound(new { error = $"World '{worldId}' not found." });
+
+        var removed = world.Portals.RemoveAll(p => string.Equals(p.Id, portalId, StringComparison.OrdinalIgnoreCase));
+        if (removed == 0) return NotFound(new { error = $"Portal '{portalId}' not found in world '{worldId}'." });
+
+        world.UpdatedAt = DateTimeOffset.UtcNow;
+        await _worldRepository.SaveWorldAsync(world, ct);
+        return Ok(new { success = true, id = portalId });
+    }
+}
+
+public class CreateWorldRequest
+{
+    public string? Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string? SpawnRoomId { get; set; }
+    public bool IsActive { get; set; } = true;
+    public List<string>? Tags { get; set; }
+    public GameRulesConfig? Rules { get; set; }
+}
+
+public class UpdateWorldRequest
+{
+    public string? Name { get; set; }
+    public string? Description { get; set; }
+    public string? SpawnRoomId { get; set; }
+    public bool? IsActive { get; set; }
+    public List<string>? Tags { get; set; }
+    public GameRulesConfig? Rules { get; set; }
+}
+
+public class CreatePortalRequest
+{
+    public string SourceRoomId { get; set; } = string.Empty;
+    public string DestinationWorldId { get; set; } = string.Empty;
+    public string? DestinationRoomId { get; set; }
+    public string? Description { get; set; }
+    public string? NarratorHint { get; set; }
+    public bool IsAdminOnly { get; set; }
+    public int? MinLevel { get; set; }
+    public List<string>? RequiredCompletedQuests { get; set; }
 }
 
 public class ContentGenerateRequest

@@ -885,12 +885,14 @@ const UI = {
       return;
     }
 
-    list.innerHTML = filtered.map((player) => `
+    list.innerHTML = filtered.map((player) => {
+      const worldLabel = player.activeWorldId ? ` | World: ${this.esc(player.activeWorldId)}` : '';
+      return `
       <div class="registry-row">
         <div class="registry-meta">
           <div>
             <div class="registry-name">${this.esc(player.name)}${player.id === currentPlayerId ? ' (active)' : ''}</div>
-            <div class="registry-subtext">${this.esc(player.id)} | Lv.${player.level} ${this.esc(player.race)} ${this.esc(player.class)} | Room ${this.esc(player.currentRoomId)}</div>
+            <div class="registry-subtext">${this.esc(player.id)} | Lv.${player.level} ${this.esc(player.race)} ${this.esc(player.class)} | Room ${this.esc(player.currentRoomId)}${worldLabel}</div>
           </div>
         </div>
         <div class="registry-actions">
@@ -900,7 +902,7 @@ const UI = {
           <button class="admin-row-delete" data-admin-action="delete-player" data-player-id="${this.esc(player.id)}" data-player-name="${this.esc(player.name)}" type="button">Del</button>
         </div>
       </div>
-    `).join('');
+    `;}).join('');
   },
 
   renderRoomCatalogue(rooms) {
@@ -921,6 +923,164 @@ const UI = {
         <div class="room-card-description">${this.esc(room.description || 'No description available.')}</div>
       </div>
     `).join('');
+  },
+
+  // ── World Management rendering ──
+
+  renderWorldList(worlds, selectedWorldId) {
+    const container = this.$('world-list');
+    if (!container) return;
+
+    if (!worlds || !worlds.length) {
+      container.innerHTML = '<div class="empty-state">No worlds found.</div>';
+      return;
+    }
+
+    container.innerHTML = worlds.map(w => {
+      const isSelected = w.id === selectedWorldId;
+      const isDefault = w.id === 'default';
+      const badges = [];
+      if (isDefault) badges.push('<span class="world-badge default">Default</span>');
+      badges.push(w.isActive
+        ? '<span class="world-badge active">Active</span>'
+        : '<span class="world-badge inactive">Inactive</span>');
+      if (w.playerCount > 0) badges.push(`<span class="world-badge players">${w.playerCount} player${w.playerCount !== 1 ? 's' : ''}</span>`);
+      if (w.portalCount > 0) badges.push(`<span class="world-badge portals">${w.portalCount} portal${w.portalCount !== 1 ? 's' : ''}</span>`);
+
+      return `<div class="world-card${isSelected ? ' selected' : ''}" data-world-id="${this.esc(w.id)}">
+        <div class="world-card-info">
+          <div class="world-card-name">${this.esc(w.name)}</div>
+          <div class="world-card-meta">${this.esc(w.id)} | ${w.statCount ?? 0} stats | Created ${new Date(w.createdAt).toLocaleDateString()}</div>
+        </div>
+        <div class="world-card-badges">${badges.join('')}</div>
+      </div>`;
+    }).join('');
+  },
+
+  renderWorldDetail(world, players) {
+    const panel = this.$('world-detail-panel');
+    const body = this.$('world-detail-body');
+    if (!panel || !body) return;
+
+    if (!world) {
+      panel.classList.add('hidden');
+      return;
+    }
+
+    panel.classList.remove('hidden');
+    this.$('world-detail-name').textContent = world.name;
+
+    const playerCount = players ? players.length : 0;
+    const portalCount = (world.portals || []).length;
+    const statCount = Object.keys(world.rules?.stats || {}).length;
+    const tags = world.tags || [];
+
+    body.innerHTML = `
+      <div class="world-detail-stats">
+        <div class="world-stat-card"><div class="world-stat-value">${playerCount}</div><div class="world-stat-label">Players</div></div>
+        <div class="world-stat-card"><div class="world-stat-value">${portalCount}</div><div class="world-stat-label">Portals</div></div>
+        <div class="world-stat-card"><div class="world-stat-value">${statCount}</div><div class="world-stat-label">Stats</div></div>
+        <div class="world-stat-card"><div class="world-stat-value">${world.isActive ? 'Yes' : 'No'}</div><div class="world-stat-label">Active</div></div>
+      </div>
+      <div class="world-detail-section">
+        <h4>Description</h4>
+        <p style="font-size:12px;margin:0;">${this.esc(world.description || 'No description.')}</p>
+      </div>
+      <div class="world-detail-section">
+        <h4>Spawn Room</h4>
+        <p style="font-size:12px;margin:0;"><code>${this.esc(world.spawnRoomId || 'spawn')}</code></p>
+      </div>
+      ${tags.length ? `<div class="world-detail-section">
+        <h4>Tags</h4>
+        <div class="world-detail-tags">${tags.map(t => `<span class="world-tag">${this.esc(t)}</span>`).join('')}</div>
+      </div>` : ''}
+      ${playerCount > 0 ? `<div class="world-detail-section">
+        <h4>Players in World</h4>
+        <div class="portal-player-list">${players.map(p => `
+          <div class="registry-row">
+            <div class="registry-meta">
+              <div class="registry-name">${this.esc(p.name)}</div>
+              <div class="registry-subtext">Lv.${p.level} ${this.esc(p.race || '')} ${this.esc(p.class || '')} | ${this.esc(p.currentRoomId || '?')}</div>
+            </div>
+          </div>`).join('')}
+        </div>
+      </div>` : ''}
+      ${statCount > 0 ? `<div class="world-detail-section">
+        <h4>Stat Definitions</h4>
+        <div style="display:grid;gap:0.25rem;">${Object.entries(world.rules.stats).map(([key, s]) => `
+          <div class="registry-row" style="padding:0.3rem 0.5rem;">
+            <div class="registry-meta">
+              <div class="registry-name">${this.esc(s.display || key)} <span style="font-weight:400;color:var(--dim);">(${this.esc(key)})</span></div>
+              <div class="registry-subtext">${this.esc(s.category || '?')} | Range ${s.min}-${s.max} | Base ${s.base}${(s.semanticTags || []).length ? ' | Tags: ' + s.semanticTags.join(', ') : ''}</div>
+            </div>
+          </div>`).join('')}
+        </div>
+      </div>` : ''}
+    `;
+  },
+
+  renderPortalList(portals, worlds) {
+    const panel = this.$('portal-manager-panel');
+    const container = this.$('portal-list');
+    if (!panel || !container) return;
+
+    if (!portals) {
+      panel.classList.add('hidden');
+      return;
+    }
+
+    panel.classList.remove('hidden');
+    const worldMap = {};
+    (worlds || []).forEach(w => { worldMap[w.id] = w.name; });
+
+    if (!portals.length) {
+      container.innerHTML = '<div class="empty-state">No portals configured for this world.</div>';
+      return;
+    }
+
+    container.innerHTML = portals.map(p => {
+      const destName = worldMap[p.destinationWorldId] || p.destinationWorldId;
+      const badges = [];
+      if (p.isAdminOnly) badges.push('<span class="world-badge inactive">Admin Only</span>');
+      if (p.minLevel) badges.push(`<span class="world-badge players">Lv.${p.minLevel}+</span>`);
+
+      return `<div class="portal-card" data-portal-id="${this.esc(p.id)}">
+        <div class="portal-card-info">
+          <div class="portal-card-route">${this.esc(p.sourceRoomId)} → ${this.esc(destName)}${p.destinationRoomId ? ' (' + this.esc(p.destinationRoomId) + ')' : ''}</div>
+          <div class="portal-card-meta">${p.description ? this.esc(p.description) : 'No description'} ${badges.join(' ')}</div>
+        </div>
+        <div class="portal-card-actions">
+          <button class="btn btn-secondary btn-sm" data-portal-edit="${this.esc(p.id)}" type="button">Edit</button>
+          <button class="admin-row-delete" data-portal-delete="${this.esc(p.id)}" type="button">Del</button>
+        </div>
+      </div>`;
+    }).join('');
+  },
+
+  populateWorldSelects(worlds, excludeWorldId) {
+    const selects = [
+      this.$('transfer-world-select'),
+      this.$('portal-form-dest-world')
+    ];
+    selects.forEach(sel => {
+      if (!sel) return;
+      const current = sel.value;
+      sel.innerHTML = '<option value="">Select world...</option>' +
+        (worlds || [])
+          .filter(w => w.id !== excludeWorldId)
+          .map(w => `<option value="${this.esc(w.id)}">${this.esc(w.name)}${w.isActive ? '' : ' (inactive)'}</option>`)
+          .join('');
+      if (current) sel.value = current;
+    });
+  },
+
+  populateTransferPlayerSelect(players) {
+    const sel = this.$('transfer-player-select');
+    if (!sel) return;
+    const current = sel.value;
+    sel.innerHTML = '<option value="">Select player...</option>' +
+      (players || []).map(p => `<option value="${this.esc(p.id)}">${this.esc(p.name)} (${this.esc(p.id)})</option>`).join('');
+    if (current) sel.value = current;
   },
 
   appendActivity(containerId, text, tone = 'info') {

@@ -1502,6 +1502,104 @@ textarea { resize: vertical; min-height: 80px; }
   min-height: 1.4em;
 }
 .world-action-result.error { color: var(--danger, #f55); }
+
+/* ── World Browser ── */
+.panel-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+.panel-header-row h3 { margin: 0; }
+
+.world-list { display: grid; gap: 0.4rem; }
+
+.world-card {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 0.5rem 0.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.world-card:hover { border-color: var(--accent); }
+.world-card.selected { border-color: var(--accent); background: rgba(97,175,239,0.08); }
+
+.world-card-info { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+.world-card-name { font-weight: 700; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.world-card-meta { font-size: 11px; color: var(--dim); }
+.world-card-badges { display: flex; gap: 0.3rem; flex-shrink: 0; }
+
+.world-badge {
+  font-size: 10px;
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.world-badge.active { background: rgba(80,200,120,0.15); color: #50c878; }
+.world-badge.inactive { background: rgba(200,80,80,0.15); color: #c85050; }
+.world-badge.default { background: rgba(97,175,239,0.15); color: var(--accent); }
+.world-badge.players { background: rgba(200,170,80,0.15); color: #c8aa50; }
+.world-badge.portals { background: rgba(170,80,200,0.15); color: #aa50c8; }
+
+.world-detail-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+.world-stat-card {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 0.4rem 0.5rem;
+  text-align: center;
+}
+.world-stat-value { font-size: 18px; font-weight: 700; color: var(--accent); }
+.world-stat-label { font-size: 10px; color: var(--dim); text-transform: uppercase; }
+
+.world-detail-section { margin-top: 0.5rem; }
+.world-detail-section h4 { font-size: 12px; margin: 0 0 0.3rem; color: var(--dim); text-transform: uppercase; }
+.world-detail-tags { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.world-tag {
+  font-size: 10px;
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  background: rgba(97,175,239,0.1);
+  color: var(--accent);
+  border: 1px solid rgba(97,175,239,0.2);
+}
+
+/* ── Portal List ── */
+.portal-list { display: grid; gap: 0.4rem; }
+
+.portal-card {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 0.5rem 0.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.portal-card-info { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+.portal-card-route { font-weight: 700; font-size: 12px; }
+.portal-card-meta { font-size: 11px; color: var(--dim); }
+.portal-card-actions { display: flex; gap: 0.3rem; flex-shrink: 0; }
+
+.panel-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 0.75rem 0;
+}
+
 .panel-danger {
   border-color: #662222;
 }
