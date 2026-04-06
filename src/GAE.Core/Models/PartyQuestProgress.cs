@@ -8,6 +8,7 @@ public class PartyQuestProgress
 {
     public string GroupId { get; set; } = string.Empty;
     public string QuestId { get; set; } = string.Empty;
+    public string WorldId { get; set; } = WorldDefaults.DefaultWorldId;
     public QuestStatus Status { get; set; } = QuestStatus.Active;
     public string CurrentStageId { get; set; } = string.Empty;
     public List<ObjectiveProgress> Objectives { get; set; } = [];

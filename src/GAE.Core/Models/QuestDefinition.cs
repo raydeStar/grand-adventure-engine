@@ -13,6 +13,7 @@ public class QuestDefinition : IRegistryEntry
     public string Id { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
+    public List<string> WorldIds { get; set; } = [WorldDefaults.DefaultWorldId];
 
     /// <summary>NPC ID that offers this quest. Must be present in the room for the player to receive the offer.</summary>
     public string GiverId { get; set; } = string.Empty;

@@ -7,6 +7,7 @@ public class Room
     public string Id { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
+    public List<string> WorldIds { get; set; } = [WorldDefaults.DefaultWorldId];
     public Dictionary<string, string> Exits { get; set; } = new();
     public List<Npc> Npcs { get; set; } = [];
     public List<InventoryItem> Items { get; set; } = [];

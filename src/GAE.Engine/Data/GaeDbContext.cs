@@ -22,6 +22,13 @@ public class GaeDbContext : DbContext
     public DbSet<GameEventEntity> GameEvents => Set<GameEventEntity>();
     public DbSet<ConversationLogEntity> ConversationLogs => Set<ConversationLogEntity>();
 
+    // ── World tables ──
+    public DbSet<WorldEntity> Worlds => Set<WorldEntity>();
+    public DbSet<PlayerWorldStateEntity> PlayerWorldStates => Set<PlayerWorldStateEntity>();
+    public DbSet<WorldStatSnapshotEntity> WorldStatSnapshots => Set<WorldStatSnapshotEntity>();
+    public DbSet<StatTranslationHistoryEntity> StatTranslationHistory => Set<StatTranslationHistoryEntity>();
+    public DbSet<WorldNpcStateEntity> WorldNpcStates => Set<WorldNpcStateEntity>();
+
     // ── Content registry tables ──
     public DbSet<ContentRegistryEntity> ContentRegistry => Set<ContentRegistryEntity>();
     public DbSet<GameConfigEntity> GameConfig => Set<GameConfigEntity>();

@@ -5,6 +5,7 @@ public class Npc
     public string Id { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string Personality { get; set; } = string.Empty;
+    public List<string> WorldIds { get; set; } = [WorldDefaults.DefaultWorldId];
     public string Faction { get; set; } = "neutral";
     public string Disposition { get; set; } = "neutral";
     public NpcDispositionState DispositionState { get; set; } = new();

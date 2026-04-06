@@ -9,6 +9,9 @@ public class QuestProgress
     /// <summary>References QuestDefinition.Id in the content registry.</summary>
     public string QuestId { get; set; } = string.Empty;
 
+    /// <summary>The world where this quest was accepted and progresses.</summary>
+    public string WorldId { get; set; } = WorldDefaults.DefaultWorldId;
+
     /// <summary>Current quest status.</summary>
     public QuestStatus Status { get; set; } = QuestStatus.Active;
 

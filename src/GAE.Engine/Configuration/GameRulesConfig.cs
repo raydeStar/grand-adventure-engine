@@ -31,6 +31,7 @@ public class StatConfig
     public int Max { get; set; }
     public string Display { get; set; } = string.Empty;
     public string Category { get; set; } = string.Empty;
+    public List<string> SemanticTags { get; set; } = [];
 }
 
 public class CombatConfig

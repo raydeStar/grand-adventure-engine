@@ -3,6 +3,7 @@ namespace GAE.Core.Models;
 public class CombatState
 {
     public string Id { get; set; } = Guid.NewGuid().ToString();
+    public string WorldId { get; set; } = WorldDefaults.DefaultWorldId;
     public string RoomId { get; set; } = string.Empty;
     public CombatPhase Phase { get; set; } = CombatPhase.Initiative;
     public List<CombatParticipant> TurnOrder { get; set; } = [];

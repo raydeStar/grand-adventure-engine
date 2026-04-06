@@ -107,6 +107,7 @@ public class DataMigrationService
             db.CombatStates.AddRange(snapshot.CombatStates.Select(c => new CombatStateEntity
             {
                 RoomId = c.RoomId,
+                WorldId = c.WorldId,
                 State = c,
                 CreatedAt = DateTimeOffset.UtcNow,
                 UpdatedAt = DateTimeOffset.UtcNow

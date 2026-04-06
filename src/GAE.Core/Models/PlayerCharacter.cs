@@ -7,6 +7,8 @@ public class PlayerCharacter
     public string Race { get; set; } = string.Empty;
     public string Class { get; set; } = string.Empty;
     public string Faction { get; set; } = "neutral";
+    public string ActiveWorldId { get; set; } = WorldDefaults.DefaultWorldId;
+    public string HomeWorldId { get; set; } = WorldDefaults.DefaultWorldId;
     public string Backstory { get; set; } = string.Empty;
     public string? DiscordId { get; set; }
     public ulong? ThreadId { get; set; }

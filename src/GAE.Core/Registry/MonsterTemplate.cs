@@ -11,6 +11,7 @@ public class MonsterTemplate : IRegistryEntry
     public string Id { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
+    public List<string> WorldIds { get; set; } = [WorldDefaults.DefaultWorldId];
 
     /// <summary>Personality text used for narrator flavour.</summary>
     public string Personality { get; set; } = "Aggressive and feral. Attacks anything that moves.";

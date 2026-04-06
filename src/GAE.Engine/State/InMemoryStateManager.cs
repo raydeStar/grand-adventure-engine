@@ -171,17 +171,17 @@ public class InMemoryStateManager : IStateManager
 
     // Combat operations
     public Task<CombatState?> GetCombatStateAsync(string roomId, CancellationToken ct = default)
-        => Task.FromResult(_combats.GetValueOrDefault(roomId));
+        => Task.FromResult(_combats.GetValueOrDefault(BuildCombatKey(WorldDefaults.DefaultWorldId, roomId)));
 
     public Task SaveCombatStateAsync(CombatState combat, CancellationToken ct = default)
     {
-        _combats[combat.RoomId] = combat;
+        _combats[BuildCombatKey(combat.WorldId, combat.RoomId)] = combat;
         return Task.CompletedTask;
     }
 
     public Task RemoveCombatStateAsync(string roomId, CancellationToken ct = default)
     {
-        _combats.TryRemove(roomId, out _);
+        _combats.TryRemove(BuildCombatKey(WorldDefaults.DefaultWorldId, roomId), out _);
         return Task.CompletedTask;
     }
 
@@ -238,7 +238,7 @@ public class InMemoryStateManager : IStateManager
 
         _combats.Clear();
         foreach (var c in snapshot.CombatStates)
-            _combats[c.RoomId] = c;
+            _combats[BuildCombatKey(c.WorldId, c.RoomId)] = c;
 
         lock (_storyLock)
         {
@@ -246,6 +246,8 @@ public class InMemoryStateManager : IStateManager
             _storyEntries.AddRange(snapshot.StoryEntries);
         }
     }
+
+    private static string BuildCombatKey(string worldId, string roomId) => $"{worldId}:{roomId}";
 }
 
 public class StateSnapshot

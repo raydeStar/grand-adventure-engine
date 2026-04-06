@@ -10,6 +10,8 @@ public class PlayerEntity
     public string Race { get; set; } = string.Empty;
     public string Class { get; set; } = string.Empty;
     public string Faction { get; set; } = "neutral";
+    public string ActiveWorldId { get; set; } = WorldDefaults.DefaultWorldId;
+    public string HomeWorldId { get; set; } = WorldDefaults.DefaultWorldId;
     public string Backstory { get; set; } = string.Empty;
     public string? DiscordId { get; set; }
     public long? ThreadId { get; set; }
@@ -54,6 +56,8 @@ public class PlayerEntity
         Race = Race,
         Class = Class,
         Faction = Faction,
+        ActiveWorldId = ActiveWorldId,
+        HomeWorldId = HomeWorldId,
         Backstory = Backstory,
         DiscordId = DiscordId,
         ThreadId = ThreadId is not null ? (ulong)ThreadId.Value : null,
@@ -91,6 +95,8 @@ public class PlayerEntity
         Race = p.Race,
         Class = p.Class,
         Faction = p.Faction,
+        ActiveWorldId = p.ActiveWorldId,
+        HomeWorldId = p.HomeWorldId,
         Backstory = p.Backstory,
         DiscordId = p.DiscordId,
         ThreadId = p.ThreadId is not null ? (long)p.ThreadId.Value : null,
@@ -127,6 +133,8 @@ public class PlayerEntity
         Race = p.Race;
         Class = p.Class;
         Faction = p.Faction;
+        ActiveWorldId = p.ActiveWorldId;
+        HomeWorldId = p.HomeWorldId;
         Backstory = p.Backstory;
         DiscordId = p.DiscordId;
         ThreadId = p.ThreadId is not null ? (long)p.ThreadId.Value : null;
@@ -164,6 +172,7 @@ public class RoomEntity
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public bool IsTemplate { get; set; } = true;
+    public List<string> WorldIds { get; set; } = [WorldDefaults.DefaultWorldId];
 
     // JSONB columns
     public Dictionary<string, string> Exits { get; set; } = new();
@@ -180,6 +189,7 @@ public class RoomEntity
         Id = Id,
         Name = Name,
         Description = Description,
+        WorldIds = WorldIds,
         Exits = Exits,
         Npcs = Npcs,
         Items = Items,
@@ -195,6 +205,7 @@ public class RoomEntity
         Name = r.Name,
         Description = r.Description,
         IsTemplate = isTemplate,
+        WorldIds = r.WorldIds,
         Exits = r.Exits,
         Npcs = r.Npcs,
         Items = r.Items,
@@ -208,6 +219,7 @@ public class RoomEntity
     {
         Name = r.Name;
         Description = r.Description;
+        WorldIds = r.WorldIds;
         Exits = r.Exits;
         Npcs = r.Npcs;
         Items = r.Items;
@@ -224,6 +236,7 @@ public class PlayerRoomEntity
     public string Id { get; set; } = string.Empty; // "playerId:roomId"
     public string PlayerId { get; set; } = string.Empty;
     public string RoomId { get; set; } = string.Empty;
+    public string WorldId { get; set; } = WorldDefaults.DefaultWorldId;
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
 
@@ -242,6 +255,7 @@ public class PlayerRoomEntity
         Id = Id,
         Name = Name,
         Description = Description,
+        WorldIds = [WorldId],
         Exits = Exits,
         Npcs = Npcs,
         Items = Items,
@@ -251,11 +265,12 @@ public class PlayerRoomEntity
         DiscoveredAt = DiscoveredAt
     };
 
-    public static PlayerRoomEntity FromDomain(Room r, string playerId, string roomId) => new()
+    public static PlayerRoomEntity FromDomain(Room r, string playerId, string roomId, string? worldId = null) => new()
     {
         Id = r.Id,
         PlayerId = playerId,
         RoomId = roomId,
+        WorldId = string.IsNullOrWhiteSpace(worldId) ? r.WorldIds.FirstOrDefault() ?? WorldDefaults.DefaultWorldId : worldId,
         Name = r.Name,
         Description = r.Description,
         Exits = r.Exits,
@@ -288,6 +303,7 @@ public class StoryEntryEntity
     public string ActionId { get; set; } = string.Empty;
     public string RawInput { get; set; } = string.Empty;
     public string PlayerId { get; set; } = string.Empty;
+    public string WorldId { get; set; } = WorldDefaults.DefaultWorldId;
     public string RoomId { get; set; } = string.Empty;
     public string MechanicalSummary { get; set; } = string.Empty;
     public string Narration { get; set; } = string.Empty;
@@ -299,6 +315,7 @@ public class StoryEntryEntity
         ActionId = ActionId,
         RawInput = RawInput,
         PlayerId = PlayerId,
+        WorldId = WorldId,
         RoomId = RoomId,
         MechanicalSummary = MechanicalSummary,
         Narration = Narration,
@@ -311,6 +328,7 @@ public class StoryEntryEntity
         ActionId = e.ActionId,
         RawInput = e.RawInput,
         PlayerId = e.PlayerId,
+        WorldId = e.WorldId,
         RoomId = e.RoomId,
         MechanicalSummary = e.MechanicalSummary,
         Narration = e.Narration,
@@ -322,6 +340,7 @@ public class StoryEntryEntity
 public class CombatStateEntity
 {
     public string RoomId { get; set; } = string.Empty;
+    public string WorldId { get; set; } = WorldDefaults.DefaultWorldId;
     public CombatState State { get; set; } = new();
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }

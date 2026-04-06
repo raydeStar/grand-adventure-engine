@@ -27,6 +27,12 @@ public class PlayerConfiguration : IEntityTypeConfiguration<PlayerEntity>
         builder.Property(p => p.Race).HasColumnName("race").IsRequired();
         builder.Property(p => p.Class).HasColumnName("class").IsRequired();
         builder.Property(p => p.Faction).HasColumnName("faction").IsRequired();
+        builder.Property(p => p.ActiveWorldId).HasColumnName("active_world_id")
+            .HasDefaultValue(WorldDefaults.DefaultWorldId)
+            .IsRequired();
+        builder.Property(p => p.HomeWorldId).HasColumnName("home_world_id")
+            .HasDefaultValue(WorldDefaults.DefaultWorldId)
+            .IsRequired();
         builder.Property(p => p.Backstory).HasColumnName("backstory");
         builder.Property(p => p.DiscordId).HasColumnName("discord_id");
         builder.Property(p => p.ThreadId).HasColumnName("thread_id");
@@ -101,6 +107,12 @@ public class RoomConfiguration : IEntityTypeConfiguration<RoomEntity>
         builder.Property(r => r.AsciiArt).HasColumnName("ascii_art");
         builder.Property(r => r.DiscoveredAt).HasColumnName("discovered_at");
 
+        builder.Property(r => r.WorldIds).HasColumnName("world_ids").HasColumnType("jsonb")
+            .HasConversion(
+                v => JsonSerializer.Serialize(v, JsonDefaults.Options),
+                v => JsonSerializer.Deserialize<List<string>>(v, JsonDefaults.Options) ?? new List<string> { WorldDefaults.DefaultWorldId })
+            .HasDefaultValueSql("'[\"default-world\"]'::jsonb");
+
         builder.Property(r => r.Exits).HasColumnName("exits").HasColumnType("jsonb")
             .HasConversion(
                 v => JsonSerializer.Serialize(v, JsonDefaults.Options),
@@ -135,6 +147,9 @@ public class PlayerRoomConfiguration : IEntityTypeConfiguration<PlayerRoomEntity
         builder.Property(pr => pr.Id).HasColumnName("id");
         builder.Property(pr => pr.PlayerId).HasColumnName("player_id").IsRequired();
         builder.Property(pr => pr.RoomId).HasColumnName("room_id").IsRequired();
+        builder.Property(pr => pr.WorldId).HasColumnName("world_id")
+            .HasDefaultValue(WorldDefaults.DefaultWorldId)
+            .IsRequired();
         builder.Property(pr => pr.Name).HasColumnName("name").IsRequired();
         builder.Property(pr => pr.Description).HasColumnName("description");
         builder.Property(pr => pr.IsDiscovered).HasColumnName("is_discovered");
@@ -162,7 +177,7 @@ public class PlayerRoomConfiguration : IEntityTypeConfiguration<PlayerRoomEntity
                 v => JsonSerializer.Deserialize<List<string>>(v, JsonDefaults.Options) ?? new List<string>());
 
         builder.HasIndex(pr => pr.PlayerId).HasDatabaseName("ix_player_rooms_player_id");
-        builder.HasIndex(pr => new { pr.PlayerId, pr.RoomId }).IsUnique()
+        builder.HasIndex(pr => new { pr.PlayerId, pr.RoomId, pr.WorldId }).IsUnique()
             .HasDatabaseName("ix_player_rooms_player_room");
     }
 }
@@ -177,12 +192,16 @@ public class StoryEntryConfiguration : IEntityTypeConfiguration<StoryEntryEntity
         builder.Property(s => s.ActionId).HasColumnName("action_id");
         builder.Property(s => s.RawInput).HasColumnName("raw_input");
         builder.Property(s => s.PlayerId).HasColumnName("player_id");
+        builder.Property(s => s.WorldId).HasColumnName("world_id")
+            .HasDefaultValue(WorldDefaults.DefaultWorldId)
+            .IsRequired();
         builder.Property(s => s.RoomId).HasColumnName("room_id");
         builder.Property(s => s.MechanicalSummary).HasColumnName("mechanical_summary");
         builder.Property(s => s.Narration).HasColumnName("narration");
         builder.Property(s => s.Timestamp).HasColumnName("timestamp");
 
         builder.HasIndex(s => s.PlayerId).HasDatabaseName("ix_story_entries_player_id");
+        builder.HasIndex(s => s.WorldId).HasDatabaseName("ix_story_entries_world_id");
         builder.HasIndex(s => s.RoomId).HasDatabaseName("ix_story_entries_room_id");
         builder.HasIndex(s => s.Timestamp).IsDescending().HasDatabaseName("ix_story_entries_timestamp");
     }
@@ -193,8 +212,11 @@ public class CombatStateConfiguration : IEntityTypeConfiguration<CombatStateEnti
     public void Configure(EntityTypeBuilder<CombatStateEntity> builder)
     {
         builder.ToTable("combat_states");
-        builder.HasKey(c => c.RoomId);
+        builder.HasKey(c => new { c.RoomId, c.WorldId });
         builder.Property(c => c.RoomId).HasColumnName("room_id");
+        builder.Property(c => c.WorldId).HasColumnName("world_id")
+            .HasDefaultValue(WorldDefaults.DefaultWorldId)
+            .IsRequired();
         builder.Property(c => c.CreatedAt).HasColumnName("created_at");
         builder.Property(c => c.UpdatedAt).HasColumnName("updated_at");
 

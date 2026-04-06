@@ -187,6 +187,7 @@ public class GameEngine : IGameEngine
                 ActionId = action.Id,
                 RawInput = action.RawInput,
                 PlayerId = playerId,
+                WorldId = player.ActiveWorldId,
                 RoomId = player.CurrentRoomId,
                 MechanicalSummary = result.MechanicalSummary,
                 Narration = result.Narration ?? string.Empty
@@ -1779,6 +1780,7 @@ public class GameEngine : IGameEngine
             ActionId = action.Id,
             RawInput = action.RawInput,
             PlayerId = player.Id,
+            WorldId = player.ActiveWorldId,
             RoomId = player.CurrentRoomId,
             MechanicalSummary = result.MechanicalSummary,
             Narration = result.Narration ?? result.MechanicalSummary
@@ -2751,6 +2753,7 @@ public class GameEngine : IGameEngine
         // Build CombatState with initiative
         var combat = new CombatState
         {
+            WorldId = player.ActiveWorldId,
             RoomId = room.Id,
             Phase = CombatPhase.PlayerTurn,
             RoundNumber = 1,
@@ -2867,6 +2870,7 @@ public class GameEngine : IGameEngine
             ActionId = action.Id,
             RawInput = action.RawInput,
             PlayerId = player.Id,
+            WorldId = player.ActiveWorldId,
             RoomId = player.CurrentRoomId,
             MechanicalSummary = result.MechanicalSummary,
             Narration = result.Narration ?? result.MechanicalSummary

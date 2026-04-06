@@ -98,7 +98,7 @@ public class QuestEngine
             return null;
         }
 
-        var progress = CreateQuestProgress(quest, firstStage, narratorDescription, partyQuestGroupId: null);
+        var progress = CreateQuestProgress(quest, firstStage, narratorDescription, player.ActiveWorldId, partyQuestGroupId: null);
 
         player.QuestLog.Add(progress);
         _logger.LogInformation("Player {PlayerId} accepted quest {QuestId}", player.Id, questId);
@@ -671,9 +671,10 @@ public class QuestEngine
         }
     }
 
-    private static QuestProgress CreateQuestProgress(QuestDefinition quest, QuestStage stage, string? narratorDescription, string? partyQuestGroupId) => new()
+    private static QuestProgress CreateQuestProgress(QuestDefinition quest, QuestStage stage, string? narratorDescription, string worldId, string? partyQuestGroupId) => new()
     {
         QuestId = quest.Id,
+        WorldId = worldId,
         Status = QuestStatus.Active,
         CurrentStageId = stage.Id,
         NarratorDescription = narratorDescription ?? quest.Description,
@@ -684,6 +685,7 @@ public class QuestEngine
     private static QuestProgress CreateQuestProgressFromParty(QuestDefinition quest, PartyQuestProgress party, string? narratorDescription) => new()
     {
         QuestId = quest.Id,
+        WorldId = party.WorldId,
         Status = party.Status,
         CurrentStageId = party.CurrentStageId,
         NarratorDescription = narratorDescription ?? quest.Description,
@@ -724,7 +726,9 @@ public class QuestEngine
         var players = await _stateManager!.GetAllPlayersAsync(ct);
         foreach (var other in players)
         {
-            if (other.Id == player.Id || !string.Equals(other.CurrentRoomId, player.CurrentRoomId, StringComparison.OrdinalIgnoreCase))
+            if (other.Id == player.Id
+                || !string.Equals(other.CurrentRoomId, player.CurrentRoomId, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(other.ActiveWorldId, player.ActiveWorldId, StringComparison.OrdinalIgnoreCase))
                 continue;
 
             var existing = other.QuestLog.FirstOrDefault(q => q.QuestId == questId && !string.IsNullOrWhiteSpace(q.PartyQuestGroupId)
@@ -741,6 +745,7 @@ public class QuestEngine
         {
             GroupId = Guid.NewGuid().ToString("N"),
             QuestId = questId,
+            WorldId = player.ActiveWorldId,
             Status = QuestStatus.Active,
             CurrentStageId = firstStage.Id,
             Objectives = CreateObjectiveProgressList(firstStage),

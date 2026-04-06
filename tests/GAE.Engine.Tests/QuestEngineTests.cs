@@ -407,6 +407,35 @@ public class QuestEngineTests
         Assert.Equal(90, updatedTwo.Xp);
     }
 
+    [Fact]
+    public async Task AcceptQuestAsync_DoesNotJoinPartyQuestAcrossWorlds()
+    {
+        var stateManager = new InMemoryStateManager();
+        var partyEngine = new QuestEngine(_registry, NullLogger<QuestEngine>.Instance, stateManager);
+        var playerOne = CreatePlayer();
+        playerOne.Id = "player-one";
+        playerOne.ActiveWorldId = WorldDefaults.DefaultWorldId;
+
+        var playerTwo = CreatePlayer();
+        playerTwo.Id = "player-two";
+        playerTwo.ActiveWorldId = "mirror-realm";
+
+        await stateManager.SavePlayerAsync(playerOne);
+        await stateManager.SavePlayerAsync(playerTwo);
+
+        var first = await partyEngine.AcceptQuestAsync(playerOne, "party_hunt");
+        Assert.NotNull(first);
+        await stateManager.SavePlayerAsync(playerOne);
+
+        var second = await partyEngine.AcceptQuestAsync(playerTwo, "party_hunt");
+        Assert.NotNull(second);
+        await stateManager.SavePlayerAsync(playerTwo);
+
+        Assert.NotEqual(first!.PartyQuestGroupId, second!.PartyQuestGroupId);
+        Assert.Equal(playerOne.ActiveWorldId, first.WorldId);
+        Assert.Equal(playerTwo.ActiveWorldId, second.WorldId);
+    }
+
     // ── Journal Formatting ──
 
     [Fact]

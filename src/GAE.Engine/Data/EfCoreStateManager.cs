@@ -117,15 +117,17 @@ public class EfCoreStateManager : IStateManager
         var parts = room.Id.Split(':', 2);
         var playerId = parts[0];
         var roomId = parts[1];
+        var worldId = await ResolvePlayerWorldIdAsync(db, playerId, ct);
 
         var existing = await db.PlayerRooms.FindAsync([room.Id], ct);
         if (existing is not null)
         {
+            existing.WorldId = worldId;
             existing.UpdateFrom(room);
         }
         else
         {
-            db.PlayerRooms.Add(PlayerRoomEntity.FromDomain(room, playerId, roomId));
+            db.PlayerRooms.Add(PlayerRoomEntity.FromDomain(room, playerId, roomId, worldId));
         }
         await db.SaveChangesAsync(ct);
     }
@@ -149,8 +151,10 @@ public class EfCoreStateManager : IStateManager
     public async Task<Room?> GetPlayerRoomAsync(string playerId, string roomId, CancellationToken ct = default)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var worldId = await ResolvePlayerWorldIdAsync(db, playerId, ct);
         var key = $"{playerId}:{roomId}";
-        var existing = await db.PlayerRooms.AsNoTracking().FirstOrDefaultAsync(pr => pr.Id == key, ct);
+        var existing = await db.PlayerRooms.AsNoTracking()
+            .FirstOrDefaultAsync(pr => pr.Id == key && pr.WorldId == worldId, ct);
         if (existing is not null)
         {
             var room = existing.ToDomain();
@@ -171,8 +175,9 @@ public class EfCoreStateManager : IStateManager
         var clone = templateRoom.DeepClone(key);
         clone.IsDiscovered = true;
         clone.DiscoveredAt = DateTimeOffset.UtcNow;
+        clone.WorldIds = [worldId];
 
-        db.PlayerRooms.Add(PlayerRoomEntity.FromDomain(clone, playerId, roomId));
+        db.PlayerRooms.Add(PlayerRoomEntity.FromDomain(clone, playerId, roomId, worldId));
         await db.SaveChangesAsync(ct);
 
         return clone;
@@ -255,14 +260,15 @@ public class EfCoreStateManager : IStateManager
     public async Task<CombatState?> GetCombatStateAsync(string roomId, CancellationToken ct = default)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
-        var entity = await db.CombatStates.AsNoTracking().FirstOrDefaultAsync(c => c.RoomId == roomId, ct);
+        var entity = await db.CombatStates.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.RoomId == roomId && c.WorldId == WorldDefaults.DefaultWorldId, ct);
         return entity?.State;
     }
 
     public async Task SaveCombatStateAsync(CombatState combat, CancellationToken ct = default)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
-        var existing = await db.CombatStates.FindAsync([combat.RoomId], ct);
+        var existing = await db.CombatStates.FindAsync([combat.RoomId, combat.WorldId], ct);
         if (existing is not null)
         {
             existing.State = combat;
@@ -273,6 +279,7 @@ public class EfCoreStateManager : IStateManager
             db.CombatStates.Add(new CombatStateEntity
             {
                 RoomId = combat.RoomId,
+                WorldId = combat.WorldId,
                 State = combat,
                 CreatedAt = DateTimeOffset.UtcNow,
                 UpdatedAt = DateTimeOffset.UtcNow
@@ -284,7 +291,7 @@ public class EfCoreStateManager : IStateManager
     public async Task RemoveCombatStateAsync(string roomId, CancellationToken ct = default)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
-        await db.CombatStates.Where(c => c.RoomId == roomId).ExecuteDeleteAsync(ct);
+        await db.CombatStates.Where(c => c.RoomId == roomId && c.WorldId == WorldDefaults.DefaultWorldId).ExecuteDeleteAsync(ct);
     }
 
     public async Task RemoveAllCombatStatesAsync(CancellationToken ct = default)
@@ -349,4 +356,11 @@ public class EfCoreStateManager : IStateManager
         });
         await db.SaveChangesAsync(ct);
     }
+
+    private static async Task<string> ResolvePlayerWorldIdAsync(GaeDbContext db, string playerId, CancellationToken ct)
+        => await db.Players.AsNoTracking()
+            .Where(p => p.Id == playerId)
+            .Select(p => p.ActiveWorldId)
+            .FirstOrDefaultAsync(ct)
+            ?? WorldDefaults.DefaultWorldId;
 }

@@ -10,6 +10,7 @@ using GAE.Engine.Configuration;
 using GAE.Engine.Data;
 using GAE.Engine.Registry;
 using GAE.Engine.State;
+using GAE.Engine.Worlds;
 using GAE.Narrator;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
@@ -70,6 +71,7 @@ if (usePostgres)
 
     builder.Services.AddSingleton<IStateManager, EfCoreStateManager>();
     builder.Services.AddSingleton<IConversationLogger, EfCoreConversationLogger>();
+    builder.Services.AddSingleton<IWorldRepository, EfCoreWorldRepository>();
     builder.Services.AddSingleton<ContentSeedService>();
 
     // Keep file-based services available for data migration
@@ -107,7 +109,10 @@ else
     builder.Services.AddSingleton<IStateReplayService>(sp => sp.GetRequiredService<StateReplayService>());
     builder.Services.AddSingleton<JournaledStateManager>();
     builder.Services.AddSingleton<IStateManager>(sp => sp.GetRequiredService<JournaledStateManager>());
+    builder.Services.AddSingleton<IWorldRepository, InMemoryWorldRepository>();
 }
+
+builder.Services.AddSingleton<WorldBootstrapService>();
 
 // World seeding config — used by admin reset endpoint
 builder.Services.AddSingleton(new WorldSeedConfig
@@ -340,6 +345,9 @@ using (var seedScope = app.Services.CreateScope())
         }
     }
 } // end seedScope
+
+var worldBootstrap = app.Services.GetRequiredService<WorldBootstrapService>();
+await worldBootstrap.EnsureDefaultWorldAsync(gameRules);
 
 app.UseDefaultFiles();
 app.UseStaticFiles(new StaticFileOptions
