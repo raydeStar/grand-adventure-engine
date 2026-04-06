@@ -163,14 +163,12 @@
     });
     // Restore persisted admin tab styling without triggering protected loads before auth.
     const savedTab = localStorage.getItem('gae.admin.tab');
+    const normalizedSavedTab = savedTab === 'dm-console' ? 'overview' : savedTab;
     const validTabs = new Set([...document.querySelectorAll('[data-admin-tab]')].map(t => t.dataset.adminTab));
-    if (savedTab && validTabs.has(savedTab)) switchAdminTab(savedTab);
+    if (normalizedSavedTab && validTabs.has(normalizedSavedTab)) switchAdminTab(normalizedSavedTab);
 
     // Wire up AI logs tab events
     UI.wireLogsTab();
-
-    // Wire up DM Console
-    UI.wireDmConsole();
 
     // Wire up content registry tab
     UI.wireRegistryTab();
@@ -451,6 +449,10 @@
   }
 
   function switchAdminTab(tabName) {
+    if (tabName === 'dm-console') {
+      tabName = 'overview';
+    }
+
     document.querySelectorAll('[data-admin-tab]').forEach((btn) => {
       btn.classList.toggle('active', btn.dataset.adminTab === tabName);
     });
