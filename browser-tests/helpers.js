@@ -59,6 +59,11 @@ async function openAdminConsole(page) {
   await expect(page.locator('#workspace-admin')).toBeVisible();
 }
 
+async function switchAdminTab(page, tabName) {
+  await page.locator(`.admin-tab[data-admin-tab="${tabName}"]`).click();
+  await expect(page.locator(`.admin-tab-content[data-admin-panel="${tabName}"]`)).toBeVisible();
+}
+
 async function seedDemoViaApi(page, replaceExisting = true) {
   return await page.evaluate(async (replace) => {
     return await API.seedDemoCharacters(replace);
@@ -113,6 +118,7 @@ module.exports = {
   openAdminConsole,
   openCreateCharacter,
   seedDemoViaApi,
+  switchAdminTab,
   cleanupTestPlayers,
   cleanupTestPlayersViaApi,
   uniqueId

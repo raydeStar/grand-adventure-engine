@@ -4,6 +4,7 @@ const {
   openAdminConsole,
   openCreateCharacter,
   seedDemoViaApi,
+  switchAdminTab,
   cleanupTestPlayersViaApi,
   uniqueId
 } = require('./helpers');
@@ -40,7 +41,8 @@ test.describe('Grand Adventure Engine dashboard', () => {
     await expect(page.locator('#dashboard')).toBeVisible();
     await expect(page.locator('#header-player')).toContainText('Playwright Hero');
     await expect(page.locator('#command-input')).toBeEnabled();
-    await expect(page.locator('#room-name')).toContainText('Crossroads');
+    // Room name is theme-dependent; just verify the player spawned in a real room.
+    await expect(page.locator('#room-name')).not.toBeEmpty();
 
     await page.locator('#command-input').fill('look');
     await page.getByRole('button', { name: 'Send' }).click();
@@ -50,7 +52,7 @@ test.describe('Grand Adventure Engine dashboard', () => {
     await expect(page.locator('#story-log')).not.toContainText('Exits:');
     await expect(page.locator('#story-log')).not.toContainText('You see:');
     await expect(page.locator('#story-log')).not.toContainText('Items:');
-    await expect(page.locator('#room-desc')).toContainText('weathered inn at the junction of three ancient roads');
+    await expect(page.locator('#room-desc')).not.toBeEmpty();
 
     await page.locator('#command-input').fill('stats');
     await page.getByRole('button', { name: 'Send' }).click();
@@ -67,17 +69,21 @@ test.describe('Grand Adventure Engine dashboard', () => {
     await expect(page.locator('#portal-message')).toContainText(/Seeded|already existed/i);
 
     await openAdminConsole(page);
+    await switchAdminTab(page, 'overview');
     await expect(page.locator('#summary-cards .summary-card')).toHaveCount(6);
-    await expect(page.locator('#admin-players-table')).toContainText('demo-user');
-    await expect(page.locator('#admin-players-table')).toContainText('demo-admin');
 
     await page.locator('#workflow-player-select').selectOption('demo-user');
     await page.getByRole('button', { name: 'Run User Smoke' }).click();
     await expect(page.locator('#workflow-log')).toContainText('demo-user > look');
 
+    await switchAdminTab(page, 'players');
+    await expect(page.locator('#admin-players-table')).toContainText('demo-user');
+    await expect(page.locator('#admin-players-table')).toContainText('demo-admin');
+
+    await switchAdminTab(page, 'commands');
     await page.locator('#admin-player-select').selectOption('demo-admin');
     await page.locator('#admin-command-input').fill('help');
-    await page.getByRole('button', { name: 'Ask / Execute' }).click();
+    await page.getByRole('button', { name: 'Execute' }).click();
     await expect(page.locator('#admin-command-log')).toContainText('demo-admin > help');
     await expect(page.locator('#admin-command-log')).toContainText('Available Commands');
   });
@@ -86,6 +92,8 @@ test.describe('Grand Adventure Engine dashboard', () => {
     await login(page, 'admin');
     await seedDemoViaApi(page, true);
     await openAdminConsole(page);
+
+    await switchAdminTab(page, 'mutations');
 
     await page.locator('#resource-player-select').selectOption('demo-user');
     await page.locator('#resource-gold-delta').fill('0');
@@ -123,6 +131,7 @@ test.describe('Grand Adventure Engine dashboard', () => {
     await page.locator('#mutation-teleport-form').getByRole('button', { name: 'Teleport Player' }).click();
     await expect(page.locator('#mutation-log')).toContainText('Teleported Ari Quickstep to QA Lab');
 
+    await switchAdminTab(page, 'players');
     await page.locator('#admin-players-table [data-player-id="demo-user"][data-admin-action="user"]').click();
     await expect(page.locator('#room-name')).toContainText('QA Lab');
     await expect(page.locator('#inventory-list')).toContainText('GM Lantern');
@@ -208,6 +217,13 @@ test.describe('Grand Adventure Engine dashboard', () => {
 
   test('story parser strips room metadata blocks from mixed responses', async ({ page }) => {
     await login(page, 'admin');
+
+    // Stop the refresh loop by clearing all intervals — prevents renderNoActivePlayer
+    // from resetting the story log after we inject test DOM.
+    await page.evaluate(() => {
+      const maxId = window.setInterval(() => {}, 100000);
+      for (let i = 1; i <= maxId; i++) window.clearInterval(i);
+    });
 
     await page.evaluate(() => {
       UI.showDashboard(true);
