@@ -131,7 +131,7 @@ builder.Services.AddSingleton<IContentRegistryService>(sp => sp.GetRequiredServi
 
 builder.Services.AddSingleton<QuestEngine>();
 builder.Services.AddSingleton<QuestTracker>();
-builder.Services.AddSingleton<IRealmTravelService, RealmTravelService>();
+// RealmTravelService registration deferred below INarratorService (depends on it)
 builder.Services.AddSingleton<IGameEngine, GameEngine>();
 
 // Narrator — LM Studio HTTP client
@@ -150,7 +150,19 @@ builder.Services.AddSingleton<INarratorService>(sp =>
     var knowledge = sp.GetRequiredService<WorldKnowledgeBuilder>();
     var conversationLogger = sp.GetRequiredService<IConversationLogger>();
     var registry = sp.GetRequiredService<IContentRegistryService>();
-    return new NarratorService(httpClient, logger, lmStudioModel, knowledge, conversationLogger, registry);
+    var worldContext = sp.GetService<IWorldContext>();
+    var worldRepository = sp.GetService<IWorldRepository>();
+    return new NarratorService(httpClient, logger, lmStudioModel, knowledge, conversationLogger, registry, worldContext, worldRepository);
+});
+
+builder.Services.AddSingleton<IRealmTravelService>(sp =>
+{
+    var stateManager = sp.GetRequiredService<IStateManager>();
+    var worldRepository = sp.GetRequiredService<IWorldRepository>();
+    var logger = sp.GetRequiredService<ILogger<RealmTravelService>>();
+    var rules = sp.GetService<GameRulesConfig>();
+    var narrator = sp.GetService<INarratorService>();
+    return new RealmTravelService(stateManager, worldRepository, logger, rules, narrator);
 });
 
 // Discord bot

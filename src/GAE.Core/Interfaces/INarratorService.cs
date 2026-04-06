@@ -3,6 +3,44 @@ using GAE.Core.Registry;
 
 namespace GAE.Core.Interfaces;
 
+/// <summary>
+/// Request for AI-mediated stat translation between worlds with different stat systems.
+/// </summary>
+public class StatTranslationRequest
+{
+    public required string CharacterName { get; set; }
+    public string? Class { get; set; }
+    public string? Race { get; set; }
+    public int Level { get; set; }
+    public required string SourceWorldName { get; set; }
+    public required string DestinationWorldName { get; set; }
+    public required Dictionary<string, StatTranslationStat> SourceStats { get; set; }
+    public required Dictionary<string, StatTranslationStat> DestinationStatDefs { get; set; }
+    public string? PreviousTranslation { get; set; }
+}
+
+/// <summary>
+/// A single stat entry with value, display name, and semantic tags for AI translation context.
+/// </summary>
+public class StatTranslationStat
+{
+    public string Display { get; set; } = string.Empty;
+    public int Value { get; set; }
+    public int Min { get; set; }
+    public int Max { get; set; }
+    public List<string> SemanticTags { get; set; } = [];
+}
+
+/// <summary>
+/// AI response from stat translation: translated values, reasoning, and transition narrative.
+/// </summary>
+public class StatTranslationResponse
+{
+    public Dictionary<string, int> TranslatedStats { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public string TranslationNotes { get; set; } = string.Empty;
+    public string Narrative { get; set; } = string.Empty;
+}
+
 public interface INarratorService
 {
     Task<string> NarrateActionAsync(NarratorContext context, CancellationToken ct = default);
@@ -43,4 +81,18 @@ public interface INarratorService
 
     /// <summary>Lists available models from the LM Studio /v1/models endpoint.</summary>
     Task<IReadOnlyList<string>> ListAvailableModelsAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// AI-mediated stat translation when a character crosses between worlds with different stat systems.
+    /// Returns translated stats, reasoning notes, and a short narrative describing the transformation.
+    /// Returns null when the AI is unavailable — caller should fall back to deterministic translation.
+    /// </summary>
+    Task<StatTranslationResponse?> TranslateStatsAsync(StatTranslationRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Generates 2-3 sentences of transition narration for a realm crossing.
+    /// Used when the stat translation was deterministic (no AI narrative was produced).
+    /// Returns null when the AI is unavailable.
+    /// </summary>
+    Task<string?> NarrateRealmTransitionAsync(string playerName, string sourceWorldName, string destinationWorldName, string? portalHint, CancellationToken ct = default);
 }

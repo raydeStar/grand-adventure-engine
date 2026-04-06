@@ -202,6 +202,12 @@ public class StubNarratorService : INarratorService
             Narration = "[Spell] Learning new spell"
         });
 
+    public Task<StatTranslationResponse?> TranslateStatsAsync(StatTranslationRequest request, CancellationToken ct = default)
+        => Task.FromResult<StatTranslationResponse?>(null);
+
+    public Task<string?> NarrateRealmTransitionAsync(string characterName, string fromWorld, string toWorld, string? translationNotes = null, CancellationToken ct = default)
+        => Task.FromResult<string?>(null);
+
     private static string OppositeDir(string dir) => dir switch
     {
         "north" => "south", "south" => "north",

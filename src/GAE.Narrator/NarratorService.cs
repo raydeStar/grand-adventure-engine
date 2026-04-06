@@ -6,6 +6,7 @@ using System.Text.Json.Serialization;
 using GAE.Core.Interfaces;
 using GAE.Core.Models;
 using GAE.Core.Registry;
+using GAE.Engine.Worlds;
 using Microsoft.Extensions.Logging;
 
 namespace GAE.Narrator;
@@ -17,16 +18,20 @@ public class NarratorService : INarratorService
     private readonly WorldKnowledgeBuilder? _knowledge;
     private readonly IConversationLogger? _conversationLogger;
     private readonly IContentRegistryService? _registry;
+    private readonly IWorldContext? _worldContext;
+    private readonly IWorldRepository? _worldRepository;
     private string _model;
     private bool _modelResolved;
 
-    public NarratorService(HttpClient httpClient, ILogger<NarratorService> logger, string model = "default", WorldKnowledgeBuilder? knowledge = null, IConversationLogger? conversationLogger = null, IContentRegistryService? registry = null)
+    public NarratorService(HttpClient httpClient, ILogger<NarratorService> logger, string model = "default", WorldKnowledgeBuilder? knowledge = null, IConversationLogger? conversationLogger = null, IContentRegistryService? registry = null, IWorldContext? worldContext = null, IWorldRepository? worldRepository = null)
     {
         _httpClient = httpClient;
         _logger = logger;
         _knowledge = knowledge;
         _conversationLogger = conversationLogger;
         _registry = registry;
+        _worldContext = worldContext;
+        _worldRepository = worldRepository;
         _model = model;
         _modelResolved = !string.Equals(model, "default", StringComparison.OrdinalIgnoreCase);
     }
@@ -79,6 +84,7 @@ public class NarratorService : INarratorService
             : "None";
 
         var loreContext = await GetRoomKnowledgeAsync(context.CurrentRoom, ct);
+        var worldContext = BuildWorldContextBlock(context);
 
         var userPrompt = $"""
             Player: {context.Player.Name} ({context.Player.Race} {context.Player.Class}, Level {context.Player.Level})
@@ -89,6 +95,7 @@ public class NarratorService : INarratorService
             Action: {context.Action.RawInput}
             Action Outcome: {(context.MechanicalResult.Success ? "success" : "failure")}
             Resolved Outcome: {resolvedOutcome}
+            {worldContext}
             {loreContext}
             """;
 
@@ -152,6 +159,7 @@ public class NarratorService : INarratorService
             : "none";
 
         var loreContext = await GetRoomKnowledgeAsync(context.CurrentRoom, ct);
+        var worldContext = BuildWorldContextBlock(context);
 
         var userPrompt = $"""
             Player: {context.Player.Name} ({context.Player.Race} {context.Player.Class}, Level {context.Player.Level})
@@ -161,6 +169,7 @@ public class NarratorService : INarratorService
             NPCs present: {npcsPresent}
             Items visible: {notableItems}
             Direction traveled: {context.Action.Direction ?? "unknown"}
+            {worldContext}
             {loreContext}
             Narrate the arrival moment.
             """;
@@ -735,6 +744,7 @@ public class NarratorService : INarratorService
 
         var loreContext = await GetRoomKnowledgeAsync(room, ct);
         var questContext = BuildFreeFormQuestContext(player);
+        var worldContext = await GetCurrentWorldContextBlockAsync(ct);
 
         var userPrompt = $"""
             Character Definition Card
@@ -761,6 +771,7 @@ public class NarratorService : INarratorService
             Exits: {string.Join(", ", room.Exits.Keys)}
             Recent history:
             {recentLines}
+            {worldContext}
             {loreContext}
             {questContext}
 
@@ -902,6 +913,7 @@ public class NarratorService : INarratorService
 
         var npcKnowledge = await GetNpcKnowledgeAsync(npc, room, ct);
         var questContext = BuildConversationQuestContext(npc, player);
+        var worldContext = await GetCurrentWorldContextBlockAsync(ct);
 
         var userPrompt = $$"""
             Player: {{player.Name}} (Lv.{{player.Level}} {{player.Race}} {{player.Class}})
@@ -909,6 +921,7 @@ public class NarratorService : INarratorService
             Location: {{room.Name}} — {{room.Description}}
             Turn {{interaction.TurnCount + 1}} of conversation with {{npc.Name}}.
             Player says/does: "{{rawInput}}"
+            {{worldContext}}
             {{npcKnowledge}}
             {{questContext}}
             """;
@@ -1122,6 +1135,7 @@ public class NarratorService : INarratorService
             """;
 
         var loreContext = await GetRoomKnowledgeAsync(room, ct);
+        var worldContext = await GetCurrentWorldContextBlockAsync(ct);
 
         var userPrompt = $$"""
             Player: {{player.Name}} (Lv.{{player.Level}} {{player.Race}} {{player.Class}})
@@ -1131,6 +1145,7 @@ public class NarratorService : INarratorService
             Location: {{room.Name}}
             Combat turn {{interaction.TurnCount + 1}} vs {{enemy.Name}} (HP: {{enemy.Hp ?? 0}}/{{enemy.MaxHp ?? 0}}, Defense: {{enemy.Defense ?? 10}})
             Player action: "{{rawInput}}"
+            {{worldContext}}
             {{loreContext}}
             """;
 
@@ -1668,6 +1683,63 @@ public class NarratorService : INarratorService
 
     private static string FallbackNarration() =>
         "The scene settles into a plain, unadorned stillness for a moment, yielding only the bare facts.";
+
+    /// <summary>
+    /// Builds a world context block for injection into narrator prompts.
+    /// Returns empty string when no world context is available.
+    /// </summary>
+    private static string BuildWorldContextBlock(NarratorContext context)
+    {
+        if (string.IsNullOrWhiteSpace(context.WorldName)) return "";
+
+        var parts = new List<string> { $"CURRENT WORLD: {context.WorldName}" };
+        if (!string.IsNullOrWhiteSpace(context.WorldDescription))
+            parts.Add($"WORLD DESCRIPTION: {context.WorldDescription}");
+        if (!string.IsNullOrWhiteSpace(context.WorldRulesSummary))
+            parts.Add($"WORLD RULES: {context.WorldRulesSummary}");
+
+        return string.Join("\n", parts);
+    }
+
+    /// <summary>
+    /// Auto-fetches world context from IWorldContext/IWorldRepository for prompts
+    /// that don't receive NarratorContext.
+    /// </summary>
+    private async Task<string> GetCurrentWorldContextBlockAsync(CancellationToken ct)
+    {
+        if (_worldContext is null || _worldRepository is null) return "";
+        if (!_worldContext.IsExplicitlySet) return "";
+
+        try
+        {
+            var worldId = _worldContext.CurrentWorldId;
+            if (string.IsNullOrWhiteSpace(worldId)) return "";
+            var world = await _worldRepository.GetWorldAsync(worldId, ct);
+            if (world is null) return "";
+
+            var parts = new List<string> { $"CURRENT WORLD: {world.Name}" };
+            if (!string.IsNullOrWhiteSpace(world.Description))
+                parts.Add($"WORLD DESCRIPTION: {world.Description}");
+
+            // Build a brief rules summary: stat names and combat style
+            if (world.Rules.Stats.Count > 0)
+            {
+                var statNames = string.Join(", ", world.Rules.Stats
+                    .Where(s => !string.Equals(s.Value.Category, "resource", StringComparison.OrdinalIgnoreCase) &&
+                                !string.Equals(s.Value.Category, "currency", StringComparison.OrdinalIgnoreCase))
+                    .Select(s => s.Value.Display));
+                if (!string.IsNullOrWhiteSpace(statNames))
+                    parts.Add($"WORLD RULES: Stats are {statNames}.");
+            }
+
+            return string.Join("\n", parts);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Could not fetch world context for narrator prompt");
+            return "";
+        }
+    }
 
     private async Task<string> GetRoomKnowledgeAsync(Room room, CancellationToken ct)
     {
@@ -2761,5 +2833,121 @@ public class NarratorService : INarratorService
             operation: "content-generate", maxTokens: 4096);
 
         return ExtractJson(rawResponse) ?? rawResponse;
+    }
+
+    /// <inheritdoc />
+    public async Task<StatTranslationResponse?> TranslateStatsAsync(StatTranslationRequest request, CancellationToken ct = default)
+    {
+        var sourceStatLines = string.Join("\n", request.SourceStats.Select(kvp =>
+            $"  - {kvp.Value.Display} ({kvp.Key}): {kvp.Value.Value} (range {kvp.Value.Min}-{kvp.Value.Max}) [tags: {string.Join(", ", kvp.Value.SemanticTags)}]"));
+
+        var destStatLines = string.Join("\n", request.DestinationStatDefs.Select(kvp =>
+            $"  - {kvp.Value.Display} ({kvp.Key}): range {kvp.Value.Min}-{kvp.Value.Max} [tags: {string.Join(", ", kvp.Value.SemanticTags)}]"));
+
+        var systemPrompt = """
+            You are the Grand Adventure Engine's stat translator. A character is crossing between
+            worlds with different stat systems. Your job is to translate their stats as faithfully
+            as possible, using the semantic tags as guides.
+
+            RULES:
+            1. Map stats by semantic tag overlap first. Direct overlaps are 1:1 mappings.
+            2. If origin has stats with no destination equivalent, fold their value into the closest
+               related stat. Explain why.
+            3. If destination has stats with no origin equivalent, derive from the closest related
+               origin stats. Explain why.
+            4. Preserve the character's relative power level. A strong character stays strong.
+            5. Respect destination stat ranges (min/max). Scale proportionally if needed.
+            6. If previous translations exist for this world pair, stay consistent unless the
+               character's level has changed significantly.
+            7. Return ONLY valid JSON in the specified format. No markdown, no commentary outside JSON.
+
+            RESPOND WITH:
+            {
+              "translated_stats": { "<stat_id>": <value>, ... },
+              "translation_notes": "<explain your reasoning briefly>",
+              "narrative": "<2-3 sentences describing the physical sensation of the transformation>"
+            }
+            """;
+
+        var previousSection = !string.IsNullOrWhiteSpace(request.PreviousTranslation)
+            ? $"\nPREVIOUS TRANSLATIONS (for consistency):\n{request.PreviousTranslation}"
+            : "";
+
+        var userPrompt = $"""
+            CHARACTER:
+            - Name: {request.CharacterName}  Class: {request.Class ?? "Unknown"}  Race: {request.Race ?? "Unknown"}  Level: {request.Level}
+            - Origin World: {request.SourceWorldName}
+            - Origin Stats:
+            {sourceStatLines}
+
+            DESTINATION WORLD: {request.DestinationWorldName}
+            DESTINATION STATS:
+            {destStatLines}
+            {previousSection}
+            Translate the character's stats to the destination world's system.
+            """;
+
+        try
+        {
+            var rawResponse = await CompletionOrThrowAsync(systemPrompt, userPrompt, ct,
+                operation: "stat-translation", maxTokens: 1024);
+
+            var json = ExtractJson(rawResponse);
+            if (json is null)
+            {
+                _logger.LogWarning("Stat translation response did not contain valid JSON: {Response}", rawResponse);
+                return null;
+            }
+
+            var parsed = JsonSerializer.Deserialize<StatTranslationResponse>(json, _jsonOptions);
+            if (parsed is null || parsed.TranslatedStats.Count == 0)
+            {
+                _logger.LogWarning("Stat translation response parsed but contained no stats: {Json}", json);
+                return null;
+            }
+
+            return parsed;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "AI stat translation failed, caller should fall back to deterministic");
+            return null;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<string?> NarrateRealmTransitionAsync(
+        string playerName, string sourceWorldName, string destinationWorldName,
+        string? portalHint, CancellationToken ct = default)
+    {
+        var systemPrompt = """
+            You are the narrator of a dark-fantasy text adventure. A character is crossing between realms.
+            Narrate the moment of transition in 2-3 sentences, second person present tense.
+            Describe physical sensations, visual distortions, the feeling of reality shifting.
+            Be vivid and atmospheric. Do not ask questions. Do not mention game mechanics.
+            """;
+
+        var portalContext = !string.IsNullOrWhiteSpace(portalHint)
+            ? $"Portal description: {portalHint}"
+            : "The transition happens through magical means.";
+
+        var userPrompt = $"""
+            Character: {playerName}
+            Departing: {sourceWorldName}
+            Arriving: {destinationWorldName}
+            {portalContext}
+            Narrate the crossing.
+            """;
+
+        try
+        {
+            return await CompletionOrThrowAsync(systemPrompt, userPrompt, ct,
+                operation: "realm-transition", maxTokens: 256);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Realm transition narration failed");
+            return null;
+        }
     }
 }

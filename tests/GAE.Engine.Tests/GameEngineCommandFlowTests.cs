@@ -864,5 +864,11 @@ public class GameEngineCommandFlowTests
                 Category = "damage", TargetType = "enemy", BasePower = 3, MpCost = 6,
                 Narration = "Test spell learned."
             });
+
+        public Task<StatTranslationResponse?> TranslateStatsAsync(StatTranslationRequest request, CancellationToken ct = default)
+            => Task.FromResult<StatTranslationResponse?>(null);
+
+        public Task<string?> NarrateRealmTransitionAsync(string characterName, string fromWorld, string toWorld, string? translationNotes = null, CancellationToken ct = default)
+            => Task.FromResult<string?>(null);
     }
 }

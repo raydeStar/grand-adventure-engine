@@ -60,6 +60,7 @@ public class WorldStatSnapshot
 
 /// <summary>
 /// Stores the narrator-approved stat translation between two worlds for a specific player.
+/// Includes source-level and source-stats so the cache can be invalidated when the player changes.
 /// </summary>
 public class StatTranslationHistory
 {
@@ -69,7 +70,20 @@ public class StatTranslationHistory
     public string DestinationWorldId { get; set; } = string.Empty;
     public Dictionary<string, int> TranslatedStats { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public string TranslationNotes { get; set; } = string.Empty;
+    public string? TransitionNarrative { get; set; }
+    public int SourceLevel { get; set; }
+    public Dictionary<string, int> SourceStats { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+/// <summary>
+/// Result from the AI stat translation prompt, parsed from the narrator's JSON response.
+/// </summary>
+public class StatTranslationResult
+{
+    public Dictionary<string, int> TranslatedStats { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public string TranslationNotes { get; set; } = string.Empty;
+    public string Narrative { get; set; } = string.Empty;
 }
 
 /// <summary>
