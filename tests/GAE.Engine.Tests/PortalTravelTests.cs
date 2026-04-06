@@ -151,6 +151,79 @@ public class PortalTravelTests
         Assert.Contains("Multiple portals", result.MechanicalSummary, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task EnterPortalToSpecificWorld_SelectsRequestedDestination()
+    {
+        var state = new InMemoryStateManager();
+        var worldRepo = new InMemoryWorldRepository();
+        var travel = new RealmTravelService(state, worldRepo, NullLogger<RealmTravelService>.Instance);
+
+        await worldRepo.SaveWorldAsync(new World
+        {
+            Id = WorldDefaults.DefaultWorldId,
+            Name = "Default",
+            SpawnRoomId = "spawn",
+            Portals =
+            [
+                new WorldPortal
+                {
+                    Id = "p1",
+                    SourceWorldId = WorldDefaults.DefaultWorldId,
+                    SourceRoomId = "spawn",
+                    DestinationWorldId = "shadow",
+                    DestinationRoomId = "shadow_gate"
+                },
+                new WorldPortal
+                {
+                    Id = "p2",
+                    SourceWorldId = WorldDefaults.DefaultWorldId,
+                    SourceRoomId = "spawn",
+                    DestinationWorldId = "ironhold",
+                    DestinationRoomId = "iron_gate"
+                }
+            ]
+        });
+
+        await worldRepo.SaveWorldAsync(new World { Id = "shadow", Name = "Shadow", SpawnRoomId = "shadow_spawn" });
+        await worldRepo.SaveWorldAsync(new World { Id = "ironhold", Name = "Ironhold", SpawnRoomId = "iron_spawn" });
+        await state.SaveRoomAsync(new Room { Id = "spawn", Name = "Spawn", WorldIds = [WorldDefaults.DefaultWorldId] });
+        await state.SavePlayerAsync(new PlayerCharacter
+        {
+            Id = "hero",
+            Name = "Hero",
+            ActiveWorldId = WorldDefaults.DefaultWorldId,
+            HomeWorldId = WorldDefaults.DefaultWorldId,
+            CurrentRoomId = "spawn",
+            Hp = 20,
+            MaxHp = 20,
+            Mp = 10,
+            MaxMp = 10
+        });
+
+        var narrator = CreateNarratorMock();
+        var dice = new Mock<IProbabilityEngine>(MockBehavior.Loose);
+        var parser = new CommandParser(NullLogger<CommandParser>.Instance);
+
+        var engine = new GameEngine(
+            state,
+            dice.Object,
+            narrator.Object,
+            parser,
+            new GameRulesConfig(),
+            NullLogger<GameEngine>.Instance,
+            realmTravelService: travel,
+            worldRepository: worldRepo);
+
+        var action = engine.ParseCommand("hero", "enter portal to ironhold");
+        var result = await engine.ProcessActionAsync("hero", action);
+
+        Assert.True(result.Success, result.MechanicalSummary);
+        var updated = await state.GetPlayerAsync("hero");
+        Assert.NotNull(updated);
+        Assert.Equal("ironhold", updated!.ActiveWorldId);
+        Assert.Equal("iron_gate", updated.CurrentRoomId);
+    }
+
     private static Mock<INarratorService> CreateNarratorMock()
     {
         var narrator = new Mock<INarratorService>(MockBehavior.Loose);

@@ -10,5 +10,10 @@ public interface IRealmTravelService
     /// <summary>
     /// Transfers a player into another world.
     /// </summary>
-    Task<ActionResult> TransferPlayerAsync(string playerId, string destinationWorldId, string initiator, CancellationToken ct = default);
+    Task<ActionResult> TransferPlayerAsync(
+        string playerId,
+        string destinationWorldId,
+        string initiator,
+        string? destinationRoomOverride = null,
+        CancellationToken ct = default);
 }

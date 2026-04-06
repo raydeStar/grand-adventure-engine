@@ -185,7 +185,7 @@ public class DashboardController : ControllerBase
             request.PlayerId,
             request.DestinationWorldId,
             "admin-dashboard",
-            ct);
+            ct: ct);
 
         if (!transfer.Success)
             return BadRequest(new { error = transfer.MechanicalSummary });

@@ -53,6 +53,15 @@ public class CommandParserTests
         Assert.Null(action.Target);
     }
 
+    [Fact]
+    public void Parse_PortalTravelWithDestination_SetsTarget()
+    {
+        var action = _parser.Parse("player1", "enter portal to shadow");
+        Assert.Equal(ActionType.TravelWorld, action.Type);
+        Assert.Equal("shadow", action.Target);
+        Assert.Equal("portal", action.Parameters.GetValueOrDefault("travelMode"));
+    }
+
     [Theory]
     [InlineData("look", ActionType.Look)]
     [InlineData("examine", ActionType.Look)]

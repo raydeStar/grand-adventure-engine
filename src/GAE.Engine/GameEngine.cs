@@ -413,8 +413,7 @@ public class GameEngine : IGameEngine
             };
         }
 
-        if (string.Equals(action.Parameters.GetValueOrDefault("travelMode"), "portal", StringComparison.OrdinalIgnoreCase)
-            && string.IsNullOrWhiteSpace(action.Target))
+        if (string.Equals(action.Parameters.GetValueOrDefault("travelMode"), "portal", StringComparison.OrdinalIgnoreCase))
         {
             return await ProcessPortalTravelAsync(player, action, ct);
         }
@@ -429,7 +428,11 @@ public class GameEngine : IGameEngine
             };
         }
 
-        var result = await _realmTravelService.TransferPlayerAsync(player.Id, action.Target.Trim(), "player-command", ct);
+        var result = await _realmTravelService.TransferPlayerAsync(
+            player.Id,
+            action.Target.Trim(),
+            "player-command",
+            ct: ct);
         result.ActionId = action.Id;
         return result;
     }
@@ -480,6 +483,13 @@ public class GameEngine : IGameEngine
             .Where(p => p.RequiredCompletedQuests.All(q => completedQuestIds.Contains(q)))
             .ToList();
 
+        if (!string.IsNullOrWhiteSpace(action.Target))
+        {
+            eligiblePortals = eligiblePortals
+                .Where(p => string.Equals(p.DestinationWorldId, action.Target, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+
         if (eligiblePortals.Count == 0)
         {
             return new ActionResult
@@ -502,7 +512,12 @@ public class GameEngine : IGameEngine
         }
 
         var portal = eligiblePortals[0];
-        var transfer = await _realmTravelService.TransferPlayerAsync(player.Id, portal.DestinationWorldId, "room-portal", ct);
+        var transfer = await _realmTravelService.TransferPlayerAsync(
+            player.Id,
+            portal.DestinationWorldId,
+            "room-portal",
+            portal.DestinationRoomId,
+            ct);
         transfer.ActionId = action.Id;
         return transfer;
     }

@@ -1,4 +1,5 @@
 using GAE.Core.Models;
+using GAE.Engine.Configuration;
 using GAE.Engine.State;
 using GAE.Engine.Worlds;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -120,5 +121,79 @@ public class RealmTravelServiceTests
         Assert.Equal(WorldDefaults.DefaultWorldId, restored!.ActiveWorldId);
         Assert.Equal(17, restored.Int);
         Assert.Equal(15, restored.Wis);
+    }
+
+    [Fact]
+    public async Task TransferPlayerAsync_ReturnHome_PreservesHigherLevelAndXp()
+    {
+        var state = new InMemoryStateManager();
+        var worlds = new InMemoryWorldRepository();
+        var rules = new GameRulesConfig
+        {
+            Stats = new Dictionary<string, StatConfig>
+            {
+                ["str"] = new() { Max = 20 },
+                ["hp"] = new() { Base = 20 },
+                ["mp"] = new() { Base = 10 }
+            }
+        };
+        var service = new RealmTravelService(state, worlds, NullLogger<RealmTravelService>.Instance, rules);
+
+        await worlds.SaveWorldAsync(new World
+        {
+            Id = WorldDefaults.DefaultWorldId,
+            Name = "Default",
+            SpawnRoomId = "spawn"
+        });
+        await worlds.SaveWorldAsync(new World
+        {
+            Id = "void",
+            Name = "Void",
+            SpawnRoomId = "void_spawn"
+        });
+
+        await state.SavePlayerAsync(new PlayerCharacter
+        {
+            Id = "veteran",
+            Name = "Veteran",
+            ActiveWorldId = WorldDefaults.DefaultWorldId,
+            HomeWorldId = WorldDefaults.DefaultWorldId,
+            CurrentRoomId = "camp",
+            Level = 3,
+            Xp = 220,
+            Str = 14,
+            Dex = 12,
+            Con = 13,
+            Int = 11,
+            Wis = 10,
+            Cha = 9,
+            Luck = 8,
+            Hp = 22,
+            MaxHp = 22,
+            Mp = 11,
+            MaxMp = 11
+        });
+
+        var toVoid = await service.TransferPlayerAsync("veteran", "void", "unit-test");
+        Assert.True(toVoid.Success);
+
+        var inVoid = await state.GetPlayerAsync("veteran");
+        Assert.NotNull(inVoid);
+        inVoid!.Level = 5;
+        inVoid.Xp = 500;
+        inVoid.Int = 6;
+        inVoid.Wis = 6;
+        await state.SavePlayerAsync(inVoid);
+
+        var backHome = await service.TransferPlayerAsync("veteran", WorldDefaults.DefaultWorldId, "unit-test");
+        Assert.True(backHome.Success);
+
+        var restored = await state.GetPlayerAsync("veteran");
+        Assert.NotNull(restored);
+        Assert.Equal(WorldDefaults.DefaultWorldId, restored!.ActiveWorldId);
+        Assert.Equal(5, restored.Level);
+        Assert.Equal(500, restored.Xp);
+        Assert.Equal(11, restored.Int); // home snapshot restored
+        Assert.Equal(10, restored.Wis); // home snapshot restored
     }
 }

@@ -1,5 +1,6 @@
 using GAE.Core.Interfaces;
 using GAE.Core.Models;
+using GAE.Engine.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace GAE.Engine.Worlds;
@@ -13,19 +14,27 @@ public class RealmTravelService : IRealmTravelService
     private readonly IStateManager _stateManager;
     private readonly IWorldRepository _worldRepository;
     private readonly ILogger<RealmTravelService> _logger;
+    private readonly GameRulesConfig _rules;
 
     public RealmTravelService(
         IStateManager stateManager,
         IWorldRepository worldRepository,
-        ILogger<RealmTravelService> logger)
+        ILogger<RealmTravelService> logger,
+        GameRulesConfig? rules = null)
     {
         _stateManager = stateManager;
         _worldRepository = worldRepository;
         _logger = logger;
+        _rules = rules ?? new GameRulesConfig();
     }
 
     /// <inheritdoc />
-    public async Task<ActionResult> TransferPlayerAsync(string playerId, string destinationWorldId, string initiator, CancellationToken ct = default)
+    public async Task<ActionResult> TransferPlayerAsync(
+        string playerId,
+        string destinationWorldId,
+        string initiator,
+        string? destinationRoomOverride = null,
+        CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(playerId) || string.IsNullOrWhiteSpace(destinationWorldId))
         {
@@ -78,9 +87,11 @@ public class RealmTravelService : IRealmTravelService
         player.ActiveWorldId = destinationWorldId;
 
         var destinationState = await _worldRepository.GetPlayerWorldStateAsync(player.Id, destinationWorldId, ct);
-        var destinationRoomId = string.IsNullOrWhiteSpace(destinationState?.CurrentRoomId)
-            ? destinationWorld.SpawnRoomId
-            : destinationState.CurrentRoomId;
+        var destinationRoomId = !string.IsNullOrWhiteSpace(destinationRoomOverride)
+            ? destinationRoomOverride
+            : string.IsNullOrWhiteSpace(destinationState?.CurrentRoomId)
+                ? destinationWorld.SpawnRoomId
+                : destinationState.CurrentRoomId;
 
         if (string.IsNullOrWhiteSpace(destinationRoomId))
             destinationRoomId = WorldDefaults.DefaultSpawnRoomId;
@@ -180,6 +191,9 @@ public class RealmTravelService : IRealmTravelService
 
     private async Task<string> ApplyDestinationStatsAsync(PlayerCharacter player, string sourceWorldId, string destinationWorldId, CancellationToken ct)
     {
+        var preservedLevel = player.Level;
+        var preservedXp = player.Xp;
+
         // Return-trip path: restore original snapshot when re-entering home world.
         if (string.Equals(destinationWorldId, player.HomeWorldId, StringComparison.OrdinalIgnoreCase))
         {
@@ -187,6 +201,13 @@ public class RealmTravelService : IRealmTravelService
             if (homeSnapshot is not null)
             {
                 ApplyStats(player, homeSnapshot.Stats);
+                player.Level = Math.Max(preservedLevel, homeSnapshot.Level);
+                player.Xp = Math.Max(preservedXp, player.Xp);
+                player.Hp = homeSnapshot.Hp;
+                player.Mp = homeSnapshot.Mp;
+                RecalculateMaxHpMp(player);
+                if (preservedLevel > homeSnapshot.Level)
+                    return "Restored native home-world stats and preserved your higher level progression.";
                 return "Restored native home-world stats from snapshot.";
             }
         }
@@ -196,6 +217,7 @@ public class RealmTravelService : IRealmTravelService
         if (history is not null)
         {
             ApplyStats(player, history.TranslatedStats);
+            RecalculateMaxHpMp(player);
             return "Applied cached stat translation.";
         }
 
@@ -212,6 +234,7 @@ public class RealmTravelService : IRealmTravelService
         };
 
         ApplyStats(player, translatedStats);
+        RecalculateMaxHpMp(player);
 
         await _worldRepository.SaveTranslationHistoryAsync(new StatTranslationHistory
         {
@@ -229,6 +252,33 @@ public class RealmTravelService : IRealmTravelService
 
     private static int ClampStat(int value)
         => Math.Clamp(value, 3, 30);
+
+    private void RecalculateMaxHpMp(PlayerCharacter player)
+    {
+        int statMax = _rules.Stats.GetValueOrDefault("str")?.Max ?? 20;
+        player.Str = Math.Clamp(player.Str, 1, statMax);
+        player.Dex = Math.Clamp(player.Dex, 1, statMax);
+        player.Con = Math.Clamp(player.Con, 1, statMax);
+        player.Int = Math.Clamp(player.Int, 1, statMax);
+        player.Wis = Math.Clamp(player.Wis, 1, statMax);
+        player.Cha = Math.Clamp(player.Cha, 1, statMax);
+        player.Luck = Math.Clamp(player.Luck, 1, statMax);
+
+        int hpBase = _rules.Stats.GetValueOrDefault("hp")?.Base ?? 20;
+        int mpBase = _rules.Stats.GetValueOrDefault("mp")?.Base ?? 10;
+        int conMod = PlayerCharacter.GetStatModifier(player.Con);
+        int intMod = PlayerCharacter.GetStatModifier(player.Int);
+        double hpScale = _rules.Leveling.HpScalePerLevel;
+        double mpScale = _rules.Leveling.MpScalePerLevel;
+        int bonusLevels = Math.Max(0, player.Level - 1);
+
+        int baseHp = hpBase + conMod;
+        int baseMp = mpBase + intMod;
+        player.MaxHp = Math.Max(1, (int)(baseHp * (1.0 + hpScale * bonusLevels)));
+        player.MaxMp = Math.Max(0, (int)(baseMp * (1.0 + mpScale * bonusLevels)));
+        player.Hp = Math.Clamp(player.Hp, 0, player.MaxHp);
+        player.Mp = Math.Clamp(player.Mp, 0, player.MaxMp);
+    }
 
     private static void ApplyStats(PlayerCharacter player, IReadOnlyDictionary<string, int> stats)
     {
