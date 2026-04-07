@@ -223,6 +223,10 @@ const API = {
     return res.json();
   },
 
+  async generateWorldIntro(worldId) {
+    return this.postJson(`${this.base}/admin/worlds/${encodeURIComponent(worldId)}/generate-intro`, {});
+  },
+
   async activateWorld(worldId) {
     return this.postJson(`${this.base}/admin/worlds/${encodeURIComponent(worldId)}/activate`, {});
   },

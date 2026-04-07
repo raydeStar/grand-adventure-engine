@@ -18,6 +18,7 @@ public class WorldEntity
     public DateTimeOffset UpdatedAt { get; set; }
     public List<string> Tags { get; set; } = [];
     public List<WorldPortal> Portals { get; set; } = [];
+    public string? CharacterCreationIntro { get; set; }
 
     public World ToDomain() => new()
     {
@@ -31,7 +32,8 @@ public class WorldEntity
         CreatedAt = CreatedAt,
         UpdatedAt = UpdatedAt,
         Tags = Tags,
-        Portals = Portals
+        Portals = Portals,
+        CharacterCreationIntro = CharacterCreationIntro
     };
 
     public static WorldEntity FromDomain(World world) => new()
@@ -46,7 +48,8 @@ public class WorldEntity
         CreatedAt = world.CreatedAt,
         UpdatedAt = world.UpdatedAt,
         Tags = world.Tags,
-        Portals = world.Portals
+        Portals = world.Portals,
+        CharacterCreationIntro = world.CharacterCreationIntro
     };
 
     public void UpdateFrom(World world)
@@ -61,6 +64,7 @@ public class WorldEntity
         UpdatedAt = world.UpdatedAt;
         Tags = world.Tags;
         Portals = world.Portals;
+        CharacterCreationIntro = world.CharacterCreationIntro;
     }
 }
 

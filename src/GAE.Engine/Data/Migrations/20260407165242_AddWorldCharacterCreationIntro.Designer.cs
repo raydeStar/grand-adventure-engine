@@ -3,6 +3,7 @@ using System;
 using GAE.Engine.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GAE.Engine.Data.Migrations
 {
     [DbContext(typeof(GaeDbContext))]
-    partial class GaeDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260407165242_AddWorldCharacterCreationIntro")]
+    partial class AddWorldCharacterCreationIntro
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

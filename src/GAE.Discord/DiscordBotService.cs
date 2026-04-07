@@ -3,6 +3,7 @@ using Discord.Net;
 using Discord.WebSocket;
 using GAE.Core.Interfaces;
 using GAE.Core.Models;
+using GAE.Engine.Worlds;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Text;
@@ -20,6 +21,7 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
     private readonly IGameEngine _engine;
     private readonly IStateManager _stateManager;
     private readonly INarratorService _narrator;
+    private readonly IWorldRepository _worldRepository;
     private readonly ILogger<DiscordBotService> _logger;
     private readonly string _token;
     private readonly string _sessionsPath;
@@ -43,6 +45,7 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         IGameEngine engine,
         IStateManager stateManager,
         INarratorService narrator,
+        IWorldRepository worldRepository,
         ILogger<DiscordBotService> logger,
         string token,
         string dataDir = "")
@@ -51,6 +54,7 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         _engine = engine;
         _stateManager = stateManager;
         _narrator = narrator;
+        _worldRepository = worldRepository;
         _logger = logger;
         _token = token;
         _sessionsPath = string.IsNullOrEmpty(dataDir) ? "" : Path.Combine(dataDir, "pending-creations.json");
@@ -482,19 +486,37 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
 
     // ==================== AI Character Creation ====================
 
+    private static readonly string DefaultCharacterCreationIntro = """
+        A voice emerges from the ether — dry, amused, and impossibly old.
+
+        *"Ah. Another soul stumbles through my door. I am the Narrator — the voice behind the curtain, the pen that writes your story as you live it. Adventures await, and I need someone to narrate. That's where you come in."*
+
+        *"But before we get to the heroics — who exactly am I narrating? Tell me about yourself."*
+
+        *(Describe yourself however you like: "I'm a sneaky halfling who picks pockets" or "I'm a massive orc who solves problems with fists" — or just tell me your name and I'll ask questions.)*
+        """;
+
     private async Task StartAiCharacterCreation(SocketThreadChannel thread, ulong userId, string discordId)
     {
         var session = new AiCreationSession(discordId);
         _creationSessions[userId] = session;
         PersistCreationSessions();
 
-        await thread.SendMessageAsync("""
-            Welcome, traveler. I am Sir Thaddeus, keeper of fates.
-            Tell me about yourself. Who are you? What are you?
-            Speak freely — I'll shape your destiny from your words.
+        // Fetch the active world's custom intro, falling back to the generic one
+        string intro = DefaultCharacterCreationIntro;
+        try
+        {
+            var worlds = await _worldRepository.GetAllWorldsAsync();
+            var activeWorld = worlds.FirstOrDefault(w => w.IsActive);
+            if (activeWorld is not null && !string.IsNullOrWhiteSpace(activeWorld.CharacterCreationIntro))
+                intro = activeWorld.CharacterCreationIntro;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to fetch world intro, using default");
+        }
 
-            *(Describe yourself however you like: "I'm a sneaky halfling who picks pockets" or "I'm a massive orc who solves problems with fists" — or just tell me your name and I'll ask questions.)*
-            """);
+        await thread.SendMessageAsync(intro);
     }
 
     private async Task HandleAiCreationInputAsync(SocketUserMessage message, SocketThreadChannel thread,

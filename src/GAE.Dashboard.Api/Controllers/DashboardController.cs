@@ -1959,6 +1959,7 @@ public class DashboardController : ControllerBase
         {
             w.Id, w.Name, w.Description, w.SpawnRoomId, w.IsActive,
             w.Tags, w.CreatedBy, w.CreatedAt, w.UpdatedAt,
+            w.CharacterCreationIntro, w.DefaultNarratorPresetId, w.NarratorPresetIds,
             portalCount = w.Portals.Count,
             playerCount = players.Count(p =>
                 string.Equals(p.ActiveWorldId, w.Id, StringComparison.OrdinalIgnoreCase) ||
@@ -2027,10 +2028,58 @@ public class DashboardController : ControllerBase
         if (request.IsActive.HasValue) world.IsActive = request.IsActive.Value;
         if (request.Tags is not null) world.Tags = request.Tags;
         if (request.Rules is not null) world.Rules = request.Rules;
+        if (request.CharacterCreationIntro is not null) world.CharacterCreationIntro = string.IsNullOrWhiteSpace(request.CharacterCreationIntro) ? null : request.CharacterCreationIntro.Trim();
+        if (request.DefaultNarratorPresetId is not null) world.DefaultNarratorPresetId = string.IsNullOrWhiteSpace(request.DefaultNarratorPresetId) ? null : request.DefaultNarratorPresetId.Trim();
+        if (request.NarratorPresetIds is not null) world.NarratorPresetIds = request.NarratorPresetIds;
         world.UpdatedAt = DateTimeOffset.UtcNow;
 
         await _worldRepository.SaveWorldAsync(world, ct);
         return Ok(world);
+    }
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpPost("admin/worlds/{worldId}/generate-intro")]
+    public async Task<IActionResult> GenerateWorldIntro(string worldId, CancellationToken ct)
+    {
+        var world = await _worldRepository.GetWorldAsync(worldId, ct);
+        if (world is null) return NotFound(new { error = $"World '{worldId}' not found." });
+
+        // Gather starter lore for context
+        var starterLore = _registry.LoreEntries.GetAll()
+            .Where(l => l.IsStarterLore)
+            .Select(l => $"- {l.Name}: {l.Content}")
+            .ToList();
+
+        var loreContext = starterLore.Count > 0
+            ? "Key world lore:\n" + string.Join("\n", starterLore.Take(5))
+            : "";
+
+        var prompt = $"""
+            Generate a Discord character creation intro message for a text RPG world.
+            The message should:
+            1. Introduce the Narrator as a character (the voice that narrates the player's adventure)
+            2. Hint at the world's setting and main conflict without spoiling specifics
+            3. Ask the player to describe who they are
+            4. End with the instruction in italics: *(Describe yourself however you like: "I'm a sneaky halfling who picks pockets" or "I'm a massive orc who solves problems with fists" — or just tell me your name and I'll ask questions.)*
+
+            World name: {world.Name}
+            World description: {world.Description}
+            {loreContext}
+
+            Write the intro using Discord markdown (bold, italics, etc). Keep it 3-5 paragraphs.
+            The Narrator should have personality — dry wit, slight amusement, world-weary wisdom.
+            Return ONLY the message text, no JSON wrapping.
+            """;
+
+        try
+        {
+            var result = await _narrator.GenerateContentAsync("text", prompt, null, ct);
+            return Ok(new { intro = result });
+        }
+        catch (Exception)
+        {
+            return StatusCode(503, new { error = "AI narrator unavailable. Write the intro manually or try again." });
+        }
     }
 
     [Authorize(Policy = DashboardPolicies.AdminAccess)]
@@ -2570,6 +2619,9 @@ public class UpdateWorldRequest
     public bool? IsActive { get; set; }
     public List<string>? Tags { get; set; }
     public GameRulesConfig? Rules { get; set; }
+    public string? CharacterCreationIntro { get; set; }
+    public string? DefaultNarratorPresetId { get; set; }
+    public List<string>? NarratorPresetIds { get; set; }
 }
 
 public class CreatePortalRequest

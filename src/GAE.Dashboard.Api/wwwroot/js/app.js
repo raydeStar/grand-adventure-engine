@@ -1166,6 +1166,7 @@
       state.selectedWorld = world;
       state.selectedWorldPlayers = players || [];
       UI.renderWorldDetail(world, state.selectedWorldPlayers);
+      wireWorldNarratorControls(world);
       UI.renderPortalList(world?.portals || [], state.worlds);
       UI.populateWorldSelects(state.worlds, worldId);
       if (ctx) ctx.classList.remove('hidden');
@@ -1183,6 +1184,87 @@
     if (!card) return;
     const worldId = card.dataset.worldId;
     void selectWorld(worldId === state.selectedWorldId ? '' : worldId);
+  }
+
+  async function wireWorldNarratorControls(world) {
+    // Populate narrator select & checkboxes from registry
+    try {
+      const summary = await API.getRegistrySummary();
+      const presets = summary.narratorPresets || 0;
+      let allPresets = [];
+      if (presets > 0) {
+        allPresets = await API.getRegistry('narrator_presets');
+      }
+
+      // Default narrator select
+      const sel = document.getElementById('world-default-narrator');
+      if (sel) {
+        sel.innerHTML = '<option value="">System default</option>' +
+          allPresets.map(p => `<option value="${UI.esc(p.id)}" ${p.id === (world.defaultNarratorPresetId || '') ? 'selected' : ''}>${UI.esc(p.name || p.id)}</option>`).join('');
+      }
+
+      // Available narrators checkboxes
+      const cbContainer = document.getElementById('world-narrator-checkboxes');
+      if (cbContainer) {
+        const selected = world.narratorPresetIds || [];
+        cbContainer.innerHTML = allPresets.map(p => {
+          const checked = selected.includes(p.id) ? 'checked' : '';
+          return `<label style="display:flex;align-items:center;gap:0.35rem;cursor:pointer;">
+            <input type="checkbox" class="world-narrator-cb" value="${UI.esc(p.id)}" ${checked}>
+            ${UI.esc(p.name || p.id)} <span style="color:var(--dim);font-size:10px;">(${UI.esc(p.archetype || '')})</span>
+          </label>`;
+        }).join('');
+      }
+    } catch (e) {
+      console.warn('Failed to load narrator presets for world settings:', e);
+    }
+
+    // Wire save button
+    const saveBtn = document.getElementById('world-intro-save');
+    if (saveBtn) {
+      saveBtn.onclick = async () => {
+        const intro = document.getElementById('world-intro-text')?.value || '';
+        const defaultNarrator = document.getElementById('world-default-narrator')?.value || '';
+        const cbs = document.querySelectorAll('.world-narrator-cb:checked');
+        const narratorIds = Array.from(cbs).map(cb => cb.value);
+
+        try {
+          saveBtn.disabled = true;
+          saveBtn.textContent = 'Saving...';
+          await API.updateWorld(world.id, {
+            characterCreationIntro: intro || '',
+            defaultNarratorPresetId: defaultNarrator || '',
+            narratorPresetIds: narratorIds
+          });
+          saveBtn.textContent = 'Saved!';
+          setTimeout(() => { saveBtn.textContent = 'Save Settings'; saveBtn.disabled = false; }, 1500);
+        } catch (e) {
+          saveBtn.textContent = 'Error';
+          setTimeout(() => { saveBtn.textContent = 'Save Settings'; saveBtn.disabled = false; }, 2000);
+          console.error('Failed to save world settings:', e);
+        }
+      };
+    }
+
+    // Wire generate button
+    const genBtn = document.getElementById('world-intro-generate');
+    if (genBtn) {
+      genBtn.onclick = async () => {
+        const textarea = document.getElementById('world-intro-text');
+        try {
+          genBtn.disabled = true;
+          genBtn.textContent = 'Generating...';
+          const result = await API.generateWorldIntro(world.id);
+          if (textarea && result.intro) textarea.value = result.intro;
+          genBtn.textContent = 'AI Generate';
+          genBtn.disabled = false;
+        } catch (e) {
+          genBtn.textContent = 'Failed';
+          setTimeout(() => { genBtn.textContent = 'AI Generate'; genBtn.disabled = false; }, 2000);
+          console.error('Failed to generate intro:', e);
+        }
+      };
+    }
   }
 
   function showCreateWorldForm() {

@@ -26,6 +26,12 @@ public class World
 
     /// <summary>Default narrator preset assigned to new characters in this world. Null = system default.</summary>
     public string? DefaultNarratorPresetId { get; set; }
+
+    /// <summary>
+    /// Discord intro message shown when a player starts character creation in this world.
+    /// Supports Discord markdown. If null/empty, a generic intro is used.
+    /// </summary>
+    public string? CharacterCreationIntro { get; set; }
 }
 
 /// <summary>

@@ -34,6 +34,8 @@ public class WorldConfiguration : IEntityTypeConfiguration<WorldEntity>
             .HasConversion(
                 v => System.Text.Json.JsonSerializer.Serialize(v, JsonDefaults.Options),
                 v => System.Text.Json.JsonSerializer.Deserialize<List<WorldPortal>>(v, JsonDefaults.Options) ?? new List<WorldPortal>());
+
+        builder.Property(w => w.CharacterCreationIntro).HasColumnName("character_creation_intro");
     }
 }
 
