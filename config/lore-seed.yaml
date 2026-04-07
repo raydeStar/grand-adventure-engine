@@ -96,6 +96,7 @@ rooms:
       southeast: "church"
       northeast: "market_stalls"
       southwest: "town_well"
+      northwest: "city_hall"
     environment_tags: ["outdoor", "safe", "lit", "town_center", "bazaar"]
     npcs:
       - id: "guard_bram"
@@ -450,6 +451,7 @@ rooms:
     description: "A serene temple built around a massive natural crystal formation that juts from the sandstone floor. Soft prismatic light refracts through the crystal, casting rainbows across the marble walls. Incense drifts in lazy spirals. The air itself feels cleansing. A White Mage in flowing robes tends to the crystal with quiet reverence, occasionally pausing to listen to something only he can hear."
     exits:
       northwest: "town_square"
+      down: "void_rift"
     environment_tags: ["indoor", "safe", "lit", "holy", "chapel", "crystal"]
     npcs:
       - id: "priest_aldric"
@@ -484,6 +486,7 @@ rooms:
     description: "The Garamsythe Waterway — an ancient sewer network beneath Rabanastre. Slick stone tunnels stretch into darkness, water channels running with murky flow. The air is thick with moisture and the squeaking of rats. Moss-covered pipes drip from overhead. Something large hisses in the shadows between the collapsed sections. Tifa mentioned a pest problem down here — now you see why."
     exits:
       up: "spawn"
+      east: "water_temple_entrance"
     environment_tags: ["indoor", "dark", "damp", "cellar", "dangerous", "waterway"]
     npcs:
       - id: "giant_rat"
@@ -638,6 +641,7 @@ rooms:
     description: "A hidden settlement in the treetops where crystalline platforms connect ancient wooden dwellings. Soft golden light filters through leaves that shimmer like glass. Bioluminescent sprites dart between mushroom rings, leaving trails of sparkling Mist. A massive Viera elder tree stands at the center, its trunk carved with faces that watch all who enter. A bizarre creature perches on a branch — an octopus wearing a bowtie. It waves a tentacle at you."
     exits:
       south: "forest_edge"
+      up: "skyward_path"
     environment_tags: ["outdoor", "forest", "magical", "lit", "fae", "viera_village"]
     npcs:
       - id: "fae_trickster"
@@ -686,6 +690,7 @@ rooms:
     exits:
       west: "forest_edge"
       south: "dungeon_entrance"
+      east: "volcanic_path"
     environment_tags: ["outdoor", "forest", "dark", "fog", "dangerous", "mist"]
     npcs:
       - id: "wolf_alpha"
@@ -714,6 +719,7 @@ rooms:
     exits:
       north: "deep_forest"
       down: "dungeon_hall"
+      east: "mountain_trail"
     environment_tags: ["outdoor", "ruins", "dark", "dangerous", "dungeon_entrance", "pharos"]
     items:
       - id: "crumbling_brick"
@@ -858,3 +864,505 @@ rooms:
             stat_bonuses:
               str: 3
               con: 2
+
+  # ── CITY HALL — QUESTLINE HUB ──────────────────────────────────
+
+  - id: "city_hall"
+    name: "Dalmascan City Hall"
+    description: "A grand sandstone building with pillars carved to resemble the old Dalmascan kings. Imperial banners hang reluctantly beside the Dalmascan crest — a compromise that satisfies no one. Inside, marble floors echo with the footsteps of bureaucrats, petitioners, and the occasional resistance sympathizer. At the far end of the main chamber, behind a desk buried in dispatches and intelligence reports, sits a man whose calm exterior belies the desperate fire in his eyes. Marquis Ondore — the last political voice of free Dalmasca — gestures for you to approach."
+    exits:
+      southeast: "town_square"
+    environment_tags: ["indoor", "safe", "lit", "political", "official"]
+    npcs:
+      - id: "marquis_ondore"
+        name: "Marquis Halim Ondore IV"
+        personality: "The political leader of what remains of the Dalmascan resistance movement. Dignified, cautious, and burdened by the weight of an occupied nation on his shoulders. Speaks with measured precision — every word is calculated for maximum effect and minimum Imperial suspicion. Publicly maintains the fiction of cooperation with the Empire while secretly funding the resistance. Desperate enough to trust adventurers with the kingdom's last hope: the elemental Crystals that once protected Dalmasca. Treats the player with the respect of an equal, because he has no other choice."
+        faction: "dalmascan_resistance"
+        knowledge_scopes: ["politics", "dalmascan_resistance", "crystals", "town", "empire", "history", "void"]
+        quests_offered: ["crystal_dying", "crystal_crusade_fire", "crystal_crusade_earth", "crystal_crusade_wind", "the_void_awaits"]
+    items:
+      - id: "dalmascan_seal"
+        name: "Dalmascan Royal Seal"
+        description: "A heavy wax seal bearing the crest of the Dalmascan royal family — a sunburst over crossed swords. Ondore keeps it on his desk as a reminder of what was lost and what must be reclaimed."
+        type: "Misc"
+        value: 0
+      - id: "crystal_map"
+        name: "Crystal Temple Map"
+        description: "A hand-drawn map showing the locations of four ancient temples dedicated to the elemental Crystals. Notes in Ondore's precise handwriting mark each site with warnings and tactical observations."
+        type: "Misc"
+        value: 10
+
+  # ── WATER TEMPLE ───────────────────────────────────────────────
+
+  - id: "water_temple_entrance"
+    name: "Flooded Tunnels"
+    description: "Beyond the familiar dampness of the Garamsythe Waterway, the passage opens into something far older. Ancient stone arches rise from knee-deep water, their surfaces carved with flowing script that glows a faint cerulean blue. The current pulls gently eastward, deeper into the dark. Bioluminescent algae clings to the walls, casting an eerie underwater glow that makes shadows dance like living things. The air is cold and tastes of salt and old magic. Something massive displaces water in the depths below — a rhythmic surge, like breathing."
+    exits:
+      west: "tavern_cellar"
+      down: "water_temple_depths"
+    environment_tags: ["indoor", "underground", "dark", "flooded", "ancient", "water_temple"]
+    npcs:
+      - id: "water_elemental"
+        name: "Water Elemental"
+        personality: "A swirling vortex of animate water given crude sentience by the concentrated Mist in the temple. It does not think — it reacts. Anything that disturbs the sacred waters triggers its wrath. It rises from the flood with a sound like a crashing wave and strikes with tendrils of pressurized water that can shear through stone."
+        faction: "neutral"
+        is_hostile: true
+        level: 2
+        hp: 15
+        max_hp: 15
+        attack_bonus: 2
+        damage_dice: "1d6"
+        defense: 10
+        loot:
+          - id: "water_shard"
+            name: "Water Shard"
+            description: "A crystallized droplet of elemental water energy. It hovers slightly above your palm and is perpetually cold to the touch."
+            type: "Misc"
+            value: 15
+    items:
+      - id: "waterlogged_journal"
+        name: "Waterlogged Journal"
+        description: "A sodden explorer's journal. Most pages are ruined, but one entry is legible: 'The guardian sleeps in the deepest sanctum. It answers only to the name of the tide.'"
+        type: "Misc"
+        value: 3
+
+  - id: "water_temple_depths"
+    name: "Sunken Chambers"
+    description: "The water rises to your waist here, cold enough to steal your breath. Massive pillars support a vaulted ceiling lost in shadow, their surfaces encrusted with barnacles and pale coral that has no business growing this far from the sea. Underwater currents tug at your legs with surprising force, channeled through carved conduits in the floor. Ancient statues of serpentine figures line the walls — their outstretched hands holding crystal orbs that pulse with dim blue light. The sound of rushing water echoes from below, and something large and fast cuts through the flooded passage ahead."
+    exits:
+      up: "water_temple_entrance"
+      down: "water_temple_sanctum"
+    environment_tags: ["indoor", "underground", "dark", "flooded", "dangerous", "water_temple"]
+    npcs:
+      - id: "sahagin_warrior"
+        name: "Sahagin Warrior"
+        personality: "A muscular, fish-scaled humanoid armed with a coral trident and a shield of hardened kelp. One of the temple's ancient guardians, awakened by the disturbance in the Mist. It communicates in gurgling clicks and fights with the discipline of a trained soldier. Patrols the flooded chambers in a methodical pattern, striking from beneath the waterline with terrifying speed."
+        faction: "neutral"
+        is_hostile: true
+        level: 3
+        hp: 20
+        max_hp: 20
+        attack_bonus: 3
+        damage_dice: "1d6+1"
+        defense: 12
+        loot:
+          - id: "coral_trident"
+            name: "Coral Trident"
+            description: "A trident carved from living coral, still faintly warm with the Sahagin's life force. Surprisingly sharp and well-balanced."
+            type: "Weapon"
+            damage_dice: "1d8+1"
+            damage_stat: "STR"
+            value: 25
+            is_equippable: true
+            slot: "Weapon"
+
+  - id: "water_temple_sanctum"
+    name: "Sanctum of the Tidal Lord"
+    description: "The deepest chamber opens into a vast underwater cathedral. The water here is crystal clear and glows from within, illuminating a massive altar of white coral at the room's center. Resting upon the altar, the Water Crystal pulses with serene blue light — a heartbeat of pure elemental power. But between you and the Crystal, the water erupts. A serpentine form of impossible size rises from the depths — Leviathan, the Tidal Lord. Its scales shimmer like liquid sapphire, its eyes burn with the cold intelligence of the deepest ocean, and when it opens its jaws, you see the storm that lives inside."
+    exits:
+      up: "water_temple_depths"
+    environment_tags: ["indoor", "underground", "lit", "boss_arena", "flooded", "water_temple", "sacred"]
+    npcs:
+      - id: "leviathan_guardian"
+        name: "Leviathan, the Tidal Lord"
+        personality: "An ancient Esper bound to guard the Water Crystal since before Dalmasca existed. Leviathan is not mindless — it is proud, territorial, and contemptuous of mortals who dare enter its sanctum. It speaks in a voice like crashing waves, demanding to know why you have disturbed its eternal vigil. Only those who prove their strength in combat may claim the Crystal. Leviathan fights with tidal waves, crushing water pressure, and the sheer overwhelming force of the deep ocean. It will not negotiate. It will not yield. It will test you, and if you are found wanting, the sea will claim you."
+        faction: "neutral"
+        is_hostile: true
+        level: 4
+        hp: 40
+        max_hp: 40
+        attack_bonus: 5
+        damage_dice: "2d6+2"
+        defense: 14
+        loot:
+          - id: "leviathan_scale"
+            name: "Leviathan's Scale"
+            description: "A single scale from the Tidal Lord, harder than adamantite and shimmering with oceanic power. Proof of a battle that should have been impossible."
+            type: "Misc"
+            value: 200
+    items:
+      - id: "water_crystal"
+        name: "Water Crystal"
+        description: "One of the four elemental Crystals that once protected Dalmasca. It pulses with the gentle rhythm of ocean tides and radiates a calming blue aura. When you hold it, you hear the distant sound of waves on a shore you've never visited. The Marquis will want to see this."
+        type: "Quest"
+        value: 0
+
+  # ── FIRE TEMPLE ────────────────────────────────────────────────
+
+  - id: "volcanic_path"
+    name: "Scorched Trail"
+    description: "The jungle gives way to blackened earth and the stench of sulfur. The treeline ends abruptly where an ancient lava flow carved a border between green life and volcanic wasteland. The ground is cracked obsidian still warm to the touch, and vents of steam hiss from fissures in the rock. In the distance, a volcano smolders against a sky stained orange by ash. The trail south leads toward an obsidian structure built into the mountainside. A ball of living flame bounces across the scorched landscape, leaving small fires in its wake."
+    exits:
+      west: "deep_forest"
+      south: "fire_temple_entrance"
+    environment_tags: ["outdoor", "hot", "volcanic", "dangerous", "fire_temple"]
+    npcs:
+      - id: "fire_bomb"
+        name: "Fire Bomb"
+        personality: "A spherical mass of compressed flame given rudimentary awareness by volcanic Mist. It bounces erratically across the scorched landscape, igniting anything flammable it contacts. When threatened, it swells to twice its size and detonates — only to reform moments later from the nearest lava vent. Mindless, destructive, and annoyingly persistent. It giggles — a crackling, popping sound like a campfire — as it burns things."
+        faction: "neutral"
+        is_hostile: true
+        level: 3
+        hp: 18
+        max_hp: 18
+        attack_bonus: 3
+        damage_dice: "1d8"
+        defense: 11
+        loot:
+          - id: "bomb_fragment"
+            name: "Bomb Fragment"
+            description: "A solidified core of elemental fire energy. Warm to the touch and faintly luminous. Alchemists prize these for crafting fire-resistant gear."
+            type: "Misc"
+            value: 20
+    items:
+      - id: "volcanic_glass"
+        name: "Volcanic Glass Shard"
+        description: "A razor-sharp piece of natural obsidian, formed when lava cooled too quickly. Beautiful and dangerous in equal measure."
+        type: "Misc"
+        value: 5
+
+  - id: "fire_temple_entrance"
+    name: "Obsidian Temple"
+    description: "An imposing temple carved directly into the volcanic mountainside, its facade of polished obsidian reflecting the hellish orange glow of the surrounding lava fields. Two massive braziers flank the entrance, burning with flames that have not gone out in millennia. The interior is a cathedral of black glass and carved fire motifs — salamanders, phoenixes, and the unmistakable sigil of Ifrit etched into every surface. The heat is almost unbearable. Deeper inside, a knight in flame-scorched armor stands guard before the descent to the temple's core, sword drawn and wreathed in fire."
+    exits:
+      north: "volcanic_path"
+      down: "fire_temple_core"
+    environment_tags: ["indoor", "hot", "volcanic", "dangerous", "fire_temple", "ancient"]
+    npcs:
+      - id: "flame_knight"
+        name: "Flame Knight"
+        personality: "A warrior consumed and preserved by the temple's fire magic. Once a mortal knight who sought to claim the Fire Crystal centuries ago and failed — now bound eternally as its guardian. The armor has fused to charred bone, and flames lick from every joint and visor slit. It fights with mechanical precision and a swordsman's instinct that death could not erase. It does not speak. It does not hesitate. It simply cuts."
+        faction: "neutral"
+        is_hostile: true
+        level: 3
+        hp: 22
+        max_hp: 22
+        attack_bonus: 4
+        damage_dice: "1d8+1"
+        defense: 13
+        loot:
+          - id: "flame_sword"
+            name: "Flame Tongue"
+            description: "The Flame Knight's blade, still burning with elemental fire. The hilt is scorching hot but the grip wrapping holds — barely. Deals fire damage on every strike."
+            type: "Weapon"
+            damage_dice: "2d6+2"
+            damage_stat: "STR"
+            value: 80
+            is_equippable: true
+            slot: "Weapon"
+
+  - id: "fire_temple_core"
+    name: "Heart of the Inferno"
+    description: "The temple's core is a natural magma chamber harnessed by ancient engineering. Rivers of molten rock flow through carved channels around a central stone platform, the heat distorting the air into shimmering waves. The Fire Crystal hovers above a basalt altar at the platform's center, burning with an inner flame so intense it casts no shadow — only light. And between you and the Crystal, rising from the magma itself, comes Ifrit. The Infernal Lord. His horns scrape the chamber ceiling. His muscles are carved from living flame. His eyes are twin furnaces of rage, and when he roars, the magma surges and the very stones crack with the sound."
+    exits:
+      up: "fire_temple_entrance"
+    environment_tags: ["indoor", "underground", "hot", "boss_arena", "volcanic", "fire_temple", "sacred"]
+    npcs:
+      - id: "ifrit_guardian"
+        name: "Ifrit, the Infernal Lord"
+        personality: "An ancient Esper of fire and wrath, guardian of the Fire Crystal since the world was young. Ifrit is fury incarnate — a being of pure elemental rage who views all intruders as fuel for his flames. Unlike Leviathan's cold pride, Ifrit burns with volcanic passion. He roars challenges, hurls fireballs, and charges with horns lowered. He respects only those strong enough to survive his onslaught. If you can withstand his Hellfire — his ultimate attack that turns the air itself into an inferno — he will acknowledge you as worthy. But he will not make it easy. Nothing worth having ever is."
+        faction: "neutral"
+        is_hostile: true
+        level: 4
+        hp: 42
+        max_hp: 42
+        attack_bonus: 6
+        damage_dice: "2d6+3"
+        defense: 13
+        loot:
+          - id: "ifrit_horn"
+            name: "Ifrit's Horn"
+            description: "A shard of horn broken from the Infernal Lord himself. It radiates heat that never fades and glows like an ember in the dark."
+            type: "Misc"
+            value: 220
+    items:
+      - id: "fire_crystal"
+        name: "Fire Crystal"
+        description: "One of the four elemental Crystals of Dalmasca. It burns with an inner flame that does not consume — warm in your hands but never painful. When you hold it, you feel a surge of courage and defiance, as though the fire itself refuses to be extinguished. The Marquis awaits."
+        type: "Quest"
+        value: 0
+
+  # ── EARTH TEMPLE ───────────────────────────────────────────────
+
+  - id: "mountain_trail"
+    name: "Rocky Switchbacks"
+    description: "A punishing trail of loose scree and crumbling switchbacks ascending the mountain range east of the Pharos. The air thins as you climb, and the wind carries the taste of mineral dust and ancient stone. Below, the black spire of the Pharos recedes into the haze. Above, a mountain peak crowned with the ruins of a temple older than any living memory. The trail is not natural — something carved these steps into the mountainside with deliberate, geological patience. A golem of fused stone and crystal blocks the narrowest point of the path, grinding forward on legs of living rock."
+    exits:
+      west: "dungeon_entrance"
+      up: "earth_temple_entrance"
+    environment_tags: ["outdoor", "mountain", "windy", "dangerous", "earth_temple"]
+    npcs:
+      - id: "stone_golem"
+        name: "Stone Golem"
+        personality: "A hulking construct of fused granite and crystal veins, animated by earth-aspected Mist. It was built to guard the mountain trail millennia ago and has been doing so without rest, complaint, or creativity ever since. It fights by swinging massive stone fists and stomping hard enough to trigger rockslides. Immune to reason, immune to charm, and very nearly immune to sharp objects. It does not speak. It blocks. It smashes. It endures."
+        faction: "neutral"
+        is_hostile: true
+        level: 3
+        hp: 25
+        max_hp: 25
+        attack_bonus: 4
+        damage_dice: "1d8+2"
+        defense: 14
+        loot:
+          - id: "golem_core"
+            name: "Golem Core"
+            description: "A pulsing crystal extracted from the golem's chest cavity. It thrums with earth energy and is warm like sun-baked stone."
+            type: "Misc"
+            value: 30
+    items:
+      - id: "fossil_fragment"
+        name: "Ancient Fossil"
+        description: "A fragment of fossilized bone embedded in the mountain rock. Whatever creature this belonged to was enormous — and has been extinct for eons."
+        type: "Misc"
+        value: 8
+
+  - id: "earth_temple_entrance"
+    name: "Temple of the Earthshaker"
+    description: "Massive stone doors stand open at the mountain's peak, each carved from a single block of granite weighing more than an airship. Beyond them, the temple interior is a cathedral of natural stone formations — stalactites and stalagmites fused into pillars by ancient magic, crystal veins threading through the walls like luminous arteries. The floor is polished bedrock, worn smooth by countless footsteps from an age when pilgrims still came to honor the earth. Deeper in, the ground trembles with a slow, rhythmic pulse — the mountain's own heartbeat. An elemental guardian of compacted earth and crystal shards bars the northern passage."
+    exits:
+      down: "mountain_trail"
+      north: "earth_temple_heart"
+    environment_tags: ["indoor", "underground", "dark", "ancient", "earth_temple", "sacred"]
+    npcs:
+      - id: "earth_elemental"
+        name: "Earth Elemental"
+        personality: "A vaguely humanoid mass of compacted soil, stone, and crystal, animated by the temple's concentrated earth Mist. It moves with grinding deliberation — slow but unstoppable, like a landslide given purpose. When struck, chunks break away only to reform from the surrounding stone. It guards the passage to the temple's heart with the patience of geology itself."
+        faction: "neutral"
+        is_hostile: true
+        level: 3
+        hp: 22
+        max_hp: 22
+        attack_bonus: 3
+        damage_dice: "1d8+1"
+        defense: 13
+        loot:
+          - id: "earth_shard"
+            name: "Earth Shard"
+            description: "A crystallized fragment of elemental earth energy. Heavy beyond its size and faintly magnetic."
+            type: "Misc"
+            value: 15
+
+  - id: "earth_temple_heart"
+    name: "Heart of the Mountain"
+    description: "The temple's innermost chamber is a vast natural cavern where crystalline formations grow in impossible geometries — spires of amethyst, veins of emerald, walls of raw diamond that catch and scatter light into a thousand prismatic shards. At the center, the Earth Crystal hangs suspended in a cage of living stone, rotating slowly, radiating a deep amber glow that makes the entire cavern feel alive. The ground shakes. Cracks spider-web across the floor. And from the bedrock itself, Titan rises — the Earthshaker. A colossus of stone and crystal, each footstep an earthquake, each fist a landslide. The mountain is his body. The temple is his throne. And you are trespassing."
+    exits:
+      south: "earth_temple_entrance"
+    environment_tags: ["indoor", "underground", "lit", "boss_arena", "earth_temple", "sacred", "crystal_cavern"]
+    npcs:
+      - id: "titan_guardian"
+        name: "Titan, the Earthshaker"
+        personality: "The eldest of the Crystal guardians — an Esper who was ancient when the mountains were young. Titan is patient, immovable, and devastatingly powerful. He does not rage like Ifrit or surge like Leviathan — he endures, and he crushes. His voice is the grinding of tectonic plates, felt in the bones more than heard in the ears. He will give you one chance to leave. If you refuse, he brings the mountain down on your head. His Earthen Fury attack reshapes the terrain itself. To defeat Titan is to prove that mortal will can move mountains."
+        faction: "neutral"
+        is_hostile: true
+        level: 4
+        hp: 45
+        max_hp: 45
+        attack_bonus: 5
+        damage_dice: "2d6+3"
+        defense: 15
+        loot:
+          - id: "titan_geode"
+            name: "Titan's Geode"
+            description: "A crystalline geode torn from Titan's body. Inside, perfect amethyst crystals pulse with the slow heartbeat of the earth."
+            type: "Misc"
+            value: 240
+    items:
+      - id: "earth_crystal"
+        name: "Earth Crystal"
+        description: "One of the four elemental Crystals of Dalmasca. It is heavy — heavier than it should be — and radiates a deep amber warmth. When you hold it, you feel rooted, unshakeable, as though the earth itself has your back. The ground beneath your feet feels more solid. The Marquis needs this."
+        type: "Quest"
+        value: 0
+
+  # ── WIND TEMPLE ────────────────────────────────────────────────
+
+  - id: "skyward_path"
+    name: "Spiraling Canopy Path"
+    description: "A narrow path of woven branches and crystallized sap spirals upward through the canopy above Eruyt Village, climbing higher than any tree has a right to grow. The air freshens with each step, and the jungle sounds fade below until all you hear is wind through leaves and the distant cry of skyborne creatures. Cloud wisps drift between the uppermost branches. A drake with wings of translucent wind membrane circles overhead, watching you with predatory interest. The path continues upward, toward a break in the canopy where sunlight blazes through."
+    exits:
+      down: "fairy_grove"
+      up: "wind_temple_entrance"
+    environment_tags: ["outdoor", "high", "windy", "forest", "dangerous", "wind_temple"]
+    npcs:
+      - id: "wind_drake"
+        name: "Wind Drake"
+        personality: "A sleek, serpentine dragon with translucent wings that shimmer like heat haze. It rides the thermal currents above the canopy, diving on anything that ventures into its territory. Not evil — territorial. It strikes with talons of compressed air and breath attacks of razor wind. Fast, agile, and nearly impossible to pin down. It screeches a challenge before attacking — a courtesy it extends to all prey."
+        faction: "neutral"
+        is_hostile: true
+        level: 3
+        hp: 18
+        max_hp: 18
+        attack_bonus: 4
+        damage_dice: "1d6+2"
+        defense: 13
+        loot:
+          - id: "drake_wing"
+            name: "Drake Wing Membrane"
+            description: "A section of translucent wing membrane from the Wind Drake. Light as air and tougher than leather. Alchemists use it to brew levitation potions."
+            type: "Misc"
+            value: 25
+    items:
+      - id: "sky_feather"
+        name: "Cloud Chocobo Feather"
+        description: "A pure white feather drifting down from somewhere above the clouds. It falls impossibly slowly, as if gravity is merely a suggestion."
+        type: "Misc"
+        value: 10
+
+  - id: "wind_temple_entrance"
+    name: "Temple of Storms"
+    description: "You emerge above the clouds. The temple floats — there is no other word for it — suspended on a platform of crystallized wind and ancient magic. Bridges of solidified air connect towers of white marble that sway gently in currents visible only as ripples in the cloud sea below. The architecture is impossibly delicate — arches thinner than your arm supporting domes wider than houses. Wind chimes of crystal and mythril sing an endless, haunting melody. A sylph — a being of living wind in a vaguely humanoid form — guards the northern passage, its body a swirl of leaves and light."
+    exits:
+      down: "skyward_path"
+      north: "wind_temple_apex"
+    environment_tags: ["outdoor", "high", "windy", "magical", "wind_temple", "ancient", "floating"]
+    npcs:
+      - id: "sylph_guardian"
+        name: "Sylph Guardian"
+        personality: "A minor wind spirit given form and purpose by the temple's magic. It appears as a whirlwind of autumn leaves, flower petals, and golden light shaped into something almost — but not quite — humanoid. It speaks in whispers carried on the breeze, politely asking intruders to leave before attempting to hurl them off the floating temple. Graceful, swift, and surprisingly strong for something made of air. It fights with cutting wind blades and suffocating vacuum pockets."
+        faction: "neutral"
+        is_hostile: true
+        level: 3
+        hp: 20
+        max_hp: 20
+        attack_bonus: 4
+        damage_dice: "1d6+2"
+        defense: 12
+        loot:
+          - id: "sylph_essence"
+            name: "Sylph's Essence"
+            description: "A swirling mote of captured wind energy, contained in a natural crystal sphere. It hums with a gentle breeze that never stops."
+            type: "Misc"
+            value: 20
+
+  - id: "wind_temple_apex"
+    name: "Apex of the Storm Empress"
+    description: "The temple's highest point is an open-air pinnacle above the clouds, with nothing but sky in every direction. The Wind Crystal floats in the center of a permanent vortex — a controlled tornado of white wind that spirals upward into the heavens. The crystal sings. A high, clear note that resonates in your chest and makes the air itself vibrate with power. And then the clouds part. Garuda descends — the Storm Empress — her wings spanning the width of the platform, her feathers crackling with lightning, her eyes twin hurricanes of emerald fury. She lands with a gust that nearly throws you from the pinnacle, and she speaks in a voice that is the roar of a thousand storms."
+    exits:
+      south: "wind_temple_entrance"
+    environment_tags: ["outdoor", "high", "boss_arena", "windy", "wind_temple", "sacred", "sky"]
+    npcs:
+      - id: "garuda_guardian"
+        name: "Garuda, the Storm Empress"
+        personality: "The most capricious of the Crystal guardians — an Esper of wind and storm who delights in the chaos of battle. Garuda is vain, theatrical, and utterly merciless. She views combat as art and destruction as beauty. Her wings generate hurricane-force winds, her talons crackle with lightning, and her Aerial Blast can tear the sky apart. Unlike the stoic Titan or the prideful Leviathan, Garuda laughs as she fights — a sound like thunder rolling across mountain peaks. She will test your speed, your reflexes, and your resolve. If you cannot match the storm, the fall from this height will be very, very long."
+        faction: "neutral"
+        is_hostile: true
+        level: 4
+        hp: 38
+        max_hp: 38
+        attack_bonus: 6
+        damage_dice: "2d6+2"
+        defense: 14
+        loot:
+          - id: "garuda_plume"
+            name: "Garuda's Plume"
+            description: "A single feather from the Storm Empress, crackling with residual lightning. It floats of its own accord and points toward the nearest storm."
+            type: "Misc"
+            value: 210
+    items:
+      - id: "wind_crystal"
+        name: "Wind Crystal"
+        description: "One of the four elemental Crystals of Dalmasca. It weighs almost nothing and hums with a constant, gentle vibration — the breath of the sky itself. When you hold it, the air around you stirs, and for a moment you understand what it means to be truly free. The Marquis is waiting."
+        type: "Quest"
+        value: 0
+
+  # ── THE VOID — FINAL DUNGEON ───────────────────────────────────
+
+  - id: "void_rift"
+    name: "The Void Rift"
+    description: "Beneath the Crystal Sanctum, where the great crystal's roots pierce the bedrock, a crack in reality has opened. The edges of the rift shimmer with colors that don't exist — hues that hurt to look at and sounds that taste like copper. Beyond the threshold, space folds in on itself. The walls are made of shattered memories — fragments of places that were and places that never will be. The temperature is wrong. Not hot, not cold — absent. As though the concept of temperature has been removed. A wraith of void energy drifts through the broken space, its form flickering between existence and oblivion."
+    exits:
+      up: "church"
+      down: "void_corridor"
+    environment_tags: ["indoor", "underground", "dark", "dangerous", "void", "final_dungeon", "otherworldly"]
+    npcs:
+      - id: "void_wraith"
+        name: "Void Wraith"
+        personality: "A being that was once something else — human, beast, it no longer matters. The Void consumed its identity, leaving only a hollow shape of dark energy that hungers for the substance of reality. It attacks not out of malice but out of desperate, mindless need — consuming light, warmth, and life to fill the emptiness where its soul used to be. It makes no sound. It casts no shadow. It simply reaches for you with hands made of nothing."
+        faction: "neutral"
+        is_hostile: true
+        level: 5
+        hp: 28
+        max_hp: 28
+        attack_bonus: 5
+        damage_dice: "2d6+1"
+        defense: 13
+        loot:
+          - id: "void_shard"
+            name: "Void Shard"
+            description: "A fragment of crystallized nothingness. It is black — not dark, but actively black, as though it absorbs light rather than reflecting it. Cold in a way that has nothing to do with temperature."
+            type: "Misc"
+            value: 50
+
+  - id: "void_corridor"
+    name: "Corridor of Shattered Dimensions"
+    description: "A twisted hallway where the laws of physics have been revoked. The floor is made of floating debris from a hundred different realities — cobblestones from a city that never existed, grass from a field that was erased, bones from creatures that evolution never designed. Gravity shifts without warning. Distances lie. The corridor stretches infinitely ahead and is also only three steps long. In the fractured reflections on every surface, you can see yourself — but wrong. Older, younger, victorious, defeated, dead. A knight of void energy materializes from the dimensional wreckage, its armor a patchwork of stolen realities."
+    exits:
+      up: "void_rift"
+      north: "void_throne"
+    environment_tags: ["indoor", "underground", "dark", "dangerous", "void", "final_dungeon", "reality_warped"]
+    npcs:
+      - id: "void_knight"
+        name: "Void Knight"
+        personality: "Once a champion who entered the Void to challenge Exdeath and lost. Now it serves the Master of the Void as an eternal sentinel, its will consumed and its body rebuilt from the substance of nothingness. It fights with the skill of a lifetime warrior and the strength of something that no longer needs muscles, bones, or mercy. Its sword cuts through reality itself, and its shield deflects not just attacks but causality. It speaks a single word when it attacks — the name it no longer remembers."
+        faction: "neutral"
+        is_hostile: true
+        level: 5
+        hp: 30
+        max_hp: 30
+        attack_bonus: 6
+        damage_dice: "2d6+2"
+        defense: 14
+        loot:
+          - id: "void_blade"
+            name: "Void Blade"
+            description: "The Void Knight's weapon — a sword forged from condensed nothingness. Its edge exists in multiple dimensions simultaneously. Terrifyingly effective."
+            type: "Weapon"
+            damage_dice: "3d6+3"
+            damage_stat: "STR"
+            value: 350
+            is_equippable: true
+            slot: "Weapon"
+
+  - id: "void_throne"
+    name: "Throne of Nothingness"
+    description: "The heart of the Void. All the shattered dimensions converge here, forming a vast amphitheater of absolute darkness broken only by distant, dying stars that are not stars at all but the last light of consumed worlds. At the center sits a throne carved from the absence of everything — not stone, not metal, not crystal, but the space where matter used to be. And upon that throne sits Exdeath. Once a tree. Then a warlock. Now something beyond mortal comprehension — a consciousness that has merged with the Void itself, seeking to reduce all of existence to the beautiful simplicity of nothing. He rises. The darkness bows. And in a voice that is the silence between heartbeats, he welcomes you to the end of everything."
+    exits:
+      south: "void_corridor"
+    environment_tags: ["indoor", "underground", "dark", "boss_arena", "void", "final_dungeon", "endgame"]
+    npcs:
+      - id: "exdeath_void"
+        name: "Exdeath, Master of the Void"
+        personality: "The final boss. A being who was once a tree in the Great Forest of Moore, into which countless evil souls were sealed — until the accumulated darkness achieved sentience. Exdeath sought the power of the Void to erase all existence, believing nothingness to be the ultimate form of perfection. He is theatrical, philosophical, and utterly convinced of his righteousness. He monologues about the beauty of oblivion with genuine passion. His power is immense — he wields the Void itself as a weapon, opening dimensional rifts, erasing matter, and warping reality. His ultimate attack, Grand Cross, inflicts every status ailment simultaneously. Defeating Exdeath is not just winning a fight — it is rejecting nothingness and affirming that existence, messy and painful as it is, matters."
+        faction: "neutral"
+        is_hostile: true
+        level: 8
+        hp: 80
+        max_hp: 80
+        attack_bonus: 8
+        damage_dice: "3d8+4"
+        defense: 16
+        loot:
+          - id: "exdeath_crystal"
+            name: "Crystal of the Void"
+            description: "The crystallized essence of the Void's power, ripped from Exdeath's shattered throne. It contains the captured light of a thousand worlds and hums with the potential of everything that was almost lost."
+            type: "Misc"
+            value: 2000
+          - id: "brave_blade"
+            name: "Brave Blade"
+            description: "A legendary sword that materializes in your hand the moment Exdeath falls — forged from the collective courage of every warrior who ever stood against the dark. Its power grows with the wielder's resolve. The Void could not consume it. Nothing can."
+            type: "Weapon"
+            damage_dice: "4d8+10"
+            damage_stat: "STR"
+            value: 5000
+            is_equippable: true
+            slot: "Weapon"
+            is_two_handed: true
+            stat_bonuses:
+              str: 5
+              con: 3
+              lck: 5
+    items:
+      - id: "void_crystal"
+        name: "Shard of Restored Light"
+        description: "When Exdeath falls, the Void begins to collapse — and from the wreckage, this crystal forms. It contains a fragment of every world the Void consumed, now freed. It pulses with warm, golden light. Proof that you saved everything. The Marquis needs to see this."
+        type: "Quest"
+        value: 0

@@ -529,3 +529,245 @@ quests:
       gold: 75
       disposition_shift: 15
       memory_flags: ["tonberry-slayer"]
+
+  # ═══════════════════════════════════════════════════════════
+  # MAIN QUESTLINE — The Crystal Crusade
+  # ═══════════════════════════════════════════════════════════
+
+  # ── QUEST: The Dying Crystal ─────────────────────────────
+  - id: "crystal_dying"
+    name: "The Dying Crystal"
+    description: "Marquis Ondore reveals that the four elemental Crystals that once shielded Dalmasca are fading. Without them, the Void — an ancient force of annihilation — will consume the kingdom. The Water Crystal's temple lies beneath the Garamsythe Waterway. Someone must retrieve it before the light goes out."
+    giver_id: "marquis_ondore"
+    turn_in_npc_id: "marquis_ondore"
+    min_level: 2
+    is_one_time: true
+    tags: ["main", "story", "crystal"]
+    stages:
+      - id: "seek_water_temple"
+        name: "Find the Water Temple"
+        description: "Descend into the tunnels beneath the Garamsythe Waterway and locate the Water Temple Sanctum."
+        narrator_hint: "The player is delving into ancient flooded tunnels beneath Rabanastre in search of the Water Crystal. Build atmosphere — dripping stone, eerie blue light, the sense of descending into something sacred and forgotten. The temple predates the city by millennia."
+        objectives:
+          - id: "discover_water_sanctum"
+            type: Discover
+            target_id: "water_temple_sanctum"
+            description: "Find the Water Temple Sanctum"
+        next_stage_id: "defeat_leviathan"
+      - id: "defeat_leviathan"
+        name: "Defeat the Tidal Lord"
+        description: "Leviathan, the ancient guardian of the Water Crystal, will not yield its charge willingly. Defeat it."
+        narrator_hint: "This is the player's first Crystal boss fight. Leviathan is proud, ancient, and powerful. The battle should feel like a genuine test — the sanctum floods, water crashes, and the serpent strikes with the fury of the deep ocean. Victory should feel earned."
+        objectives:
+          - id: "kill_leviathan"
+            type: Kill
+            target_id: "leviathan_guardian"
+            required_count: 1
+            description: "Defeat Leviathan, the Tidal Lord"
+        next_stage_id: "return_water_crystal"
+      - id: "return_water_crystal"
+        name: "Return the Water Crystal"
+        description: "Bring the Water Crystal to Marquis Ondore at City Hall."
+        narrator_hint: "Ondore is visibly moved when the player returns with the Water Crystal. For the first time, hope breaks through his careful political mask. He explains that three more Crystals remain — Fire, Earth, and Wind — scattered in temples across the land. The crusade has begun."
+        objectives:
+          - id: "talk_ondore_water"
+            type: TalkTo
+            target_id: "marquis_ondore"
+            description: "Deliver the Water Crystal to Marquis Ondore"
+    rewards:
+      xp: 100
+      gold: 50
+      unlocks_quest: "crystal_crusade_fire"
+      disposition_shift: 20
+      memory_flags: ["water-crystal-recovered", "crystal-crusader"]
+
+  # ── QUEST: Trial of Fire ─────────────────────────────────
+  - id: "crystal_crusade_fire"
+    name: "Trial of Fire"
+    description: "The Fire Crystal burns in a volcanic temple east of the Feywood. Ifrit, the Infernal Lord, guards it with the fury of a thousand suns. Ondore warns that the volcano is active — speed and strength in equal measure will be needed."
+    giver_id: "marquis_ondore"
+    turn_in_npc_id: "marquis_ondore"
+    min_level: 3
+    prerequisites: ["crystal_dying"]
+    is_one_time: true
+    tags: ["main", "story", "crystal", "fire"]
+    stages:
+      - id: "enter_fire_temple"
+        name: "Reach the Fire Temple Core"
+        description: "Travel through the volcanic wasteland east of the Feywood and penetrate the Fire Temple to its core."
+        narrator_hint: "The journey takes the player from the Mist-choked Feywood into scorched volcanic terrain — a dramatic shift. The obsidian temple is ancient and imposing. Heat is a constant enemy. Build the sense of approaching something primal and dangerous."
+        objectives:
+          - id: "discover_fire_core"
+            type: Discover
+            target_id: "fire_temple_core"
+            description: "Reach the Heart of the Inferno"
+        next_stage_id: "defeat_ifrit"
+      - id: "defeat_ifrit"
+        name: "Defeat the Infernal Lord"
+        description: "Ifrit will not relinquish the Fire Crystal without a fight. Survive his flames."
+        narrator_hint: "Ifrit is rage incarnate. The magma chamber becomes an arena of fire and fury. Ifrit charges, roars, and unleashes Hellfire — a wall of flame that fills the entire chamber. This fight is visceral and exhausting. Victory should leave the player singed but triumphant."
+        objectives:
+          - id: "kill_ifrit"
+            type: Kill
+            target_id: "ifrit_guardian"
+            required_count: 1
+            description: "Defeat Ifrit, the Infernal Lord"
+        next_stage_id: "return_fire_crystal"
+      - id: "return_fire_crystal"
+        name: "Return the Fire Crystal"
+        description: "Bring the Fire Crystal to Marquis Ondore."
+        narrator_hint: "Ondore accepts the Fire Crystal with quiet gratitude. Two down, two to go. He marks the remaining temples on the player's map and urges haste — the Void's influence grows stronger with each passing day."
+        objectives:
+          - id: "talk_ondore_fire"
+            type: TalkTo
+            target_id: "marquis_ondore"
+            description: "Deliver the Fire Crystal to Marquis Ondore"
+    rewards:
+      xp: 100
+      gold: 50
+      disposition_shift: 15
+      memory_flags: ["fire-crystal-recovered"]
+
+  # ── QUEST: Trial of Earth ────────────────────────────────
+  - id: "crystal_crusade_earth"
+    name: "Trial of Earth"
+    description: "The Earth Crystal lies within a mountain temple east of the Pharos. Titan, the Earthshaker, has guarded it since the mountains were young. Ondore warns that the trail is treacherous and the guardian is the most enduring of the four."
+    giver_id: "marquis_ondore"
+    turn_in_npc_id: "marquis_ondore"
+    min_level: 3
+    prerequisites: ["crystal_dying"]
+    is_one_time: true
+    tags: ["main", "story", "crystal", "earth"]
+    stages:
+      - id: "enter_earth_temple"
+        name: "Reach the Heart of the Mountain"
+        description: "Climb the mountain trail east of the Pharos and penetrate the Earth Temple to its heart."
+        narrator_hint: "The ascent is punishing — thin air, loose scree, and a golem blocking the path. The temple at the peak is ancient and humbling, built by hands that understood stone on a fundamental level. The deeper the player goes, the more they feel the mountain's weight above them."
+        objectives:
+          - id: "discover_earth_heart"
+            type: Discover
+            target_id: "earth_temple_heart"
+            description: "Reach the Heart of the Mountain"
+        next_stage_id: "defeat_titan"
+      - id: "defeat_titan"
+        name: "Defeat the Earthshaker"
+        description: "Titan awaits in the crystal cavern. His patience is geological. His fists are mountains."
+        narrator_hint: "Titan is the most physically imposing of the four guardians. The cavern shakes with every step he takes. His Earthen Fury attack reshapes the battlefield — pillars collapse, the floor cracks, and boulders rain from the ceiling. This is a fight of endurance and timing."
+        objectives:
+          - id: "kill_titan"
+            type: Kill
+            target_id: "titan_guardian"
+            required_count: 1
+            description: "Defeat Titan, the Earthshaker"
+        next_stage_id: "return_earth_crystal"
+      - id: "return_earth_crystal"
+        name: "Return the Earth Crystal"
+        description: "Bring the Earth Crystal to Marquis Ondore."
+        narrator_hint: "Ondore's hands tremble as he accepts the Earth Crystal. The weight of it surprises him. He studies it with the eyes of a man who dares to hope for the first time in years."
+        objectives:
+          - id: "talk_ondore_earth"
+            type: TalkTo
+            target_id: "marquis_ondore"
+            description: "Deliver the Earth Crystal to Marquis Ondore"
+    rewards:
+      xp: 100
+      gold: 50
+      disposition_shift: 15
+      memory_flags: ["earth-crystal-recovered"]
+
+  # ── QUEST: Trial of Wind ─────────────────────────────────
+  - id: "crystal_crusade_wind"
+    name: "Trial of Wind"
+    description: "The Wind Crystal floats in a temple above the clouds, high above Eruyt Village. Garuda, the Storm Empress, guards it with hurricanes and lightning. Ondore warns this is the most treacherous approach — one misstep means a very long fall."
+    giver_id: "marquis_ondore"
+    turn_in_npc_id: "marquis_ondore"
+    min_level: 3
+    prerequisites: ["crystal_dying"]
+    is_one_time: true
+    tags: ["main", "story", "crystal", "wind"]
+    stages:
+      - id: "enter_wind_temple"
+        name: "Reach the Apex of Storms"
+        description: "Climb the canopy path above Eruyt Village and reach the floating Wind Temple's apex."
+        narrator_hint: "The journey upward is breathtaking — literally and figuratively. The player climbs through the canopy into open sky, arriving at a temple that floats on solidified wind. The architecture is impossibly delicate. The crystal's song can be heard from the entrance. Build wonder and vertigo."
+        objectives:
+          - id: "discover_wind_apex"
+            type: Discover
+            target_id: "wind_temple_apex"
+            description: "Reach the Apex of the Storm Empress"
+        next_stage_id: "defeat_garuda"
+      - id: "defeat_garuda"
+        name: "Defeat the Storm Empress"
+        description: "Garuda awaits at the temple's peak. She fights with the fury of a hurricane and the speed of lightning."
+        narrator_hint: "Garuda is the fastest and most agile of the guardians. She fights in three dimensions — swooping, diving, and attacking from impossible angles. Her Aerial Blast tears the sky apart. The platform is open-air, the fall is infinite, and Garuda laughs the entire time. This fight is about speed and adaptation."
+        objectives:
+          - id: "kill_garuda"
+            type: Kill
+            target_id: "garuda_guardian"
+            required_count: 1
+            description: "Defeat Garuda, the Storm Empress"
+        next_stage_id: "return_wind_crystal"
+      - id: "return_wind_crystal"
+        name: "Return the Wind Crystal"
+        description: "Bring the Wind Crystal to Marquis Ondore."
+        narrator_hint: "When the last Crystal is delivered, Ondore's composure finally breaks. He smiles — genuinely, fully — for perhaps the first time in years. All four Crystals are gathered. But he grows grave again quickly: the Crystals' power has revealed the source of the corruption. A rift to the Void has opened beneath the Crystal Sanctum. Someone must enter it and face whatever waits on the other side."
+        objectives:
+          - id: "talk_ondore_wind"
+            type: TalkTo
+            target_id: "marquis_ondore"
+            description: "Deliver the Wind Crystal to Marquis Ondore"
+    rewards:
+      xp: 100
+      gold: 50
+      disposition_shift: 15
+      memory_flags: ["wind-crystal-recovered"]
+
+  # ── QUEST: The Void Awaits ───────────────────────────────
+  - id: "the_void_awaits"
+    name: "The Void Awaits"
+    description: "All four Crystals are gathered, and their combined light has revealed the truth: a rift to the Void — the dimension of nothingness — has opened beneath the Crystal Sanctum. Exdeath, the ancient Warlock of the Void, draws power from the rift to unmake reality itself. Someone must enter the Void and end him, or everything — every memory, every dream, every life — will be erased."
+    giver_id: "marquis_ondore"
+    turn_in_npc_id: "marquis_ondore"
+    min_level: 5
+    prerequisites: ["crystal_crusade_fire", "crystal_crusade_earth", "crystal_crusade_wind"]
+    is_one_time: true
+    tags: ["main", "story", "crystal", "void", "final"]
+    stages:
+      - id: "enter_void"
+        name: "Enter the Void"
+        description: "Descend through the rift beneath the Crystal Sanctum and reach the Throne of Nothingness."
+        narrator_hint: "This is it — the final dungeon. The rift beneath the Crystal Sanctum opens into a dimension where reality has been revoked. The player passes through shattered dimensions, fights void-corrupted guardians, and arrives at a throne carved from the absence of existence. Build dread, wonder, and the weight of finality. Everything the player has done has led here."
+        objectives:
+          - id: "discover_void_throne"
+            type: Discover
+            target_id: "void_throne"
+            description: "Reach the Throne of Nothingness"
+        next_stage_id: "defeat_exdeath"
+      - id: "defeat_exdeath"
+        name: "Defeat Exdeath"
+        description: "Exdeath, Master of the Void, awaits on his throne of nothingness. End him. End this."
+        narrator_hint: "The final boss fight. Exdeath is theatrical, powerful, and genuinely terrifying. He monologues about the beauty of oblivion, wields the Void as a weapon, and unleashes Grand Cross — an attack that warps reality itself. The fight should feel desperate, epic, and ultimately triumphant. When Exdeath falls, the Void begins to collapse. The player must escape. Light returns. Make the player feel like a true Warrior of Light."
+        objectives:
+          - id: "kill_exdeath"
+            type: Kill
+            target_id: "exdeath_void"
+            required_count: 1
+            description: "Defeat Exdeath, Master of the Void"
+        next_stage_id: "return_victorious"
+      - id: "return_victorious"
+        name: "Return Victorious"
+        description: "The Void collapses. Light returns. Report to Marquis Ondore — the kingdom is saved."
+        narrator_hint: "The return should be a victory lap. The rift seals behind the player. Sunlight pours into the Crystal Sanctum. Citizens cheer in the streets. Ondore meets the player with tears in his eyes and declares them the Savior of Dalmasca. Every NPC the player has helped along the way acknowledges the victory. This is the ending — make it legendary."
+        objectives:
+          - id: "talk_ondore_victory"
+            type: TalkTo
+            target_id: "marquis_ondore"
+            description: "Report to Marquis Ondore"
+    rewards:
+      xp: 1000
+      gold: 500
+      items:
+        - item_id: "brave_blade"
+          quantity: 1
+      disposition_shift: 50
+      memory_flags: ["void-defeated", "savior-of-dalmasca", "warrior-of-light-true"]

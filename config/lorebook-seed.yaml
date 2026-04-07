@@ -450,3 +450,166 @@ lore_entries:
     teaser: "Ancient creatures of incredible power, locked away for centuries..."
     narrator_hint: "Espers are endgame mysteries. Build intrigue and dread. Each one has a tragic backstory."
     tags: ["history", "espers", "summoning", "occuria", "power"]
+
+  # ═══════════════════════════════════════════════════════════
+  #  CRYSTAL QUESTLINE — First-Visit Discovery Lore
+  # ═══════════════════════════════════════════════════════════
+
+  - id: "lore-crystals"
+    name: "The Elemental Crystals"
+    lore_scope: "history"
+    parent_lore_id: "lore-ivalice"
+    cascade_down: false
+    discovery_trigger: "explore"
+    discovery_source_id: "city_hall"
+    description: "The four elemental Crystals that once protected Dalmasca from the Void."
+    content: >
+      Long before the Archadian Empire, long before the Occuria withdrew from mortal
+      affairs, four elemental Crystals were set in place to shield the world from the
+      Void — a dimension of absolute nothingness that presses against reality like
+      dark water against glass. The Water Crystal commanded the tides and the healing
+      rains. The Fire Crystal fueled the forge-fires of civilization and the courage
+      of warriors. The Earth Crystal anchored the mountains and gave the land its
+      strength. The Wind Crystal filled the sails of airships and carried the prayers
+      of the faithful to the heavens. Together, they formed a barrier that kept the
+      Void at bay. But the Crystals are fading. Their guardians sleep. And in the
+      darkness beneath the Crystal Sanctum, something is already pushing through.
+      Marquis Ondore believes that recovering and reuniting the four Crystals is
+      Dalmasca's only hope — and perhaps the world's.
+    teaser: "Ancient crystals that protected the world from an unspeakable force..."
+    narrator_hint: "The Crystals are the central MacGuffin of the main questline. Reference them with reverence and urgency. Their light is fading and the consequences are existential."
+    linked_entity_ids: ["city_hall", "marquis_ondore"]
+    tags: ["history", "crystals", "void", "main-quest", "elemental"]
+
+  - id: "lore-water-temple"
+    name: "The Water Temple"
+    lore_scope: "location"
+    parent_lore_id: "lore-crystals"
+    cascade_down: false
+    discovery_trigger: "explore"
+    discovery_source_id: "water_temple_entrance"
+    description: "An ancient temple beneath the Garamsythe Waterway, home to the Water Crystal."
+    content: >
+      Beneath the familiar damp of the Garamsythe Waterway lies something far older —
+      a temple carved from living stone by hands that understood water the way a poet
+      understands words. The Water Temple predates Rabanastre by millennia, built in
+      an age when the Crystals were first set in place. Its halls are flooded not by
+      accident but by design — the water itself is sacred, infused with elemental Mist
+      that gives it a faint blue luminescence. Leviathan, the Tidal Lord, was bound
+      here as the Crystal's eternal guardian. The Sahagin who patrol the depths are
+      not monsters — they are the temple's original caretakers, preserved by the
+      Crystal's power long after their civilization crumbled to dust. The temple's
+      deepest sanctum holds the Water Crystal on a coral altar, and the sea itself
+      answers to the guardian who watches over it.
+    teaser: "Ancient flooded tunnels glowing with unnatural blue light..."
+    narrator_hint: "The Water Temple is serene and dangerous. The water is sacred. Leviathan is proud, not evil. This is a place of ancient power, not corruption."
+    linked_entity_ids: ["water_temple_entrance", "water_temple_depths", "water_temple_sanctum"]
+    tags: ["location", "dungeon", "water-temple", "crystal", "leviathan"]
+
+  - id: "lore-fire-temple"
+    name: "The Fire Temple"
+    lore_scope: "location"
+    parent_lore_id: "lore-crystals"
+    cascade_down: false
+    discovery_trigger: "explore"
+    discovery_source_id: "volcanic_path"
+    description: "A volcanic temple east of the Feywood, forged in obsidian and guarded by Ifrit."
+    content: >
+      East of the Feywood, where the jungle surrenders to scorched earth and lava
+      fields, an obsidian temple rises from the flank of an active volcano. The Fire
+      Temple was built — or perhaps grown — from the volcanic rock itself, its halls
+      shaped by the same elemental force that the Fire Crystal embodies. Unlike the
+      serene Water Temple, this place burns with barely contained fury. The walls
+      radiate heat. The air shimmers. Rivers of magma flow through carved channels
+      that serve as both illumination and defense. The Flame Knights who guard the
+      upper halls were once mortal warriors who sought to claim the Crystal and
+      failed — their punishment is eternal service, their armor fused to charred bone
+      by Ifrit's contempt. The Infernal Lord himself waits in the temple's core, a
+      magma chamber where the Fire Crystal floats above a basalt altar. Ifrit does
+      not guard the Crystal out of duty — he guards it because the flame belongs to
+      him, and he does not share.
+    teaser: "A temple of obsidian and flame built into a living volcano..."
+    narrator_hint: "The Fire Temple is hostile and aggressive. Everything burns. Ifrit is fury personified. The theme is passion, rage, and the destructive power of unchecked fire."
+    linked_entity_ids: ["volcanic_path", "fire_temple_entrance", "fire_temple_core"]
+    tags: ["location", "dungeon", "fire-temple", "crystal", "ifrit", "volcano"]
+
+  - id: "lore-earth-temple"
+    name: "The Earth Temple"
+    lore_scope: "location"
+    parent_lore_id: "lore-crystals"
+    cascade_down: false
+    discovery_trigger: "explore"
+    discovery_source_id: "mountain_trail"
+    description: "A mountain temple east of the Pharos, where Titan guards the Earth Crystal in stone."
+    content: >
+      The mountain trail east of the Pharos ascends through punishing switchbacks
+      to a temple that is as much a part of the mountain as the stone itself. The
+      Earth Temple was not built in the conventional sense — it was shaped by Titan,
+      the Earthshaker, who carved its halls from living bedrock with the patience of
+      geological ages. Crystal veins thread through the walls like luminous arteries,
+      and the air hums with a subsonic vibration — the mountain's heartbeat, regulated
+      by the Earth Crystal. The temple's innermost chamber is a natural cavern of
+      impossible beauty, where formations of amethyst, emerald, and raw diamond grow
+      in geometries that defy nature. Titan is the oldest and most patient of the four
+      guardians. He does not rage, he does not rush. He endures. And he has been
+      waiting a very, very long time for someone worthy to claim the Crystal he
+      protects. He has not yet been disappointed. That is not a compliment.
+    teaser: "An ancient temple built into the bones of a mountain..."
+    narrator_hint: "The Earth Temple is solid, ancient, and humbling. Titan is patience incarnate. The theme is endurance, permanence, and the weight of ages."
+    linked_entity_ids: ["mountain_trail", "earth_temple_entrance", "earth_temple_heart"]
+    tags: ["location", "dungeon", "earth-temple", "crystal", "titan", "mountain"]
+
+  - id: "lore-wind-temple"
+    name: "The Wind Temple"
+    lore_scope: "location"
+    parent_lore_id: "lore-crystals"
+    cascade_down: false
+    discovery_trigger: "explore"
+    discovery_source_id: "skyward_path"
+    description: "A floating temple above the clouds near Eruyt Village, where Garuda guards the Wind Crystal."
+    content: >
+      High above Eruyt Village, past a spiraling path through the canopy and into
+      open sky, the Wind Temple floats among the clouds — held aloft by the same
+      elemental force that the Wind Crystal embodies. The temple is a marvel of
+      impossible architecture: bridges of solidified air, towers of white marble
+      thinner than bone yet stronger than steel, and wind chimes of crystal and
+      mythril that sing an eternal melody. Garuda, the Storm Empress, rules this
+      domain with capricious fury. She is the youngest and most volatile of the
+      four guardians — vain, theatrical, and delighted by destruction. The Sylphs
+      who serve her are minor wind spirits given form by the temple's magic, and
+      they adore their mistress with the devotion of a hurricane's eye for its storm.
+      The Wind Crystal floats at the temple's apex in a permanent vortex, singing a
+      note so pure it resonates in the chest. Those who wish to claim it must match
+      the storm — and survive the fall if they cannot.
+    teaser: "A temple floating among the clouds, singing with wind and light..."
+    narrator_hint: "The Wind Temple is beautiful, vertiginous, and dangerous. Garuda is theatrical and vain. The theme is freedom, speed, and the terrible beauty of the storm."
+    linked_entity_ids: ["skyward_path", "wind_temple_entrance", "wind_temple_apex"]
+    tags: ["location", "dungeon", "wind-temple", "crystal", "garuda", "sky"]
+
+  - id: "lore-the-void"
+    name: "The Void"
+    lore_scope: "location"
+    parent_lore_id: "lore-crystals"
+    cascade_down: false
+    discovery_trigger: "explore"
+    discovery_source_id: "void_rift"
+    description: "A dimension of nothingness that presses against reality, now breached beneath the Crystal Sanctum."
+    content: >
+      The Void is not a place — it is the absence of place. A dimension of pure
+      nothingness that exists in the spaces between realities, pressing against the
+      walls of the world like dark water against glass. When the elemental Crystals
+      were strong, they held the Void at bay. As they faded, the barrier weakened,
+      and something on the other side began to push through. Exdeath — once a tree
+      in the Great Forest of Moore, into which countless evil souls were sealed until
+      the accumulated darkness achieved sentience — seeks to merge the Void with
+      reality, reducing all of existence to the beautiful simplicity of nothing.
+      The rift beneath the Crystal Sanctum is his doorway. Within the Void, the
+      laws of physics are suggestions at best. Space folds. Time stutters. The
+      dead walk alongside the living, and the walls are made of shattered memories
+      from worlds already consumed. At its heart sits the Throne of Nothingness,
+      and upon it, Exdeath waits — patient, philosophical, and utterly convinced
+      that the end of everything is an act of mercy.
+    teaser: "A crack in reality where the laws of existence have been revoked..."
+    narrator_hint: "The Void is the endgame. It should feel existentially threatening — not just dangerous, but wrong on a fundamental level. Exdeath is the final boss and a genuine philosophical threat. The theme is nothingness versus existence, despair versus hope."
+    linked_entity_ids: ["void_rift", "void_corridor", "void_throne"]
+    tags: ["location", "dungeon", "void", "final-dungeon", "exdeath", "endgame"]

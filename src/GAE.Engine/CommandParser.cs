@@ -350,7 +350,7 @@ public partial class CommandParser
         return action;
     }
 
-    [GeneratedRegex(@"^(?:go|move|walk|head|travel)\s+(?<dir>north|south|east|west|up|down|n|s|e|w|u|d)$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^(?:go|move|walk|head|travel)\s+(?<dir>north|south|east|west|northeast|northwest|southeast|southwest|up|down|ne|nw|se|sw|n|s|e|w|u|d)$", RegexOptions.IgnoreCase)]
     private static partial Regex MoveRegex();
 
     [GeneratedRegex(@"^(?:(?:travel|shift|jump)\s+(?:to\s+)?(?:world|realm)\s+|(?:world|realm)\s+(?:travel|shift|jump)\s+)(?<world>[a-zA-Z0-9][a-zA-Z0-9_-]{1,63})$", RegexOptions.IgnoreCase)]
@@ -359,7 +359,7 @@ public partial class CommandParser
     [GeneratedRegex(@"^(?:enter|use|take|step\s+through)\s+(?:the\s+)?(?:portal|gate|rift)(?:\s+to\s+(?<world>[a-zA-Z0-9][a-zA-Z0-9_-]{1,63}))?$", RegexOptions.IgnoreCase)]
     private static partial Regex PortalTravelRegex();
 
-    [GeneratedRegex(@"^(?<dir>north|south|east|west|up|down|n|s|e|w|u|d)$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^(?<dir>north|south|east|west|northeast|northwest|southeast|southwest|up|down|ne|nw|se|sw|n|s|e|w|u|d)$", RegexOptions.IgnoreCase)]
     private static partial Regex BareDirectionRegex();
 
     [GeneratedRegex(@"^(?:leave|exit|depart|go\s+out(?:side)?|step\s+out(?:side)?|get\s+out)(?:\s+.*)?$", RegexOptions.IgnoreCase)]
@@ -371,6 +371,10 @@ public partial class CommandParser
         "s" => "south",
         "e" => "east",
         "w" => "west",
+        "ne" => "northeast",
+        "nw" => "northwest",
+        "se" => "southeast",
+        "sw" => "southwest",
         "u" => "up",
         "d" => "down",
         _ => dir.ToLowerInvariant()
