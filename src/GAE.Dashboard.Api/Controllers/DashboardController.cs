@@ -2163,6 +2163,33 @@ public class DashboardController : ControllerBase
     }
 
     [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpPost("admin/worlds/{worldId}/set-discord-default")]
+    public async Task<IActionResult> SetDiscordDefaultWorld(string worldId, CancellationToken ct)
+    {
+        var target = await _worldRepository.GetWorldAsync(worldId, ct);
+        if (target is null) return NotFound(new { error = $"World '{worldId}' not found." });
+
+        // Remove the discord-default tag from all worlds
+        var allWorlds = await _worldRepository.GetAllWorldsAsync(ct);
+        foreach (var w in allWorlds)
+        {
+            if (w.Tags.Remove("discord-default"))
+            {
+                w.UpdatedAt = DateTimeOffset.UtcNow;
+                await _worldRepository.SaveWorldAsync(w, ct);
+            }
+        }
+
+        // Add the tag to the target world
+        if (!target.Tags.Contains("discord-default"))
+            target.Tags.Add("discord-default");
+        target.UpdatedAt = DateTimeOffset.UtcNow;
+        await _worldRepository.SaveWorldAsync(target, ct);
+
+        return Ok(new { success = true, id = worldId, isDiscordDefault = true });
+    }
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
     [HttpGet("admin/worlds/{worldId}/players")]
     public async Task<IActionResult> GetWorldPlayers(string worldId, CancellationToken ct)
     {

@@ -1463,14 +1463,15 @@ const UI = {
 
     container.innerHTML = worlds.map(w => {
       const isSelected = w.id === selectedWorldId;
-      const isDefault = w.id === 'default';
+      const isDiscordDefault = (w.tags || []).includes('discord-default');
       const badges = [];
-      if (isDefault) badges.push('<span class="world-badge default">Default</span>');
+      if (isDiscordDefault) badges.push('<span class="world-badge default">⚔ Discord Default</span>');
       badges.push(w.isActive
         ? '<span class="world-badge active">Active</span>'
         : '<span class="world-badge inactive">Inactive</span>');
       if (w.playerCount > 0) badges.push(`<span class="world-badge players">${w.playerCount} player${w.playerCount !== 1 ? 's' : ''}</span>`);
       if (w.portalCount > 0) badges.push(`<span class="world-badge portals">${w.portalCount} portal${w.portalCount !== 1 ? 's' : ''}</span>`);
+      if (!isDiscordDefault) badges.push(`<button class="btn btn-secondary btn-sm world-set-default-btn" data-set-default-world="${this.esc(w.id)}" type="button" style="font-size:10px;padding:1px 8px;">Set Default</button>`);
 
       return `<div class="world-card${isSelected ? ' selected' : ''}" data-world-id="${this.esc(w.id)}">
         <div class="world-card-info">

@@ -396,22 +396,22 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         // Show typing indicator while the AI thinks
         using var typing = message.Channel.EnterTypingState();
 
-        // Default to the Discord starting world if no world specified
-        worldId ??= WorldDefaults.DefaultWorldId;
-
         try
         {
+            // Resolve world — use player's world, or find the Discord default
+            World? resolvedWorld = null;
+            if (worldId is not null)
+                resolvedWorld = await _worldRepository.GetWorldAsync(worldId);
+            resolvedWorld ??= await GetDiscordDefaultWorldAsync();
+            worldId ??= resolvedWorld?.Id;
+
             // Resolve the narrator voice
             NarratorPreset? narrator = null;
             if (player?.NarratorPresetId is not null)
                 narrator = _registry.NarratorPresets.GetById(player.NarratorPresetId);
 
-            if (narrator is null && worldId is not null)
-            {
-                var world = await _worldRepository.GetWorldAsync(worldId);
-                if (world?.DefaultNarratorPresetId is not null)
-                    narrator = _registry.NarratorPresets.GetById(world.DefaultNarratorPresetId);
-            }
+            if (narrator is null && resolvedWorld?.DefaultNarratorPresetId is not null)
+                narrator = _registry.NarratorPresets.GetById(resolvedWorld.DefaultNarratorPresetId);
 
             // Fall back to first selectable narrator if none set
             narrator ??= _registry.NarratorPresets.GetAll()
@@ -435,13 +435,9 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
             }
 
             // Build world context
-            var worldContext = "";
-            if (worldId is not null)
-            {
-                var world = await _worldRepository.GetWorldAsync(worldId);
-                if (world is not null)
-                    worldContext = $"\nWorld: {world.Name} — {world.Description}";
-            }
+            var worldContext = resolvedWorld is not null
+                ? $"\nWorld: {resolvedWorld.Name} — {resolvedWorld.Description}"
+                : "";
 
             // Build the narrator voice block
             var voiceBlock = narrator is not null
@@ -629,6 +625,28 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         await SendGameResponseAsync(thread, player, action, result);
     }
 
+    // ==================== World Resolution ====================
+
+    /// <summary>
+    /// Find the world tagged 'discord-default', falling back to the hardcoded default,
+    /// then to the first active world.
+    /// </summary>
+    private async Task<World?> GetDiscordDefaultWorldAsync()
+    {
+        var worlds = await _worldRepository.GetAllWorldsAsync();
+
+        // Prefer the world tagged as Discord default
+        var tagged = worlds.FirstOrDefault(w => w.Tags.Contains("discord-default", StringComparer.OrdinalIgnoreCase));
+        if (tagged is not null) return tagged;
+
+        // Fallback: hardcoded default world ID
+        var hardcoded = worlds.FirstOrDefault(w => string.Equals(w.Id, WorldDefaults.DefaultWorldId, StringComparison.OrdinalIgnoreCase));
+        if (hardcoded is not null) return hardcoded;
+
+        // Last resort: first active world
+        return worlds.FirstOrDefault(w => w.IsActive);
+    }
+
     // ==================== Thread Management ====================
 
     private async Task<SocketThreadChannel?> CreatePlayerThreadAsync(ISocketMessageChannel channel, SocketUser user)
@@ -683,13 +701,7 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         World? activeWorld = null;
         try
         {
-            activeWorld = await _worldRepository.GetWorldAsync(WorldDefaults.DefaultWorldId);
-            if (activeWorld is null)
-            {
-                // Fallback: pick the first active world
-                var worlds = await _worldRepository.GetAllWorldsAsync();
-                activeWorld = worlds.FirstOrDefault(w => w.IsActive);
-            }
+            activeWorld = await GetDiscordDefaultWorldAsync();
             if (activeWorld is not null && !string.IsNullOrWhiteSpace(activeWorld.CharacterCreationIntro))
                 savedIntro = activeWorld.CharacterCreationIntro;
         }

@@ -235,6 +235,10 @@ const API = {
     return this.postJson(`${this.base}/admin/worlds/${encodeURIComponent(worldId)}/deactivate`, {});
   },
 
+  async setDiscordDefaultWorld(worldId) {
+    return this.postJson(`${this.base}/admin/worlds/${encodeURIComponent(worldId)}/set-discord-default`, {});
+  },
+
   async getWorldPlayers(worldId) {
     return this.getJson(`${this.base}/admin/worlds/${encodeURIComponent(worldId)}/players`);
   },

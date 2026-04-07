@@ -1182,6 +1182,20 @@
   }
 
   function handleWorldListClick(event) {
+    // Handle "Set Default" button
+    const setDefaultBtn = event.target.closest('[data-set-default-world]');
+    if (setDefaultBtn) {
+      event.stopPropagation();
+      const worldId = setDefaultBtn.dataset.setDefaultWorld;
+      setDefaultBtn.disabled = true;
+      setDefaultBtn.textContent = '...';
+      API.setDiscordDefaultWorld(worldId)
+        .then(() => refreshWorlds())
+        .catch(e => alert('Failed to set default: ' + e.message))
+        .finally(() => { setDefaultBtn.disabled = false; setDefaultBtn.textContent = 'Set Default'; });
+      return;
+    }
+
     const card = event.target.closest('[data-world-id]');
     if (!card) return;
     const worldId = card.dataset.worldId;
