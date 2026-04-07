@@ -1010,6 +1010,7 @@
       state.worlds = await API.getWorlds();
       UI.renderWorldList(state.worlds, state.selectedWorldId);
       UI.populateWorldSelects(state.worlds, state.selectedWorldId);
+      UI.populateOverviewWorldFilter(state.worlds);
       UI.populateTransferPlayerSelect(state.players);
 
       // Re-select world if previously selected

@@ -789,6 +789,32 @@ const UI = {
   _ovSelectedItem: null,
   _ovSelectedType: null,
   _ovJsonMode: false,
+  _ovWorldMap: {},
+
+  _ovGetWorldFilter() {
+    return this.$('overview-world-filter')?.value || '';
+  },
+
+  _ovWorldLabel(worldIds) {
+    if (!worldIds || !worldIds.length) return '';
+    return worldIds.map(id => this._ovWorldMap[id] || id).join(', ');
+  },
+
+  populateOverviewWorldFilter(worlds) {
+    this._ovWorldMap = {};
+    const sel = this.$('overview-world-filter');
+    if (!sel) return;
+    const current = sel.value;
+    sel.innerHTML = '<option value="">All Worlds</option>';
+    for (const w of worlds) {
+      this._ovWorldMap[w.id] = w.name;
+      const opt = document.createElement('option');
+      opt.value = w.id;
+      opt.textContent = w.name;
+      sel.appendChild(opt);
+    }
+    if (current) sel.value = current;
+  },
 
   async ovSearch(query) {
     const results = this.$('overview-results');
@@ -799,9 +825,10 @@ const UI = {
     }
 
     const typeFilter = this.$('overview-type-filter')?.value || '';
+    const worldFilter = this._ovGetWorldFilter();
     results.innerHTML = '<div class="dm-result-count">Searching...</div>';
     try {
-      const data = await API.dmSearch(query, typeFilter || undefined);
+      const data = await API.dmSearch(query, typeFilter || undefined, worldFilter || undefined);
       this._ovRenderResults(data.results, query);
     } catch (err) {
       results.innerHTML = `<div class="dm-no-results">Error: ${this.esc(err.message)}</div>`;
@@ -814,9 +841,10 @@ const UI = {
     if (!results) return;
     if (input) input.value = '';
 
+    const worldFilter = this._ovGetWorldFilter();
     results.innerHTML = '<div class="dm-result-count">Loading...</div>';
     try {
-      const data = await API.dmBrowse(type);
+      const data = await API.dmBrowse(type, worldFilter || undefined);
       this._ovRenderResults(data.results, null, type);
     } catch (err) {
       results.innerHTML = `<div class="dm-no-results">Error: ${this.esc(err.message)}</div>`;
@@ -835,16 +863,18 @@ const UI = {
       : `${items.length} result${items.length !== 1 ? 's' : ''}`;
 
     results.innerHTML = `<div class="dm-result-count">${countLabel}</div>` +
-      items.map(item => `
+      items.map(item => {
+        const worldLabel = this._ovWorldLabel(item.worldIds);
+        return `
         <div class="dm-result-card" data-ov-id="${this.esc(item.id)}" data-ov-type="${this.esc(item.type)}">
           <div class="dm-result-header">
             <span class="dm-result-name">${this.esc(item.name)}</span>
             <span class="dm-result-type dm-type-${this.esc(item.type)}">${this.esc(item.type)}</span>
           </div>
-          <div class="dm-result-meta">${this.esc(item.meta || '')}</div>
+          <div class="dm-result-meta">${this.esc(item.meta || '')}${worldLabel ? ` | ${worldLabel}` : ''}</div>
           ${item.description ? `<div class="dm-result-desc">${this.esc(item.description)}</div>` : ''}
-        </div>
-      `).join('');
+        </div>`;
+      }).join('');
   },
 
   _ovShowWelcome() {

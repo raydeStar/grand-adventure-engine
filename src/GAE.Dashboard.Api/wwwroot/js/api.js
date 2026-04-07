@@ -151,14 +151,16 @@ const API = {
   },
 
   // ── DM Console ─────────────────────────────────────────
-  async dmSearch(query, typeFilter) {
+  async dmSearch(query, typeFilter, worldId) {
     const params = new URLSearchParams({ q: query });
     if (typeFilter) params.set('type', typeFilter);
+    if (worldId) params.set('worldId', worldId);
     return this.getJson(`${this.base}/admin/dm/search?${params}`);
   },
 
-  async dmBrowse(type) {
-    return this.getJson(`${this.base}/admin/dm/browse/${encodeURIComponent(type)}`);
+  async dmBrowse(type, worldId) {
+    const params = worldId ? `?worldId=${encodeURIComponent(worldId)}` : '';
+    return this.getJson(`${this.base}/admin/dm/browse/${encodeURIComponent(type)}${params}`);
   },
 
   // ── Content Registry ───────────────────────────────────

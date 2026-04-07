@@ -1535,38 +1535,41 @@ public class DashboardController : ControllerBase
 
     [Authorize(Policy = DashboardPolicies.AdminAccess)]
     [HttpGet("admin/dm/search")]
-    public async Task<IActionResult> DmSearch([FromQuery] string q, [FromQuery] string? type, CancellationToken ct)
+    public async Task<IActionResult> DmSearch([FromQuery] string q, [FromQuery] string? type, [FromQuery] string? worldId, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(q))
             return Ok(new { results = Array.Empty<object>() });
 
         var query = q.Trim().ToLowerInvariant();
         var filter = type?.Trim().ToLowerInvariant();
+        var wf = string.IsNullOrWhiteSpace(worldId) ? null : worldId.Trim();
         var results = new List<object>();
+
+        bool InWorld(List<string>? wids) => wf is null || (wids?.Contains(wf, StringComparer.OrdinalIgnoreCase) ?? false);
 
         // Search spells
         if (filter is null or "spell")
             foreach (var s in _registry.Spells.GetAll())
-                if (Matches(s.Id, s.Name, s.Description, s.School, s.Tags, query))
-                    results.Add(new { type = "spell", s.Id, s.Name, s.Description, meta = $"{s.School} | Power {s.PowerLevel} | {s.ManaCost} MP", data = s });
+                if (InWorld(s.WorldIds) && Matches(s.Id, s.Name, s.Description, s.School, s.Tags, query))
+                    results.Add(new { type = "spell", s.Id, s.Name, s.Description, meta = $"{s.School} | Power {s.PowerLevel} | {s.ManaCost} MP", worldIds = s.WorldIds, data = s });
 
         // Search items
         if (filter is null or "item")
             foreach (var i in _registry.Items.GetAll())
-                if (Matches(i.Id, i.Name, i.Description, i.Rarity, i.Tags, query))
-                    results.Add(new { type = "item", i.Id, i.Name, i.Description, meta = $"{i.Type} | {i.Rarity} | {i.Value}g", data = i });
+                if (InWorld(i.WorldIds) && Matches(i.Id, i.Name, i.Description, i.Rarity, i.Tags, query))
+                    results.Add(new { type = "item", i.Id, i.Name, i.Description, meta = $"{i.Type} | {i.Rarity} | {i.Value}g", worldIds = i.WorldIds, data = i });
 
         // Search classes
         if (filter is null or "class")
             foreach (var c in _registry.Classes.GetAll())
-                if (Matches(c.Id, c.Name, c.Description, null, c.Tags, query))
-                    results.Add(new { type = "class", c.Id, c.Name, c.Description, meta = $"{c.HitDie} | {c.PrimaryStat}{(c.CanCastSpells ? " | Caster" : "")}", data = c });
+                if (InWorld(c.WorldIds) && Matches(c.Id, c.Name, c.Description, null, c.Tags, query))
+                    results.Add(new { type = "class", c.Id, c.Name, c.Description, meta = $"{c.HitDie} | {c.PrimaryStat}{(c.CanCastSpells ? " | Caster" : "")}", worldIds = c.WorldIds, data = c });
 
         // Search races
         if (filter is null or "race")
             foreach (var r in _registry.Races.GetAll())
-                if (Matches(r.Id, r.Name, r.Description, null, r.Tags, query))
-                    results.Add(new { type = "race", r.Id, r.Name, r.Description, meta = string.Join(", ", r.Traits), data = r });
+                if (InWorld(r.WorldIds) && Matches(r.Id, r.Name, r.Description, null, r.Tags, query))
+                    results.Add(new { type = "race", r.Id, r.Name, r.Description, meta = string.Join(", ", r.Traits), worldIds = r.WorldIds, data = r });
 
         // Fetch rooms once if needed for room or NPC search
         var needRooms = filter is null or "room" or "npc";
@@ -1575,74 +1578,86 @@ public class DashboardController : ControllerBase
         // Search rooms
         if (filter is null or "room")
             foreach (var rm in rooms)
-                if (rm.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                if (InWorld(rm.WorldIds) &&
+                    (rm.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                     rm.Id.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                    (rm.Description?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false))
+                    (rm.Description?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)))
                     results.Add(new { type = "room", id = rm.Id, name = rm.Name, description = rm.Description,
-                        meta = $"{rm.Npcs.Count} NPCs | {rm.Items.Count} items | {rm.Exits.Count} exits", data = rm });
+                        meta = $"{rm.Npcs.Count} NPCs | {rm.Items.Count} items | {rm.Exits.Count} exits", worldIds = rm.WorldIds, data = rm });
 
         // Search players
         if (filter is null or "player")
         {
             var players = await _stateManager.GetAllPlayersAsync(ct);
             foreach (var p in players)
-                if (p.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                if ((wf is null || string.Equals(p.ActiveWorldId, wf, StringComparison.OrdinalIgnoreCase)) &&
+                    (p.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                     p.Id.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                     p.Race.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                    p.Class.Contains(query, StringComparison.OrdinalIgnoreCase))
+                    p.Class.Contains(query, StringComparison.OrdinalIgnoreCase)))
                     results.Add(new { type = "player", id = p.Id, name = p.Name,
                         description = $"Lv.{p.Level} {p.Race} {p.Class}",
-                        meta = $"HP: {p.Hp}/{p.MaxHp} | MP: {p.Mp}/{p.MaxMp} | Gold: {p.Gold}", data = p });
+                        meta = $"HP: {p.Hp}/{p.MaxHp} | MP: {p.Mp}/{p.MaxMp} | Gold: {p.Gold}", worldIds = new List<string> { p.ActiveWorldId }, data = p });
         }
 
         // Search NPCs (across all rooms)
         if (filter is null or "npc")
             foreach (var rm in rooms)
                 foreach (var npc in rm.Npcs)
-                    if (npc.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                    if (InWorld(npc.WorldIds) &&
+                        (npc.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                         npc.Id.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                         (npc.Personality?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false) ||
-                        npc.Faction.Contains(query, StringComparison.OrdinalIgnoreCase))
+                        npc.Faction.Contains(query, StringComparison.OrdinalIgnoreCase)))
                         results.Add(new { type = "npc", id = npc.Id, name = npc.Name,
                             description = npc.Personality,
-                            meta = $"{npc.Faction} | Lv.{npc.Level}{(npc.IsHostile ? " | Hostile" : "")} | Room: {rm.Name}", data = npc, roomId = rm.Id });
+                            meta = $"{npc.Faction} | Lv.{npc.Level}{(npc.IsHostile ? " | Hostile" : "")} | Room: {rm.Name}", worldIds = npc.WorldIds, data = npc, roomId = rm.Id });
 
         return Ok(new { results, total = results.Count });
     }
 
     [Authorize(Policy = DashboardPolicies.AdminAccess)]
     [HttpGet("admin/dm/browse/{type}")]
-    public async Task<IActionResult> DmBrowse(string type, CancellationToken ct)
+    public async Task<IActionResult> DmBrowse(string type, [FromQuery] string? worldId, CancellationToken ct)
     {
         var results = new List<object>();
+        var wf = string.IsNullOrWhiteSpace(worldId) ? null : worldId.Trim();
+        bool InWorld(List<string>? wids) => wf is null || (wids?.Contains(wf, StringComparer.OrdinalIgnoreCase) ?? false);
+
         switch (type.ToLowerInvariant())
         {
             case "spells":
                 foreach (var s in _registry.Spells.GetAll())
-                    results.Add(new { type = "spell", s.Id, s.Name, s.Description, meta = $"{s.School} | Power {s.PowerLevel} | {s.ManaCost} MP", data = s });
+                    if (InWorld(s.WorldIds))
+                        results.Add(new { type = "spell", s.Id, s.Name, s.Description, meta = $"{s.School} | Power {s.PowerLevel} | {s.ManaCost} MP", worldIds = s.WorldIds, data = s });
                 break;
             case "items":
                 foreach (var i in _registry.Items.GetAll())
-                    results.Add(new { type = "item", i.Id, i.Name, i.Description, meta = $"{i.Type} | {i.Rarity} | {i.Value}g", data = i });
+                    if (InWorld(i.WorldIds))
+                        results.Add(new { type = "item", i.Id, i.Name, i.Description, meta = $"{i.Type} | {i.Rarity} | {i.Value}g", worldIds = i.WorldIds, data = i });
                 break;
             case "classes":
                 foreach (var c in _registry.Classes.GetAll())
-                    results.Add(new { type = "class", c.Id, c.Name, c.Description, meta = $"{c.HitDie} | {c.PrimaryStat}{(c.CanCastSpells ? " | Caster" : "")}", data = c });
+                    if (InWorld(c.WorldIds))
+                        results.Add(new { type = "class", c.Id, c.Name, c.Description, meta = $"{c.HitDie} | {c.PrimaryStat}{(c.CanCastSpells ? " | Caster" : "")}", worldIds = c.WorldIds, data = c });
                 break;
             case "races":
                 foreach (var r in _registry.Races.GetAll())
-                    results.Add(new { type = "race", r.Id, r.Name, r.Description, meta = string.Join(", ", r.Traits), data = r });
+                    if (InWorld(r.WorldIds))
+                        results.Add(new { type = "race", r.Id, r.Name, r.Description, meta = string.Join(", ", r.Traits), worldIds = r.WorldIds, data = r });
                 break;
             case "rooms":
                 foreach (var rm in await _stateManager.GetAllRoomsAsync(ct))
-                    results.Add(new { type = "room", id = rm.Id, name = rm.Name, description = rm.Description,
-                        meta = $"{rm.Npcs.Count} NPCs | {rm.Items.Count} items | {rm.Exits.Count} exits", data = rm });
+                    if (InWorld(rm.WorldIds))
+                        results.Add(new { type = "room", id = rm.Id, name = rm.Name, description = rm.Description,
+                            meta = $"{rm.Npcs.Count} NPCs | {rm.Items.Count} items | {rm.Exits.Count} exits", worldIds = rm.WorldIds, data = rm });
                 break;
             case "players":
                 foreach (var p in await _stateManager.GetAllPlayersAsync(ct))
-                    results.Add(new { type = "player", id = p.Id, name = p.Name,
-                        description = $"Lv.{p.Level} {p.Race} {p.Class}",
-                        meta = $"HP: {p.Hp}/{p.MaxHp} | MP: {p.Mp}/{p.MaxMp} | Gold: {p.Gold}", data = p });
+                    if (wf is null || string.Equals(p.ActiveWorldId, wf, StringComparison.OrdinalIgnoreCase))
+                        results.Add(new { type = "player", id = p.Id, name = p.Name,
+                            description = $"Lv.{p.Level} {p.Race} {p.Class}",
+                            meta = $"HP: {p.Hp}/{p.MaxHp} | MP: {p.Mp}/{p.MaxMp} | Gold: {p.Gold}", worldIds = new List<string> { p.ActiveWorldId }, data = p });
                 break;
         }
         return Ok(new { results, total = results.Count });
