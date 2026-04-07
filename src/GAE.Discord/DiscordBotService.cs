@@ -659,7 +659,7 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
 
     // ==================== AI Character Creation ====================
 
-    private static readonly string DefaultCharacterCreationIntro = """
+    private static readonly string FallbackCharacterCreationIntro = """
         A voice emerges from the ether — dry, amused, and impossibly old.
 
         *"Ah. Another soul stumbles through my door. I am the Narrator — the voice behind the curtain, the pen that writes your story as you live it. Adventures await, and I need someone to narrate. That's where you come in."*
@@ -675,18 +675,80 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         _creationSessions[userId] = session;
         PersistCreationSessions();
 
-        // Fetch the active world's custom intro, falling back to the generic one
-        string intro = DefaultCharacterCreationIntro;
+        // Try to load the world's saved intro first
+        string? savedIntro = null;
+        World? activeWorld = null;
         try
         {
             var worlds = await _worldRepository.GetAllWorldsAsync();
-            var activeWorld = worlds.FirstOrDefault(w => w.IsActive);
+            activeWorld = worlds.FirstOrDefault(w => w.IsActive);
             if (activeWorld is not null && !string.IsNullOrWhiteSpace(activeWorld.CharacterCreationIntro))
-                intro = activeWorld.CharacterCreationIntro;
+                savedIntro = activeWorld.CharacterCreationIntro;
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to fetch world intro, using default");
+            _logger.LogWarning(ex, "Failed to fetch world intro");
+        }
+
+        // If we have a saved intro, use it directly
+        if (!string.IsNullOrWhiteSpace(savedIntro))
+        {
+            await thread.SendMessageAsync(savedIntro);
+            return;
+        }
+
+        // No saved intro — generate one dynamically using the narrator's voice
+        string intro = FallbackCharacterCreationIntro;
+        try
+        {
+            // Resolve the world's narrator
+            NarratorPreset? narrator = null;
+            if (activeWorld?.DefaultNarratorPresetId is not null)
+                narrator = _registry.NarratorPresets.GetById(activeWorld.DefaultNarratorPresetId);
+
+            narrator ??= _registry.NarratorPresets.GetAll()
+                .Where(n => n.IsSelectable)
+                .OrderBy(n => n.SortOrder)
+                .FirstOrDefault();
+
+            if (narrator is not null)
+            {
+                var worldContext = activeWorld is not null
+                    ? $"World: {activeWorld.Name} — {activeWorld.Description}"
+                    : "A fantasy RPG world";
+
+                var prompt = $"""
+                    You are **{narrator.Name}**, the narrator/guide for a text RPG.
+                    Archetype: {narrator.Archetype}
+                    Personality: {narrator.PersonalityPrompt}
+                    {worldContext}
+
+                    Write a character creation greeting for a new player arriving in their adventure thread.
+                    You MUST:
+                    1. Introduce yourself by name — e.g. "I am {narrator.Name}" — make it fun and memorable
+                    2. Give a brief, flavorful hint about the world and its conflict (don't spoil)
+                    3. Ask the player to describe who they are
+                    4. End with this exact instruction in italics:
+                       *(Describe yourself however you like: "I'm a sneaky halfling who picks pockets" or "I'm a massive orc who solves problems with fists" — or just tell me your name and I'll ask questions.)*
+
+                    Keep it 3-4 paragraphs. Use Discord markdown (bold, italics). Stay fully in character.
+                    Return ONLY the message text, no JSON wrapping.
+                    """;
+
+                await _narratorLock.WaitAsync();
+                try
+                {
+                    intro = await _narrator.GenerateContentAsync("text", prompt, null);
+                }
+                finally
+                {
+                    _narratorLock.Release();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to generate narrator intro, using fallback");
         }
 
         await thread.SendMessageAsync(intro);
