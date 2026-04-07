@@ -2508,7 +2508,9 @@ textarea { resize: vertical; min-height: 80px; }
   align-items: center;
   gap: 0.5rem;
   margin-bottom: 0.75rem;
+  flex-wrap: wrap;
 }
+.registry-toolbar .btn { white-space: nowrap; }
 .registry-toolbar select {
   background: var(--bg-input);
   border: 1px solid var(--border);
