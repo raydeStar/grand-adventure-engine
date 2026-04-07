@@ -81,65 +81,80 @@
   }
 
   function bindEvents() {
-    UI.$('auth-form').addEventListener('submit', handleLogin);
-    UI.$('btn-fill-user').addEventListener('click', () => fillCredentials('user'));
-    UI.$('btn-fill-admin').addEventListener('click', () => fillCredentials('admin'));
-    UI.$('btn-logout-header').addEventListener('click', () => void handleLogout());
-    UI.$('btn-logout-portal').addEventListener('click', () => void handleLogout());
+    const bind = (id, eventName, handler) => {
+      const element = UI.$(id);
+      if (!element) {
+        console.warn(`Dashboard boot: missing expected element #${id}`);
+        return null;
+      }
+
+      element.addEventListener(eventName, handler);
+      return element;
+    };
+
+    const bindOptional = (id, eventName, handler) => {
+      UI.$(id)?.addEventListener(eventName, handler);
+    };
+
+    bind('auth-form', 'submit', handleLogin);
+    bind('btn-fill-user', 'click', () => fillCredentials('user'));
+    bind('btn-fill-admin', 'click', () => fillCredentials('admin'));
+    bind('btn-logout-header', 'click', () => void handleLogout());
+    bind('btn-logout-portal', 'click', () => void handleLogout());
 
     // Theme toggle
     const themeBtn = UI.$('btn-theme-toggle');
     if (themeBtn) themeBtn.addEventListener('click', () => UI.toggleTheme());
 
-    UI.$('btn-new-char').addEventListener('click', () => {
+    bind('btn-new-char', 'click', () => {
       UI.showCreateForm(true);
     });
-    UI.$('btn-cancel-create').addEventListener('click', () => UI.showCreateForm(false));
-    UI.$('btn-open-portal').addEventListener('click', () => {
+    bind('btn-cancel-create', 'click', () => UI.showCreateForm(false));
+    bind('btn-open-portal', 'click', () => {
       UI.showPortal(true);
       UI.showDashboard(false);
     });
-    UI.$('btn-refresh').addEventListener('click', () => {
+    bind('btn-refresh', 'click', () => {
       if (!ensureAuthenticated()) return;
       void refreshAll().catch((error) => handleError(error, { portal: true, logId: 'workflow-log' }));
       UI.appendActivity('workflow-log', 'Manual refresh requested.', 'info');
     });
-    UI.$('btn-seed-demo-admin').addEventListener('click', () => void seedDemoCharacters(false));
-    UI.$('btn-llm-refresh').addEventListener('click', () => void refreshLlmModels());
-    UI.$('llm-models-list').addEventListener('click', handleLlmModelClick);
+    bind('btn-seed-demo-admin', 'click', () => void seedDemoCharacters(false));
+    bind('btn-llm-refresh', 'click', () => void refreshLlmModels());
+    bind('llm-models-list', 'click', handleLlmModelClick);
 
-    UI.$('create-form').addEventListener('submit', handleCreateCharacter);
-    UI.$('command-input').addEventListener('keydown', handleCommandKeydown);
-    UI.$('command-form').addEventListener('submit', handleUserCommand);
-    UI.$('admin-command-form').addEventListener('submit', handleAdminCommand);
-    UI.$('mutation-resource-form').addEventListener('submit', handleResourceMutation);
-    UI.$('mutation-teleport-form').addEventListener('submit', handleTeleportMutation);
-    UI.$('mutation-item-form').addEventListener('submit', handleItemMutation);
-    UI.$('mutation-status-form').addEventListener('submit', handleStatusMutation);
-    UI.$('room-fixture-form').addEventListener('submit', handleRoomFixtureMutation);
-    UI.$('btn-send-msg').addEventListener('click', () => void handleSendMessage());
-    UI.$('msg-player-select').addEventListener('change', updateSendButtonLabel);
-    UI.$('btn-warp-to-spawn')?.addEventListener('click', () => void handleWarpToSpawn());
-    UI.$('btn-warp-all-spawn')?.addEventListener('click', () => void handleWarpAllToSpawn());
-    UI.$('btn-reseed-world')?.addEventListener('click', () => void handleReseedWorld());
-    UI.$('btn-seed-demo-world')?.addEventListener('click', () => void handleSeedDemoWorld());
-    UI.$('btn-reset-world')?.addEventListener('click', () => void handleResetWorld());
-    UI.$('btn-export-world')?.addEventListener('click', () => void handleExportWorld());
-    UI.$('btn-import-world')?.addEventListener('click', () => handleImportWorldClick());
-    UI.$('import-world-file')?.addEventListener('change', (e) => void handleImportWorldFile(e));
+    bind('create-form', 'submit', handleCreateCharacter);
+    bind('command-input', 'keydown', handleCommandKeydown);
+    bind('command-form', 'submit', handleUserCommand);
+    bind('admin-command-form', 'submit', handleAdminCommand);
+    bind('mutation-resource-form', 'submit', handleResourceMutation);
+    bind('mutation-teleport-form', 'submit', handleTeleportMutation);
+    bind('mutation-item-form', 'submit', handleItemMutation);
+    bind('mutation-status-form', 'submit', handleStatusMutation);
+    bind('room-fixture-form', 'submit', handleRoomFixtureMutation);
+    bind('btn-send-msg', 'click', () => void handleSendMessage());
+    bind('msg-player-select', 'change', updateSendButtonLabel);
+    bindOptional('btn-warp-to-spawn', 'click', () => void handleWarpToSpawn());
+    bindOptional('btn-warp-all-spawn', 'click', () => void handleWarpAllToSpawn());
+    bindOptional('btn-reseed-world', 'click', () => void handleReseedWorld());
+    bindOptional('btn-seed-demo-world', 'click', () => void handleSeedDemoWorld());
+    bindOptional('btn-reset-world', 'click', () => void handleResetWorld());
+    bindOptional('btn-export-world', 'click', () => void handleExportWorld());
+    bindOptional('btn-import-world', 'click', () => handleImportWorldClick());
+    bindOptional('import-world-file', 'change', (e) => void handleImportWorldFile(e));
 
     // World management events
-    UI.$('btn-create-world')?.addEventListener('click', showCreateWorldForm);
-    UI.$('world-form')?.addEventListener('submit', handleWorldFormSubmit);
-    UI.$('world-form-cancel')?.addEventListener('click', hideWorldForm);
-    UI.$('btn-edit-world')?.addEventListener('click', showEditWorldForm);
-    UI.$('btn-delete-world')?.addEventListener('click', () => void handleDeleteWorld());
-    UI.$('btn-create-portal')?.addEventListener('click', showCreatePortalForm);
-    UI.$('portal-form')?.addEventListener('submit', handlePortalFormSubmit);
-    UI.$('portal-form-cancel')?.addEventListener('click', hidePortalForm);
-    UI.$('btn-realm-transfer')?.addEventListener('click', () => void handleRealmTransfer());
-    UI.$('world-list')?.addEventListener('click', handleWorldListClick);
-    UI.$('portal-list')?.addEventListener('click', handlePortalListClick);
+    bindOptional('btn-create-world', 'click', showCreateWorldForm);
+    bindOptional('world-form', 'submit', handleWorldFormSubmit);
+    bindOptional('world-form-cancel', 'click', hideWorldForm);
+    bindOptional('btn-edit-world', 'click', showEditWorldForm);
+    bindOptional('btn-delete-world', 'click', () => void handleDeleteWorld());
+    bindOptional('btn-create-portal', 'click', showCreatePortalForm);
+    bindOptional('portal-form', 'submit', handlePortalFormSubmit);
+    bindOptional('portal-form-cancel', 'click', hidePortalForm);
+    bindOptional('btn-realm-transfer', 'click', () => void handleRealmTransfer());
+    bindOptional('world-list', 'click', handleWorldListClick);
+    bindOptional('portal-list', 'click', handlePortalListClick);
 
     document.querySelectorAll('[data-role-choice]').forEach((button) => {
       button.addEventListener('click', () => openDashboard(button.dataset.roleChoice || 'user'));
