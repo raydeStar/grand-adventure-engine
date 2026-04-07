@@ -21,6 +21,7 @@ public class GameEngine : IGameEngine
     private readonly QuestTracker? _questTracker;
     private readonly IRealmTravelService? _realmTravelService;
     private readonly IWorldRepository? _worldRepository;
+    private readonly LoreTracker? _loreTracker;
 
 
     public GameEngine(
@@ -34,7 +35,8 @@ public class GameEngine : IGameEngine
         QuestEngine? questEngine = null,
         QuestTracker? questTracker = null,
         IRealmTravelService? realmTravelService = null,
-        IWorldRepository? worldRepository = null)
+        IWorldRepository? worldRepository = null,
+        LoreTracker? loreTracker = null)
     {
         _stateManager = stateManager;
         _dice = dice;
@@ -47,6 +49,7 @@ public class GameEngine : IGameEngine
         _questTracker = questTracker;
         _realmTravelService = realmTravelService;
         _worldRepository = worldRepository;
+        _loreTracker = loreTracker;
     }
 
     public GameAction ParseCommand(string playerId, string rawInput)
@@ -138,6 +141,8 @@ public class GameEngine : IGameEngine
             ActionType.AcceptQuest => await ProcessAcceptQuestAsync(player, action, ct),
             ActionType.AbandonQuest => await ProcessAbandonQuest(player, action, ct),
             ActionType.TravelWorld => await ProcessTravelWorldAsync(player, action, ct),
+            ActionType.Lorebook => ProcessLorebook(player, action),
+            ActionType.LoreInfo => ProcessLoreInfo(player, action),
             _ => await ProcessFreeFormActionAsync(player, action, ct)
         };
 
@@ -162,6 +167,8 @@ public class GameEngine : IGameEngine
             && action.Type != ActionType.QuestInfo
             && action.Type != ActionType.AcceptQuest
             && action.Type != ActionType.AbandonQuest
+            && action.Type != ActionType.Lorebook
+            && action.Type != ActionType.LoreInfo
             && action.Type != ActionType.Unknown;
 
         if (shouldNarrate)
@@ -258,6 +265,14 @@ public class GameEngine : IGameEngine
 
         // Grant starting items from the registry / lore seed
         await GrantStartingItemsAsync(player, ct);
+
+        // Grant starter lore for the world
+        if (_loreTracker is not null)
+        {
+            var starterLore = _loreTracker.GrantStarterLore(player, player.ActiveWorldId);
+            if (starterLore.Count > 0)
+                _logger.LogInformation("Granted {Count} starter lore entries to {PlayerId}", starterLore.Count, player.Id);
+        }
 
         // Grant default Heal spell
         player.Spellbook.Add(new LearnedSpell
@@ -620,9 +635,19 @@ public class GameEngine : IGameEngine
             ? await _questTracker.OnRoomEnteredAsync(player, targetRoom, ct)
             : null;
 
+        // Lore discovery: exploring this room
+        string? loreDiscoveryNotice = null;
+        if (_loreTracker is not null)
+        {
+            var discoveredLore = _loreTracker.DiscoverBySource(player, simpleTargetId, "explore", player.ActiveWorldId);
+            loreDiscoveryNotice = LoreTracker.FormatDiscoveryNotice(discoveredLore);
+        }
+
         var moveSummary = BuildRoomSummary($"You move {direction} to **{targetRoom.Name}**.", targetRoom);
         if (escortedNpcNames.Count > 0)
             moveSummary += $"\n🧭 {string.Join(", ", escortedNpcNames)} keeps pace with you.";
+        if (loreDiscoveryNotice is not null)
+            moveSummary += $"\n{loreDiscoveryNotice}";
         if (questUpdate is not null)
             moveSummary += $"\n📜 {questUpdate}";
 
@@ -984,10 +1009,20 @@ public class GameEngine : IGameEngine
             (narratorQuestSummary, questReward) = await _questTracker.ProcessNarratorQuestUpdatesAsync(player, freeForm.QuestUpdates, target, ct);
         }
 
+        // Lore discovery: talking to this NPC
+        string? loreDiscoveryNotice = null;
+        if (_loreTracker is not null)
+        {
+            var discoveredLore = _loreTracker.DiscoverBySource(player, target.Id, "talk", player.ActiveWorldId);
+            loreDiscoveryNotice = LoreTracker.FormatDiscoveryNotice(discoveredLore);
+        }
+
         await _stateManager.SavePlayerAsync(player, ct);
 
         var greeting = !string.IsNullOrWhiteSpace(freeForm.Narration) ? freeForm.Narration : $"You approach {target.Name}.";
         var mechanicalSummary = greeting;
+        if (loreDiscoveryNotice is not null)
+            mechanicalSummary += $"\n{loreDiscoveryNotice}";
         if (questUpdate is not null)
             mechanicalSummary += $"\n📜 {questUpdate}";
         if (narratorQuestSummary is not null)
@@ -2379,7 +2414,8 @@ public class GameEngine : IGameEngine
     private static readonly HashSet<ActionType> PassthroughInConversation = new()
     {
         ActionType.Inventory, ActionType.Stats, ActionType.Spellbook, ActionType.Help,
-        ActionType.Journal, ActionType.CompletedQuests, ActionType.QuestInfo, ActionType.Map
+        ActionType.Journal, ActionType.CompletedQuests, ActionType.QuestInfo, ActionType.Map,
+        ActionType.Lorebook, ActionType.LoreInfo
     };
 
     private async Task<ActionResult?> ProcessConversationTurnAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
@@ -3616,6 +3652,32 @@ public class GameEngine : IGameEngine
             .FirstOrDefault(q => q.Name.Contains(nameOrId, StringComparison.OrdinalIgnoreCase));
     }
 
+    private ActionResult ProcessLorebook(PlayerCharacter player, GameAction action)
+    {
+        if (_loreTracker is null)
+            return new ActionResult { ActionId = action.Id, Success = true, MechanicalSummary = "Lorebook system not available." };
+
+        return new ActionResult
+        {
+            ActionId = action.Id,
+            Success = true,
+            MechanicalSummary = _loreTracker.FormatLorebook(player, player.ActiveWorldId)
+        };
+    }
+
+    private ActionResult ProcessLoreInfo(PlayerCharacter player, GameAction action)
+    {
+        if (_loreTracker is null || string.IsNullOrWhiteSpace(action.Target))
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "Usage: lore <topic name>" };
+
+        return new ActionResult
+        {
+            ActionId = action.Id,
+            Success = true,
+            MechanicalSummary = _loreTracker.FormatLoreEntry(player, action.Target)
+        };
+    }
+
     private static ActionResult ProcessHelp(GameAction action)
     {
         return new ActionResult
@@ -3650,6 +3712,8 @@ public class GameEngine : IGameEngine
                 `quest <name>` -- View details for a specific quest
                 `accept <quest>` -- Accept a quest
                 `abandon <quest>` -- Abandon an active quest
+                `lorebook` -- View your discovered lore
+                `lore <topic>` -- Read details about a specific lore entry
                 `travel to world <world-id>` -- Transfer to another world
                 `enter portal` -- Use an active portal in the current room
                 `help` -- Show this help message

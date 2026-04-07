@@ -45,5 +45,7 @@ public enum ActionType
     AcceptQuest,
     AbandonQuest,
     TravelWorld,
+    Lorebook,
+    LoreInfo,
     Unknown
 }

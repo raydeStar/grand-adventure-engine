@@ -306,6 +306,22 @@ public partial class CommandParser
             return action;
         }
 
+        // Lorebook — "lorebook", "lore", "knowledge"
+        if (LorebookRegex().IsMatch(input))
+        {
+            action.Type = ActionType.Lorebook;
+            return action;
+        }
+
+        // Lore info — "lore <name>" to read specific lore
+        var loreInfoMatch = LoreInfoRegex().Match(input);
+        if (loreInfoMatch.Success)
+        {
+            action.Type = ActionType.LoreInfo;
+            action.Target = loreInfoMatch.Groups["topic"].Value.Trim();
+            return action;
+        }
+
         // Help
         if (HelpRegex().IsMatch(input))
         {
@@ -442,4 +458,10 @@ public partial class CommandParser
 
     [GeneratedRegex(@"^(?:help|h|\?)$", RegexOptions.IgnoreCase)]
     private static partial Regex HelpRegex();
+
+    [GeneratedRegex(@"^(?:lorebook|lore\s*book|knowledge|discoveries|discovered\s+lore)$", RegexOptions.IgnoreCase)]
+    private static partial Regex LorebookRegex();
+
+    [GeneratedRegex(@"^(?:lore|lore\s+(?:about|info|entry|on))\s+(?<topic>.+)$", RegexOptions.IgnoreCase)]
+    private static partial Regex LoreInfoRegex();
 }

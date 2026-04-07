@@ -108,6 +108,7 @@ builder.Services.AddSingleton<IContentRegistryService>(sp => sp.GetRequiredServi
 
 builder.Services.AddSingleton<QuestEngine>();
 builder.Services.AddSingleton<QuestTracker>();
+builder.Services.AddSingleton<LoreTracker>();
 // RealmTravelService registration deferred below INarratorService (depends on it)
 builder.Services.AddSingleton<IGameEngine, GameEngine>();
 
