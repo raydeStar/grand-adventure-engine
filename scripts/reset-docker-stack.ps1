@@ -17,14 +17,17 @@ $projectRoot = Get-ProjectRoot -ScriptRoot $PSScriptRoot
 Write-Host 'Stopping docker compose stack while preserving data volumes...'
 Invoke-Compose -ProjectRoot $projectRoot -Arguments @('down', '--remove-orphans')
 
-$requestedGaePort = if ($PSBoundParameters.ContainsKey('GaePort')) {
+# Use the configured port directly — no auto-resolution.
+# The compose stack was just torn down so 8181 should be free.
+$resolvedGaePort = if ($PSBoundParameters.ContainsKey('GaePort')) {
     $GaePort
 }
 else {
     Get-ConfiguredPort -EnvironmentVariableName 'GAE_HOST_PORT' -Fallback 8181
 }
 
-$resolvedGaePort = Resolve-AvailableTcpPort -PreferredPort $requestedGaePort -ServiceName 'GAE dashboard'
+# Brief pause to let the OS release the port after docker down
+Start-Sleep -Seconds 2
 
 $BaseUrl = Resolve-BaseUrl -BaseUrl $BaseUrl -FallbackUrl "http://localhost:$resolvedGaePort"
 
