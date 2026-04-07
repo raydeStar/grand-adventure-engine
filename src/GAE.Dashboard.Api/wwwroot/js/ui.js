@@ -1266,20 +1266,33 @@ const UI = {
 
   wireOverviewBrowser() {
     const searchInput = this.$('overview-search-input');
-    const searchBtn = this.$('btn-overview-search');
     const resultsEl = this.$('overview-results');
+    let debounceTimer = null;
+
+    const triggerSearch = () => {
+      const q = searchInput?.value?.trim() || '';
+      if (!q) { this._ovShowWelcome(); return; }
+      if (q.length < 2) return;
+      this.ovSearch(q);
+    };
 
     if (searchInput) {
-      searchInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') this.ovSearch(searchInput.value);
-      });
       searchInput.addEventListener('input', () => {
-        if (!searchInput.value.trim()) this._ovShowWelcome();
+        clearTimeout(debounceTimer);
+        const q = searchInput.value.trim();
+        if (!q) { this._ovShowWelcome(); return; }
+        debounceTimer = setTimeout(triggerSearch, 250);
+      });
+      searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { clearTimeout(debounceTimer); triggerSearch(); }
       });
     }
-    if (searchBtn) {
-      searchBtn.addEventListener('click', () => this.ovSearch(this.$('overview-search-input')?.value || ''));
-    }
+
+    // Re-search when world or type filter changes
+    const worldFilter = this.$('overview-world-filter');
+    const typeFilter = this.$('overview-type-filter');
+    if (worldFilter) worldFilter.addEventListener('change', triggerSearch);
+    if (typeFilter) typeFilter.addEventListener('change', triggerSearch);
 
     if (resultsEl) {
       resultsEl.addEventListener('click', async (e) => {
