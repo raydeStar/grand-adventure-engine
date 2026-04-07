@@ -2503,38 +2503,66 @@ textarea { resize: vertical; min-height: 80px; }
 
 /* ───────────────────── CONTENT REGISTRY TAB ───────────────────── */
 
-.registry-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
-  flex-wrap: wrap;
+.registry-browse-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  min-height: 520px;
 }
-.registry-toolbar .btn { white-space: nowrap; }
-.registry-toolbar select {
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-  padding: 0.4rem 0.6rem;
-  color: var(--text);
-  font-family: var(--font);
-  font-size: 12px;
+.registry-browse-layout:has(.registry-editor-col:not(.hidden)) {
+  grid-template-columns: 1fr 1fr;
 }
-.registry-filter {
-  flex: 1;
-  min-width: 100px;
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-  padding: 0.4rem 0.6rem;
-  color: var(--text);
-  font-family: var(--font);
-  font-size: 12px;
-}
-.registry-filter:focus { border-color: var(--accent); outline: none; }
-.registry-count { color: var(--dim); font-size: 11px; margin-left: auto; }
 
-.registry-entries { display: grid; gap: 0.3rem; max-height: 400px; overflow-y: auto; }
+.registry-browse-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.registry-search-bar {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+.registry-search-bar select {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 0.6rem 0.6rem;
+  color: var(--dim);
+  font-family: var(--font);
+  font-size: 12px;
+}
+.registry-search-bar select:focus { border-color: var(--accent); outline: none; color: var(--accent); }
+.registry-search-bar input {
+  flex: 1 1 0;
+  min-width: 150px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 0.6rem 0.6rem;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+}
+.registry-search-bar input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 6px var(--glow); }
+.registry-search-bar input::placeholder { color: var(--dim); }
+.registry-count { color: var(--dim); font-size: 11px; white-space: nowrap; }
+
+.registry-list-actions {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+.registry-list-actions .btn { white-space: nowrap; }
+
+.registry-entries {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
 
 .registry-entry {
   background: var(--bg-input);
@@ -2546,6 +2574,7 @@ textarea { resize: vertical; min-height: 80px; }
   align-items: center;
   cursor: pointer;
   transition: border-color 0.15s;
+  flex-shrink: 0;
 }
 .registry-entry:hover { border-color: var(--accent); }
 .registry-entry-name { color: var(--accent); font-weight: bold; font-size: 13px; }
@@ -2561,12 +2590,22 @@ textarea { resize: vertical; min-height: 80px; }
 }
 .registry-entry-actions { display: flex; gap: 0.3rem; }
 
-/* Editor panel */
+/* Editor column */
+.registry-editor-col {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  overflow-y: auto;
+}
 .registry-editor-layout {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1rem;
-  margin-bottom: 1rem;
+  flex: 1;
 }
 
 .registry-ai-chat {

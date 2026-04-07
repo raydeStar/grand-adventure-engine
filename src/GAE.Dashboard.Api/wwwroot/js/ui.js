@@ -2384,9 +2384,9 @@ const UI = {
       case 'races':
         return `${(entry.traits || []).join(', ')}`;
       case 'monsters':
-        return `CR ${entry.challengeRating ?? '?'} | ${entry.type || '?'} | HP ${entry.hp ?? '?'}${entry.xpReward ? ` | ${entry.xpReward} XP` : ''}`;
+        return `Lv.${entry.minLevel ?? '?'}-${entry.maxLevel ?? '?'} | HP ${entry.baseHp ?? '?'} | ${entry.damageDice || '?'} | ${entry.rarity || 'common'}${entry.isBoss ? ' | BOSS' : ''}`;
       case 'quests':
-        return `${entry.type || '?'} | Lv.${entry.requiredLevel || 1}${entry.xpReward ? ` | ${entry.xpReward} XP` : ''}${entry.goldReward ? ` | ${entry.goldReward}g` : ''}`;
+        return `Lv.${entry.minLevel || 1} | ${(entry.stages || []).length} stages | Giver: ${entry.giverId || '?'}${entry.isOneTime === false ? ' | Repeatable' : ''}`;
       default:
         return entry.id || '';
     }

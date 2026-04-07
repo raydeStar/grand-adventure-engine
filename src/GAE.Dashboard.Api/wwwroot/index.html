@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=14" />
+  <link rel="stylesheet" href="css/style.css?v=15" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.7/signalr.min.js"
           crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="https://cdn.jsdelivr.net/npm/rot-js@2/dist/rot.min.js"
@@ -569,56 +569,58 @@
         <!-- ═══ CONTENT REGISTRY TAB ═══ -->
         <div class="admin-tab-content" data-admin-panel="registry">
           <div class="admin-tab-body">
-            <div class="panel">
-              <h3>Content Registry</h3>
-              <p class="panel-hint">Browse, create, and edit all game content. Use the AI generator to describe what you want and it fills in the details.</p>
-              <div class="registry-toolbar">
-                <select id="registry-world-select" title="Filter by world">
-                  <option value="">All Worlds</option>
-                </select>
-                <select id="registry-type-select">
-                  <option value="spells">Spells</option>
-                  <option value="items">Items</option>
-                  <option value="classes">Classes</option>
-                  <option value="races">Races</option>
-                  <option value="monsters">Monsters</option>
-                  <option value="quests">Quests</option>
-                </select>
-                <input type="text" id="registry-filter-input" placeholder="Filter by name..." autocomplete="off" class="registry-filter" />
-                <button class="btn btn-primary btn-sm" id="btn-refresh-registry" type="button">Refresh</button>
-                <button class="btn btn-primary btn-sm" id="btn-new-registry-entry" type="button">+ New</button>
-                <span class="registry-count" id="registry-count"></span>
+            <div class="registry-browse-layout">
+              <div class="registry-browse-main">
+                <div class="registry-search-bar">
+                  <select id="registry-world-select" title="Filter by world">
+                    <option value="">All Worlds</option>
+                  </select>
+                  <select id="registry-type-select">
+                    <option value="spells">Spells</option>
+                    <option value="items">Items</option>
+                    <option value="classes">Classes</option>
+                    <option value="races">Races</option>
+                    <option value="monsters">Monsters</option>
+                    <option value="quests">Quests</option>
+                  </select>
+                  <input type="text" id="registry-filter-input" placeholder="Search by name, id, or description..." autocomplete="off" />
+                  <span class="registry-count" id="registry-count"></span>
+                </div>
+                <div class="registry-list-actions">
+                  <button class="btn btn-primary btn-sm" id="btn-refresh-registry" type="button">Refresh</button>
+                  <button class="btn btn-primary btn-sm" id="btn-new-registry-entry" type="button">+ New</button>
+                </div>
+                <div id="registry-list" class="registry-entries"></div>
               </div>
-              <div id="registry-list" class="registry-entries"></div>
-            </div>
 
-            <!-- Editor / Generator panel -->
-            <div id="registry-editor-panel" class="panel hidden">
-              <h3 id="registry-editor-title">New Entry</h3>
-              <div class="registry-editor-layout">
-                <div class="registry-ai-chat">
-                  <div class="registry-chat-messages" id="registry-chat-messages">
-                    <div class="chat-msg system">Describe what you want to create or change. The AI will fill in the structured details for you.</div>
+              <!-- Editor / Generator panel -->
+              <div id="registry-editor-panel" class="registry-editor-col hidden">
+                <h3 id="registry-editor-title">New Entry</h3>
+                <div class="registry-editor-layout">
+                  <div class="registry-ai-chat">
+                    <div class="registry-chat-messages" id="registry-chat-messages">
+                      <div class="chat-msg system">Describe what you want to create or change. The AI will fill in the structured details for you.</div>
+                    </div>
+                    <div class="registry-chat-input-row">
+                      <input type="text" id="registry-chat-input" placeholder="e.g. A fire spell that does moderate damage, available to mages at level 3..." autocomplete="off" />
+                      <button class="btn btn-primary btn-sm" id="btn-registry-chat-send" type="button">Send</button>
+                    </div>
                   </div>
-                  <div class="registry-chat-input-row">
-                    <input type="text" id="registry-chat-input" placeholder="e.g. A fire spell that does moderate damage, available to mages at level 3..." autocomplete="off" />
-                    <button class="btn btn-primary btn-sm" id="btn-registry-chat-send" type="button">Send</button>
+                  <div class="registry-json-editor">
+                    <div class="registry-json-header">
+                      <span>JSON Preview</span>
+                      <button class="btn btn-secondary btn-sm" id="btn-registry-json-edit" type="button">Edit JSON</button>
+                    </div>
+                    <textarea id="registry-json-textarea" class="registry-json-area" spellcheck="false" rows="20"></textarea>
                   </div>
                 </div>
-                <div class="registry-json-editor">
-                  <div class="registry-json-header">
-                    <span>JSON Preview</span>
-                    <button class="btn btn-secondary btn-sm" id="btn-registry-json-edit" type="button">Edit JSON</button>
-                  </div>
-                  <textarea id="registry-json-textarea" class="registry-json-area" spellcheck="false" rows="20"></textarea>
+                <div class="registry-editor-actions">
+                  <button class="btn btn-primary" id="btn-registry-save" type="button">Save to Registry</button>
+                  <button class="btn btn-secondary" id="btn-registry-cancel" type="button">Cancel</button>
+                  <button class="btn btn-danger" id="btn-registry-delete" type="button">Delete</button>
                 </div>
               </div>
-              <div class="registry-editor-actions">
-                <button class="btn btn-primary" id="btn-registry-save" type="button">Save to Registry</button>
-                <button class="btn btn-secondary" id="btn-registry-cancel" type="button">Cancel</button>
-                <button class="btn btn-danger" id="btn-registry-delete" type="button">Delete</button>
-              </div>
-            </div>
+            </div><!-- /registry-browse-layout -->
           </div>
         </div>
 
@@ -667,7 +669,7 @@
   <script src="js/api.js?v=4"></script>
   <script src="js/signalr-client.js?v=3"></script>
   <script src="js/room-map.js?v=3"></script>
-  <script src="js/ui.js?v=15"></script>
+  <script src="js/ui.js?v=16"></script>
   <script src="js/app.js?v=16"></script>
 </body>
 </html>
