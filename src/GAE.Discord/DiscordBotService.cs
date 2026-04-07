@@ -3,6 +3,7 @@ using Discord.Net;
 using Discord.WebSocket;
 using GAE.Core.Interfaces;
 using GAE.Core.Models;
+using GAE.Core.Registry;
 using GAE.Engine.Worlds;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -22,6 +23,7 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
     private readonly IStateManager _stateManager;
     private readonly INarratorService _narrator;
     private readonly IWorldRepository _worldRepository;
+    private readonly IContentRegistryService _registry;
     private readonly ILogger<DiscordBotService> _logger;
     private readonly string _token;
     private readonly string _sessionsPath;
@@ -46,6 +48,7 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         IStateManager stateManager,
         INarratorService narrator,
         IWorldRepository worldRepository,
+        IContentRegistryService registry,
         ILogger<DiscordBotService> logger,
         string token,
         string dataDir = "")
@@ -55,6 +58,7 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         _stateManager = stateManager;
         _narrator = narrator;
         _worldRepository = worldRepository;
+        _registry = registry;
         _logger = logger;
         _token = token;
         _sessionsPath = string.IsNullOrEmpty(dataDir) ? "" : Path.Combine(dataDir, "pending-creations.json");
@@ -337,9 +341,38 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         bool isMentioned = message.MentionedUsers.Any(u => u.Id == botUser.Id);
         if (!isMentioned) return;
 
-        // Bot was @mentioned — respond helpfully with commands and status
+        // Strip the @mention to get the player's actual question
+        var question = content
+            .Replace($"<@{botUser.Id}>", "")
+            .Replace($"<@!{botUser.Id}>", "")
+            .Trim();
+
         var player = await _stateManager.GetPlayerByDiscordIdAsync(discordId);
-        if (player is not null)
+
+        // No character yet — welcome message with getting-started info
+        if (player is null)
+        {
+            if (string.IsNullOrWhiteSpace(question) || question.Length < 3)
+            {
+                await message.Channel.SendMessageAsync(
+                    $"Hey {message.Author.Mention}! Welcome to the Grand Adventure Engine! ⚔️\n\n" +
+                    "**Getting Started:**\n" +
+                    "> `/create` — Begin your adventure! I'll help you create a character.\n\n" +
+                    "**Other Commands:**\n" +
+                    "> `/stats` — View your character sheet\n" +
+                    "> `/inventory` — Check your gear\n" +
+                    "> `/map` — See discovered rooms\n" +
+                    "> `/help` — Full command list");
+                return;
+            }
+
+            // Even without a character, let them chat with the guide
+            await HandleGuideChat(message, null, null, question);
+            return;
+        }
+
+        // Player exists — if it's just a bare @mention with no question, show status
+        if (string.IsNullOrWhiteSpace(question) || question.Length < 3)
         {
             var link = player.ThreadId.HasValue ? $"<#{player.ThreadId}>" : "your adventure thread";
             await message.Channel.SendMessageAsync(
@@ -349,19 +382,117 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
                 "> `/stats` — View your character sheet\n" +
                 "> `/inventory` — Check your gear\n" +
                 "> `/map` — See discovered rooms\n" +
-                "> `/restart` — Start over with a new character");
+                "> `/restart` — Start over with a new character\n\n" +
+                "*Or just @mention me with a question and I'll answer in character!*");
+            return;
         }
-        else
+
+        // Player asked a question — guide chat!
+        await HandleGuideChat(message, player, player.ActiveWorldId, question);
+    }
+
+    private async Task HandleGuideChat(SocketUserMessage message, PlayerCharacter? player, string? worldId, string question)
+    {
+        // Show typing indicator while the AI thinks
+        using var typing = message.Channel.EnterTypingState();
+
+        try
         {
+            // Resolve the narrator voice
+            NarratorPreset? narrator = null;
+            if (player?.NarratorPresetId is not null)
+                narrator = _registry.NarratorPresets.GetById(player.NarratorPresetId);
+
+            if (narrator is null && worldId is not null)
+            {
+                var world = await _worldRepository.GetWorldAsync(worldId);
+                if (world?.DefaultNarratorPresetId is not null)
+                    narrator = _registry.NarratorPresets.GetById(world.DefaultNarratorPresetId);
+            }
+
+            // Fall back to first selectable narrator if none set
+            narrator ??= _registry.NarratorPresets.GetAll()
+                .Where(n => n.IsSelectable)
+                .OrderBy(n => n.SortOrder)
+                .FirstOrDefault();
+
+            // Build discovered lore context for the player
+            var loreContext = "";
+            if (player is not null && player.DiscoveredLore.Count > 0)
+            {
+                var discoveredEntries = player.DiscoveredLore
+                    .Select(id => _registry.LoreEntries.GetById(id))
+                    .Where(e => e is not null)
+                    .Take(15) // Cap to avoid prompt bloat
+                    .Select(e => $"- **{e!.Name}**: {e.Content}")
+                    .ToList();
+
+                if (discoveredEntries.Count > 0)
+                    loreContext = "\n\nLore the player has discovered (use this to inform your answers):\n" + string.Join("\n", discoveredEntries);
+            }
+
+            // Build world context
+            var worldContext = "";
+            if (worldId is not null)
+            {
+                var world = await _worldRepository.GetWorldAsync(worldId);
+                if (world is not null)
+                    worldContext = $"\nWorld: {world.Name} — {world.Description}";
+            }
+
+            // Build the narrator voice block
+            var voiceBlock = narrator is not null
+                ? $"You are **{narrator.Name}**, the player's guide.\n" +
+                  $"Archetype: {narrator.Archetype}\n" +
+                  $"Personality: {narrator.PersonalityPrompt}\n" +
+                  $"Lore delivery style: {narrator.LoreDeliveryStyle ?? "engaging and in-character"}\n"
+                : "You are a mysterious, world-weary guide in a fantasy RPG. Speak with personality and flavor.\n";
+
+            var playerContext = player is not null
+                ? $"You are speaking with **{player.Name}**, a Lv.{player.Level} {player.Race} {player.Class}."
+                : "You are speaking with a newcomer who hasn't created a character yet.";
+
+            var prompt = $"""
+                {voiceBlock}
+                {playerContext}
+                {worldContext}
+                {loreContext}
+
+                This is a casual, in-character conversation in the tavern (the public channel).
+                You are NOT narrating gameplay — no game state changes, no combat, no movement.
+                Just chat as the guide/narrator. Be helpful, entertaining, and stay in character.
+                If they ask about game lore, draw from what they've discovered.
+                If they ask about mechanics, answer helpfully but in character.
+                If they haven't started yet, encourage them to use /create.
+
+                Keep your response under 300 words. Use Discord markdown.
+
+                The player says: "{question}"
+                """;
+
+            await _narratorLock.WaitAsync();
+            string response;
+            try
+            {
+                response = await _narrator.GenerateContentAsync("text", prompt, null);
+            }
+            finally
+            {
+                _narratorLock.Release();
+            }
+
+            // Discord has a 2000 char limit — truncate if needed
+            if (response.Length > 1900)
+                response = response[..1900] + "\n\n*...the guide trails off, lost in thought.*";
+
+            await message.Channel.SendMessageAsync($"{message.Author.Mention} {response}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Guide chat failed for {User}", message.Author.Username);
             await message.Channel.SendMessageAsync(
-                $"Hey {message.Author.Mention}! Welcome to the Grand Adventure Engine! ⚔️\n\n" +
-                "**Getting Started:**\n" +
-                "> `/create` — Begin your adventure! I'll help you create a character.\n\n" +
-                "**Other Commands:**\n" +
-                "> `/stats` — View your character sheet\n" +
-                "> `/inventory` — Check your gear\n" +
-                "> `/map` — See discovered rooms\n" +
-                "> `/help` — Full command list");
+                $"{message.Author.Mention} *The guide opens their mouth to speak, but the words fade to silence.* " +
+                "(The AI narrator is unavailable right now. Try again in a moment!)");
         }
     }
 
