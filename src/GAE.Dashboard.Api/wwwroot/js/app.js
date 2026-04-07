@@ -464,9 +464,9 @@
   }
 
   function switchAdminTab(tabName) {
-    if (tabName === 'dm-console') {
-      tabName = 'overview';
-    }
+    // Migrate legacy stored tab names to current names
+    if (tabName === 'dm-console') tabName = 'overview';
+    if (tabName === 'world-actions' || tabName === 'commands' || tabName === 'mutations') tabName = 'tools';
 
     document.querySelectorAll('[data-admin-tab]').forEach((btn) => {
       btn.classList.toggle('active', btn.dataset.adminTab === tabName);
@@ -480,16 +480,15 @@
       return;
     }
 
-    // Auto-load conversation logs when switching to the logs tab
+    // Auto-load data when switching tabs
     if (tabName === 'logs') {
       UI.loadConversationLogs();
     }
-    // Auto-load registry when switching to registry tab
     if (tabName === 'registry') {
       UI.loadRegistry();
     }
-    // Auto-load worlds when switching to the world tab
-    if (tabName === 'world-actions') {
+    // World management now lives inside DM Console
+    if (tabName === 'overview') {
       void refreshWorlds();
     }
   }
