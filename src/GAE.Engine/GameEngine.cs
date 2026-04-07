@@ -143,6 +143,8 @@ public class GameEngine : IGameEngine
             ActionType.TravelWorld => await ProcessTravelWorldAsync(player, action, ct),
             ActionType.Lorebook => ProcessLorebook(player, action),
             ActionType.LoreInfo => ProcessLoreInfo(player, action),
+            ActionType.Narrator => ProcessNarratorList(player, action),
+            ActionType.SetNarrator => ProcessSetNarrator(player, action),
             _ => await ProcessFreeFormActionAsync(player, action, ct)
         };
 
@@ -169,6 +171,8 @@ public class GameEngine : IGameEngine
             && action.Type != ActionType.AbandonQuest
             && action.Type != ActionType.Lorebook
             && action.Type != ActionType.LoreInfo
+            && action.Type != ActionType.Narrator
+            && action.Type != ActionType.SetNarrator
             && action.Type != ActionType.Unknown;
 
         if (shouldNarrate)
@@ -2415,7 +2419,8 @@ public class GameEngine : IGameEngine
     {
         ActionType.Inventory, ActionType.Stats, ActionType.Spellbook, ActionType.Help,
         ActionType.Journal, ActionType.CompletedQuests, ActionType.QuestInfo, ActionType.Map,
-        ActionType.Lorebook, ActionType.LoreInfo
+        ActionType.Lorebook, ActionType.LoreInfo,
+        ActionType.Narrator, ActionType.SetNarrator
     };
 
     private async Task<ActionResult?> ProcessConversationTurnAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
@@ -3678,6 +3683,83 @@ public class GameEngine : IGameEngine
         };
     }
 
+    private ActionResult ProcessNarratorList(PlayerCharacter player, GameAction action)
+    {
+        var allPresets = _registry?.NarratorPresets.GetAll() ?? [];
+        var presets = allPresets.Where(p => p.IsSelectable).OrderBy(p => p.SortOrder).ToList();
+
+        if (presets.Count == 0)
+            return new ActionResult { ActionId = action.Id, Success = true, MechanicalSummary = "No narrator presets are available." };
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("🎭 **NARRATOR PERSONALITIES**\n");
+
+        var currentPresetId = player.NarratorPresetId;
+        foreach (var preset in presets)
+        {
+            var active = string.Equals(preset.Id, currentPresetId, StringComparison.OrdinalIgnoreCase) ? " ✅" : "";
+            sb.AppendLine($"**{preset.Name}**{active} — *{preset.Archetype}*");
+            if (!string.IsNullOrWhiteSpace(preset.Description))
+                sb.AppendLine($"  {preset.Description}");
+            sb.AppendLine();
+        }
+
+        if (string.IsNullOrWhiteSpace(currentPresetId))
+            sb.AppendLine("*Currently using the default narrator voice.*");
+
+        sb.AppendLine("\nUse `narrator <name>` to change your narrator.");
+        return new ActionResult { ActionId = action.Id, Success = true, MechanicalSummary = sb.ToString().TrimEnd() };
+    }
+
+    private ActionResult ProcessSetNarrator(PlayerCharacter player, GameAction action)
+    {
+        if (string.IsNullOrWhiteSpace(action.Target))
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "Usage: narrator <name>" };
+
+        var target = action.Target.Trim();
+
+        // Handle "default" / "reset" / "none"
+        if (target.Equals("default", StringComparison.OrdinalIgnoreCase)
+            || target.Equals("reset", StringComparison.OrdinalIgnoreCase)
+            || target.Equals("none", StringComparison.OrdinalIgnoreCase))
+        {
+            player.NarratorPresetId = null;
+            return new ActionResult
+            {
+                ActionId = action.Id,
+                Success = true,
+                MechanicalSummary = "🎭 Narrator reset to the default voice.",
+                StateChanges = [new StateChange { EntityType = "player", EntityId = player.Id, Property = "narratorPresetId", OldValue = player.NarratorPresetId, NewValue = "default" }]
+            };
+        }
+
+        // Find by name (partial match) or ID
+        var preset = _registry?.NarratorPresets.GetById(target)
+            ?? _registry?.NarratorPresets.FindByName(target)
+            ?? _registry?.NarratorPresets.GetAll()
+                .FirstOrDefault(p => p.Name.Contains(target, StringComparison.OrdinalIgnoreCase) && p.IsSelectable);
+
+        if (preset is null)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"No narrator preset found matching \"{target}\". Use `narrator` to see available options." };
+
+        if (!preset.IsSelectable)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"\"{preset.Name}\" is not available for selection." };
+
+        var oldPresetId = player.NarratorPresetId;
+        player.NarratorPresetId = preset.Id;
+        var greeting = !string.IsNullOrWhiteSpace(preset.GreetingText)
+            ? $"\n\n*{preset.GreetingText}*"
+            : "";
+
+        return new ActionResult
+        {
+            ActionId = action.Id,
+            Success = true,
+            MechanicalSummary = $"🎭 Narrator changed to **{preset.Name}** ({preset.Archetype}).{greeting}",
+            StateChanges = [new StateChange { EntityType = "player", EntityId = player.Id, Property = "narratorPresetId", OldValue = oldPresetId, NewValue = preset.Id }]
+        };
+    }
+
     private static ActionResult ProcessHelp(GameAction action)
     {
         return new ActionResult
@@ -3714,6 +3796,8 @@ public class GameEngine : IGameEngine
                 `abandon <quest>` -- Abandon an active quest
                 `lorebook` -- View your discovered lore
                 `lore <topic>` -- Read details about a specific lore entry
+                `narrator` -- View available narrator personalities
+                `narrator <name>` -- Change your narrator's personality
                 `travel to world <world-id>` -- Transfer to another world
                 `enter portal` -- Use an active portal in the current room
                 `help` -- Show this help message

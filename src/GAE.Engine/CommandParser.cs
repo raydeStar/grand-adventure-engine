@@ -322,6 +322,22 @@ public partial class CommandParser
             return action;
         }
 
+        // Narrator — "narrator", "narrators", "voice", "personality"
+        if (NarratorListRegex().IsMatch(input))
+        {
+            action.Type = ActionType.Narrator;
+            return action;
+        }
+
+        // Set narrator — "narrator <name>", "set narrator <name>"
+        var narratorMatch = SetNarratorRegex().Match(input);
+        if (narratorMatch.Success)
+        {
+            action.Type = ActionType.SetNarrator;
+            action.Target = narratorMatch.Groups["name"].Value.Trim();
+            return action;
+        }
+
         // Help
         if (HelpRegex().IsMatch(input))
         {
@@ -464,4 +480,10 @@ public partial class CommandParser
 
     [GeneratedRegex(@"^(?:lore|lore\s+(?:about|info|entry|on))\s+(?<topic>.+)$", RegexOptions.IgnoreCase)]
     private static partial Regex LoreInfoRegex();
+
+    [GeneratedRegex(@"^(?:narrator|narrators|voice|personality|voices)$", RegexOptions.IgnoreCase)]
+    private static partial Regex NarratorListRegex();
+
+    [GeneratedRegex(@"^(?:(?:set\s+)?narrator|(?:set\s+)?voice|(?:change\s+)?narrator)\s+(?<name>.+)$", RegexOptions.IgnoreCase)]
+    private static partial Regex SetNarratorRegex();
 }

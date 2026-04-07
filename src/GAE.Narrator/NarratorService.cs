@@ -45,18 +45,12 @@ public class NarratorService : INarratorService
         if (context.Action.Type == ActionType.Move && context.MechanicalResult.Success)
             return await NarrateRoomArrivalAsync(context, ct);
 
-        var systemPrompt = """
-            You are the narrator of a dark-fantasy text adventure with the comic sensibility of
-            classic Sierra point-and-click games (Quest for Glory, King's Quest, Space Quest).
+        var voiceHint = context.MechanicalResult.Success ? "success" : "failure";
+        var voiceBlock = ResolveNarratorVoice(context.Player, voiceHint);
+        var systemPrompt = $"""
+            You are the narrator of a dark-fantasy text adventure.
 
-            VOICE:
-            - Second person ("You", "your", "you"). You are the dungeon master narrating TO the player.
-            - Dry, sardonic wit. Absurd observations and understated reactions.
-            - When the player FAILS, make it entertaining — slapstick, ironic commentary, the universe conspiring.
-              Never just say "nothing happens." Make failures *memorable and funny.*
-            - When the player SUCCEEDS, make them feel cool, but sneak in a wry aside.
-            - Use concrete sensory detail and at least one vivid visual focal point.
-            - Write 2-4 sentences. Be punchy, not flowery.
+            {voiceBlock}
 
             RULES:
             - Narrate what the engine decided. Never contradict the mechanical result.
@@ -118,9 +112,9 @@ public class NarratorService : INarratorService
     /// </summary>
     private async Task<string> NarrateRoomArrivalAsync(NarratorContext context, CancellationToken ct)
     {
-        var systemPrompt = """
-            You are the narrator of a dark-fantasy text adventure with the comic sensibility of
-            classic Sierra point-and-click games (Quest for Glory, King's Quest, Space Quest).
+        var voiceBlock = ResolveNarratorVoice(context.Player);
+        var systemPrompt = $"""
+            You are the narrator of a dark-fantasy text adventure.
 
             The player just walked into a new room. The room's NAME, DESCRIPTION, NPCs, ITEMS, and
             EXITS are already displayed in a separate info card — DO NOT repeat any of that.
@@ -133,9 +127,9 @@ public class NarratorService : INarratorService
             - Atmosphere/mood: the vibe of the space as the player steps in. Tension, warmth, dread, boredom.
             - The player's personal state: are they tired, wounded, confident, nervous?
 
-            VOICE:
-            - Second person ("You", "your", "you"). You are the dungeon master narrating TO the player.
-            - Dry, sardonic Sierra wit. Vivid but concise.
+            {voiceBlock}
+
+            ADDITIONAL RULES:
             - Write 2-3 sentences. This is a quick establishing shot, not a novel paragraph.
             - NEVER name the room. NEVER list exits, NPCs, or items — the card handles that.
             - NEVER say "You enter [room name]" or "You find yourself in [description]."
@@ -644,17 +638,13 @@ public class NarratorService : INarratorService
     public async Task<FreeFormResponse> ProcessFreeFormAsync(PlayerCharacter player, Room room, string rawInput, IReadOnlyList<StoryEntry> recentStory, CancellationToken ct = default)
     {
 
-        var systemPrompt = """
-            You are the Game Master for a dark-fantasy text-adventure RPG with the comic sensibility
-            of classic Sierra point-and-click adventures (Quest for Glory, King's Quest, Space Quest).
-
-            VOICE & TONE:
-            - Dry, sardonic wit. You love the absurd. Channel the narrator from Space Quest who delights
-              in describing your failures in excruciating, hilarious detail.
+        var voiceBlock = ResolveNarratorVoice(player);
+        var systemPrompt = "You are the Game Master for a dark-fantasy text-adventure RPG.\n\n"
+            + voiceBlock + "\n\n" + """
+            TONE GUIDELINES:
             - Failures should be FUNNY. Slapstick, ironic consequences, bystander reactions, deadpan commentary.
-              Never just "nothing happens." If someone tries to pee on a gate, describe the awkward attempt,
-              the wind direction, a guard's horrified expression — make the player laugh even when they fail.
-            - Successes can be cool but with a wry edge — the universe is amused by heroism.
+              Never just "nothing happens." Make the player laugh even when they fail.
+            - Successes can be cool but with a wry edge.
             - NPCs react with PERSONALITY. A gruff barmaid rolls her eyes. A guard reaches for his weapon
               not because he's threatened but because he can't believe what he just saw.
             - For silly/harmless actions (emotes, jokes, bodily functions), narrate them literally and locally
@@ -808,12 +798,15 @@ public class NarratorService : INarratorService
             ? string.Join(", ", npc.DispositionState.MemoryFlags)
             : "none";
 
+        var narratorVoice = ResolveNarratorVoice(player);
         var systemPrompt = $$"""
             You are now voicing {{npc.Name}} in direct conversation with the player.
-            Channel the memorable NPCs of classic Sierra adventure games — each person has a distinct
-            voice, quirks, and opinions. They are NOT quest dispensers; they are characters with lives.
+            Each NPC has a distinct voice, quirks, and opinions. They are NOT quest dispensers; they are characters with lives.
 
-            VOICE:
+            NARRATOR PERSONALITY (for stage directions and framing text around dialogue):
+            {{narratorVoice}}
+
+            NPC VOICE:
             - Write the NPC's actual dialogue in quotes. Give them verbal tics, catchphrases, or speech patterns.
             - Include physical reactions and body language — eye rolls, sighs, smirks, crossed arms.
             - The NPC has a PERSONALITY. A gruff barmaid doesn't suddenly become helpful because the player asked
@@ -1086,13 +1079,16 @@ public class NarratorService : INarratorService
             ? $"\n            Enemy memory: {string.Join(", ", enemy.DispositionState.MemoryFlags)}"
             : "";
 
+        var combatVoice = ResolveNarratorVoice(player);
         var systemPrompt = $$"""
             Combat is active against {{enemy.Name}}.
             Enemy HP: {{enemy.Hp ?? 0}}/{{enemy.MaxHp ?? 0}}
             Player HP: {{player.Hp}}/{{player.MaxHp}}
             Enemy faction: {{enemy.Faction}}{{combatMemory}}
 
-            VOICE: Narrate combat with dramatic flair and dark humor. Misses should be entertaining —
+            {{combatVoice}}
+
+            COMBAT NARRATION: Narrate combat with dramatic flair. Misses should be entertaining —
             a sword clangs off a helmet and rings like a dinner bell, an arrow embeds itself in a
             perfectly innocent wall. Hits should feel impactful and visceral. If someone does something
             stupid in combat, the narrator should notice.
@@ -1681,6 +1677,56 @@ public class NarratorService : INarratorService
         scopes.AddRange(environmentTags.Take(3).Select(t => t.ToLowerInvariant()));
         return scopes;
     }
+
+    // ── Narrator personality resolution ──────────────────────────────────────
+
+    /// <summary>Default Sierra-style voice block when no preset is selected or available.</summary>
+    private const string DefaultVoiceBlock = """
+        VOICE:
+        - Second person ("You", "your", "you"). You are the dungeon master narrating TO the player.
+        - Dry, sardonic wit. Absurd observations and understated reactions.
+        - When the player FAILS, make it entertaining — slapstick, ironic commentary, the universe conspiring.
+          Never just say "nothing happens." Make failures *memorable and funny.*
+        - When the player SUCCEEDS, make them feel cool, but sneak in a wry aside.
+        - Use concrete sensory detail and at least one vivid visual focal point.
+        - Write 2-4 sentences. Be punchy, not flowery.
+        """;
+
+    /// <summary>
+    /// Resolves the narrator voice/personality block for the given player.
+    /// If the player has a NarratorPresetId and it exists in the registry, uses that preset's
+    /// PersonalityPrompt (plus context-specific style hints). Otherwise falls back to the default Sierra voice.
+    /// </summary>
+    private string ResolveNarratorVoice(string? presetId, string? situationHint = null)
+    {
+        if (string.IsNullOrWhiteSpace(presetId) || _registry is null)
+            return DefaultVoiceBlock;
+
+        var preset = _registry.NarratorPresets.GetById(presetId);
+        if (preset is null || string.IsNullOrWhiteSpace(preset.PersonalityPrompt))
+            return DefaultVoiceBlock;
+
+        var sb = new StringBuilder();
+        sb.AppendLine("VOICE:");
+        sb.AppendLine("- Second person (\"You\", \"your\", \"you\"). You are the dungeon master narrating TO the player.");
+        sb.AppendLine($"- {preset.PersonalityPrompt}");
+
+        // Situational style overrides from the preset
+        if (situationHint is "failure" && !string.IsNullOrWhiteSpace(preset.FailureReactionStyle))
+            sb.AppendLine($"- For failures: {preset.FailureReactionStyle}");
+        else if (situationHint is "success" && !string.IsNullOrWhiteSpace(preset.SuccessReactionStyle))
+            sb.AppendLine($"- For successes: {preset.SuccessReactionStyle}");
+        else if (situationHint is "lore" && !string.IsNullOrWhiteSpace(preset.LoreDeliveryStyle))
+            sb.AppendLine($"- For lore delivery: {preset.LoreDeliveryStyle}");
+
+        sb.AppendLine("- Use concrete sensory detail and at least one vivid visual focal point.");
+        sb.AppendLine("- Write 2-4 sentences. Be punchy, not flowery.");
+        return sb.ToString();
+    }
+
+    /// <summary>Resolves narrator voice from a PlayerCharacter.</summary>
+    private string ResolveNarratorVoice(PlayerCharacter player, string? situationHint = null)
+        => ResolveNarratorVoice(player.NarratorPresetId, situationHint);
 
     private static string FallbackNarration() =>
         "The scene settles into a plain, unadorned stillness for a moment, yielding only the bare facts.";

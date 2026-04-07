@@ -47,5 +47,7 @@ public enum ActionType
     TravelWorld,
     Lorebook,
     LoreInfo,
+    Narrator,
+    SetNarrator,
     Unknown
 }
