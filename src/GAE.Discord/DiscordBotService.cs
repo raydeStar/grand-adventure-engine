@@ -396,6 +396,9 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         // Show typing indicator while the AI thinks
         using var typing = message.Channel.EnterTypingState();
 
+        // Default to the Discord starting world if no world specified
+        worldId ??= WorldDefaults.DefaultWorldId;
+
         try
         {
             // Resolve the narrator voice
@@ -675,13 +678,18 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         _creationSessions[userId] = session;
         PersistCreationSessions();
 
-        // Try to load the world's saved intro first
+        // Try to load the Discord default world's saved intro first
         string? savedIntro = null;
         World? activeWorld = null;
         try
         {
-            var worlds = await _worldRepository.GetAllWorldsAsync();
-            activeWorld = worlds.FirstOrDefault(w => w.IsActive);
+            activeWorld = await _worldRepository.GetWorldAsync(WorldDefaults.DefaultWorldId);
+            if (activeWorld is null)
+            {
+                // Fallback: pick the first active world
+                var worlds = await _worldRepository.GetAllWorldsAsync();
+                activeWorld = worlds.FirstOrDefault(w => w.IsActive);
+            }
             if (activeWorld is not null && !string.IsNullOrWhiteSpace(activeWorld.CharacterCreationIntro))
                 savedIntro = activeWorld.CharacterCreationIntro;
         }
