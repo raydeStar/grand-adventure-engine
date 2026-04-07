@@ -74,9 +74,9 @@ if (-not $SkipWait) {
 if ($ReseedContent) {
     Write-Host 'Re-seeding rooms via reset-world...'
     try {
-        $session = New-DashboardSession -BaseUrl $BaseUrl `
-            -Username ($env:GAE_DASHBOARD_ADMIN_USERNAME ?? 'admin') `
-            -Password ($env:GAE_DASHBOARD_ADMIN_PASSWORD ?? 'GAE-Admin-Local!123')
+        $adminUser = Get-DefaultValue -Value $env:GAE_DASHBOARD_ADMIN_USERNAME -Fallback 'admin'
+        $adminPass = Get-DefaultValue -Value $env:GAE_DASHBOARD_ADMIN_PASSWORD -Fallback 'GAE-Admin-Local!123'
+        $session = New-DashboardSession -BaseUrl $BaseUrl -Username $adminUser -Password $adminPass
 
         $null = Invoke-RestMethod `
             -Uri "$BaseUrl/api/dashboard/admin/reset-world" `
