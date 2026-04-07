@@ -782,6 +782,87 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         await thread.SendMessageAsync(intro);
     }
 
+    /// <summary>
+    /// After character creation is finalized, the narrator describes the player arriving
+    /// in the world — a cinematic moment before the room card appears.
+    /// </summary>
+    private async Task SendArrivalNarration(SocketThreadChannel thread, PlayerCharacter player)
+    {
+        try
+        {
+            await thread.TriggerTypingAsync();
+
+            var world = await GetDiscordDefaultWorldAsync();
+
+            // Resolve narrator
+            NarratorPreset? narrator = null;
+            if (player.NarratorPresetId is not null)
+                narrator = _registry.NarratorPresets.GetById(player.NarratorPresetId);
+            if (narrator is null && world?.DefaultNarratorPresetId is not null)
+                narrator = _registry.NarratorPresets.GetById(world.DefaultNarratorPresetId);
+            narrator ??= _registry.NarratorPresets.GetAll()
+                .Where(n => n.IsSelectable).OrderBy(n => n.SortOrder).FirstOrDefault();
+
+            // Get the spawn room for flavor
+            var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId);
+
+            var voiceBlock = narrator is not null
+                ? $"You are **{narrator.Name}**, the narrator.\nArchetype: {narrator.Archetype}\nPersonality: {narrator.PersonalityPrompt}\n"
+                : "You are a mysterious narrator in a fantasy RPG.\n";
+
+            var worldContext = world is not null
+                ? $"World: {world.Name} — {world.Description}"
+                : "";
+
+            var roomContext = room is not null
+                ? $"The player's starting location is: {room.Name} — {room.Description}"
+                : "The player arrives at a tavern.";
+
+            var prompt = $"""
+                {voiceBlock}
+                {worldContext}
+                {roomContext}
+
+                The player just finished creating their character. Write a short, atmospheric
+                arrival scene describing them materializing/arriving in the world for the first time.
+
+                Character: **{player.Name}**, a Lv.{player.Level} {player.Race} {player.Class}.
+                Backstory hint: {player.Backstory ?? "mysterious origins"}
+
+                Guidelines:
+                - Address the player in second person ("You step through...", "The mists part...")
+                - Describe the sensory experience of arriving — sights, sounds, smells
+                - End with a hint of what they see (the room/tavern) but don't describe the full room
+                - Stay in your narrator voice
+                - 2-3 short paragraphs, use Discord markdown (bold, italics)
+                - Return ONLY the narration, no JSON
+                """;
+
+            await _narratorLock.WaitAsync();
+            string narration;
+            try
+            {
+                narration = await _narrator.GenerateContentAsync("text", prompt, null);
+            }
+            finally
+            {
+                _narratorLock.Release();
+            }
+
+            if (narration.Length > 1900)
+                narration = narration[..1900] + "\n*...the vision sharpens.*";
+
+            await thread.SendMessageAsync(narration);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to generate arrival narration for {Player}", player.Name);
+            // Graceful fallback — just skip the arrival narration
+            await thread.SendMessageAsync(
+                $"*The mists part, and **{player.Name}** steps into a new world...*");
+        }
+    }
+
     private async Task HandleAiCreationInputAsync(SocketUserMessage message, SocketThreadChannel thread,
         AiCreationSession session, string discordId)
     {
@@ -951,6 +1032,10 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
 
         await thread.ModifyAsync(props => props.Name = $"\u2694\uFE0F {player.Name}'s Adventure");
         await SendCharacterCreatedEmbed(thread, player);
+
+        // Generate a narrated arrival scene using the world's narrator voice
+        await SendArrivalNarration(thread, player);
+
         await SendRoomEntryAsync(thread, player);
 
         // Notify admin channel
