@@ -86,6 +86,13 @@ public class PlayerConfiguration : IEntityTypeConfiguration<PlayerEntity>
                 v => JsonSerializer.Serialize(v, JsonDefaults.Options),
                 v => JsonSerializer.Deserialize<InteractionState>(v, JsonDefaults.Options) ?? new InteractionState());
 
+        // Lore & narrator
+        builder.Property(p => p.DiscoveredLore).HasColumnName("discovered_lore").HasColumnType("jsonb")
+            .HasConversion(
+                v => JsonSerializer.Serialize(v, JsonDefaults.Options),
+                v => JsonSerializer.Deserialize<List<string>>(v, JsonDefaults.Options) ?? new List<string>());
+        builder.Property(p => p.NarratorPresetId).HasColumnName("narrator_preset_id");
+
         // Indexes
         builder.HasIndex(p => p.DiscordId).IsUnique().HasDatabaseName("ix_players_discord_id")
             .HasFilter("discord_id IS NOT NULL");

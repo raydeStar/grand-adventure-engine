@@ -44,6 +44,10 @@ public class PlayerEntity
     public List<QuestProgress> QuestLog { get; set; } = [];
     public InteractionState Interaction { get; set; } = new();
 
+    // Lore & narrator
+    public List<string> DiscoveredLore { get; set; } = [];
+    public string? NarratorPresetId { get; set; }
+
     // Timestamps
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset LastActiveAt { get; set; }
@@ -83,6 +87,8 @@ public class PlayerEntity
         Spellbook = Spellbook,
         QuestLog = QuestLog,
         Interaction = Interaction,
+        DiscoveredLore = DiscoveredLore,
+        NarratorPresetId = NarratorPresetId,
         CreatedAt = CreatedAt,
         LastActiveAt = LastActiveAt
     };
@@ -122,6 +128,8 @@ public class PlayerEntity
         Spellbook = p.Spellbook,
         QuestLog = p.QuestLog,
         Interaction = p.Interaction,
+        DiscoveredLore = p.DiscoveredLore,
+        NarratorPresetId = p.NarratorPresetId,
         CreatedAt = p.CreatedAt,
         LastActiveAt = p.LastActiveAt
     };
@@ -160,6 +168,8 @@ public class PlayerEntity
         Spellbook = p.Spellbook;
         QuestLog = p.QuestLog;
         Interaction = p.Interaction;
+        DiscoveredLore = p.DiscoveredLore;
+        NarratorPresetId = p.NarratorPresetId;
         CreatedAt = p.CreatedAt;
         LastActiveAt = p.LastActiveAt;
     }
