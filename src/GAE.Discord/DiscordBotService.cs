@@ -164,8 +164,50 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         var existing = await _stateManager.GetPlayerByDiscordIdAsync(discordId);
         if (existing is not null)
         {
-            var threadLink = existing.ThreadId.HasValue ? $"<#{existing.ThreadId}>" : "your adventure thread";
-            await command.FollowupAsync($"You already have a character: **{existing.Name}**. Head to {threadLink} to play!", ephemeral: true);
+            // Verify the thread still exists — if deleted/lost, recreate it
+            SocketThreadChannel? existingThread = null;
+            if (existing.ThreadId.HasValue && command.Channel is SocketTextChannel parentChannel)
+            {
+                existingThread = parentChannel.Guild.GetChannel(existing.ThreadId.Value) as SocketThreadChannel;
+            }
+
+            if (existingThread is null)
+            {
+                // Thread is gone — recreate it and re-link the player
+                _logger.LogWarning("Thread {ThreadId} for player {Name} no longer exists, recreating",
+                    existing.ThreadId, existing.Name);
+
+                var newThread = await CreatePlayerThreadAsync(command.Channel, command.User);
+                if (newThread is null)
+                {
+                    await command.FollowupAsync("Your adventure thread was lost and I couldn't create a new one. Make sure I have Thread permissions.", ephemeral: true);
+                    return;
+                }
+
+                existing.ThreadId = newThread.Id;
+                await _stateManager.SavePlayerAsync(existing);
+
+                await command.FollowupAsync(
+                    $"Welcome back, **{existing.Name}**! Your old thread was lost, so I created a new one. Head to <#{newThread.Id}> to continue your adventure!\n" +
+                    $"*(If you'd rather start over with a new character, use `/restart`.)*", ephemeral: true);
+
+                // Send a welcome-back message in the new thread
+                await newThread.SendMessageAsync(
+                    $"⚔️ **{existing.Name}** returns! Your adventure thread was recreated.\n" +
+                    $"You can pick up where you left off — just type a command like `look` or `stats`.");
+                return;
+            }
+
+            // Thread exists — unarchive if needed
+            if (existingThread.IsArchived)
+            {
+                try { await existingThread.ModifyAsync(props => props.Archived = false); }
+                catch (Exception ex) { _logger.LogWarning(ex, "Failed to unarchive thread {ThreadId}", existingThread.Id); }
+            }
+
+            await command.FollowupAsync(
+                $"You already have a character: **{existing.Name}**. Head to <#{existingThread.Id}> to play!\n" +
+                $"*(If you need to start over, use `/restart`.)*", ephemeral: true);
             return;
         }
 
