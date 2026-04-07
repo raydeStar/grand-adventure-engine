@@ -702,6 +702,10 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         try
         {
             activeWorld = await GetDiscordDefaultWorldAsync();
+            _logger.LogInformation("Character creation: resolved world={WorldId}, narrator={NarratorId}, hasIntro={HasIntro}",
+                activeWorld?.Id ?? "null",
+                activeWorld?.DefaultNarratorPresetId ?? "null",
+                !string.IsNullOrWhiteSpace(activeWorld?.CharacterCreationIntro));
             if (activeWorld is not null && !string.IsNullOrWhiteSpace(activeWorld.CharacterCreationIntro))
                 savedIntro = activeWorld.CharacterCreationIntro;
         }
@@ -713,6 +717,7 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         // If we have a saved intro, use it directly
         if (!string.IsNullOrWhiteSpace(savedIntro))
         {
+            _logger.LogInformation("Using saved character creation intro from world {WorldId}", activeWorld?.Id);
             await thread.SendMessageAsync(savedIntro);
             return;
         }
@@ -730,6 +735,9 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
                 .Where(n => n.IsSelectable)
                 .OrderBy(n => n.SortOrder)
                 .FirstOrDefault();
+
+            _logger.LogInformation("Generating dynamic intro with narrator={NarratorName} ({NarratorId})",
+                narrator?.Name ?? "none", narrator?.Id ?? "none");
 
             if (narrator is not null)
             {
