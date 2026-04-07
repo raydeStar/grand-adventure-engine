@@ -1364,10 +1364,10 @@
     const worldId = state.selectedWorldId;
     if (!worldId) { alert('Select a world first.'); return; }
     const resultEl = UI.$('export-world-result');
-    resultEl.textContent = 'Exporting...'; resultEl.className = 'world-action-result';
+    resultEl.textContent = 'Starting download...'; resultEl.className = 'world-action-result';
     try {
-      await API.exportWorldYaml(worldId);
-      resultEl.textContent = `Exported world "${worldId}" as YAML.`; resultEl.className = 'world-action-result';
+      API.exportWorldYaml(worldId);
+      resultEl.textContent = `Download started: world-${worldId}.yaml`; resultEl.className = 'world-action-result';
     } catch (e) { resultEl.textContent = `Error: ${e.message}`; resultEl.className = 'world-action-result error'; }
   }
 

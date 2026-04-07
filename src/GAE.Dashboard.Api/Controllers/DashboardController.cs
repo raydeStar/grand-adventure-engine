@@ -2136,8 +2136,10 @@ public class DashboardController : ControllerBase
 
         var yaml = serializer.Serialize(exportDto);
 
+        var safeWorldId = string.Concat(worldId.Select(ch => char.IsLetterOrDigit(ch) || ch is '-' or '_' or '.' ? ch : '-'));
+        var fileName = $"world-{safeWorldId}.yaml";
         Response.ContentType = "application/x-yaml";
-        Response.Headers["Content-Disposition"] = $"attachment; filename=\"world-{worldId}.yaml\"";
+        Response.Headers["Content-Disposition"] = $"attachment; filename=\"{fileName}\"; filename*=UTF-8''{Uri.EscapeDataString(fileName)}";
         await Response.WriteAsync(yaml, ct);
     }
 

@@ -256,18 +256,13 @@ const API = {
     return this.postJson(`${this.base}/admin/worlds/transfer`, { playerId, destinationWorldId });
   },
 
-  async exportWorldYaml(worldId) {
-    const res = await fetch(`${this.base}/admin/worlds/${encodeURIComponent(worldId)}/export`, { credentials: 'same-origin' });
-    if (!res.ok) throw this.createHttpError(res, await this.readError(res));
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
+  exportWorldYaml(worldId) {
     const a = document.createElement('a');
-    a.href = url;
+    a.href = `${this.base}/admin/worlds/${encodeURIComponent(worldId)}/export`;
     a.download = `world-${worldId}.yaml`;
     document.body.appendChild(a);
     a.click();
     a.remove();
-    URL.revokeObjectURL(url);
   },
 
   async importWorldYaml(file) {
