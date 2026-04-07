@@ -1531,14 +1531,10 @@ const UI = {
         </div>
       </div>` : ''}
       <div class="world-detail-section">
-        <h4>Default Narrator</h4>
+        <h4>Narrator Voice</h4>
         <select id="world-default-narrator" style="width:100%;padding:4px 6px;font-size:12px;background:var(--bg-secondary);color:var(--text);border:1px solid var(--border);border-radius:4px;">
           <option value="">System default</option>
         </select>
-      </div>
-      <div class="world-detail-section">
-        <h4>Available Narrators</h4>
-        <div id="world-narrator-checkboxes" style="display:grid;gap:0.25rem;font-size:12px;max-height:120px;overflow-y:auto;"></div>
       </div>
       <div class="world-detail-section">
         <h4>Character Creation Intro</h4>
@@ -1547,6 +1543,7 @@ const UI = {
           <button class="btn btn-secondary btn-sm" id="world-intro-generate" type="button">AI Generate</button>
           <button class="btn btn-primary btn-sm" id="world-intro-save" type="button">Save Settings</button>
         </div>
+        <div id="world-intro-status" style="font-size:11px;margin-top:0.25rem;color:var(--dim);"></div>
       </div>
       <div class="world-detail-section">
         <h4>Stat Definitions <button class="btn btn-secondary btn-sm" id="world-stat-add" type="button" style="margin-left:0.5rem;font-size:10px;padding:1px 8px;">+ Add</button></h4>

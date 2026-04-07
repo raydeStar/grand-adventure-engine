@@ -1188,7 +1188,7 @@
   }
 
   async function wireWorldNarratorControls(world) {
-    // Populate narrator select & checkboxes from registry
+    // Populate narrator select from registry
     try {
       const summary = await API.getRegistrySummary();
       const presets = summary.narratorPresets || 0;
@@ -1197,29 +1197,13 @@
         allPresets = await API.getRegistry('narrator_presets');
       }
 
-      // Default narrator select
       const sel = document.getElementById('world-default-narrator');
       if (sel) {
         sel.innerHTML = '<option value="">System default</option>' +
-          allPresets.map(p => `<option value="${UI.esc(p.id)}" ${p.id === (world.defaultNarratorPresetId || '') ? 'selected' : ''}>${UI.esc(p.name || p.id)}</option>`).join('');
-      }
-
-      // Available narrators checkboxes
-      const cbContainer = document.getElementById('world-narrator-checkboxes');
-      if (cbContainer) {
-        const selected = world.narratorPresetIds || [];
-        cbContainer.innerHTML = allPresets.map(p => {
-          const checked = selected.includes(p.id) ? 'checked' : '';
-          return `<label style="display:flex;align-items:center;gap:0.35rem;cursor:pointer;">
-            <input type="checkbox" class="world-narrator-cb" value="${UI.esc(p.id)}" ${checked}>
-            ${UI.esc(p.name || p.id)} <span style="color:var(--dim);font-size:10px;">(${UI.esc(p.archetype || '')})</span>
-          </label>`;
-        }).join('');
+          allPresets.map(p => `<option value="${UI.esc(p.id)}" ${p.id === (world.defaultNarratorPresetId || '') ? 'selected' : ''}>${UI.esc(p.name || p.id)} (${UI.esc(p.archetype || '')})</option>`).join('');
       }
     } catch (e) {
       console.error('Failed to load narrator presets for world settings:', e);
-      const cbContainer = document.getElementById('world-narrator-checkboxes');
-      if (cbContainer) cbContainer.innerHTML = `<div style="color:var(--error);font-size:11px;">Error loading presets: ${e.message}</div>`;
     }
 
     // Wire save button
@@ -1228,16 +1212,13 @@
       saveBtn.onclick = async () => {
         const intro = document.getElementById('world-intro-text')?.value || '';
         const defaultNarrator = document.getElementById('world-default-narrator')?.value || '';
-        const cbs = document.querySelectorAll('.world-narrator-cb:checked');
-        const narratorIds = Array.from(cbs).map(cb => cb.value);
 
         try {
           saveBtn.disabled = true;
           saveBtn.textContent = 'Saving...';
           await API.updateWorld(world.id, {
             characterCreationIntro: intro || '',
-            defaultNarratorPresetId: defaultNarrator || '',
-            narratorPresetIds: narratorIds
+            defaultNarratorPresetId: defaultNarrator || ''
           });
           saveBtn.textContent = 'Saved!';
           setTimeout(() => { saveBtn.textContent = 'Save Settings'; saveBtn.disabled = false; }, 1500);
@@ -1249,26 +1230,32 @@
       };
     }
 
-    // Wire generate button
+    // Wire generate button with spinner
     const genBtn = document.getElementById('world-intro-generate');
     if (genBtn) {
       genBtn.onclick = async () => {
         const textarea = document.getElementById('world-intro-text');
+        const statusEl = document.getElementById('world-intro-status');
+        const narratorId = document.getElementById('world-default-narrator')?.value || '';
         const wid = world?.id;
-        console.log('Generate intro clicked, world.id:', wid);
-        if (!wid) { genBtn.textContent = 'Error: no world'; return; }
+        if (!wid) return;
         try {
           genBtn.disabled = true;
-          genBtn.textContent = 'Generating...';
-          const result = await API.generateWorldIntro(wid);
-          console.log('Generate result:', result);
+          genBtn.innerHTML = '<span class="spinner"></span> Generating...';
+          if (statusEl) statusEl.textContent = 'Asking the narrator to write an intro...';
+          const result = await API.generateWorldIntro(wid, narratorId);
           if (textarea && result.intro) textarea.value = result.intro;
-          genBtn.textContent = 'AI Generate';
+          genBtn.innerHTML = 'AI Generate';
           genBtn.disabled = false;
+          if (statusEl) statusEl.textContent = 'Intro generated! Review and click Save Settings.';
+          setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 5000);
         } catch (e) {
-          console.error('Generate intro failed:', e, 'status:', e.status, 'code:', e.code);
-          genBtn.textContent = `Failed (${e.status || '?'})`;
-          setTimeout(() => { genBtn.textContent = 'AI Generate'; genBtn.disabled = false; }, 4000);
+          console.error('Generate intro failed:', e);
+          genBtn.innerHTML = 'AI Generate';
+          genBtn.disabled = false;
+          if (statusEl) statusEl.textContent = `Generation failed: ${e.message || 'unknown error'}`;
+          statusEl.style.color = 'var(--error)';
+          setTimeout(() => { if (statusEl) { statusEl.textContent = ''; statusEl.style.color = 'var(--dim)'; } }, 5000);
         }
       };
     }
