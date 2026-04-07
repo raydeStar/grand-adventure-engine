@@ -4,10 +4,10 @@
 # ══════════════════════════════════════════════════════════════════
 
 quests:
-  # ── QUEST 1: Lebreau's Rat Problem ──────────────────────────
+  # ── QUEST 1: Tifa's Rat Problem ────────────────────────────
   - id: "waterway_infestation"
     name: "The Waterway Infestation"
-    description: "Lebreau's cellar connects to the Garamsythe Waterway, and something down there is scaring away her barbacks. Clear it out."
+    description: "Tifa's cellar connects to the Garamsythe Waterway, and something down there is scaring away her barbacks. Clear it out."
     giver_id: "innkeeper_mara"
     turn_in_npc_id: "innkeeper_mara"
     min_level: 1
@@ -27,13 +27,13 @@ quests:
         next_stage_id: "return_to_lebreau"
       - id: "return_to_lebreau"
         name: "Report Back"
-        description: "Tell Lebreau the Waterway is clear."
-        narrator_hint: "Lebreau is relieved and pours the player a drink on the house. She hints this wasn't the first pest problem — the Mist beneath the city is getting worse."
+        description: "Tell Tifa the Waterway is clear."
+        narrator_hint: "Tifa is relieved and pours the player a drink on the house. She hints this wasn't the first pest problem — the Mist beneath the city is getting worse."
         objectives:
           - id: "talk_lebreau_done"
             type: TalkTo
             target_id: "innkeeper_mara"
-            description: "Report back to Lebreau"
+            description: "Report back to Tifa"
     rewards:
       xp: 25
       gold: 10
@@ -292,13 +292,13 @@ quests:
         next_stage_id: "claim_bounty"
       - id: "claim_bounty"
         name: "Claim the Bounty"
-        description: "Return to Lebreau at the Seventh Heaven to collect the hunt reward."
-        narrator_hint: "Lebreau is impressed — Cactuars are notoriously hard to catch. She pays the full bounty and marks the hunt as complete on the board."
+        description: "Return to Tifa at the Seventh Heaven to collect the hunt reward."
+        narrator_hint: "Tifa is impressed — Cactuars are notoriously hard to catch. She pays the full bounty and marks the hunt as complete on the board."
         objectives:
           - id: "talk_lebreau_bounty"
             type: TalkTo
             target_id: "innkeeper_mara"
-            description: "Collect the bounty from Lebreau"
+            description: "Collect the bounty from Tifa"
     rewards:
       xp: 60
       gold: 100

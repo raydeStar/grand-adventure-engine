@@ -40,18 +40,19 @@ rooms:
 
   - id: "spawn"
     name: "The Seventh Heaven"
-    description: "A bustling tavern wedged between two towering sandstone buildings. Ceiling fans creak overhead, struggling against the desert heat. The bar is polished driftwood, the chairs are mismatched, and the air smells of spiced meat and strong coffee. A bounty board near the door overflows with hunt postings. Lebreau keeps the drinks flowing and the rumors sharper."
+    description: "A bustling tavern wedged between two towering sandstone buildings. Ceiling fans creak overhead, struggling against the desert heat. The bar is polished driftwood, the chairs are mismatched, and the air smells of spiced meat and strong coffee. A bounty board near the door overflows with hunt postings. Behind the bar, a young woman with dark hair and striking crimson eyes mixes drinks with the speed and precision of a martial artist — because she is one. A faded AVALANCHE poster hangs behind the bar, half-hidden by bottles. Tifa keeps the drinks flowing and the rumors sharper."
     exits:
       east: "town_square"
       south: "back_alley"
       down: "tavern_cellar"
+      north: "qa-lab"
     environment_tags: ["indoor", "safe", "lit", "tavern"]
     npcs:
       - id: "innkeeper_mara"
-        name: "Lebreau"
-        personality: "Warm, confident, and effortlessly cool. Runs the Seventh Heaven with charm and steel. Knows everyone's secrets and trades them like currency. Flirtatious with adventurers she finds interesting. Used to run with a resistance cell before settling down. Still keeps a gunblade behind the bar."
-        faction: "merchants_guild"
-        knowledge_scopes: ["rumors", "town", "golmore", "pharos", "merchants_guild", "dalmascan_resistance"]
+        name: "Tifa Lockhart"
+        personality: "Strong, compassionate, and fiercely protective of anyone she considers family. Runs the Seventh Heaven with a warm smile and iron fists — literally. A master martial artist who could flatten half the tavern without spilling a drink, but prefers to keep the peace. Used to fight with AVALANCHE before settling down to run the bar. Still trains every morning and keeps her Premium Heart gloves behind the counter. Has a complicated history with a certain spiky-haired swordsman she doesn't like to talk about. Knows everyone's secrets and trades them like currency. Flirtatious in a genuine, caring way — not manipulative. Will absolutely throw you through a wall if you start trouble in her bar."
+        faction: "dalmascan_resistance"
+        knowledge_scopes: ["rumors", "town", "golmore", "pharos", "merchants_guild", "dalmascan_resistance", "martial_arts", "avalanche"]
         quests_offered: ["waterway_infestation", "cactuar_hunt"]
       - id: "drunk_pete"
         name: "Wedge"
@@ -61,10 +62,12 @@ rooms:
         quests_offered: ["wedge_lucky_charm"]
     items:
       - id: "chipped_mug"
-        name: "Cracked Mug"
-        description: "A ceramic mug with a lightning-bolt crack down the side. Half-full of something that might be coffee or might be motor oil."
+        name: "Tifa's Signature Cocktail"
+        description: "A ceramic mug shaped like a Chocobo head, filled with Tifa's famous Cosmo Canyon Sunset — a layered drink that shifts from red to gold. Somehow always warm."
         type: "Misc"
-        value: 1
+        is_consumable: true
+        value: 3
+        effect: "Restores 1d4 HP and warms your soul"
       - id: "half_eaten_bread"
         name: "Gysahl Biscuit"
         description: "A crunchy biscuit made from gysahl greens. Chocobos love them, and Wedge apparently does too — there's a bite taken out of this one."
@@ -76,6 +79,11 @@ rooms:
         description: "A dog-eared deck of Triple Triad cards. Several are missing, and the rest are sticky with spilled ale. The Ifrit card has a mustache drawn on it."
         type: "Misc"
         value: 2
+      - id: "avalanche_flyer"
+        name: "Faded AVALANCHE Flyer"
+        description: "A crumpled resistance flyer with the AVALANCHE logo — a meteor streaking through a green circle. Someone has scrawled 'FIGHT THE EMPIRE' across the bottom. Tifa pretends not to know where these keep coming from."
+        type: "Misc"
+        value: 0
 
   - id: "town_square"
     name: "Rabanastre Bazaar"
@@ -473,7 +481,7 @@ rooms:
 
   - id: "tavern_cellar"
     name: "The Waterway"
-    description: "The Garamsythe Waterway — an ancient sewer network beneath Rabanastre. Slick stone tunnels stretch into darkness, water channels running with murky flow. The air is thick with moisture and the squeaking of rats. Moss-covered pipes drip from overhead. Something large hisses in the shadows between the collapsed sections. Lebreau mentioned a pest problem down here — now you see why."
+    description: "The Garamsythe Waterway — an ancient sewer network beneath Rabanastre. Slick stone tunnels stretch into darkness, water channels running with murky flow. The air is thick with moisture and the squeaking of rats. Moss-covered pipes drip from overhead. Something large hisses in the shadows between the collapsed sections. Tifa mentioned a pest problem down here — now you see why."
     exits:
       up: "spawn"
     environment_tags: ["indoor", "dark", "damp", "cellar", "dangerous", "waterway"]
@@ -498,7 +506,7 @@ rooms:
     items:
       - id: "aged_wine_bottle"
         name: "Baccus Wine"
-        description: "A dusty bottle of vintage wine from the old kingdom. Lebreau probably doesn't know it's down here. Worth a fortune to the right collector."
+        description: "A dusty bottle of vintage wine from the old kingdom. Tifa probably doesn't know it's down here. Worth a fortune to the right collector."
         type: "Misc"
         value: 8
       - id: "rat_chewed_coin_pouch"
