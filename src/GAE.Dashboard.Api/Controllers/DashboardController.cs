@@ -2054,6 +2054,18 @@ public class DashboardController : ControllerBase
             ? "Key world lore:\n" + string.Join("\n", starterLore.Take(5))
             : "";
 
+        // Gather main storyline quests for context
+        var mainQuests = _registry.Quests.GetAll()
+            .Where(q => q.Tags.Any(t => string.Equals(t, "main", StringComparison.OrdinalIgnoreCase)
+                                     || string.Equals(t, "storyline", StringComparison.OrdinalIgnoreCase)
+                                     || string.Equals(t, "crystal", StringComparison.OrdinalIgnoreCase)))
+            .Select(q => $"- {q.Name}: {q.Description}")
+            .ToList();
+
+        var questContext = mainQuests.Count > 0
+            ? "\nMain storyline quests (hint at but don't spoil):\n" + string.Join("\n", mainQuests.Take(5))
+            : "";
+
         var prompt = $"""
             Generate a Discord character creation intro message for a text RPG world.
             The message should:
@@ -2065,6 +2077,7 @@ public class DashboardController : ControllerBase
             World name: {world.Name}
             World description: {world.Description}
             {loreContext}
+            {questContext}
 
             Write the intro using Discord markdown (bold, italics, etc). Keep it 3-5 paragraphs.
             The Narrator should have personality — dry wit, slight amusement, world-weary wisdom.

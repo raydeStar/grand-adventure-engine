@@ -1166,7 +1166,7 @@
       state.selectedWorld = world;
       state.selectedWorldPlayers = players || [];
       UI.renderWorldDetail(world, state.selectedWorldPlayers);
-      wireWorldNarratorControls(world);
+      await wireWorldNarratorControls(world);
       wireStatControls(world);
       UI.renderPortalList(world?.portals || [], state.worlds);
       UI.populateWorldSelects(state.worlds, worldId);
@@ -1217,7 +1217,9 @@
         }).join('');
       }
     } catch (e) {
-      console.warn('Failed to load narrator presets for world settings:', e);
+      console.error('Failed to load narrator presets for world settings:', e);
+      const cbContainer = document.getElementById('world-narrator-checkboxes');
+      if (cbContainer) cbContainer.innerHTML = `<div style="color:var(--error);font-size:11px;">Error loading presets: ${e.message}</div>`;
     }
 
     // Wire save button
