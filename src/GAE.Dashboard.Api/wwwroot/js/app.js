@@ -1232,30 +1232,47 @@
 
     // Wire generate button with spinner
     const genBtn = document.getElementById('world-intro-generate');
+    let generating = false;
     if (genBtn) {
       genBtn.onclick = async () => {
-        const textarea = document.getElementById('world-intro-text');
-        const statusEl = document.getElementById('world-intro-status');
+        if (generating) return;
+        generating = true;
         const narratorId = document.getElementById('world-default-narrator')?.value || '';
         const wid = world?.id;
-        if (!wid) return;
+        if (!wid) { generating = false; return; }
         try {
           genBtn.disabled = true;
+          genBtn.style.pointerEvents = 'none';
           genBtn.innerHTML = '<span class="spinner"></span> Generating...';
-          if (statusEl) statusEl.textContent = 'Asking the narrator to write an intro...';
+          const statusBefore = document.getElementById('world-intro-status');
+          if (statusBefore) { statusBefore.style.color = 'var(--dim)'; statusBefore.textContent = 'Asking the narrator to write an intro...'; }
+
+          // Pause auto-refresh so it doesn't re-render the DOM and destroy our textarea
+          stopRefreshLoop();
+
           const result = await API.generateWorldIntro(wid, narratorId);
-          if (textarea && result.intro) textarea.value = result.intro;
-          genBtn.innerHTML = 'AI Generate';
-          genBtn.disabled = false;
-          if (statusEl) statusEl.textContent = 'Intro generated! Review and click Save Settings.';
-          setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 5000);
+
+          // Re-query DOM elements AFTER the await — the refresh loop may have
+          // replaced the DOM during the (potentially long) AI call
+          const textarea = document.getElementById('world-intro-text');
+          const statusEl = document.getElementById('world-intro-status');
+          const introText = (result && result.intro) ? result.intro : JSON.stringify(result);
+
+          if (textarea) {
+            textarea.value = introText;
+          }
+          if (statusEl) { statusEl.style.color = 'var(--accent)'; statusEl.textContent = 'Intro generated! Review and click Save Settings.'; }
+          setTimeout(() => { const el = document.getElementById('world-intro-status'); if (el) { el.textContent = ''; el.style.color = 'var(--dim)'; } }, 8000);
         } catch (e) {
           console.error('Generate intro failed:', e);
-          genBtn.innerHTML = 'AI Generate';
-          genBtn.disabled = false;
-          if (statusEl) statusEl.textContent = `Generation failed: ${e.message || 'unknown error'}`;
-          statusEl.style.color = 'var(--error)';
-          setTimeout(() => { if (statusEl) { statusEl.textContent = ''; statusEl.style.color = 'var(--dim)'; } }, 5000);
+          const statusEl = document.getElementById('world-intro-status');
+          if (statusEl) { statusEl.style.color = 'var(--error)'; statusEl.textContent = `Generation failed: ${e.message || 'unknown error'}`; }
+          setTimeout(() => { const el = document.getElementById('world-intro-status'); if (el) { el.textContent = ''; el.style.color = 'var(--dim)'; } }, 5000);
+        } finally {
+          const btn = document.getElementById('world-intro-generate');
+          if (btn) { btn.innerHTML = 'AI Generate'; btn.disabled = false; btn.style.pointerEvents = ''; }
+          generating = false;
+          startRefreshLoop();
         }
       };
     }
