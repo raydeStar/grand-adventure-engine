@@ -1168,6 +1168,7 @@
       UI.renderWorldDetail(world, state.selectedWorldPlayers);
       await wireWorldNarratorControls(world);
       wireStatControls(world);
+      wireCollapsibleHeadings();
       UI.renderPortalList(world?.portals || [], state.worlds);
       UI.populateWorldSelects(state.worlds, worldId);
       if (ctx) ctx.classList.remove('hidden');
@@ -1276,6 +1277,20 @@
         }
       };
     }
+  }
+
+  // ── Collapsible section headings ──────────────────────
+  function wireCollapsibleHeadings() {
+    document.querySelectorAll('.collapsible-heading[data-toggle]').forEach(heading => {
+      heading.onclick = () => {
+        const target = document.getElementById(heading.dataset.toggle);
+        if (!target) return;
+        const isHidden = target.style.display === 'none';
+        target.style.display = isHidden ? '' : 'none';
+        const indicator = heading.querySelector('span');
+        if (indicator) indicator.textContent = indicator.textContent.replace(/[▾▸]/, isHidden ? '▾' : '▸');
+      };
+    });
   }
 
   // ── Stat Definitions CRUD ─────────────────────────────

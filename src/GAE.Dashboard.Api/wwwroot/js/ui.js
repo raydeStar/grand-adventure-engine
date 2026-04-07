@@ -1520,8 +1520,8 @@ const UI = {
         <div class="world-detail-tags">${tags.map(t => `<span class="world-tag">${this.esc(t)}</span>`).join('')}</div>
       </div>` : ''}
       ${playerCount > 0 ? `<div class="world-detail-section">
-        <h4>Players in World</h4>
-        <div class="portal-player-list">${players.map(p => `
+        <h4 class="collapsible-heading" data-toggle="world-player-list" style="cursor:pointer;user-select:none;">Players in World <span style="font-size:10px;color:var(--dim);font-weight:400;">(${playerCount}) ▾</span></h4>
+        <div id="world-player-list" class="portal-player-list" style="max-height:180px;overflow-y:auto;">${players.map(p => `
           <div class="registry-row">
             <div class="registry-meta">
               <div class="registry-name">${this.esc(p.name)}</div>
