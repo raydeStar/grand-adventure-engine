@@ -1673,6 +1673,49 @@ textarea { resize: vertical; min-height: 80px; }
 }
 .btn-danger:hover { background: rgba(204,51,51,0.15); }
 
+/* ── World Toolbar ── */
+.world-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+}
+.toolbar-sep {
+  width: 1px;
+  height: 1.2rem;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+/* ── Admin Tools collapsible section ── */
+.admin-tools-section {
+  margin-top: 0.25rem;
+}
+.admin-tools-header {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.5rem 0;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.admin-tools-header::-webkit-details-marker { display: none; }
+.admin-tools-header::before {
+  content: '▸ ';
+  display: inline-block;
+  transition: transform 0.15s;
+}
+.admin-tools-section[open] > .admin-tools-header::before {
+  transform: rotate(90deg);
+}
+
 .registry-table { display: grid; gap: 0.4rem; }
 
 .registry-row {

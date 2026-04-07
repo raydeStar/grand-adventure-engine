@@ -1023,6 +1023,7 @@
     state.selectedWorldId = worldId;
     localStorage.setItem('gae.admin.world', worldId);
     UI.renderWorldList(state.worlds, worldId);
+    const ctx = UI.$('world-context-section');
 
     if (!worldId) {
       state.selectedWorld = null;
@@ -1030,6 +1031,7 @@
       UI.renderWorldDetail(null);
       UI.renderPortalList(null);
       UI.populateWorldSelects(state.worlds, null);
+      if (ctx) ctx.classList.add('hidden');
       return;
     }
 
@@ -1043,11 +1045,13 @@
       UI.renderWorldDetail(world, state.selectedWorldPlayers);
       UI.renderPortalList(world?.portals || [], state.worlds);
       UI.populateWorldSelects(state.worlds, worldId);
+      if (ctx) ctx.classList.remove('hidden');
     } catch (e) {
       state.selectedWorld = null;
       state.selectedWorldPlayers = [];
       UI.renderWorldDetail(null);
       UI.renderPortalList(null);
+      if (ctx) ctx.classList.add('hidden');
     }
   }
 

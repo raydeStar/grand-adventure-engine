@@ -278,18 +278,23 @@
         <div class="admin-tab-content" data-admin-panel="world-actions">
           <div class="admin-tab-body">
 
-            <!-- World Browser -->
+            <!-- ── World Selector ── -->
             <div class="panel">
               <div class="panel-header-row">
                 <h3>Worlds</h3>
-                <button class="btn btn-primary btn-sm" id="btn-create-world" type="button">+ New World</button>
+                <div class="world-action-buttons">
+                  <input type="file" id="import-world-file" accept=".yaml,.yml" style="display:none" />
+                  <button class="btn btn-secondary btn-sm" id="btn-import-world" type="button">Import YAML</button>
+                  <button class="btn btn-primary btn-sm" id="btn-create-world" type="button">+ New World</button>
+                </div>
               </div>
               <div id="world-list" class="world-list">
                 <div class="empty-state">Loading worlds...</div>
               </div>
+              <div id="import-world-result" class="world-action-result"></div>
             </div>
 
-            <!-- Create / Edit World Form (hidden by default) -->
+            <!-- ── Create / Edit World Form (hidden by default) ── -->
             <div class="panel hidden" id="world-form-panel">
               <h3 id="world-form-title">Create World</h3>
               <form id="world-form" class="world-action-form">
@@ -320,199 +325,172 @@
               </form>
             </div>
 
-            <!-- World Detail (shown when a world is selected) -->
-            <div class="panel hidden" id="world-detail-panel">
-              <div class="panel-header-row">
-                <h3 id="world-detail-name">World Detail</h3>
-                <div class="world-action-buttons">
-                  <button class="btn btn-secondary btn-sm" id="btn-edit-world" type="button">Edit</button>
-                  <button class="btn btn-danger btn-sm" id="btn-delete-world" type="button">Delete</button>
-                </div>
-              </div>
-              <div id="world-detail-body"></div>
-            </div>
+            <!-- ── Selected World Context (hidden until a world is clicked) ── -->
+            <div id="world-context-section" class="hidden">
 
-            <!-- Portal Manager (shown when a world is selected) -->
-            <div class="panel hidden" id="portal-manager-panel">
-              <div class="panel-header-row">
-                <h3>Portals</h3>
-                <button class="btn btn-primary btn-sm" id="btn-create-portal" type="button">+ New Portal</button>
-              </div>
-              <div id="portal-list" class="portal-list"></div>
-
-              <!-- Create / Edit Portal Form (hidden by default) -->
-              <div class="hidden" id="portal-form-wrapper">
-                <hr class="panel-divider" />
-                <h4 id="portal-form-title">Create Portal</h4>
-                <form id="portal-form" class="world-action-form">
-                  <input type="hidden" id="portal-form-id" />
-                  <div class="mutation-row">
-                    <div class="form-group">
-                      <label for="portal-form-source-room">Source Room ID</label>
-                      <input type="text" id="portal-form-source-room" placeholder="e.g. town_gate" required />
-                    </div>
-                    <div class="form-group">
-                      <label for="portal-form-dest-world">Destination World</label>
-                      <select id="portal-form-dest-world" required></select>
-                    </div>
-                  </div>
-                  <div class="mutation-row">
-                    <div class="form-group">
-                      <label for="portal-form-dest-room">Destination Room ID (optional)</label>
-                      <input type="text" id="portal-form-dest-room" placeholder="Uses world spawn if blank" />
-                    </div>
-                    <div class="form-group">
-                      <label for="portal-form-min-level">Min Level (optional)</label>
-                      <input type="number" id="portal-form-min-level" min="1" />
-                    </div>
-                  </div>
-                  <div class="form-group">
-                    <label for="portal-form-desc">Description</label>
-                    <input type="text" id="portal-form-desc" placeholder="A shimmering rift in the air..." />
-                  </div>
-                  <div class="form-group">
-                    <label for="portal-form-hint">Narrator Hint</label>
-                    <input type="text" id="portal-form-hint" placeholder="Describe the transition dramatically..." />
-                  </div>
-                  <label class="remember-toggle">
-                    <input type="checkbox" id="portal-form-admin-only" />
-                    <span>Admin only</span>
-                  </label>
+              <!-- World Detail + Actions Header -->
+              <div class="panel" id="world-detail-panel">
+                <div class="panel-header-row">
+                  <h3 id="world-detail-name">World Detail</h3>
                   <div class="world-action-buttons">
-                    <button class="btn btn-primary" type="submit" id="portal-form-submit">Create Portal</button>
-                    <button class="btn btn-secondary" type="button" id="portal-form-cancel">Cancel</button>
-                  </div>
-                  <div id="portal-form-result" class="world-action-result"></div>
-                </form>
-              </div>
-            </div>
-
-            <!-- Realm Transfer -->
-            <div class="panel">
-              <h3>Realm Transfer</h3>
-              <p class="panel-hint">Instantly move a player to a different world. Triggers stat translation and snapshot.</p>
-              <div class="world-action-form">
-                <div class="mutation-row">
-                  <div class="form-group">
-                    <label for="transfer-player-select">Player</label>
-                    <select id="transfer-player-select"></select>
-                  </div>
-                  <div class="form-group">
-                    <label for="transfer-world-select">Destination World</label>
-                    <select id="transfer-world-select"></select>
+                    <button class="btn btn-secondary btn-sm" id="btn-export-world" type="button">Export YAML</button>
+                    <button class="btn btn-secondary btn-sm" id="btn-edit-world" type="button">Edit</button>
+                    <button class="btn btn-danger btn-sm" id="btn-delete-world" type="button">Delete</button>
                   </div>
                 </div>
-                <div class="world-action-buttons">
-                  <button class="btn btn-primary" id="btn-realm-transfer" type="button">Transfer Player</button>
-                </div>
-                <div id="realm-transfer-result" class="world-action-result"></div>
-              </div>
-            </div>
-
-            <!-- Send Message / Announcement -->
-            <div class="panel">
-              <h3>Send Message / Announcement</h3>
-              <p class="panel-hint">Send a message directly to a player's Discord thread, or broadcast to everyone.</p>
-              <div class="world-action-form">
-                <div class="form-group">
-                  <label for="msg-player-select">Recipient</label>
-                  <select id="msg-player-select">
-                    <option value="">All Players (Broadcast)</option>
-                  </select>
-                </div>
-                <div class="form-group">
-                  <label for="msg-text">Message</label>
-                  <textarea id="msg-text" rows="4" placeholder="Type the message to send to player threads..." required></textarea>
-                </div>
-                <div class="world-action-buttons">
-                  <button class="btn btn-primary" id="btn-send-msg" type="button">Broadcast to All Players</button>
-                </div>
-                <div id="send-message-result" class="world-action-result"></div>
-              </div>
-            </div>
-
-            <!-- Warp Players -->
-            <div class="world-action-grid">
-              <div class="panel">
-                <h3>Warp Player to Spawn</h3>
-                <p class="panel-hint">Teleport a player back to The Rusted Flagon (spawn). Resets their interaction state.</p>
-                <div class="world-action-form">
-                  <div class="form-group">
-                    <label for="warp-player-select">Target player</label>
-                    <select id="warp-player-select"></select>
-                  </div>
-                  <button class="btn btn-primary" id="btn-warp-to-spawn" type="button">Warp to Spawn</button>
-                  <div id="warp-result" class="world-action-result"></div>
-                </div>
+                <div id="world-detail-body"></div>
+                <div id="export-world-result" class="world-action-result"></div>
               </div>
 
-              <div class="panel">
-                <h3>Warp All Players to Spawn</h3>
-                <p class="panel-hint">Teleport every player back to The Rusted Flagon. Useful after updates or world resets.</p>
-                <div class="world-action-form">
-                  <button class="btn btn-warning" id="btn-warp-all-spawn" type="button">Warp All Players to Spawn</button>
-                  <div id="warp-all-result" class="world-action-result"></div>
-                </div>
-              </div>
-            </div>
-
-            <!-- World Management -->
-            <div class="world-action-grid">
-              <div class="panel">
-                <h3>Re-Seed World</h3>
-                <p class="panel-hint">Re-generate all world rooms from the lore seed. Existing rooms are refreshed to their original state.</p>
-                <div class="world-action-form">
-                  <button class="btn btn-primary" id="btn-reseed-world" type="button">Re-Seed Rooms</button>
-                  <div id="reseed-result" class="world-action-result"></div>
-                </div>
-              </div>
-
-              <div class="panel">
-                <h3>Seed Demo Characters</h3>
-                <p class="panel-hint">Create demo test characters (Ari Quickstep &amp; Marshal Vale) for smoke testing.</p>
-                <div class="world-action-form">
-                  <label class="remember-toggle">
-                    <input type="checkbox" id="seed-demo-replace" />
-                    <span>Replace existing demo characters</span>
-                  </label>
-                  <button class="btn btn-primary" id="btn-seed-demo-world" type="button">Seed Demo Characters</button>
-                  <div id="seed-demo-result" class="world-action-result"></div>
-                </div>
-              </div>
-
-              <div class="panel">
-                <h3>Export World</h3>
-                <p class="panel-hint">Download the selected world (definition, rules, portals, rooms, NPCs) as a YAML file.</p>
-                <div class="world-action-form">
-                  <button class="btn btn-secondary" id="btn-export-world" type="button">Export YAML</button>
-                  <div id="export-world-result" class="world-action-result"></div>
-                </div>
-              </div>
-
-              <div class="panel">
-                <h3>Import World</h3>
-                <p class="panel-hint">Upload a YAML file to create or update a world with its rooms and NPCs.</p>
-                <div class="world-action-form">
-                  <input type="file" id="import-world-file" accept=".yaml,.yml" style="display:none" />
-                  <button class="btn btn-secondary" id="btn-import-world" type="button">Import YAML</button>
-                  <div id="import-world-result" class="world-action-result"></div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Danger Zone -->
-            <div class="panel panel-danger">
-              <h3>Reset World</h3>
-              <p class="panel-hint">Nuke all rooms and re-seed from lore YAML. Players can optionally be kept (reset to spawn with full HP/MP) or deleted entirely.</p>
-              <div class="world-action-form">
-                <label class="remember-toggle">
-                  <input type="checkbox" id="reset-keep-players" checked />
-                  <span>Keep players (reset to spawn with full HP/MP)</span>
+              <!-- World Actions Toolbar -->
+              <div class="world-toolbar">
+                <button class="btn btn-primary btn-sm" id="btn-reseed-world" type="button">Re-Seed Rooms</button>
+                <button class="btn btn-primary btn-sm" id="btn-seed-demo-world" type="button">Seed Demo Characters</button>
+                <label class="remember-toggle" style="margin:0;">
+                  <input type="checkbox" id="seed-demo-replace" />
+                  <span>Replace existing</span>
                 </label>
-                <button class="btn btn-danger" id="btn-reset-world" type="button">Reset World</button>
-                <div id="reset-world-result" class="world-action-result"></div>
+                <span class="toolbar-sep"></span>
+                <button class="btn btn-danger btn-sm" id="btn-reset-world" type="button">Reset World</button>
+                <label class="remember-toggle" style="margin:0;">
+                  <input type="checkbox" id="reset-keep-players" checked />
+                  <span>Keep players</span>
+                </label>
               </div>
-            </div>
+              <div id="reseed-result" class="world-action-result"></div>
+              <div id="seed-demo-result" class="world-action-result"></div>
+              <div id="reset-world-result" class="world-action-result"></div>
+
+              <!-- Portals -->
+              <div class="panel" id="portal-manager-panel">
+                <div class="panel-header-row">
+                  <h3>Portals</h3>
+                  <button class="btn btn-primary btn-sm" id="btn-create-portal" type="button">+ New Portal</button>
+                </div>
+                <div id="portal-list" class="portal-list"></div>
+
+                <div class="hidden" id="portal-form-wrapper">
+                  <hr class="panel-divider" />
+                  <h4 id="portal-form-title">Create Portal</h4>
+                  <form id="portal-form" class="world-action-form">
+                    <input type="hidden" id="portal-form-id" />
+                    <div class="mutation-row">
+                      <div class="form-group">
+                        <label for="portal-form-source-room">Source Room ID</label>
+                        <input type="text" id="portal-form-source-room" placeholder="e.g. town_gate" required />
+                      </div>
+                      <div class="form-group">
+                        <label for="portal-form-dest-world">Destination World</label>
+                        <select id="portal-form-dest-world" required></select>
+                      </div>
+                    </div>
+                    <div class="mutation-row">
+                      <div class="form-group">
+                        <label for="portal-form-dest-room">Destination Room ID (optional)</label>
+                        <input type="text" id="portal-form-dest-room" placeholder="Uses world spawn if blank" />
+                      </div>
+                      <div class="form-group">
+                        <label for="portal-form-min-level">Min Level (optional)</label>
+                        <input type="number" id="portal-form-min-level" min="1" />
+                      </div>
+                    </div>
+                    <div class="form-group">
+                      <label for="portal-form-desc">Description</label>
+                      <input type="text" id="portal-form-desc" placeholder="A shimmering rift in the air..." />
+                    </div>
+                    <div class="form-group">
+                      <label for="portal-form-hint">Narrator Hint</label>
+                      <input type="text" id="portal-form-hint" placeholder="Describe the transition dramatically..." />
+                    </div>
+                    <label class="remember-toggle">
+                      <input type="checkbox" id="portal-form-admin-only" />
+                      <span>Admin only</span>
+                    </label>
+                    <div class="world-action-buttons">
+                      <button class="btn btn-primary" type="submit" id="portal-form-submit">Create Portal</button>
+                      <button class="btn btn-secondary" type="button" id="portal-form-cancel">Cancel</button>
+                    </div>
+                    <div id="portal-form-result" class="world-action-result"></div>
+                  </form>
+                </div>
+              </div>
+
+            </div><!-- /world-context-section -->
+
+            <!-- ── Admin Tools (always visible) ── -->
+            <details class="admin-tools-section" open>
+              <summary class="admin-tools-header">Admin Tools</summary>
+
+              <div class="world-action-grid">
+                <!-- Realm Transfer -->
+                <div class="panel">
+                  <h3>Realm Transfer</h3>
+                  <p class="panel-hint">Move a player to a different world. Triggers stat translation and snapshot.</p>
+                  <div class="world-action-form">
+                    <div class="mutation-row">
+                      <div class="form-group">
+                        <label for="transfer-player-select">Player</label>
+                        <select id="transfer-player-select"></select>
+                      </div>
+                      <div class="form-group">
+                        <label for="transfer-world-select">Destination World</label>
+                        <select id="transfer-world-select"></select>
+                      </div>
+                    </div>
+                    <div class="world-action-buttons">
+                      <button class="btn btn-primary" id="btn-realm-transfer" type="button">Transfer Player</button>
+                    </div>
+                    <div id="realm-transfer-result" class="world-action-result"></div>
+                  </div>
+                </div>
+
+                <!-- Send Message -->
+                <div class="panel">
+                  <h3>Send Message</h3>
+                  <p class="panel-hint">Send a message to a player's Discord thread, or broadcast to everyone.</p>
+                  <div class="world-action-form">
+                    <div class="form-group">
+                      <label for="msg-player-select">Recipient</label>
+                      <select id="msg-player-select">
+                        <option value="">All Players (Broadcast)</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label for="msg-text">Message</label>
+                      <textarea id="msg-text" rows="3" placeholder="Type the message to send..." required></textarea>
+                    </div>
+                    <div class="world-action-buttons">
+                      <button class="btn btn-primary" id="btn-send-msg" type="button">Send</button>
+                    </div>
+                    <div id="send-message-result" class="world-action-result"></div>
+                  </div>
+                </div>
+
+                <!-- Warp Player -->
+                <div class="panel">
+                  <h3>Warp to Spawn</h3>
+                  <p class="panel-hint">Teleport a player back to spawn. Resets their interaction state.</p>
+                  <div class="world-action-form">
+                    <div class="form-group">
+                      <label for="warp-player-select">Target player</label>
+                      <select id="warp-player-select"></select>
+                    </div>
+                    <button class="btn btn-primary" id="btn-warp-to-spawn" type="button">Warp to Spawn</button>
+                    <div id="warp-result" class="world-action-result"></div>
+                  </div>
+                </div>
+
+                <!-- Warp All -->
+                <div class="panel">
+                  <h3>Warp All to Spawn</h3>
+                  <p class="panel-hint">Teleport every player back to spawn. Useful after updates or world resets.</p>
+                  <div class="world-action-form">
+                    <button class="btn btn-warning" id="btn-warp-all-spawn" type="button">Warp All Players</button>
+                    <div id="warp-all-result" class="world-action-result"></div>
+                  </div>
+                </div>
+              </div>
+            </details>
 
           </div>
         </div>
