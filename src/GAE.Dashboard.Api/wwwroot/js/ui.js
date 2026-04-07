@@ -2288,6 +2288,34 @@ const UI = {
         return row('Faction', item.faction) + row('Level', item.level, 'dm-val-accent') + row('HP', `${item.hp || '?'}/${item.maxHp || '?'}`, 'dm-val-hp')
           + row('Hostile', item.isHostile ? 'Yes' : 'No', item.isHostile ? 'dm-val-hp' : '') + row('Shopkeeper', item.isShopkeeper ? 'Yes' : 'No')
           + row('Personality', item.personality);
+      case 'narrator_preset':
+        return row('Archetype', item.archetype, 'dm-val-accent')
+          + row('Selectable', item.isSelectable === false ? 'No' : 'Yes')
+          + row('Sort Order', item.sortOrder)
+          + rawRow('Personality', item.personalityPrompt ? `<div style="max-height:100px;overflow-y:auto;font-size:10px;white-space:pre-wrap;line-height:1.4;color:var(--dim);">${this.esc(item.personalityPrompt)}</div>` : '')
+          + rawRow('Greeting', item.greetingText ? `<div style="max-height:80px;overflow-y:auto;font-size:10px;white-space:pre-wrap;line-height:1.4;color:var(--dim);">${this.esc(item.greetingText)}</div>` : '')
+          + row('Lore Style', item.loreDeliveryStyle)
+          + row('On Failure', item.failureReactionStyle)
+          + row('On Success', item.successReactionStyle)
+          + row('Tags', (item.tags || []).join(', '));
+      case 'lore_entry':
+        return row('Scope', item.scope, 'dm-val-accent')
+          + row('Discovery', item.discoveryTrigger || (item.isStarterLore ? 'Starter Lore' : ''))
+          + row('Cascade', item.cascade ? 'Yes' : 'No')
+          + row('Parent', item.parentId)
+          + row('Tags', (item.tags || []).join(', '));
+      case 'quest':
+        return row('Level', `${item.minLevel || 1}-${item.maxLevel || '?'}`, 'dm-val-accent')
+          + row('Quest Giver', item.questGiverId)
+          + row('Stages', (item.stages || []).length)
+          + row('Repeatable', item.isRepeatable ? 'Yes' : 'No')
+          + row('Prerequisites', (item.prerequisites || []).join(', '))
+          + row('Tags', (item.tags || []).join(', '));
+      case 'monster':
+        return row('Level', `${item.minLevel || 1}-${item.maxLevel || '?'}`, 'dm-val-accent')
+          + row('HP', item.hp, 'dm-val-hp') + row('Damage', item.damageDice, 'dm-val-hp')
+          + row('Rarity', item.rarity) + row('Boss', item.isBoss ? 'BOSS' : 'No')
+          + row('Tags', (item.tags || []).join(', '));
       default:
         return row('ID', item.id);
     }
