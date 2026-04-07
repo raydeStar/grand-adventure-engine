@@ -36,6 +36,12 @@ public class WorldConfiguration : IEntityTypeConfiguration<WorldEntity>
                 v => System.Text.Json.JsonSerializer.Deserialize<List<WorldPortal>>(v, JsonDefaults.Options) ?? new List<WorldPortal>());
 
         builder.Property(w => w.CharacterCreationIntro).HasColumnName("character_creation_intro");
+        builder.Property(w => w.DefaultNarratorPresetId).HasColumnName("default_narrator_preset_id");
+
+        builder.Property(w => w.NarratorPresetIds).HasColumnName("narrator_preset_ids").HasColumnType("jsonb")
+            .HasConversion(
+                v => System.Text.Json.JsonSerializer.Serialize(v, JsonDefaults.Options),
+                v => System.Text.Json.JsonSerializer.Deserialize<List<string>>(v, JsonDefaults.Options) ?? new List<string>());
     }
 }
 

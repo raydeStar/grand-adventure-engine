@@ -19,6 +19,8 @@ public class WorldEntity
     public List<string> Tags { get; set; } = [];
     public List<WorldPortal> Portals { get; set; } = [];
     public string? CharacterCreationIntro { get; set; }
+    public string? DefaultNarratorPresetId { get; set; }
+    public List<string> NarratorPresetIds { get; set; } = [];
 
     public World ToDomain() => new()
     {
@@ -33,7 +35,9 @@ public class WorldEntity
         UpdatedAt = UpdatedAt,
         Tags = Tags,
         Portals = Portals,
-        CharacterCreationIntro = CharacterCreationIntro
+        CharacterCreationIntro = CharacterCreationIntro,
+        DefaultNarratorPresetId = DefaultNarratorPresetId,
+        NarratorPresetIds = NarratorPresetIds
     };
 
     public static WorldEntity FromDomain(World world) => new()
@@ -49,7 +53,9 @@ public class WorldEntity
         UpdatedAt = world.UpdatedAt,
         Tags = world.Tags,
         Portals = world.Portals,
-        CharacterCreationIntro = world.CharacterCreationIntro
+        CharacterCreationIntro = world.CharacterCreationIntro,
+        DefaultNarratorPresetId = world.DefaultNarratorPresetId,
+        NarratorPresetIds = world.NarratorPresetIds
     };
 
     public void UpdateFrom(World world)
@@ -65,6 +71,8 @@ public class WorldEntity
         Tags = world.Tags;
         Portals = world.Portals;
         CharacterCreationIntro = world.CharacterCreationIntro;
+        DefaultNarratorPresetId = world.DefaultNarratorPresetId;
+        NarratorPresetIds = world.NarratorPresetIds;
     }
 }
 

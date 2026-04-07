@@ -1167,6 +1167,7 @@
       state.selectedWorldPlayers = players || [];
       UI.renderWorldDetail(world, state.selectedWorldPlayers);
       wireWorldNarratorControls(world);
+      wireStatControls(world);
       UI.renderPortalList(world?.portals || [], state.worlds);
       UI.populateWorldSelects(state.worlds, worldId);
       if (ctx) ctx.classList.remove('hidden');
@@ -1265,6 +1266,101 @@
         }
       };
     }
+  }
+
+  // ── Stat Definitions CRUD ─────────────────────────────
+  function wireStatControls(world) {
+    const listEl = document.getElementById('world-stat-list');
+    const addBtn = document.getElementById('world-stat-add');
+    if (!listEl) return;
+
+    // Edit button handlers
+    listEl.querySelectorAll('[data-stat-edit]').forEach(btn => {
+      btn.onclick = () => showStatEditor(world, btn.dataset.statEdit);
+    });
+
+    // Delete button handlers
+    listEl.querySelectorAll('[data-stat-delete]').forEach(btn => {
+      btn.onclick = async () => {
+        const key = btn.dataset.statDelete;
+        if (!confirm(`Delete stat "${key}"?`)) return;
+        const stats = { ...(world.rules?.stats || {}) };
+        delete stats[key];
+        try {
+          await API.updateWorld(world.id, { rules: { ...world.rules, stats } });
+          await selectWorld(world.id);
+        } catch (e) { alert('Failed to delete stat: ' + e.message); }
+      };
+    });
+
+    // Add button
+    if (addBtn) {
+      addBtn.onclick = () => showStatEditor(world, null);
+    }
+  }
+
+  function showStatEditor(world, editKey) {
+    const existing = editKey ? (world.rules?.stats || {})[editKey] : null;
+    const listEl = document.getElementById('world-stat-list');
+    if (!listEl) return;
+
+    // Remove any existing editor
+    document.getElementById('stat-editor-form')?.remove();
+
+    const categories = ['attribute', 'resource', 'currency'];
+    const form = document.createElement('div');
+    form.id = 'stat-editor-form';
+    form.style.cssText = 'padding:0.5rem;border:1px solid var(--accent);border-radius:4px;margin-top:0.35rem;background:var(--bg-secondary);';
+    form.innerHTML = `
+      <div style="font-size:11px;font-weight:600;margin-bottom:0.35rem;">${editKey ? 'Edit' : 'Add'} Stat</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.35rem;font-size:11px;">
+        <label>Key<input id="stat-ed-key" type="text" value="${UI.esc(editKey || '')}" ${editKey ? 'disabled' : ''} style="width:100%;padding:3px 5px;font-size:11px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:3px;" placeholder="e.g. str"></label>
+        <label>Display Name<input id="stat-ed-display" type="text" value="${UI.esc(existing?.display || '')}" style="width:100%;padding:3px 5px;font-size:11px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:3px;" placeholder="e.g. Strength"></label>
+        <label>Category<select id="stat-ed-category" style="width:100%;padding:3px 5px;font-size:11px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:3px;">
+          ${categories.map(c => `<option value="${c}" ${(existing?.category || 'attribute') === c ? 'selected' : ''}>${c}</option>`).join('')}
+        </select></label>
+        <label>Base<input id="stat-ed-base" type="number" value="${existing?.base ?? 10}" style="width:100%;padding:3px 5px;font-size:11px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:3px;"></label>
+        <label>Min<input id="stat-ed-min" type="number" value="${existing?.min ?? 1}" style="width:100%;padding:3px 5px;font-size:11px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:3px;"></label>
+        <label>Max<input id="stat-ed-max" type="number" value="${existing?.max ?? 20}" style="width:100%;padding:3px 5px;font-size:11px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:3px;"></label>
+      </div>
+      <label style="display:block;margin-top:0.35rem;font-size:11px;">Semantic Tags <span style="color:var(--dim);">(comma separated)</span>
+        <input id="stat-ed-tags" type="text" value="${UI.esc((existing?.semanticTags || []).join(', '))}" style="width:100%;padding:3px 5px;font-size:11px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:3px;" placeholder="e.g. physical, melee">
+      </label>
+      <div style="display:flex;gap:0.5rem;margin-top:0.5rem;">
+        <button class="btn btn-primary btn-sm" id="stat-ed-save" type="button">${editKey ? 'Save' : 'Add'}</button>
+        <button class="btn btn-secondary btn-sm" id="stat-ed-cancel" type="button">Cancel</button>
+      </div>
+    `;
+    listEl.parentElement.appendChild(form);
+
+    document.getElementById('stat-ed-cancel').onclick = () => form.remove();
+    document.getElementById('stat-ed-save').onclick = async () => {
+      const key = (document.getElementById('stat-ed-key').value || '').trim().toLowerCase();
+      if (!key) { alert('Stat key is required.'); return; }
+      if (!editKey && (world.rules?.stats || {})[key]) { alert(`Stat "${key}" already exists.`); return; }
+
+      const stat = {
+        display: document.getElementById('stat-ed-display').value.trim() || key.toUpperCase(),
+        category: document.getElementById('stat-ed-category').value,
+        base: parseInt(document.getElementById('stat-ed-base').value) || 10,
+        min: parseInt(document.getElementById('stat-ed-min').value) || 0,
+        max: parseInt(document.getElementById('stat-ed-max').value) || 20,
+        semanticTags: document.getElementById('stat-ed-tags').value.split(',').map(t => t.trim()).filter(Boolean)
+      };
+
+      const stats = { ...(world.rules?.stats || {}), [key]: stat };
+      try {
+        const saveBtn = document.getElementById('stat-ed-save');
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+        await API.updateWorld(world.id, { rules: { ...world.rules, stats } });
+        form.remove();
+        await selectWorld(world.id);
+      } catch (e) { alert('Failed to save stat: ' + e.message); }
+    };
+
+    // Focus first input
+    setTimeout(() => document.getElementById(editKey ? 'stat-ed-display' : 'stat-ed-key')?.focus(), 50);
   }
 
   function showCreateWorldForm() {

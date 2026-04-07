@@ -1548,17 +1548,21 @@ const UI = {
           <button class="btn btn-primary btn-sm" id="world-intro-save" type="button">Save Settings</button>
         </div>
       </div>
-      ${statCount > 0 ? `<div class="world-detail-section">
-        <h4>Stat Definitions</h4>
-        <div style="display:grid;gap:0.25rem;">${Object.entries(world.rules.stats).map(([key, s]) => `
-          <div class="registry-row" style="padding:0.3rem 0.5rem;">
-            <div class="registry-meta">
+      <div class="world-detail-section">
+        <h4>Stat Definitions <button class="btn btn-secondary btn-sm" id="world-stat-add" type="button" style="margin-left:0.5rem;font-size:10px;padding:1px 8px;">+ Add</button></h4>
+        <div id="world-stat-list" style="display:grid;gap:0.25rem;">${statCount > 0 ? Object.entries(world.rules.stats).map(([key, s]) => `
+          <div class="registry-row" style="padding:0.3rem 0.5rem;display:flex;align-items:center;justify-content:space-between;" data-stat-key="${this.esc(key)}">
+            <div class="registry-meta" style="flex:1;">
               <div class="registry-name">${this.esc(s.display || key)} <span style="font-weight:400;color:var(--dim);">(${this.esc(key)})</span></div>
               <div class="registry-subtext">${this.esc(s.category || '?')} | Range ${s.min}-${s.max} | Base ${s.base}${(s.semanticTags || []).length ? ' | Tags: ' + s.semanticTags.join(', ') : ''}</div>
             </div>
-          </div>`).join('')}
+            <div style="display:flex;gap:0.25rem;flex-shrink:0;">
+              <button class="btn btn-secondary btn-sm" data-stat-edit="${this.esc(key)}" type="button" style="font-size:10px;padding:1px 6px;">Edit</button>
+              <button class="admin-row-delete" data-stat-delete="${this.esc(key)}" type="button" style="font-size:10px;padding:1px 6px;">Del</button>
+            </div>
+          </div>`).join('') : '<div class="empty-state" style="font-size:11px;">No stats defined. Click + Add to create one.</div>'}
         </div>
-      </div>` : ''}
+      </div>
     `;
   },
 
