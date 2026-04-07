@@ -20,6 +20,12 @@ public class World
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
     public List<string> Tags { get; set; } = [];
     public List<WorldPortal> Portals { get; set; } = [];
+
+    /// <summary>Narrator preset IDs available for selection in this world.</summary>
+    public List<string> NarratorPresetIds { get; set; } = [];
+
+    /// <summary>Default narrator preset assigned to new characters in this world. Null = system default.</summary>
+    public string? DefaultNarratorPresetId { get; set; }
 }
 
 /// <summary>

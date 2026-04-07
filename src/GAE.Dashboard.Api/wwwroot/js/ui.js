@@ -1325,11 +1325,10 @@ const UI = {
     }
 
     const type = this._ovSelectedType;
-    const registryTypes = ['spell', 'item', 'class', 'race', 'monster', 'quest'];
+    const registryTypesMap = { spell: 'spells', item: 'items', class: 'classes', race: 'races', monster: 'monsters', quest: 'quests', lore_entry: 'lore_entries', narrator_preset: 'narrator_presets' };
     try {
-      if (registryTypes.includes(type)) {
-        const pluralType = type === 'class' ? 'classes' : type + 's';
-        await API.upsertRegistryEntry(pluralType, this._ovSelectedItem);
+      if (registryTypesMap[type]) {
+        await API.upsertRegistryEntry(registryTypesMap[type], this._ovSelectedItem);
       } else if (type === 'player') {
         await API.editPlayer({ playerId: this._ovSelectedItem.id, ...this._ovSelectedItem });
       } else if (type === 'room') {
@@ -1351,9 +1350,9 @@ const UI = {
     if (!confirm(`Delete "${this._ovSelectedItem.name || this._ovSelectedItem.id}"?`)) return;
     const type = this._ovSelectedType;
     try {
-      if (['spell', 'item', 'class', 'race', 'monster', 'quest'].includes(type)) {
-        const plural = type === 'class' ? 'classes' : type + 's';
-        await API.deleteRegistryEntry(plural, this._ovSelectedItem.id);
+      const deleteTypeMap = { spell: 'spells', item: 'items', class: 'classes', race: 'races', monster: 'monsters', quest: 'quests', lore_entry: 'lore_entries', narrator_preset: 'narrator_presets' };
+      if (deleteTypeMap[type]) {
+        await API.deleteRegistryEntry(deleteTypeMap[type], this._ovSelectedItem.id);
       } else if (type === 'player') {
         await API.deletePlayer(this._ovSelectedItem.id);
       } else if (type === 'room') {
@@ -1370,7 +1369,7 @@ const UI = {
   async _ovFetchAndSelect(id, type) {
     try {
       let item;
-      const registryTypes = { spell: 'spells', item: 'items', class: 'classes', race: 'races', monster: 'monsters', quest: 'quests' };
+      const registryTypes = { spell: 'spells', item: 'items', class: 'classes', race: 'races', monster: 'monsters', quest: 'quests', lore_entry: 'lore_entries', narrator_preset: 'narrator_presets' };
       if (registryTypes[type]) {
         item = await API.getRegistryEntry(registryTypes[type], id);
       } else if (type === 'player') {
@@ -2390,6 +2389,10 @@ const UI = {
         return `Lv.${entry.minLevel ?? '?'}-${entry.maxLevel ?? '?'} | HP ${entry.baseHp ?? '?'} | ${entry.damageDice || '?'} | ${entry.rarity || 'common'}${entry.isBoss ? ' | BOSS' : ''}`;
       case 'quests':
         return `Lv.${entry.minLevel || 1} | ${(entry.stages || []).length} stages | Giver: ${entry.giverId || '?'}${entry.isOneTime === false ? ' | Repeatable' : ''}`;
+      case 'lore_entries':
+        return `${entry.loreScope || 'custom'} | ${entry.isStarterLore ? 'Starter' : (entry.discoveryTrigger || 'talk')}${entry.cascadeDown ? ' | Cascades' : ''}${entry.parentLoreId ? ` | Parent: ${entry.parentLoreId}` : ''}`;
+      case 'narrator_presets':
+        return `${entry.archetype || '?'}${entry.isSelectable ? '' : ' | Admin-only'} | Order: ${entry.sortOrder ?? 0}`;
       default:
         return entry.id || '';
     }
@@ -2445,7 +2448,8 @@ const UI = {
 
     try {
       // Singular form for API
-      const singularType = type.replace(/s$/, '');
+      const pluralToSingular = { spells: 'spell', items: 'item', classes: 'class', races: 'race', monsters: 'monster', quests: 'quest', lore_entries: 'lore_entry', narrator_presets: 'narrator_preset' };
+      const singularType = pluralToSingular[type] || type.replace(/s$/, '');
       const existingJson = textarea.value.trim() || null;
       const result = await API.generateContent(singularType, userMsg, existingJson);
 
@@ -2517,7 +2521,11 @@ const UI = {
     if (typeSelect) typeSelect.addEventListener('change', () => this.loadRegistry());
     if (worldSelect) worldSelect.addEventListener('change', () => this.loadRegistry());
     if (refreshBtn) refreshBtn.addEventListener('click', () => this.loadRegistry());
-    if (newBtn) newBtn.addEventListener('click', () => this.openRegistryEditor(null, (typeSelect?.value || 'spells').replace(/s$/, '')));
+    if (newBtn) newBtn.addEventListener('click', () => {
+      const pluralToSingular = { spells: 'spell', items: 'item', classes: 'class', races: 'race', monsters: 'monster', quests: 'quest', lore_entries: 'lore_entry', narrator_presets: 'narrator_preset' };
+      const singular = pluralToSingular[typeSelect?.value] || 'spell';
+      this.openRegistryEditor(null, singular);
+    });
     if (saveBtn) saveBtn.addEventListener('click', () => this.saveRegistryEntry());
     if (cancelBtn) cancelBtn.addEventListener('click', () => this.closeRegistryEditor());
     if (deleteBtn) deleteBtn.addEventListener('click', () => this.deleteRegistryEntry(this._registryEditingId));

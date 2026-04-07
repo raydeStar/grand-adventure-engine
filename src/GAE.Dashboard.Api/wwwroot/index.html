@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=19" />
+  <link rel="stylesheet" href="css/style.css?v=20" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.7/signalr.min.js"
           crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="https://cdn.jsdelivr.net/npm/rot-js@2/dist/rot.min.js"
@@ -261,6 +261,8 @@
                       <button class="dm-quick-btn" data-ov-quick="races" type="button">All Races</button>
                       <button class="dm-quick-btn" data-ov-quick="monsters" type="button">All Monsters</button>
                       <button class="dm-quick-btn" data-ov-quick="quests" type="button">All Quests</button>
+                      <button class="dm-quick-btn" data-ov-quick="lore_entries" type="button">All Lore</button>
+                      <button class="dm-quick-btn" data-ov-quick="narrator_presets" type="button">Narrators</button>
                     </div>
                   </div>
                 </div>
@@ -582,6 +584,8 @@
                     <option value="races">Races</option>
                     <option value="monsters">Monsters</option>
                     <option value="quests">Quests</option>
+                    <option value="lore_entries">Lore</option>
+                    <option value="narrator_presets">Narrator Presets</option>
                   </select>
                   <input type="text" id="registry-filter-input" placeholder="Search by name, id, or description..." autocomplete="off" />
                   <span class="registry-count" id="registry-count"></span>
@@ -669,7 +673,7 @@
   <script src="js/api.js?v=4"></script>
   <script src="js/signalr-client.js?v=3"></script>
   <script src="js/room-map.js?v=3"></script>
-  <script src="js/ui.js?v=18"></script>
-  <script src="js/app.js?v=16"></script>
+  <script src="js/ui.js?v=19"></script>
+  <script src="js/app.js?v=17"></script>
 </body>
 </html>

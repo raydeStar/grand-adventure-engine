@@ -1583,6 +1583,18 @@ public class DashboardController : ControllerBase
                 if (InWorld(qst.WorldIds) && Matches(qst.Id, qst.Name, qst.Description, qst.GiverId, qst.Tags, query))
                     results.Add(new { type = "quest", qst.Id, qst.Name, qst.Description, meta = $"Lv.{qst.MinLevel} | {qst.Stages.Count} stages | Giver: {qst.GiverId}", worldIds = qst.WorldIds, data = qst });
 
+        // Search lore entries
+        if (filter is null or "lore_entry")
+            foreach (var l in _registry.LoreEntries.GetAll())
+                if (InWorld(l.WorldIds) && Matches(l.Id, l.Name, l.Description, l.LoreScope, l.Tags, query))
+                    results.Add(new { type = "lore_entry", l.Id, l.Name, l.Description, meta = $"{l.LoreScope} | {(l.IsStarterLore ? "Starter" : l.DiscoveryTrigger)}{(l.CascadeDown ? " | Cascades" : "")}{(l.ParentLoreId is not null ? $" | Parent: {l.ParentLoreId}" : "")}", worldIds = l.WorldIds, data = l });
+
+        // Search narrator presets
+        if (filter is null or "narrator_preset")
+            foreach (var np in _registry.NarratorPresets.GetAll())
+                if (InWorld(np.WorldIds) && Matches(np.Id, np.Name, np.Description, np.Archetype, np.Tags, query))
+                    results.Add(new { type = "narrator_preset", np.Id, np.Name, np.Description, meta = $"{np.Archetype}{(np.IsSelectable ? "" : " | Admin-only")} | Order: {np.SortOrder}", worldIds = np.WorldIds, data = np });
+
         // Fetch rooms once if needed for room or NPC search
         var needRooms = filter is null or "room" or "npc";
         var rooms = needRooms ? await _stateManager.GetAllRoomsAsync(ct) : [];
@@ -1683,6 +1695,18 @@ public class DashboardController : ControllerBase
                         results.Add(new { type = "quest", qst.Id, qst.Name, qst.Description,
                             meta = $"Lv.{qst.MinLevel} | {qst.Stages.Count} stages | Giver: {qst.GiverId}", worldIds = qst.WorldIds, data = qst });
                 break;
+            case "lore_entries":
+                foreach (var l in _registry.LoreEntries.GetAll())
+                    if (InWorld(l.WorldIds))
+                        results.Add(new { type = "lore_entry", l.Id, l.Name, l.Description,
+                            meta = $"{l.LoreScope} | {(l.IsStarterLore ? "Starter" : l.DiscoveryTrigger)}{(l.CascadeDown ? " | Cascades" : "")}{(l.ParentLoreId is not null ? $" | Parent: {l.ParentLoreId}" : "")}", worldIds = l.WorldIds, data = l });
+                break;
+            case "narrator_presets":
+                foreach (var np in _registry.NarratorPresets.GetAll())
+                    if (InWorld(np.WorldIds))
+                        results.Add(new { type = "narrator_preset", np.Id, np.Name, np.Description,
+                            meta = $"{np.Archetype}{(np.IsSelectable ? "" : " | Admin-only")} | Order: {np.SortOrder}", worldIds = np.WorldIds, data = np });
+                break;
         }
         return Ok(new { results, total = results.Count });
     }
@@ -1713,6 +1737,8 @@ public class DashboardController : ControllerBase
             "items" => Ok(_registry.Items.GetAll()),
             "monsters" => Ok(_registry.Monsters.GetAll()),
             "quests" => Ok(_registry.Quests.GetAll()),
+            "lore_entries" => Ok(_registry.LoreEntries.GetAll()),
+            "narrator_presets" => Ok(_registry.NarratorPresets.GetAll()),
             _ => NotFound(new { error = $"Unknown registry type: {type}" })
         };
     }
@@ -1729,6 +1755,8 @@ public class DashboardController : ControllerBase
             "items" => _registry.Items.GetById(id),
             "monsters" => _registry.Monsters.GetById(id),
             "quests" => _registry.Quests.GetById(id),
+            "lore_entries" => _registry.LoreEntries.GetById(id),
+            "narrator_presets" => _registry.NarratorPresets.GetById(id),
             _ => null
         };
         return entry is not null ? Ok(entry) : NotFound();
@@ -1744,6 +1772,8 @@ public class DashboardController : ControllerBase
             classes = _registry.Classes.Count,
             races = _registry.Races.Count,
             items = _registry.Items.Count,
+            loreEntries = _registry.LoreEntries.Count,
+            narratorPresets = _registry.NarratorPresets.Count,
             spellList = _registry.Spells.GetAll().Select(s => new { s.Id, s.Name, s.School, s.PowerLevel, s.ManaCost, s.RequiredLevel }),
             classList = _registry.Classes.GetAll().Select(c => new { c.Id, c.Name, c.CanCastSpells, c.PrimaryStat }),
             raceList = _registry.Races.GetAll().Select(r => new { r.Id, r.Name, r.Traits }),
@@ -1799,6 +1829,18 @@ public class DashboardController : ControllerBase
                     _registry.Quests.Register(quest);
                     if (_contentSeed is not null) await _contentSeed.SaveEntryAsync("quest", quest, ct);
                     return Ok(quest);
+                case "lore_entries":
+                    var loreEntry = System.Text.Json.JsonSerializer.Deserialize<LoreEntry>(body.GetRawText(), options);
+                    if (loreEntry is null || string.IsNullOrWhiteSpace(loreEntry.Id)) return BadRequest(new { error = "Invalid lore entry data" });
+                    _registry.LoreEntries.Register(loreEntry);
+                    if (_contentSeed is not null) await _contentSeed.SaveEntryAsync("lore_entry", loreEntry, ct);
+                    return Ok(loreEntry);
+                case "narrator_presets":
+                    var narratorPreset = System.Text.Json.JsonSerializer.Deserialize<NarratorPreset>(body.GetRawText(), options);
+                    if (narratorPreset is null || string.IsNullOrWhiteSpace(narratorPreset.Id)) return BadRequest(new { error = "Invalid narrator preset data" });
+                    _registry.NarratorPresets.Register(narratorPreset);
+                    if (_contentSeed is not null) await _contentSeed.SaveEntryAsync("narrator_preset", narratorPreset, ct);
+                    return Ok(narratorPreset);
                 default:
                     return NotFound(new { error = $"Unknown registry type: {type}" });
             }
@@ -1822,6 +1864,8 @@ public class DashboardController : ControllerBase
             case "items": _registry.Items.Remove(id); contentType = "item"; break;
             case "monsters": _registry.Monsters.Remove(id); contentType = "monster"; break;
             case "quests": _registry.Quests.Remove(id); contentType = "quest"; break;
+            case "lore_entries": _registry.LoreEntries.Remove(id); contentType = "lore_entry"; break;
+            case "narrator_presets": _registry.NarratorPresets.Remove(id); contentType = "narrator_preset"; break;
             default: return NotFound(new { error = $"Unknown registry type: {type}" });
         }
         if (_contentSeed is not null && contentType is not null)
@@ -1837,6 +1881,67 @@ public class DashboardController : ControllerBase
             return BadRequest(new { error = "contentType and description are required." });
 
         var result = await _narrator.GenerateContentAsync(request.ContentType, request.Description, request.ExistingJson, ct);
+        return Ok(new { json = result });
+    }
+
+    /// <summary>
+    /// AI-assisted quest generation. Accepts a brief, selected lore context, and world ID.
+    /// Assembles a rich prompt with relevant lore, NPCs, and locations, then returns a structured quest definition.
+    /// </summary>
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpPost("admin/registry/generate-quest")]
+    public async Task<IActionResult> GenerateQuest([FromBody] GenerateQuestRequest request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.Brief))
+            return BadRequest(new { error = "A brief description is required." });
+
+        // Gather lore context
+        var loreContext = new List<string>();
+        if (request.LoreEntryIds is { Count: > 0 })
+        {
+            foreach (var loreId in request.LoreEntryIds)
+            {
+                var lore = _registry.LoreEntries.GetById(loreId);
+                if (lore is not null)
+                    loreContext.Add($"[{lore.LoreScope}: {lore.Name}] {lore.Content ?? lore.Description ?? ""}");
+            }
+        }
+
+        // Gather NPC context from specified world
+        var npcContext = new List<string>();
+        var roomContext = new List<string>();
+        if (!string.IsNullOrWhiteSpace(request.WorldId))
+        {
+            var rooms = await _stateManager.GetAllRoomsAsync(ct);
+            var worldRooms = rooms.Where(r => r.WorldIds?.Contains(request.WorldId, StringComparer.OrdinalIgnoreCase) ?? false).ToList();
+            foreach (var rm in worldRooms)
+            {
+                roomContext.Add($"Room: {rm.Name} (id: {rm.Id}) - {rm.Description}");
+                foreach (var npc in rm.Npcs)
+                    npcContext.Add($"NPC: {npc.Name} (id: {npc.Id}) in {rm.Name} - {npc.Personality}, faction: {npc.Faction}");
+            }
+        }
+
+        // Build the generation prompt with full context
+        var contextBlock = "";
+        if (loreContext.Count > 0)
+            contextBlock += "\n\n## Relevant Lore\n" + string.Join("\n", loreContext);
+        if (npcContext.Count > 0)
+            contextBlock += "\n\n## Available NPCs\n" + string.Join("\n", npcContext.Take(30));
+        if (roomContext.Count > 0)
+            contextBlock += "\n\n## Available Locations\n" + string.Join("\n", roomContext.Take(30));
+
+        // Existing quests for reference
+        var existingQuests = _registry.Quests.GetAll()
+            .Where(q => string.IsNullOrWhiteSpace(request.WorldId) || (q.WorldIds?.Contains(request.WorldId, StringComparer.OrdinalIgnoreCase) ?? false))
+            .Select(q => $"- {q.Name} (id: {q.Id}): {q.Description}")
+            .Take(20);
+        if (existingQuests.Any())
+            contextBlock += "\n\n## Existing Quests (avoid duplicates)\n" + string.Join("\n", existingQuests);
+
+        var fullDescription = $"Generate a quest based on this brief: {request.Brief}\n\nTarget level range: {request.MinLevel ?? 1}-{request.MaxLevel ?? 5}{contextBlock}";
+
+        var result = await _narrator.GenerateContentAsync("quest", fullDescription, null, ct);
         return Ok(new { json = result });
     }
 
@@ -2484,6 +2589,20 @@ public class ContentGenerateRequest
     public string ContentType { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public string? ExistingJson { get; set; }
+}
+
+public class GenerateQuestRequest
+{
+    /// <summary>1-3 sentences of direction for the quest.</summary>
+    public string Brief { get; set; } = string.Empty;
+    /// <summary>World ID to pull NPC/room context from.</summary>
+    public string? WorldId { get; set; }
+    /// <summary>Lore entry IDs to include as context for the AI.</summary>
+    public List<string>? LoreEntryIds { get; set; }
+    /// <summary>Minimum player level for the quest.</summary>
+    public int? MinLevel { get; set; }
+    /// <summary>Maximum player level for the quest.</summary>
+    public int? MaxLevel { get; set; }
 }
 
 public class ActionRequest

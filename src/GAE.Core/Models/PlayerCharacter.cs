@@ -45,6 +45,13 @@ public class PlayerCharacter
     // Quest log
     public List<QuestProgress> QuestLog { get; set; } = [];
 
+    // Lore & narrator
+    /// <summary>IDs of lore entries this player has discovered.</summary>
+    public List<string> DiscoveredLore { get; set; } = [];
+
+    /// <summary>ID of the narrator preset assigned to this player. Null = world default.</summary>
+    public string? NarratorPresetId { get; set; }
+
     // Timestamps
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset LastActiveAt { get; set; } = DateTimeOffset.UtcNow;

@@ -18,6 +18,8 @@ public class ContentRegistryService : IContentRegistryService
     public IContentRegistry<ItemTemplate> Items { get; } = new ContentRegistry<ItemTemplate>();
     public IContentRegistry<MonsterTemplate> Monsters { get; } = new ContentRegistry<MonsterTemplate>();
     public IContentRegistry<QuestDefinition> Quests { get; } = new ContentRegistry<QuestDefinition>();
+    public IContentRegistry<LoreEntry> LoreEntries { get; } = new ContentRegistry<LoreEntry>();
+    public IContentRegistry<NarratorPreset> NarratorPresets { get; } = new ContentRegistry<NarratorPreset>();
 
     public ContentRegistryService(ILogger<ContentRegistryService> logger)
     {
@@ -78,7 +80,7 @@ public class ContentRegistryService : IContentRegistryService
 
     public void LogRegistrySummary()
     {
-        _logger.LogInformation("Content registries loaded: {Spells} spells, {Classes} classes, {Races} races, {Items} items, {Monsters} monsters, {Quests} quests",
-            Spells.Count, Classes.Count, Races.Count, Items.Count, Monsters.Count, Quests.Count);
+        _logger.LogInformation("Content registries loaded: {Spells} spells, {Classes} classes, {Races} races, {Items} items, {Monsters} monsters, {Quests} quests, {LoreEntries} lore entries, {NarratorPresets} narrator presets",
+            Spells.Count, Classes.Count, Races.Count, Items.Count, Monsters.Count, Quests.Count, LoreEntries.Count, NarratorPresets.Count);
     }
 }

@@ -1,0 +1,452 @@
+# ══════════════════════════════════════════════════════════════════
+# LOREBOOK SEED — Hierarchical World Lore for Ivalice
+# Lore tree: Planet → Region → City/Zone → Faction/Location → NPC/Event
+# ══════════════════════════════════════════════════════════════════
+
+lore_entries:
+
+  # ═══════════════════════════════════════════════════════════
+  #  STARTER LORE — Auto-granted on character creation
+  # ═══════════════════════════════════════════════════════════
+
+  - id: "lore-mechanics-combat"
+    name: "Combat Basics"
+    lore_scope: "mechanic"
+    is_starter_lore: true
+    cascade_down: false
+    discovery_trigger: "auto"
+    description: "How fighting works in this world."
+    content: >
+      Combat in Ivalice is turn-based and brutal. When hostilities begin, you and your
+      opponent trade blows in sequence. Your STR governs melee damage, DEX determines
+      hit chance and dodge, and CON is the difference between walking away and being
+      carried out. Spellcasters draw from MP to unleash magical attacks — INT boosts
+      spell power while WIS improves spell accuracy. LUCK influences critical hits
+      and loot drops. Don't forget: running away is always an option. The dead have
+      no pride to protect.
+    narrator_hint: "Reference combat mechanics naturally when the player first enters a fight or asks about fighting."
+    tags: ["tutorial", "combat", "starter"]
+
+  - id: "lore-mechanics-stats"
+    name: "Attributes & Stats"
+    lore_scope: "mechanic"
+    is_starter_lore: true
+    cascade_down: false
+    discovery_trigger: "auto"
+    description: "The seven attributes that define every adventurer."
+    content: >
+      Seven attributes shape your fate: STR (raw power), DEX (agility and finesse),
+      CON (toughness and endurance), INT (arcane knowledge), WIS (perception and willpower),
+      CHA (force of personality), and LUCK (the universe's opinion of you).
+      Each attribute provides a modifier: (stat - 10) / 2, rounded down.
+      Equipment can boost these further. A silver tongue (high CHA) opens doors
+      that a sharp sword cannot — and vice versa.
+    narrator_hint: "Explain stat mechanics when the player checks their stats for the first time or asks about attributes."
+    tags: ["tutorial", "stats", "starter"]
+
+  - id: "lore-mechanics-magic"
+    name: "Magic & Spellcasting"
+    lore_scope: "mechanic"
+    is_starter_lore: true
+    cascade_down: false
+    discovery_trigger: "auto"
+    description: "How the arcane arts function in Ivalice."
+    content: >
+      Magic flows through the Mist — an invisible energy that permeates Ivalice.
+      Spellcasters channel Mist through learned formulae (registered spells) or raw
+      willpower (improvised spells). Registered spells are reliable and cost fixed MP.
+      Improvised spells are creative but risky — exceed your power cap and the spell
+      fizzles spectacularly. Your class determines your spell cap and which registered
+      spells you can learn. Even non-casters can attempt minor cantrips, though the
+      results tend to be... entertaining.
+    narrator_hint: "Weave Mist lore into magic-related narration. The Mist is visible in certain areas as a faint shimmer."
+    tags: ["tutorial", "magic", "mist", "starter"]
+
+  - id: "lore-mechanics-equipment"
+    name: "Equipment & Inventory"
+    lore_scope: "mechanic"
+    is_starter_lore: true
+    cascade_down: false
+    discovery_trigger: "auto"
+    description: "Weapons, armor, and the things you carry."
+    content: >
+      You can equip items in ten slots: Weapon, Armor, Shield, Helmet, Cloak, Boots,
+      Gloves, Ring, Amulet, and Bracelet. Each piece may grant stat bonuses or special
+      effects. Weapons have damage dice (like 1d8+2), and armor provides a flat defense
+      bonus. Two-handed weapons sacrifice your shield slot for extra damage. Consumables
+      like potions can be used in or out of combat. Shops sell gear for Gil — the
+      universal currency. If you can't afford it, there's always the old-fashioned
+      way: take it off something that doesn't need it anymore.
+    narrator_hint: "Reference equipment naturally when the player finds loot, visits a shop, or asks about gear."
+    tags: ["tutorial", "equipment", "starter"]
+
+  # ═══════════════════════════════════════════════════════════
+  #  PLANET-LEVEL LORE — Root of the hierarchy
+  # ═══════════════════════════════════════════════════════════
+
+  - id: "lore-ivalice"
+    name: "Ivalice"
+    lore_scope: "planet"
+    is_starter_lore: true
+    cascade_down: false
+    discovery_trigger: "auto"
+    description: "The world of Ivalice — a land of crystal, conflict, and ancient powers."
+    content: >
+      Ivalice is a world where magic flows through an energy called the Mist, where
+      ancient beings called the Occuria once shaped the course of history from their
+      hidden realm, and where empires rise and fall like desert tides. The great city
+      of Rabanastre sits at the crossroads of trade and conflict — a jewel of the
+      desert kingdom of Dalmasca, now under the shadow of Imperial occupation.
+      Espers — beings of immense power — slumber in forgotten places, and the
+      nethicite crystals that once powered civilizations now threaten to destroy them.
+      Adventures begin in taverns. Yours begins at The Seventh Heaven.
+    narrator_hint: "Ivalice is the backdrop for everything. Reference the Mist, the political tension, and the ancient mysteries when setting atmosphere."
+    tags: ["world", "ivalice", "starter"]
+
+  # ═══════════════════════════════════════════════════════════
+  #  REGION: DALMASCA
+  # ═══════════════════════════════════════════════════════════
+
+  - id: "lore-dalmasca"
+    name: "The Kingdom of Dalmasca"
+    lore_scope: "region"
+    parent_lore_id: "lore-ivalice"
+    is_starter_lore: false
+    cascade_down: false
+    discovery_trigger: "talk"
+    description: "A desert kingdom under Imperial occupation."
+    content: >
+      Dalmasca was once a proud, independent kingdom ruled by the Dalmascan royal line.
+      Two years ago, the Archadian Empire invaded under the pretense of a peace treaty.
+      King Raminas was assassinated, the princess vanished, and Dalmasca became a
+      conquered province. Now Imperial soldiers patrol the streets, taxes bleed the
+      merchants dry, and the people endure with quiet defiance. But whispers of
+      resistance grow louder in the back alleys, and not everyone has accepted
+      the Empire's rule.
+    teaser: "A desert kingdom with a troubled recent history..."
+    narrator_hint: "The Imperial occupation is the central political conflict. NPCs have strong opinions about it."
+    linked_entity_ids: ["rabanastre"]
+    tags: ["region", "dalmasca", "politics", "empire"]
+
+  # ═══════════════════════════════════════════════════════════
+  #  CITY: RABANASTRE
+  # ═══════════════════════════════════════════════════════════
+
+  - id: "lore-rabanastre"
+    name: "Rabanastre"
+    lore_scope: "city"
+    parent_lore_id: "lore-dalmasca"
+    cascade_down: false
+    discovery_trigger: "explore"
+    discovery_source_id: "spawn"
+    description: "The great desert city, jewel of Dalmasca."
+    content: >
+      Rabanastre is a sprawling desert metropolis of sandstone archways, grand bazaars,
+      and narrow back alleys. The city is divided between the sunlit upper districts where
+      Imperial officers and wealthy merchants reside, and the lower quarters where the
+      common folk scrape by. The Garamsythe Waterway runs beneath everything — an
+      ancient sewer system that now serves as both a trade route for smugglers and a
+      highway for monsters. The city's beating heart is the town square, where news,
+      gossip, and gil flow freely.
+    teaser: "A great desert city you've heard stories about..."
+    narrator_hint: "Rabanastre is bustling, hot, and full of contrasts — wealth next to poverty, Imperial order next to underground chaos."
+    linked_entity_ids: ["spawn", "town_square", "back_alley"]
+    tags: ["city", "rabanastre", "dalmasca", "desert"]
+
+  # ═══════════════════════════════════════════════════════════
+  #  LOCATIONS IN RABANASTRE
+  # ═══════════════════════════════════════════════════════════
+
+  - id: "lore-seventh-heaven"
+    name: "The Seventh Heaven"
+    lore_scope: "location"
+    parent_lore_id: "lore-rabanastre"
+    cascade_down: false
+    discovery_trigger: "explore"
+    discovery_source_id: "spawn"
+    description: "A bustling tavern run by a former resistance fighter."
+    content: >
+      The Seventh Heaven is more than just a tavern — it's a sanctuary. Run by Tifa
+      Lockhart, a former member of the resistance group AVALANCHE, the bar serves as an
+      unofficial meeting point for those who oppose Imperial rule. The drinks are strong,
+      the food is surprisingly good, and if you know the right words, you can access
+      information networks that reach across all of Dalmasca. A faded AVALANCHE poster
+      hangs behind the bar, half-hidden by bottles — a reminder of fights past and
+      perhaps fights yet to come.
+    teaser: "A tavern where the drinks come with a side of secrets..."
+    narrator_hint: "The Seventh Heaven feels warm and safe despite the world outside. Tifa's presence makes it a hub of quiet resistance."
+    linked_entity_ids: ["spawn", "innkeeper_mara"]
+    tags: ["location", "tavern", "seventh-heaven", "avalanche"]
+
+  - id: "lore-garamsythe"
+    name: "The Garamsythe Waterway"
+    lore_scope: "location"
+    parent_lore_id: "lore-rabanastre"
+    cascade_down: false
+    discovery_trigger: "explore"
+    discovery_source_id: "tavern_cellar"
+    description: "Ancient sewers beneath Rabanastre, now a monster-infested smuggler highway."
+    content: >
+      The Garamsythe Waterway is an ancient system of canals and tunnels beneath
+      Rabanastre, originally built to manage floodwaters from the Estersand. Over the
+      centuries it became a smuggler's route, a hiding place for fugitives, and eventually
+      a breeding ground for monsters. Giant rats, flans, and worse things lurk in the
+      dark. The Resistance uses certain passages for covert movement, though they're
+      careful — the deeper sections are truly dangerous. Strange markings on the oldest
+      walls suggest the waterway predates Rabanastre itself.
+    teaser: "Dark tunnels beneath the city where things lurk..."
+    narrator_hint: "The waterway is claustrophobic, damp, and echoing. Light sources flicker. Something is always watching."
+    linked_entity_ids: ["tavern_cellar"]
+    tags: ["location", "dungeon", "waterway", "underground"]
+
+  # ═══════════════════════════════════════════════════════════
+  #  FACTIONS
+  # ═══════════════════════════════════════════════════════════
+
+  - id: "lore-dalmascan-resistance"
+    name: "The Dalmascan Resistance"
+    lore_scope: "faction"
+    parent_lore_id: "lore-dalmasca"
+    cascade_down: false
+    discovery_trigger: "talk"
+    discovery_source_id: "innkeeper_mara"
+    description: "Freedom fighters loyal to the memory of King Raminas."
+    content: >
+      The Dalmascan Resistance is a loosely organized network of freedom fighters,
+      spies, smugglers, and ordinary citizens united by one goal: liberating Dalmasca
+      from Imperial rule. They operate in cells — small groups that know only their
+      immediate contacts — to prevent the Empire from rolling up the entire network
+      if one member is captured. Tifa Lockhart's Seventh Heaven serves as an unofficial
+      headquarters. The Resistance lacks the military power to challenge the Empire
+      directly, so they rely on sabotage, intelligence gathering, and building alliances
+      with sympathetic factions. Rumors say they're searching for something that could
+      turn the tide — an ancient power hidden beneath the desert.
+    teaser: "Whispers of organized resistance against the Empire..."
+    narrator_hint: "The Resistance is real but cautious. NPCs won't openly discuss it unless they trust the player."
+    linked_entity_ids: ["innkeeper_mara", "drunk_pete"]
+    tags: ["faction", "resistance", "dalmasca", "avalanche"]
+
+  - id: "lore-occuria-cult"
+    name: "The Cult of the Occuria"
+    lore_scope: "faction"
+    parent_lore_id: "lore-ivalice"
+    cascade_down: false
+    discovery_trigger: "talk"
+    description: "Zealots who worship the ancient Occuria as gods."
+    content: >
+      The Cult of the Occuria is a fanatical religious order that believes the Occuria —
+      ancient, godlike beings who once shaped Ivalice's history — are the true rulers
+      of the world and must be served absolutely. They seek to awaken the Esper sealed
+      within the Pharos at Ridorana, believing this will herald the Occuria's return.
+      Their members are found throughout Ivalice, often disguised as scholars, merchants,
+      or even Imperial officers. They are willing to kill, manipulate, and sacrifice
+      anything in service of their divine masters. Most people dismiss them as lunatics.
+      Those who've seen their work up close know better.
+    teaser: "A strange religious order with dangerous beliefs..."
+    narrator_hint: "The Cult operates in the shadows. Their members seem normal until they don't. Creepy undertones."
+    tags: ["faction", "cult", "occuria", "antagonist"]
+
+  - id: "lore-merchants-guild"
+    name: "Rabanastre Merchants' Guild"
+    lore_scope: "faction"
+    parent_lore_id: "lore-rabanastre"
+    cascade_down: false
+    discovery_trigger: "talk"
+    description: "The shopkeepers and traders who keep Rabanastre's economy alive."
+    content: >
+      The Merchants' Guild is the economic backbone of Rabanastre. Run by a council
+      of the city's wealthiest traders, they control prices, regulate trade routes,
+      and maintain the Grand Bazaar. They're officially neutral in the conflict between
+      the Empire and the Resistance, but in practice they'll do business with anyone
+      who has Gil. Several Moogles hold senior positions — their natural affinity for
+      commerce and bookkeeping makes them invaluable. The Guild's motto: "Gil doesn't
+      care whose pocket it came from." They charge membership fees, offer bulk discounts,
+      and occasionally hire adventurers for caravan escort work.
+    teaser: "A powerful trading organization in the city..."
+    narrator_hint: "The Guild is pragmatic and mercenary. They respect wealth and shrewd dealing above all."
+    linked_entity_ids: ["merchants_guild"]
+    tags: ["faction", "merchants", "trade", "moogle"]
+
+  # ═══════════════════════════════════════════════════════════
+  #  NPCs
+  # ═══════════════════════════════════════════════════════════
+
+  - id: "lore-tifa"
+    name: "Tifa Lockhart"
+    lore_scope: "npc"
+    parent_lore_id: "lore-dalmascan-resistance"
+    cascade_down: false
+    discovery_trigger: "talk"
+    discovery_source_id: "innkeeper_mara"
+    description: "Bartender, martial artist, and former AVALANCHE operative."
+    content: >
+      Tifa Lockhart runs The Seventh Heaven with warmth, precision, and fists that
+      could crack sandstone. A former member of the eco-resistance group AVALANCHE,
+      she came to Rabanastre after that chapter of her life ended — though she doesn't
+      talk about why. She carries a complicated history with a spiky-haired swordsman
+      and a grief she keeps locked behind her smile. As a bartender, she's everyone's
+      confidant. As a fighter, she's terrifying — her Premium Heart gloves sit behind
+      the counter, always within reach. She feeds intelligence to the Dalmascan
+      Resistance but isn't officially a member. Her tavern is neutral ground, and
+      she enforces that with extreme prejudice.
+    teaser: "The bartender at The Seventh Heaven — seems like more than she lets on..."
+    narrator_hint: "Tifa is warm but guarded about her past. High CHA unlocks more personal details. She's observant and notices everything."
+    linked_entity_ids: ["innkeeper_mara", "spawn"]
+    tags: ["npc", "tifa", "avalanche", "bartender", "martial-artist"]
+
+  - id: "lore-wedge"
+    name: "Wedge"
+    lore_scope: "npc"
+    parent_lore_id: "lore-dalmascan-resistance"
+    cascade_down: false
+    discovery_trigger: "talk"
+    discovery_source_id: "drunk_pete"
+    description: "A perpetually drunk resistance member waiting for his partner Biggs to return."
+    content: >
+      Wedge is one half of the legendary duo Biggs & Wedge — except Biggs shipped
+      out on a mission weeks ago and hasn't come back. Since then, Wedge has been
+      drowning his worry (and his sorrows) at The Seventh Heaven's bar. He's hapless,
+      good-hearted, and terrible at keeping secrets, which is why the Resistance only
+      gives him low-level assignments. He claims he once piloted an airship — a story
+      that changes slightly every time he tells it. Despite his bumbling exterior,
+      Wedge is surprisingly loyal and brave when it matters. He just needs someone
+      to believe in him.
+    teaser: "A drunk regular at the tavern — seems to know people..."
+    narrator_hint: "Wedge is comic relief but has genuine heart. He accidentally drops hints about Resistance activities when drunk."
+    linked_entity_ids: ["drunk_pete", "spawn"]
+    tags: ["npc", "wedge", "biggs", "comic-relief", "resistance"]
+
+  # ═══════════════════════════════════════════════════════════
+  #  REGIONS: GOLMORE JUNGLE
+  # ═══════════════════════════════════════════════════════════
+
+  - id: "lore-golmore"
+    name: "The Golmore Jungle"
+    lore_scope: "region"
+    parent_lore_id: "lore-ivalice"
+    cascade_down: false
+    discovery_trigger: "explore"
+    description: "A vast primordial jungle of ancient magic and forgotten peoples."
+    content: >
+      The Golmore Jungle is a trackless expanse of ancient trees, bioluminescent fungi,
+      and predatory wildlife. The Viera — a reclusive race of tall, rabbit-eared warriors
+      — once called it home, though most have retreated deeper into the forest or left
+      entirely. The jungle is saturated with Mist, making magic unpredictable and powerful
+      within its borders. Ancient ruins dot the undergrowth, remnants of a civilization
+      that predated even the Occuria. Travelers who enter without a guide rarely return.
+      Those who do return speak of whispers in the canopy and lights that move with purpose.
+    teaser: "A dark jungle to the south that few return from..."
+    narrator_hint: "The jungle is alive and aware. Nature here has opinions. The Mist makes everything slightly surreal."
+    linked_entity_ids: ["golmore"]
+    tags: ["region", "jungle", "viera", "mist", "dangerous"]
+
+  # ═══════════════════════════════════════════════════════════
+  #  REGIONS: PHAROS AT RIDORANA
+  # ═══════════════════════════════════════════════════════════
+
+  - id: "lore-pharos"
+    name: "The Pharos at Ridorana"
+    lore_scope: "region"
+    parent_lore_id: "lore-ivalice"
+    cascade_down: false
+    discovery_trigger: "talk"
+    description: "A black tower rising from the sea, prison of an ancient Esper."
+    content: >
+      The Pharos at Ridorana is a monolithic tower of black stone that rises from
+      the ocean south of Ivalice. Built by the Occuria in an age before recorded
+      history, it serves as both a beacon and a prison — within its highest chamber
+      sleeps an Esper of devastating power, sealed away because even the Occuria
+      feared what it could do. The tower is filled with traps, guardians, and puzzles
+      designed to prevent anyone from reaching the summit. The Cult of the Occuria
+      believes awakening this Esper will herald a new age. The Resistance believes
+      it could be weaponized against the Empire. Everyone agrees: it's extremely dangerous.
+    teaser: "A mysterious black tower visible on the distant horizon..."
+    narrator_hint: "The Pharos is endgame content. Build dread and mystery when it's mentioned. No one who's gone inside has come back the same."
+    linked_entity_ids: ["pharos"]
+    tags: ["region", "pharos", "tower", "esper", "endgame", "occuria"]
+
+  # ═══════════════════════════════════════════════════════════
+  #  HISTORY & EVENTS
+  # ═══════════════════════════════════════════════════════════
+
+  - id: "lore-fall-of-dalmasca"
+    name: "The Fall of Dalmasca"
+    lore_scope: "event"
+    parent_lore_id: "lore-dalmasca"
+    cascade_down: false
+    discovery_trigger: "talk"
+    description: "The night the Empire took Dalmasca and King Raminas was murdered."
+    content: >
+      Two years ago, the Archadian Empire extended an offer of peace to King Raminas
+      of Dalmasca. The king traveled to Nalbina Fortress for the signing ceremony.
+      He never returned. The official Imperial account claims Dalmascan traitors
+      assassinated the king to provoke war. The truth, whispered in back alleys:
+      the Empire orchestrated the assassination and used the chaos to justify a full
+      military occupation. Princess Ashelia, heir to the throne, was reported dead —
+      but no body was ever found. The Resistance clings to the hope that she lives.
+      The anniversary of the Fall is a day of mourning in Rabanastre, observed in
+      silence under the watchful eyes of Imperial soldiers.
+    teaser: "Something terrible happened to this kingdom not long ago..."
+    narrator_hint: "The Fall is recent history and deeply emotional for Dalmascans. NPCs react strongly when it's mentioned."
+    tags: ["event", "history", "dalmasca", "empire", "assassination"]
+
+  - id: "lore-mist"
+    name: "The Mist"
+    lore_scope: "history"
+    parent_lore_id: "lore-ivalice"
+    cascade_down: false
+    discovery_trigger: "talk"
+    description: "The invisible magical energy that permeates all of Ivalice."
+    content: >
+      The Mist is the lifeblood of magic in Ivalice. It flows through the air like
+      an invisible current, concentrating in certain areas — jungles, ruins, and
+      places where the earth is thin. Spellcasters draw upon the Mist to fuel their
+      magic, and Mist-dense areas amplify magical effects (sometimes dangerously).
+      Nethicite — a rare crystal — can absorb and store Mist, making it incredibly
+      valuable and incredibly dangerous. The ancient Occuria crafted nethicite as tools
+      of control. The Empire now seeks it as a weapon. In high concentrations, Mist
+      can warp reality: animals grow monstrous, the dead stir, and the boundaries
+      between worlds grow thin.
+    teaser: "A strange energy that seems to power magic in this world..."
+    narrator_hint: "The Mist is everywhere but invisible to most. Describe it as a shimmer, a tingling, or a pressure in the air when it's relevant."
+    tags: ["history", "mist", "magic", "nethicite", "occuria"]
+
+  - id: "lore-occuria"
+    name: "The Occuria"
+    lore_scope: "history"
+    parent_lore_id: "lore-ivalice"
+    cascade_down: false
+    discovery_trigger: "quest"
+    description: "Ancient godlike beings who once shaped the destiny of Ivalice."
+    content: >
+      The Occuria are ancient, incorporeal beings who existed before mortal races
+      walked Ivalice. They shaped history from the shadows — creating the Espers
+      as servants, crafting nethicite to control the flow of Mist, and manipulating
+      mortal rulers as puppets. When a mortal dared defy them, the Occuria sealed
+      their most powerful Esper in the Pharos and withdrew from the world. Or so
+      the stories say. Some scholars believe the Occuria never truly left — that
+      they still whisper in the ears of the powerful, nudging history toward their
+      unknowable ends. The Cult worships them. The wise fear them.
+    teaser: "Legends speak of ancient beings who shaped the world..."
+    narrator_hint: "The Occuria should feel Lovecraftian — vast, alien, and beyond mortal comprehension. They are not benevolent."
+    tags: ["history", "occuria", "gods", "ancient", "esper", "deep-lore"]
+
+  - id: "lore-espers"
+    name: "The Espers"
+    lore_scope: "history"
+    parent_lore_id: "lore-occuria"
+    cascade_down: false
+    discovery_trigger: "quest"
+    description: "Powerful beings created by the Occuria, now sealed across Ivalice."
+    content: >
+      Espers are beings of immense magical power, created by the Occuria as servants
+      and weapons. When the Espers rebelled — seeking freedom from their creators —
+      the Occuria crushed them and sealed each one in a prison of stone and magic.
+      These prisons are scattered across Ivalice: in forgotten ruins, deep caverns,
+      and the depths of the Pharos. An Esper can be freed by a mortal of sufficient
+      power and will, binding the Esper to their service. This is the foundation
+      of summoning magic. But the most powerful Esper — the one sealed in the Pharos —
+      has never been freed. There's a reason for that.
+    teaser: "Ancient creatures of incredible power, locked away for centuries..."
+    narrator_hint: "Espers are endgame mysteries. Build intrigue and dread. Each one has a tragic backstory."
+    tags: ["history", "espers", "summoning", "occuria", "power"]

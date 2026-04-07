@@ -279,6 +279,34 @@ public class ContentSeedService
             }
         }
 
+        // Lore Entries
+        var lorebookPath = Path.Combine(configDir, "lorebook-seed.yaml");
+        if (File.Exists(lorebookPath))
+        {
+            var yaml = await File.ReadAllTextAsync(lorebookPath, ct);
+            var loreEntries = DeserializeYaml<LoreEntrySeedFile>(yaml)?.LoreEntries;
+            if (loreEntries is not null)
+            {
+                foreach (var l in loreEntries)
+                    entities.Add(ToEntity("lore_entry", l));
+                _logger.LogInformation("Prepared {Count} lore entries for DB seeding", loreEntries.Count);
+            }
+        }
+
+        // Narrator Presets
+        var narratorPresetsPath = Path.Combine(configDir, "narrator-presets-seed.yaml");
+        if (File.Exists(narratorPresetsPath))
+        {
+            var yaml = await File.ReadAllTextAsync(narratorPresetsPath, ct);
+            var presets = DeserializeYaml<NarratorPresetSeedFile>(yaml)?.NarratorPresets;
+            if (presets is not null)
+            {
+                foreach (var p in presets)
+                    entities.Add(ToEntity("narrator_preset", p));
+                _logger.LogInformation("Prepared {Count} narrator presets for DB seeding", presets.Count);
+            }
+        }
+
         if (entities.Count > 0)
         {
             db.ContentRegistry.AddRange(entities);
@@ -319,6 +347,14 @@ public class ContentSeedService
                 case "quest":
                     var quest = JsonSerializer.Deserialize<QuestDefinition>(entity.Data, JsonOpts);
                     if (quest is not null) registryService.Quests.Register(quest);
+                    break;
+                case "lore_entry":
+                    var loreEntry = JsonSerializer.Deserialize<LoreEntry>(entity.Data, JsonOpts);
+                    if (loreEntry is not null) registryService.LoreEntries.Register(loreEntry);
+                    break;
+                case "narrator_preset":
+                    var preset = JsonSerializer.Deserialize<NarratorPreset>(entity.Data, JsonOpts);
+                    if (preset is not null) registryService.NarratorPresets.Register(preset);
                     break;
                 default:
                     _logger.LogWarning("Unknown content type in DB: {ContentType}", entity.ContentType);
@@ -425,6 +461,8 @@ public class ContentSeedService
     private class MonsterSeedFile { public List<MonsterTemplate>? Monsters { get; set; } }
     private class ItemSeedFile { public List<LoreItemDto>? Items { get; set; } }
     private class QuestSeedFile { public List<QuestDefinition>? Quests { get; set; } }
+    private class LoreEntrySeedFile { public List<LoreEntry>? LoreEntries { get; set; } }
+    private class NarratorPresetSeedFile { public List<NarratorPreset>? NarratorPresets { get; set; } }
 
     private class LoreSeedForItems
     {

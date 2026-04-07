@@ -11,6 +11,8 @@ public interface IContentRegistryService
     IContentRegistry<ItemTemplate> Items { get; }
     IContentRegistry<MonsterTemplate> Monsters { get; }
     IContentRegistry<QuestDefinition> Quests { get; }
+    IContentRegistry<LoreEntry> LoreEntries { get; }
+    IContentRegistry<NarratorPreset> NarratorPresets { get; }
 
     /// <summary>Get the maximum improvised spell power level a character can attempt.</summary>
     int GetImprovisedSpellCap(string className, int level);
