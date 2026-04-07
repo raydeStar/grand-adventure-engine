@@ -2415,6 +2415,7 @@ const UI = {
     }
 
     chatMessages.innerHTML = '<div class="chat-msg system">Describe what you want to create or change. The AI will fill in the structured details for you.</div>';
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
   },
 
   closeRegistryEditor() {
