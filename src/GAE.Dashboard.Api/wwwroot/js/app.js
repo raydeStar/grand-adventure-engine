@@ -1254,17 +1254,21 @@
     if (genBtn) {
       genBtn.onclick = async () => {
         const textarea = document.getElementById('world-intro-text');
+        const wid = world?.id;
+        console.log('Generate intro clicked, world.id:', wid);
+        if (!wid) { genBtn.textContent = 'Error: no world'; return; }
         try {
           genBtn.disabled = true;
           genBtn.textContent = 'Generating...';
-          const result = await API.generateWorldIntro(world.id);
+          const result = await API.generateWorldIntro(wid);
+          console.log('Generate result:', result);
           if (textarea && result.intro) textarea.value = result.intro;
           genBtn.textContent = 'AI Generate';
           genBtn.disabled = false;
         } catch (e) {
-          genBtn.textContent = 'Failed';
-          setTimeout(() => { genBtn.textContent = 'AI Generate'; genBtn.disabled = false; }, 2000);
-          console.error('Failed to generate intro:', e);
+          console.error('Generate intro failed:', e, 'status:', e.status, 'code:', e.code);
+          genBtn.textContent = `Failed (${e.status || '?'})`;
+          setTimeout(() => { genBtn.textContent = 'AI Generate'; genBtn.disabled = false; }, 4000);
         }
       };
     }
