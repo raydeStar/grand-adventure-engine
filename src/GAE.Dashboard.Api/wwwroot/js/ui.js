@@ -2349,10 +2349,27 @@ const UI = {
     const list = this.$('registry-list');
     if (!list) return;
 
+    // Toggle edit/delete/new/generate buttons visibility for live-entity types
+    const isLiveType = type === 'players' || type === 'rooms';
+    const newBtn = this.$('btn-new-registry-entry');
+    const questBtn = this.$('btn-generate-quest');
+    if (newBtn) newBtn.style.display = isLiveType ? 'none' : '';
+    if (questBtn) questBtn.style.display = isLiveType ? 'none' : '';
+
     try {
-      this._registryData = await API.getRegistry(type);
-      // Client-side world filter: entries have worldIds array
+      // Players and rooms are live game entities, not content registry
+      if (type === 'players') {
+        this._registryData = await API.getPlayers();
+      } else if (type === 'rooms') {
+        this._registryData = await API.getRooms();
+      } else {
+        this._registryData = await API.getRegistry(type);
+      }
+      // Client-side world filter: entries have worldIds array or activeWorldId
       let filtered = this._registryData;
+      if (worldId && type === 'players') {
+        filtered = filtered.filter(e => (e.activeWorldId || e.homeWorldId || '') === worldId);
+      } else
       if (worldId) {
         filtered = filtered.filter(e => {
           const wids = e.worldIds || e.WorldIds || [];
@@ -2377,7 +2394,9 @@ const UI = {
     this._registryFilterText = q;
 
     let filtered = this._registryData;
-    if (worldId) {
+    if (worldId && type === 'players') {
+      filtered = filtered.filter(e => (e.activeWorldId || e.homeWorldId || '') === worldId);
+    } else if (worldId) {
       filtered = filtered.filter(e => {
         const wids = e.worldIds || e.WorldIds || [];
         return !wids.length || wids.some(id => id.toLowerCase() === worldId.toLowerCase());
@@ -2387,7 +2406,10 @@ const UI = {
       filtered = filtered.filter(e =>
         (e.name || '').toLowerCase().includes(q) ||
         (e.id || '').toLowerCase().includes(q) ||
-        (e.description || '').toLowerCase().includes(q)
+        (e.description || '').toLowerCase().includes(q) ||
+        (e.race || '').toLowerCase().includes(q) ||
+        (e.class || '').toLowerCase().includes(q) ||
+        (e.currentRoomId || '').toLowerCase().includes(q)
       );
     }
     if (countEl) countEl.textContent = `${filtered.length} entries`;
@@ -2401,6 +2423,7 @@ const UI = {
       return;
     }
 
+    const isLiveType = type === 'players' || type === 'rooms';
     list.innerHTML = entries.map(entry => {
       const meta = this._getEntryMeta(type, entry);
       const tags = (entry.tags || []).slice(0, 5);
@@ -2409,14 +2432,14 @@ const UI = {
       return `
         <div class="registry-entry" data-registry-id="${this.esc(entry.id)}">
           <div>
-            <div class="registry-entry-name">${this.esc(entry.name)}${worldLabels.length ? worldLabels.map(w => ` <span class="registry-world-tag">${this.esc(w)}</span>`).join('') : ''}</div>
+            <div class="registry-entry-name">${this.esc(entry.name || entry.id)}${worldLabels.length ? worldLabels.map(w => ` <span class="registry-world-tag">${this.esc(w)}</span>`).join('') : ''}</div>
             <div class="registry-entry-meta">${this.esc(meta)}</div>
             ${tags.length ? `<div class="registry-entry-tags">${tags.map(t => `<span class="registry-entry-tag">${this.esc(t)}</span>`).join('')}</div>` : ''}
           </div>
-          <div class="registry-entry-actions">
+          ${isLiveType ? '' : `<div class="registry-entry-actions">
             <button class="btn btn-primary btn-sm" data-reg-action="edit" data-reg-id="${this.esc(entry.id)}" type="button">Edit</button>
             <button class="btn btn-danger btn-sm" data-reg-action="delete" data-reg-id="${this.esc(entry.id)}" type="button">Del</button>
-          </div>
+          </div>`}
         </div>
       `;
     }).join('');
@@ -2424,6 +2447,10 @@ const UI = {
 
   _getEntryMeta(type, entry) {
     switch (type) {
+      case 'players':
+        return `Lv.${entry.level || 1} ${entry.race || '?'} ${entry.class || '?'} | ${entry.currentRoomId || '?'} | HP ${entry.hp ?? '?'}/${entry.maxHp ?? '?'} | ${entry.gold ?? 0}g | World: ${entry.activeWorldId || '?'}`;
+      case 'rooms':
+        return `${Object.keys(entry.exits || {}).length} exits | ${(entry.npcs || []).length} NPCs | ${(entry.fixtures || []).length} fixtures${(entry.worldIds || []).length ? ' | ' + (entry.worldIds || []).join(', ') : ''}`;
       case 'spells':
         return `${entry.school || '?'} | Power ${entry.powerLevel || '?'} | ${entry.manaCost || 0} MP | Lv.${entry.requiredLevel || 1}${entry.damageDice ? ` | ${entry.damageDice}` : ''}${entry.healDice ? ` | Heal ${entry.healDice}` : ''}`;
       case 'items':
