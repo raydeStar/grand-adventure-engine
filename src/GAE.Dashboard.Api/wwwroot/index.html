@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=20" />
+  <link rel="stylesheet" href="css/style.css?v=21" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.7/signalr.min.js"
           crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="https://cdn.jsdelivr.net/npm/rot-js@2/dist/rot.min.js"
@@ -593,6 +593,26 @@
                 <div class="registry-list-actions">
                   <button class="btn btn-primary btn-sm" id="btn-refresh-registry" type="button">Refresh</button>
                   <button class="btn btn-primary btn-sm" id="btn-new-registry-entry" type="button">+ New</button>
+                  <button class="btn btn-accent btn-sm" id="btn-generate-quest" type="button" title="AI-generate a quest from a brief and lore context">AI Quest</button>
+                </div>
+                <!-- Quest generation dialog -->
+                <div id="quest-gen-dialog" class="quest-gen-dialog hidden">
+                  <h4>AI Quest Generator</h4>
+                  <label>Brief (what should this quest be about?):</label>
+                  <textarea id="quest-gen-brief" rows="3" placeholder="e.g. An NPC in Rabanastre needs help recovering a stolen artifact from the sewers..."></textarea>
+                  <label>World:</label>
+                  <select id="quest-gen-world"><option value="">Default World</option></select>
+                  <label>Lore context (select entries to include):</label>
+                  <select id="quest-gen-lore" multiple size="5"></select>
+                  <div class="quest-gen-level-row">
+                    <label>Level: <input type="number" id="quest-gen-min-level" value="1" min="1" max="50" style="width:4rem" /></label>
+                    <label>to <input type="number" id="quest-gen-max-level" value="5" min="1" max="50" style="width:4rem" /></label>
+                  </div>
+                  <div class="quest-gen-actions">
+                    <button class="btn btn-primary btn-sm" id="btn-quest-gen-go" type="button">Generate</button>
+                    <button class="btn btn-secondary btn-sm" id="btn-quest-gen-cancel" type="button">Cancel</button>
+                  </div>
+                  <div id="quest-gen-status" class="quest-gen-status"></div>
                 </div>
                 <div id="registry-list" class="registry-entries"></div>
               </div>
@@ -670,10 +690,10 @@
     </main>
   </div>
 
-  <script src="js/api.js?v=4"></script>
+  <script src="js/api.js?v=5"></script>
   <script src="js/signalr-client.js?v=3"></script>
   <script src="js/room-map.js?v=3"></script>
-  <script src="js/ui.js?v=19"></script>
+  <script src="js/ui.js?v=20"></script>
   <script src="js/app.js?v=17"></script>
 </body>
 </html>

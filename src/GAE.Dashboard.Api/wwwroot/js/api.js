@@ -193,6 +193,10 @@ const API = {
     return this.postJson(`${this.base}/admin/registry/generate`, { contentType, description, existingJson });
   },
 
+  async generateQuest(brief, worldId, loreEntryIds, minLevel, maxLevel) {
+    return this.postJson(`${this.base}/admin/registry/generate-quest`, { brief, worldId, loreEntryIds, minLevel, maxLevel });
+  },
+
   // ── World Management ───────────────────────────────────
   async getWorlds() {
     return this.getJson(`${this.base}/admin/worlds`);

@@ -2556,6 +2556,31 @@ textarea { resize: vertical; min-height: 80px; }
 }
 .registry-list-actions .btn { white-space: nowrap; }
 
+/* Quest generation dialog */
+.quest-gen-dialog {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.8rem;
+  margin-bottom: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.quest-gen-dialog h4 { margin: 0 0 0.3rem 0; color: var(--accent); }
+.quest-gen-dialog label { font-size: 11px; color: var(--dim); }
+.quest-gen-dialog textarea, .quest-gen-dialog select, .quest-gen-dialog input[type="number"] {
+  background: var(--bg); color: var(--fg); border: 1px solid var(--border);
+  border-radius: 4px; padding: 0.3rem 0.5rem; font-size: 12px; width: 100%;
+}
+.quest-gen-dialog select[multiple] { min-height: 5em; }
+.quest-gen-level-row { display: flex; gap: 0.5rem; align-items: center; }
+.quest-gen-level-row input[type="number"] { width: 4rem !important; }
+.quest-gen-actions { display: flex; gap: 0.4rem; margin-top: 0.3rem; }
+.quest-gen-status { font-size: 11px; color: var(--dim); min-height: 1.2em; }
+.btn-accent { background: #7c4dff; color: #fff; border: none; cursor: pointer; }
+.btn-accent:hover { background: #651fff; }
+
 .registry-entries {
   overflow-y: auto;
   display: flex;

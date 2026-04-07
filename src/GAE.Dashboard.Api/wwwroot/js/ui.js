@@ -2530,6 +2530,24 @@ const UI = {
     if (cancelBtn) cancelBtn.addEventListener('click', () => this.closeRegistryEditor());
     if (deleteBtn) deleteBtn.addEventListener('click', () => this.deleteRegistryEntry(this._registryEditingId));
     if (sendBtn) sendBtn.addEventListener('click', () => this.sendRegistryChat());
+
+    // Quest generation dialog
+    const questGenBtn = this.$('btn-generate-quest');
+    const questGenDialog = this.$('quest-gen-dialog');
+    const questGenGo = this.$('btn-quest-gen-go');
+    const questGenCancel = this.$('btn-quest-gen-cancel');
+    if (questGenBtn && questGenDialog) {
+      questGenBtn.addEventListener('click', () => {
+        questGenDialog.classList.toggle('hidden');
+        if (!questGenDialog.classList.contains('hidden')) this._populateQuestGenSelects();
+      });
+    }
+    if (questGenCancel && questGenDialog) {
+      questGenCancel.addEventListener('click', () => questGenDialog.classList.add('hidden'));
+    }
+    if (questGenGo) {
+      questGenGo.addEventListener('click', () => this._runQuestGeneration());
+    }
     if (chatInput) {
       chatInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') this.sendRegistryChat();
@@ -2559,6 +2577,72 @@ const UI = {
           this.deleteRegistryEntry(delBtn.dataset.regId);
         }
       });
+    }
+  },
+
+  // ── Quest Generation ─────────────────────────────────────
+  async _populateQuestGenSelects() {
+    // Populate world select
+    const worldSel = this.$('quest-gen-world');
+    if (worldSel && worldSel.options.length <= 1) {
+      try {
+        const worlds = await API.getWorlds();
+        worlds.forEach(w => {
+          const opt = document.createElement('option');
+          opt.value = w.id;
+          opt.textContent = w.name;
+          worldSel.appendChild(opt);
+        });
+      } catch { /* ignore */ }
+    }
+    // Populate lore select
+    const loreSel = this.$('quest-gen-lore');
+    if (loreSel && loreSel.options.length === 0) {
+      try {
+        const loreEntries = await API.getRegistryEntries('lore_entries');
+        (loreEntries || []).forEach(l => {
+          const opt = document.createElement('option');
+          opt.value = l.id;
+          opt.textContent = `[${l.loreScope || '?'}] ${l.name}`;
+          loreSel.appendChild(opt);
+        });
+      } catch { /* ignore */ }
+    }
+  },
+
+  async _runQuestGeneration() {
+    const brief = this.$('quest-gen-brief')?.value?.trim();
+    if (!brief) { alert('Please enter a brief description.'); return; }
+
+    const worldId = this.$('quest-gen-world')?.value || null;
+    const loreSel = this.$('quest-gen-lore');
+    const loreEntryIds = loreSel ? Array.from(loreSel.selectedOptions).map(o => o.value) : [];
+    const minLevel = parseInt(this.$('quest-gen-min-level')?.value) || 1;
+    const maxLevel = parseInt(this.$('quest-gen-max-level')?.value) || 5;
+
+    const status = this.$('quest-gen-status');
+    if (status) status.textContent = 'Generating quest... (this may take a moment)';
+    const goBtn = this.$('btn-quest-gen-go');
+    if (goBtn) goBtn.disabled = true;
+
+    try {
+      const result = await API.generateQuest(brief, worldId, loreEntryIds, minLevel, maxLevel);
+      if (result?.json) {
+        // Open in registry editor as a new quest
+        let questData;
+        try {
+          questData = typeof result.json === 'string' ? JSON.parse(result.json) : result.json;
+        } catch { questData = result.json; }
+        this.openRegistryEditor(questData, 'quest');
+        this.$('quest-gen-dialog')?.classList.add('hidden');
+        if (status) status.textContent = '';
+      } else {
+        if (status) status.textContent = 'Generation returned no result.';
+      }
+    } catch (err) {
+      if (status) status.textContent = `Error: ${err.message || err}`;
+    } finally {
+      if (goBtn) goBtn.disabled = false;
     }
   }
 };
