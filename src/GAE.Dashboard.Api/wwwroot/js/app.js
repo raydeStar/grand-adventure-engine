@@ -127,13 +127,9 @@
     bind('command-input', 'keydown', handleCommandKeydown);
     bind('command-form', 'submit', handleUserCommand);
     bind('admin-command-form', 'submit', handleAdminCommand);
-    bind('mutation-resource-form', 'submit', handleResourceMutation);
-    bind('mutation-teleport-form', 'submit', handleTeleportMutation);
-    bind('mutation-item-form', 'submit', handleItemMutation);
-    bind('mutation-status-form', 'submit', handleStatusMutation);
-    bind('room-fixture-form', 'submit', handleRoomFixtureMutation);
-    bind('btn-send-msg', 'click', () => void handleSendMessage());
-    bind('msg-player-select', 'change', updateSendButtonLabel);
+    bindOptional('room-fixture-form', 'submit', handleRoomFixtureMutation);
+    bindOptional('btn-send-msg', 'click', () => void handleSendMessage());
+    bindOptional('msg-player-select', 'change', updateSendButtonLabel);
     bindOptional('btn-warp-to-spawn', 'click', () => void handleWarpToSpawn());
     bindOptional('btn-warp-all-spawn', 'click', () => void handleWarpAllToSpawn());
     bindOptional('btn-reseed-world', 'click', () => void handleReseedWorld());
@@ -316,6 +312,117 @@
         } else {
           alert('Item update failed: ' + err.message);
         }
+      }
+    });
+
+    // Run command from overview detail panel
+    document.addEventListener('overview-run-command', async (e) => {
+      const { playerId, command } = e.detail;
+      if (!playerId || !command || !ensureAdmin()) return;
+      try {
+        const result = await API.sendCommand(playerId, command);
+        if (result.actionId) state.recentActionIds.add(result.actionId);
+        appendOverviewMessage(`${playerId} > ${command}`);
+        appendOverviewMessage(result.mechanicalSummary || 'OK');
+        if (playerId === state.currentPlayerId) UI.appendStoryEntry(result, result.success ? 'success' : 'failure');
+        await afterCommand(playerId, result);
+        await UI._ovFetchAndSelect(playerId, 'player');
+        const input = UI.$('ov-cmd-input');
+        if (input) input.value = '';
+      } catch (err) {
+        appendOverviewMessage(`Error: ${err.message}`);
+      }
+    });
+
+    // Adjust resources from overview detail panel
+    document.addEventListener('overview-adjust-resources', async (e) => {
+      const d = e.detail;
+      if (!d.playerId || !ensureAdmin()) return;
+      try {
+        const result = await API.adjustResources(d);
+        appendOverviewMessage(result.summary || 'Resources updated.');
+        if (d.playerId === state.currentPlayerId) await refreshCurrentPlayer();
+        await UI._ovFetchAndSelect(d.playerId, 'player');
+      } catch (err) {
+        appendOverviewMessage(`Error: ${err.message}`);
+      }
+    });
+
+    // Teleport from overview detail panel
+    document.addEventListener('overview-teleport', async (e) => {
+      const { playerId, roomId } = e.detail;
+      if (!playerId || !roomId || !ensureAdmin()) return;
+      try {
+        await API.teleportPlayer({ playerId, roomId });
+        appendOverviewMessage(`Teleported to ${roomId}.`);
+        if (playerId === state.currentPlayerId) await refreshCurrentPlayer();
+        await UI._ovFetchAndSelect(playerId, 'player');
+      } catch (err) {
+        appendOverviewMessage(`Error: ${err.message}`);
+      }
+    });
+
+    // Apply status from overview detail panel
+    document.addEventListener('overview-apply-status', async (e) => {
+      const d = e.detail;
+      if (!d.playerId || !d.name || !ensureAdmin()) return;
+      try {
+        const result = await API.applyStatus(d);
+        appendOverviewMessage(result.summary || `Applied ${d.name}.`);
+        if (d.playerId === state.currentPlayerId) await refreshCurrentPlayer();
+        await UI._ovFetchAndSelect(d.playerId, 'player');
+      } catch (err) {
+        appendOverviewMessage(`Error: ${err.message}`);
+      }
+    });
+
+    // Grant custom item from overview detail panel
+    document.addEventListener('overview-grant-item', async (e) => {
+      const { playerId, name, type } = e.detail;
+      if (!playerId || !name || !ensureAdmin()) return;
+      try {
+        const result = await API.grantItem({ playerId, name, type, quantity: 1 });
+        appendOverviewMessage(result.summary || `Granted ${name}.`);
+        if (playerId === state.currentPlayerId) await refreshCurrentPlayer();
+        await UI._ovFetchAndSelect(playerId, 'player');
+        const input = UI.$('ov-grant-name');
+        if (input) input.value = '';
+      } catch (err) {
+        appendOverviewMessage(`Error: ${err.message}`);
+      }
+    });
+
+    // Add item to room from overview detail panel
+    document.addEventListener('overview-room-add-item', async (e) => {
+      const { roomId, name, type } = e.detail;
+      if (!roomId || !name || !ensureAdmin()) return;
+      try {
+        const room = await API.getRoom(roomId);
+        const items = [...(room?.items || []), { name, type, quantity: 1 }];
+        await API.upsertRoomFixture({ roomId, items });
+        appendOverviewMessage(`Added ${name} to room.`);
+        await UI._ovFetchAndSelect(roomId, 'room');
+        const input = UI.$('ov-room-item-name');
+        if (input) input.value = '';
+      } catch (err) {
+        appendOverviewMessage(`Error: ${err.message}`);
+      }
+    });
+
+    // Add NPC to room from overview detail panel
+    document.addEventListener('overview-room-add-npc', async (e) => {
+      const { roomId, name, isHostile } = e.detail;
+      if (!roomId || !name || !ensureAdmin()) return;
+      try {
+        const room = await API.getRoom(roomId);
+        const npcs = [...(room?.npcs || []), { name, isHostile }];
+        await API.upsertRoomFixture({ roomId, npcs });
+        appendOverviewMessage(`Added NPC "${name}" to room.`);
+        await UI._ovFetchAndSelect(roomId, 'room');
+        const input = UI.$('ov-room-npc-name');
+        if (input) input.value = '';
+      } catch (err) {
+        appendOverviewMessage(`Error: ${err.message}`);
       }
     });
 

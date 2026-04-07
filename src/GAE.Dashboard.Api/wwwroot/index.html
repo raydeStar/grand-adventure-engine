@@ -445,7 +445,7 @@
             <!-- ── Command Harness ── -->
             <div class="panel">
               <h3>Command Harness</h3>
-              <p class="panel-hint">Run any command as any character. Useful for testing NPC interactions, combat, and free-form actions.</p>
+              <p class="panel-hint">Run any command as any character. For single-player actions, use the DM Console detail panel instead.</p>
               <form id="admin-command-form" class="admin-command-form">
                 <select id="admin-player-select"></select>
                 <input type="text" id="admin-command-input" placeholder="Ask or run a command as any character" autocomplete="off" />
@@ -454,287 +454,71 @@
               <div id="admin-command-log" class="activity-log"></div>
             </div>
 
-            <!-- ── Player Mutations ── -->
-            <details class="admin-tools-section" open>
-              <summary class="admin-tools-header">Player Mutations</summary>
-              <div class="mutation-grid">
-
-                <form id="mutation-resource-form" class="mutation-form">
-                  <h4>Resources</h4>
-                  <p class="panel-hint">Adjust HP, MP, Gold, XP, or Level by a delta amount, or set an absolute value.</p>
+            <!-- ── Room Fixture ── -->
+            <details class="admin-tools-section">
+              <summary class="admin-tools-header">Create Room Fixture</summary>
+              <form id="room-fixture-form" class="mutation-form" style="margin-top:0.5rem">
+                <p class="panel-hint">Create or update a test room from scratch. For adding items/NPCs to existing rooms, use the DM Console.</p>
+                <div class="mutation-row">
                   <div class="form-group">
-                    <label for="resource-player-select">Target player</label>
-                    <select id="resource-player-select"></select>
+                    <label for="fixture-room-id">Room id</label>
+                    <input type="text" id="fixture-room-id" placeholder="qa-lab" required />
                   </div>
-                  <div class="mutation-row">
-                    <div class="form-group">
-                      <label for="resource-hp-delta">HP delta</label>
-                      <input type="number" id="resource-hp-delta" value="0" />
-                    </div>
-                    <div class="form-group">
-                      <label for="resource-mp-delta">MP delta</label>
-                      <input type="number" id="resource-mp-delta" value="0" />
-                    </div>
-                    <div class="form-group">
-                      <label for="resource-gold-delta">Gold delta</label>
-                      <input type="number" id="resource-gold-delta" value="0" />
-                    </div>
-                    <div class="form-group">
-                      <label for="resource-xp-delta">XP delta</label>
-                      <input type="number" id="resource-xp-delta" value="0" />
-                    </div>
-                    <div class="form-group">
-                      <label for="resource-level-delta">Level delta</label>
-                      <input type="number" id="resource-level-delta" value="0" />
-                    </div>
-                  </div>
-                  <div class="mutation-row">
-                    <div class="form-group">
-                      <label for="resource-set-hp">Set HP <span class="optional">(optional)</span></label>
-                      <input type="number" id="resource-set-hp" placeholder="Leave blank to use delta" />
-                    </div>
-                    <div class="form-group">
-                      <label for="resource-set-mp">Set MP <span class="optional">(optional)</span></label>
-                      <input type="number" id="resource-set-mp" placeholder="Leave blank to use delta" />
-                    </div>
-                    <div class="form-group">
-                      <label for="resource-set-gold">Set Gold <span class="optional">(optional)</span></label>
-                      <input type="number" id="resource-set-gold" placeholder="Leave blank to use delta" />
-                    </div>
-                    <div class="form-group">
-                      <label for="resource-set-xp">Set XP <span class="optional">(optional)</span></label>
-                      <input type="number" id="resource-set-xp" placeholder="Leave blank to use delta" />
-                    </div>
-                    <div class="form-group">
-                      <label for="resource-set-level">Set Level <span class="optional">(optional)</span></label>
-                      <input type="number" id="resource-set-level" placeholder="Leave blank to use delta" />
-                    </div>
-                  </div>
-                  <button class="btn btn-primary" type="submit">Apply Resource Delta</button>
-                </form>
-
-                <form id="mutation-item-form" class="mutation-form">
-                  <h4>Grant Item</h4>
-                  <p class="panel-hint">Give a player an item. Optionally auto-equip weapons and armor.</p>
                   <div class="form-group">
-                    <label for="item-player-select">Target player</label>
-                    <select id="item-player-select"></select>
+                    <label for="fixture-room-name">Room name <span class="optional">(optional)</span></label>
+                    <input type="text" id="fixture-room-name" placeholder="QA Laboratory" />
                   </div>
-                  <div class="mutation-row">
-                    <div class="form-group">
-                      <label for="item-name">Item name</label>
-                      <input type="text" id="item-name" placeholder="Prototype Keycard" required />
-                    </div>
-                    <div class="form-group">
-                      <label for="item-type">Type</label>
-                      <select id="item-type">
-                        <option value="Weapon">Weapon</option>
-                        <option value="Armor">Armor</option>
-                        <option value="Shield">Shield</option>
-                        <option value="Helmet">Helmet</option>
-                        <option value="Potion">Potion</option>
-                        <option value="Scroll">Scroll</option>
-                        <option value="Key">Key</option>
-                        <option value="QuestItem">Quest Item</option>
-                        <option value="Misc" selected>Misc</option>
-                      </select>
-                    </div>
-                    <div class="form-group">
-                      <label for="item-quantity">Quantity</label>
-                      <input type="number" id="item-quantity" min="1" value="1" />
-                    </div>
+                </div>
+                <div class="form-group">
+                  <label for="fixture-room-description">Description <span class="optional">(optional)</span></label>
+                  <textarea id="fixture-room-description" rows="2" placeholder="Describe the room."></textarea>
+                </div>
+                <div class="mutation-row mutation-row-4">
+                  <div class="form-group">
+                    <label for="fixture-tags">Tags</label>
+                    <input type="text" id="fixture-tags" placeholder="qa, boss, loot" />
                   </div>
-                  <div class="mutation-row">
-                    <div class="form-group">
-                      <label for="item-description">Description <span class="optional">(optional)</span></label>
-                      <input type="text" id="item-description" placeholder="Operator-seeded manual test item" />
-                    </div>
-                    <div class="form-group">
-                      <label for="item-effect">Effect <span class="optional">(optional)</span></label>
-                      <input type="text" id="item-effect" placeholder="Access debug door" />
-                    </div>
+                  <div class="form-group">
+                    <label for="fixture-exit-direction">Exit dir</label>
+                    <input type="text" id="fixture-exit-direction" placeholder="south" />
                   </div>
-                  <label class="remember-toggle" for="item-auto-equip">
-                    <input type="checkbox" id="item-auto-equip" />
-                    <span>Auto-equip if the item has a matching slot</span>
+                  <div class="form-group">
+                    <label for="fixture-exit-target">Exit target</label>
+                    <input type="text" id="fixture-exit-target" placeholder="spawn" />
+                  </div>
+                  <div class="form-group">
+                    <label for="fixture-item-name">Seed item</label>
+                    <input type="text" id="fixture-item-name" placeholder="Emergency Ration" />
+                  </div>
+                </div>
+                <div class="mutation-row">
+                  <div class="form-group">
+                    <label for="fixture-npc-name">Seed NPC</label>
+                    <input type="text" id="fixture-npc-name" placeholder="Inspector Vale" />
+                  </div>
+                  <label class="remember-toggle" for="fixture-npc-hostile">
+                    <input type="checkbox" id="fixture-npc-hostile" />
+                    <span>Hostile</span>
                   </label>
-                  <button class="btn btn-primary" type="submit">Grant Item</button>
-                </form>
-
-                <form id="mutation-status-form" class="mutation-form">
-                  <h4>Apply Status</h4>
-                  <p class="panel-hint">Apply buffs, debuffs, or status effects with stat modifiers.</p>
-                  <div class="form-group">
-                    <label for="status-player-select">Target player</label>
-                    <select id="status-player-select"></select>
-                  </div>
-                  <div class="mutation-row">
-                    <div class="form-group">
-                      <label for="status-name">Status name</label>
-                      <input type="text" id="status-name" placeholder="Inspired" required />
-                    </div>
-                    <div class="form-group">
-                      <label for="status-type">Type</label>
-                      <select id="status-type">
-                        <option value="Buff">Buff</option>
-                        <option value="Debuff">Debuff</option>
-                        <option value="Poison">Poison</option>
-                        <option value="Regen">Regen</option>
-                        <option value="Stun">Stun</option>
-                        <option value="Blind">Blind</option>
-                        <option value="Charm">Charm</option>
-                      </select>
-                    </div>
-                    <div class="form-group">
-                      <label for="status-turns">Turns</label>
-                      <input type="number" id="status-turns" min="1" value="3" />
-                    </div>
-                  </div>
-                  <div class="mutation-row">
-                    <div class="form-group">
-                      <label for="status-modifiers">Stat modifiers <span class="optional">(str:2,dex:-1)</span></label>
-                      <input type="text" id="status-modifiers" placeholder="str:2,wis:1" />
-                    </div>
-                    <div class="form-group">
-                      <label for="status-description">Description <span class="optional">(optional)</span></label>
-                      <input type="text" id="status-description" placeholder="Temporary QA buff" />
-                    </div>
-                  </div>
-                  <button class="btn btn-primary" type="submit">Apply Status</button>
-                </form>
-
-              </div>
+                </div>
+                <button class="btn btn-primary" type="submit">Upsert Room Fixture</button>
+              </form>
             </details>
 
-            <!-- ── Teleport & Rooms ── -->
-            <details class="admin-tools-section" open>
-              <summary class="admin-tools-header">Teleport & Rooms</summary>
-              <div class="mutation-grid">
-
-                <form id="mutation-teleport-form" class="mutation-form">
-                  <h4>Teleport</h4>
-                  <p class="panel-hint">Move a player to any room. Optionally create a return path.</p>
-                  <div class="form-group">
-                    <label for="teleport-player-select">Target player</label>
-                    <select id="teleport-player-select"></select>
-                  </div>
-                  <div class="mutation-row">
-                    <div class="form-group">
-                      <label for="teleport-room-id">Room id</label>
-                      <input type="text" id="teleport-room-id" placeholder="debug-arena" required />
-                    </div>
-                    <div class="form-group">
-                      <label for="teleport-room-name">Room name <span class="optional">(optional)</span></label>
-                      <input type="text" id="teleport-room-name" placeholder="Debug Arena" />
-                    </div>
-                  </div>
-                  <div class="form-group">
-                    <label for="teleport-room-description">Room description <span class="optional">(optional)</span></label>
-                    <textarea id="teleport-room-description" rows="3" placeholder="Short fixture description for a manual test room."></textarea>
-                  </div>
-                  <div class="mutation-row">
-                    <div class="form-group">
-                      <label for="teleport-direction">Back-link direction</label>
-                      <select id="teleport-direction">
-                        <option value="north">north</option>
-                        <option value="south">south</option>
-                        <option value="east">east</option>
-                        <option value="west">west</option>
-                        <option value="up">up</option>
-                        <option value="down">down</option>
-                        <option value="debug">debug</option>
-                      </select>
-                    </div>
-                    <div class="form-group">
-                      <label for="teleport-tags">Tags <span class="optional">(comma separated)</span></label>
-                      <input type="text" id="teleport-tags" placeholder="test, staging" />
-                    </div>
-                  </div>
-                  <label class="remember-toggle" for="teleport-connect">
-                    <input type="checkbox" id="teleport-connect" checked />
-                    <span>Create a return path from the current room</span>
-                  </label>
-                  <button class="btn btn-primary" type="submit">Teleport Player</button>
-                </form>
-
-                <form id="room-fixture-form" class="mutation-form">
-                  <h4>Room Fixture</h4>
-                  <p class="panel-hint">Create or update a test room with optional NPCs and items.</p>
-                  <div class="mutation-row">
-                    <div class="form-group">
-                      <label for="fixture-room-id">Room id</label>
-                      <input type="text" id="fixture-room-id" placeholder="qa-lab" required />
-                    </div>
-                    <div class="form-group">
-                      <label for="fixture-room-name">Room name <span class="optional">(optional)</span></label>
-                      <input type="text" id="fixture-room-name" placeholder="QA Laboratory" />
-                    </div>
-                  </div>
-                  <div class="form-group">
-                    <label for="fixture-room-description">Description <span class="optional">(optional)</span></label>
-                    <textarea id="fixture-room-description" rows="3" placeholder="Describe the manual test fixture or special encounter room."></textarea>
-                  </div>
-                  <div class="mutation-row mutation-row-4">
-                    <div class="form-group">
-                      <label for="fixture-tags">Tags <span class="optional">(comma separated)</span></label>
-                      <input type="text" id="fixture-tags" placeholder="qa, boss, loot" />
-                    </div>
-                    <div class="form-group">
-                      <label for="fixture-exit-direction">Exit direction <span class="optional">(optional)</span></label>
-                      <input type="text" id="fixture-exit-direction" placeholder="south" />
-                    </div>
-                    <div class="form-group">
-                      <label for="fixture-exit-target">Exit target <span class="optional">(optional)</span></label>
-                      <input type="text" id="fixture-exit-target" placeholder="spawn" />
-                    </div>
-                    <div class="form-group">
-                      <label for="fixture-item-name">Seed item <span class="optional">(optional)</span></label>
-                      <input type="text" id="fixture-item-name" placeholder="Emergency Ration" />
-                    </div>
-                  </div>
-                  <div class="mutation-row">
-                    <div class="form-group">
-                      <label for="fixture-npc-name">Seed NPC <span class="optional">(optional)</span></label>
-                      <input type="text" id="fixture-npc-name" placeholder="Inspector Vale" />
-                    </div>
-                    <label class="remember-toggle" for="fixture-npc-hostile">
-                      <input type="checkbox" id="fixture-npc-hostile" />
-                      <span>Mark seeded NPC as hostile</span>
-                    </label>
-                  </div>
-                  <button class="btn btn-primary" type="submit">Upsert Room Fixture</button>
-                </form>
-
-                <!-- Warp shortcuts -->
-                <div class="mutation-form">
-                  <h4>Warp to Spawn</h4>
-                  <p class="panel-hint">Teleport a player back to spawn. Resets their interaction state.</p>
-                  <div class="form-group">
-                    <label for="warp-player-select">Target player</label>
-                    <select id="warp-player-select"></select>
-                  </div>
-                  <button class="btn btn-primary" id="btn-warp-to-spawn" type="button">Warp to Spawn</button>
-                  <div id="warp-result" class="world-action-result"></div>
-                </div>
-
-                <div class="mutation-form">
-                  <h4>Warp All to Spawn</h4>
-                  <p class="panel-hint">Teleport every player to spawn. Useful after updates or resets.</p>
+            <!-- ── Bulk Operations ── -->
+            <details class="admin-tools-section">
+              <summary class="admin-tools-header">Bulk Operations</summary>
+              <div class="world-action-grid" style="margin-top:0.5rem">
+                <div class="panel">
+                  <h3>Warp All to Spawn</h3>
+                  <p class="panel-hint">Teleport every player to spawn. Useful after updates or world resets.</p>
                   <button class="btn btn-warning" id="btn-warp-all-spawn" type="button">Warp All Players</button>
                   <div id="warp-all-result" class="world-action-result"></div>
                 </div>
 
-              </div>
-            </details>
-
-            <!-- ── Communication & Transfer ── -->
-            <details class="admin-tools-section" open>
-              <summary class="admin-tools-header">Communication & Transfer</summary>
-              <div class="world-action-grid">
-
                 <div class="panel">
                   <h3>Realm Transfer</h3>
-                  <p class="panel-hint">Move a player to a different world. Triggers stat translation and snapshot.</p>
+                  <p class="panel-hint">Move a player to a different world. Triggers stat translation.</p>
                   <div class="world-action-form">
                     <div class="mutation-row">
                       <div class="form-group">
@@ -747,15 +531,15 @@
                       </div>
                     </div>
                     <div class="world-action-buttons">
-                      <button class="btn btn-primary" id="btn-realm-transfer" type="button">Transfer Player</button>
+                      <button class="btn btn-primary" id="btn-realm-transfer" type="button">Transfer</button>
                     </div>
                     <div id="realm-transfer-result" class="world-action-result"></div>
                   </div>
                 </div>
 
                 <div class="panel">
-                  <h3>Send Message</h3>
-                  <p class="panel-hint">Send a message to a player's Discord thread, or broadcast to everyone.</p>
+                  <h3>Broadcast Message</h3>
+                  <p class="panel-hint">Send a message to a player's Discord thread, or broadcast to all.</p>
                   <div class="world-action-form">
                     <div class="form-group">
                       <label for="msg-player-select">Recipient</label>
@@ -765,7 +549,7 @@
                     </div>
                     <div class="form-group">
                       <label for="msg-text">Message</label>
-                      <textarea id="msg-text" rows="3" placeholder="Type the message to send..." required></textarea>
+                      <textarea id="msg-text" rows="2" placeholder="Type the message to send..." required></textarea>
                     </div>
                     <div class="world-action-buttons">
                       <button class="btn btn-primary" id="btn-send-msg" type="button">Send</button>
@@ -773,7 +557,6 @@
                     <div id="send-message-result" class="world-action-result"></div>
                   </div>
                 </div>
-
               </div>
             </details>
 
@@ -876,7 +659,7 @@
   <script src="js/api.js?v=4"></script>
   <script src="js/signalr-client.js?v=3"></script>
   <script src="js/room-map.js?v=3"></script>
-  <script src="js/ui.js?v=13"></script>
-  <script src="js/app.js?v=14"></script>
+  <script src="js/ui.js?v=14"></script>
+  <script src="js/app.js?v=15"></script>
 </body>
 </html>

@@ -32,12 +32,8 @@ const RESERVED_PLAYER_KEYS = new Set([
 
 const PLAYER_SELECT_IDS = [
   'admin-player-select',
-  'resource-player-select',
-  'teleport-player-select',
-  'item-player-select',
-  'status-player-select',
-  'msg-player-select',
-  'warp-player-select'
+  'transfer-player-select',
+  'msg-player-select'
 ];
 
 const UI = {
@@ -911,7 +907,7 @@ const UI = {
     const cardRows = this._dmBuildCardRows(item, type);
     const descHtml = item.description ? `<div class="dm-detail-desc">${this.esc(item.description)}</div>` : '';
 
-    // Player-specific action buttons
+    // Player-specific action buttons + inline quick-actions
     const playerActions = type === 'player' ? `
       <div class="dm-player-actions">
         <button class="btn btn-primary btn-sm" id="btn-ov-play" title="Play as this character"><span class="btn-icon">&#9654;</span> Play</button>
@@ -926,11 +922,78 @@ const UI = {
           <select id="ov-item-dest"><option value="inventory">Inventory</option><option value="equip">Equip</option></select>
         </div>
         <div class="dm-item-picker-list" id="ov-item-list"></div>
-      </div>` : '';
+      </div>
+      <details class="dm-inline-section">
+        <summary class="dm-inline-header">Quick Actions</summary>
+        <div class="dm-inline-actions">
+          <div class="dm-inline-form">
+            <label class="dm-inline-label">Run Command</label>
+            <div class="dm-inline-row">
+              <input type="text" id="ov-cmd-input" placeholder="look, go north, attack goblin..." autocomplete="off" />
+              <button class="btn btn-primary btn-sm" id="btn-ov-cmd" type="button">Run</button>
+            </div>
+          </div>
+          <div class="dm-inline-form">
+            <label class="dm-inline-label">Adjust Resources</label>
+            <div class="dm-inline-row dm-resource-row">
+              <div class="dm-res-field"><span>HP</span><input type="number" id="ov-res-hp" value="0" /></div>
+              <div class="dm-res-field"><span>MP</span><input type="number" id="ov-res-mp" value="0" /></div>
+              <div class="dm-res-field"><span>Gold</span><input type="number" id="ov-res-gold" value="0" /></div>
+              <div class="dm-res-field"><span>XP</span><input type="number" id="ov-res-xp" value="0" /></div>
+              <div class="dm-res-field"><span>Lv</span><input type="number" id="ov-res-level" value="0" /></div>
+              <button class="btn btn-primary btn-sm" id="btn-ov-res" type="button">Apply</button>
+            </div>
+          </div>
+          <div class="dm-inline-form">
+            <label class="dm-inline-label">Teleport</label>
+            <div class="dm-inline-row">
+              <input type="text" id="ov-tp-room" placeholder="Room ID (e.g. tavern, spawn)" autocomplete="off" />
+              <button class="btn btn-primary btn-sm" id="btn-ov-tp" type="button">Go</button>
+            </div>
+          </div>
+          <div class="dm-inline-form">
+            <label class="dm-inline-label">Apply Status</label>
+            <div class="dm-inline-row">
+              <input type="text" id="ov-status-name" placeholder="Status name" autocomplete="off" />
+              <select id="ov-status-type"><option value="Buff">Buff</option><option value="Debuff">Debuff</option><option value="Poison">Poison</option><option value="Regen">Regen</option><option value="Stun">Stun</option></select>
+              <input type="number" id="ov-status-turns" value="3" min="1" style="width:3.5rem" title="Turns" />
+              <button class="btn btn-primary btn-sm" id="btn-ov-status" type="button">Apply</button>
+            </div>
+          </div>
+          <div class="dm-inline-form">
+            <label class="dm-inline-label">Grant Custom Item</label>
+            <div class="dm-inline-row">
+              <input type="text" id="ov-grant-name" placeholder="Item name" autocomplete="off" />
+              <select id="ov-grant-type"><option value="Misc">Misc</option><option value="Weapon">Weapon</option><option value="Armor">Armor</option><option value="Potion">Potion</option><option value="Key">Key</option><option value="QuestItem">Quest</option></select>
+              <button class="btn btn-primary btn-sm" id="btn-ov-grant" type="button">Grant</button>
+            </div>
+          </div>
+        </div>
+      </details>` : '';
 
-    // Non-player top actions
-    const genericPlayBtn = type !== 'player'
-      ? '' : '';
+    // Room-specific inline actions
+    const roomActions = type === 'room' ? `
+      <details class="dm-inline-section">
+        <summary class="dm-inline-header">Quick Actions</summary>
+        <div class="dm-inline-actions">
+          <div class="dm-inline-form">
+            <label class="dm-inline-label">Add Item to Room</label>
+            <div class="dm-inline-row">
+              <input type="text" id="ov-room-item-name" placeholder="Item name" autocomplete="off" />
+              <select id="ov-room-item-type"><option value="Misc">Misc</option><option value="Weapon">Weapon</option><option value="Armor">Armor</option><option value="Potion">Potion</option><option value="Key">Key</option><option value="QuestItem">Quest</option></select>
+              <button class="btn btn-primary btn-sm" id="btn-ov-room-item" type="button">Add</button>
+            </div>
+          </div>
+          <div class="dm-inline-form">
+            <label class="dm-inline-label">Add NPC to Room</label>
+            <div class="dm-inline-row">
+              <input type="text" id="ov-room-npc-name" placeholder="NPC name" autocomplete="off" />
+              <label class="remember-toggle" style="margin:0"><input type="checkbox" id="ov-room-npc-hostile" /><span>Hostile</span></label>
+              <button class="btn btn-primary btn-sm" id="btn-ov-room-npc" type="button">Add</button>
+            </div>
+          </div>
+        </div>
+      </details>` : '';
 
     panel.innerHTML = `
       <div class="dm-detail-header">
@@ -944,6 +1007,7 @@ const UI = {
         </div>
       </div>
       ${playerActions}
+      ${roomActions}
       ${descHtml}
       <div class="dm-detail-card">
         <table>${cardRows}</table>
@@ -1005,6 +1069,66 @@ const UI = {
         }));
       });
     });
+
+    // ── Inline player quick-actions ──
+    const pid = this._ovSelectedItem?.id;
+    if (type === 'player' && pid) {
+      const cmdInput = this.$('ov-cmd-input');
+      if (cmdInput) {
+        cmdInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') this.$('btn-ov-cmd')?.click(); });
+      }
+      this.$('btn-ov-cmd')?.addEventListener('click', () => {
+        const cmd = this.$('ov-cmd-input')?.value?.trim();
+        if (cmd) document.dispatchEvent(new CustomEvent('overview-run-command', { detail: { playerId: pid, command: cmd } }));
+      });
+      this.$('btn-ov-res')?.addEventListener('click', () => {
+        document.dispatchEvent(new CustomEvent('overview-adjust-resources', { detail: {
+          playerId: pid,
+          hpDelta: parseInt(this.$('ov-res-hp')?.value) || 0,
+          mpDelta: parseInt(this.$('ov-res-mp')?.value) || 0,
+          goldDelta: parseInt(this.$('ov-res-gold')?.value) || 0,
+          xpDelta: parseInt(this.$('ov-res-xp')?.value) || 0,
+          levelDelta: parseInt(this.$('ov-res-level')?.value) || 0
+        }}));
+      });
+      this.$('btn-ov-tp')?.addEventListener('click', () => {
+        const roomId = this.$('ov-tp-room')?.value?.trim();
+        if (roomId) document.dispatchEvent(new CustomEvent('overview-teleport', { detail: { playerId: pid, roomId } }));
+      });
+      this.$('ov-tp-room')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') this.$('btn-ov-tp')?.click(); });
+      this.$('btn-ov-status')?.addEventListener('click', () => {
+        const name = this.$('ov-status-name')?.value?.trim();
+        if (name) document.dispatchEvent(new CustomEvent('overview-apply-status', { detail: {
+          playerId: pid, name,
+          type: this.$('ov-status-type')?.value || 'Buff',
+          remainingTurns: parseInt(this.$('ov-status-turns')?.value) || 3
+        }}));
+      });
+      this.$('btn-ov-grant')?.addEventListener('click', () => {
+        const name = this.$('ov-grant-name')?.value?.trim();
+        if (name) document.dispatchEvent(new CustomEvent('overview-grant-item', { detail: {
+          playerId: pid, name,
+          type: this.$('ov-grant-type')?.value || 'Misc'
+        }}));
+      });
+    }
+
+    // ── Inline room quick-actions ──
+    const rid = this._ovSelectedItem?.id;
+    if (type === 'room' && rid) {
+      this.$('btn-ov-room-item')?.addEventListener('click', () => {
+        const name = this.$('ov-room-item-name')?.value?.trim();
+        if (name) document.dispatchEvent(new CustomEvent('overview-room-add-item', { detail: {
+          roomId: rid, name, type: this.$('ov-room-item-type')?.value || 'Misc'
+        }}));
+      });
+      this.$('btn-ov-room-npc')?.addEventListener('click', () => {
+        const name = this.$('ov-room-npc-name')?.value?.trim();
+        if (name) document.dispatchEvent(new CustomEvent('overview-room-add-npc', { detail: {
+          roomId: rid, name, isHostile: this.$('ov-room-npc-hostile')?.checked || false
+        }}));
+      });
+    }
   },
 
   _ovItemCache: null,
