@@ -986,7 +986,8 @@ public class GameEngine : IGameEngine
 
         await _stateManager.SavePlayerAsync(player, ct);
 
-        var mechanicalSummary = $"You approach {target.Name}.";
+        var greeting = !string.IsNullOrWhiteSpace(freeForm.Narration) ? freeForm.Narration : $"You approach {target.Name}.";
+        var mechanicalSummary = greeting;
         if (questUpdate is not null)
             mechanicalSummary += $"\n📜 {questUpdate}";
         if (narratorQuestSummary is not null)
@@ -2374,8 +2375,27 @@ public class GameEngine : IGameEngine
         };
     }
 
+    // Commands that should work normally even mid-conversation (info lookups, not dialogue)
+    private static readonly HashSet<ActionType> PassthroughInConversation = new()
+    {
+        ActionType.Inventory, ActionType.Stats, ActionType.Spellbook, ActionType.Help,
+        ActionType.Journal, ActionType.CompletedQuests, ActionType.QuestInfo, ActionType.Map
+    };
+
     private async Task<ActionResult?> ProcessConversationTurnAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
     {
+        // Let info commands pass through to normal processing without breaking conversation
+        if (PassthroughInConversation.Contains(action.Type))
+            return null;
+
+        // "talk to X" while in conversation: switch to new target (or re-greet same one)
+        if (action.Type == ActionType.Talk)
+        {
+            player.Interaction.Reset();
+            await _stateManager.SavePlayerAsync(player, ct);
+            return null; // Fall through to normal Talk processing
+        }
+
         var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
         if (room is null)
         {
@@ -2402,33 +2422,19 @@ public class GameEngine : IGameEngine
         // Load world-scoped NPC state for this conversation
         await OverlayWorldNpcStateAsync(npc, player.ActiveWorldId, player.Id, ct);
 
-        // Movement mid-conversation: exit with disposition penalty
+        // Movement mid-conversation: exit cleanly (no disposition penalty for walking away)
         if (action.Type == ActionType.Move)
         {
-            var dispositionPenalty = ShiftDisposition(npc.Disposition, -1);
-            npc.Disposition = dispositionPenalty;
-            player.Interaction.AppendContext($"Player walked away mid-conversation. {npc.Name}'s disposition shifted to {dispositionPenalty}.");
-
-            var freeForm = await _narrator.ProcessConversationTurnAsync(player, room, npc, player.Interaction, "[Player walks away mid-sentence]", ct);
-            ApplyInteractionUpdate(player, room, npc, freeForm);
-
             player.Interaction.Reset();
             await PersistWorldNpcStateAsync(npc, player.ActiveWorldId, player.Id, ct);
             await _stateManager.SavePlayerAsync(player, ct);
-            await _stateManager.SaveRoomAsync(room, ct);
-
-            var exitResult = new ActionResult
-            {
-                ActionId = action.Id,
-                RawInput = action.RawInput,
-                Success = true,
-                MechanicalSummary = $"You walk away from {npc.Name}. Their disposition shifts to {dispositionPenalty}.",
-                Narration = freeForm.Narration,
-                InteractionUpdate = new InteractionUpdate { Mode = InteractionMode.Explore, NpcDisposition = dispositionPenalty }
-            };
-
-            await PersistInteractionStoryEntry(player, action, exitResult, ct);
             return null; // Let the movement continue through normal processing
+        }
+
+        // "look" while in conversation: let it pass through but stay in conversation
+        if (action.Type == ActionType.Look && string.IsNullOrWhiteSpace(action.Target))
+        {
+            return null;
         }
 
         // Attack mid-conversation: transition to combat
