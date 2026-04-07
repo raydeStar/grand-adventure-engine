@@ -2557,11 +2557,12 @@ textarea { resize: vertical; min-height: 80px; }
 .registry-list-actions .btn { white-space: nowrap; }
 
 .registry-entries {
-  flex: 1;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
+  max-height: calc(100vh - 220px);
+  min-height: 200px;
 }
 
 .registry-entry {
