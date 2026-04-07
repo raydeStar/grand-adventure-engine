@@ -595,8 +595,8 @@
       UI.populateRegistryWorldFilter(state.worlds);
       UI.loadRegistry();
     }
-    // World management now lives inside DM Console
-    if (tabName === 'overview') {
+    // World management tab
+    if (tabName === 'worlds' || tabName === 'overview') {
       void refreshWorlds();
     }
   }

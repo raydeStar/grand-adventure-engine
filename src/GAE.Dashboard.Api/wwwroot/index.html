@@ -213,6 +213,7 @@
       <section id="workspace-admin" class="workspace hidden">
         <nav class="admin-toolbar">
           <button class="admin-tab active" data-admin-tab="overview" type="button">DM Console</button>
+          <button class="admin-tab" data-admin-tab="worlds" type="button">Worlds</button>
           <button class="admin-tab" data-admin-tab="tools" type="button">Tools</button>
           <button class="admin-tab" data-admin-tab="llm" type="button">LLM</button>
           <button class="admin-tab" data-admin-tab="registry" type="button">Registry</button>
@@ -276,144 +277,147 @@
               </div>
             </div>
 
-            <!-- ── World Management (collapsible) ── -->
-            <details class="admin-tools-section">
-              <summary class="admin-tools-header">World Management</summary>
 
-              <div class="panel">
+          </div>
+        </div>
+
+        <!-- ═══ WORLDS TAB ═══ -->
+        <div class="admin-tab-content" data-admin-panel="worlds">
+          <div class="admin-tab-body">
+
+            <div class="panel">
+              <div class="panel-header-row">
+                <h3>Worlds</h3>
+                <div class="world-action-buttons">
+                  <input type="file" id="import-world-file" accept=".yaml,.yml" style="display:none" />
+                  <button class="btn btn-secondary btn-sm" id="btn-import-world" type="button">Import YAML</button>
+                  <button class="btn btn-primary btn-sm" id="btn-create-world" type="button">+ New World</button>
+                </div>
+              </div>
+              <div id="world-list" class="world-list">
+                <div class="empty-state">Loading worlds...</div>
+              </div>
+              <div id="import-world-result" class="world-action-result"></div>
+            </div>
+
+            <!-- Create / Edit World Form (hidden by default) -->
+            <div class="panel hidden" id="world-form-panel">
+              <h3 id="world-form-title">Create World</h3>
+              <form id="world-form" class="world-action-form">
+                <input type="hidden" id="world-form-id" />
+                <div class="mutation-row">
+                  <div class="form-group">
+                    <label for="world-form-name">Name</label>
+                    <input type="text" id="world-form-name" placeholder="e.g. Cyberpunk 2099" required />
+                  </div>
+                  <div class="form-group">
+                    <label for="world-form-spawn">Spawn Room ID</label>
+                    <input type="text" id="world-form-spawn" placeholder="spawn" />
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label for="world-form-desc">Description</label>
+                  <textarea id="world-form-desc" rows="2" placeholder="A brief description of this world..."></textarea>
+                </div>
+                <div class="form-group">
+                  <label for="world-form-tags">Tags (comma-separated)</label>
+                  <input type="text" id="world-form-tags" placeholder="fantasy, medieval, dark" />
+                </div>
+                <div class="world-action-buttons">
+                  <button class="btn btn-primary" type="submit" id="world-form-submit">Create World</button>
+                  <button class="btn btn-secondary" type="button" id="world-form-cancel">Cancel</button>
+                </div>
+                <div id="world-form-result" class="world-action-result"></div>
+              </form>
+            </div>
+
+            <!-- Selected World Context (hidden until a world is clicked) -->
+            <div id="world-context-section" class="hidden">
+              <div class="panel" id="world-detail-panel">
                 <div class="panel-header-row">
-                  <h3>Worlds</h3>
+                  <h3 id="world-detail-name">World Detail</h3>
                   <div class="world-action-buttons">
-                    <input type="file" id="import-world-file" accept=".yaml,.yml" style="display:none" />
-                    <button class="btn btn-secondary btn-sm" id="btn-import-world" type="button">Import YAML</button>
-                    <button class="btn btn-primary btn-sm" id="btn-create-world" type="button">+ New World</button>
+                    <button class="btn btn-secondary btn-sm" id="btn-export-world" type="button">Export YAML</button>
+                    <button class="btn btn-secondary btn-sm" id="btn-edit-world" type="button">Edit</button>
+                    <button class="btn btn-danger btn-sm" id="btn-delete-world" type="button">Delete</button>
                   </div>
                 </div>
-                <div id="world-list" class="world-list">
-                  <div class="empty-state">Loading worlds...</div>
+                <div id="world-detail-body"></div>
+                <div id="export-world-result" class="world-action-result"></div>
+              </div>
+
+              <div class="world-toolbar">
+                <button class="btn btn-primary btn-sm" id="btn-reseed-world" type="button">Re-Seed Rooms</button>
+                <button class="btn btn-primary btn-sm" id="btn-seed-demo-world" type="button">Seed Demo Characters</button>
+                <label class="remember-toggle" style="margin:0;">
+                  <input type="checkbox" id="seed-demo-replace" />
+                  <span>Replace existing</span>
+                </label>
+                <span class="toolbar-sep"></span>
+                <button class="btn btn-danger btn-sm" id="btn-reset-world" type="button">Reset World</button>
+                <label class="remember-toggle" style="margin:0;">
+                  <input type="checkbox" id="reset-keep-players" checked />
+                  <span>Keep players</span>
+                </label>
+              </div>
+              <div id="reseed-result" class="world-action-result"></div>
+              <div id="seed-demo-result" class="world-action-result"></div>
+              <div id="reset-world-result" class="world-action-result"></div>
+
+              <!-- Portals -->
+              <div class="panel" id="portal-manager-panel">
+                <div class="panel-header-row">
+                  <h3>Portals</h3>
+                  <button class="btn btn-primary btn-sm" id="btn-create-portal" type="button">+ New Portal</button>
                 </div>
-                <div id="import-world-result" class="world-action-result"></div>
-              </div>
+                <div id="portal-list" class="portal-list"></div>
 
-              <!-- Create / Edit World Form (hidden by default) -->
-              <div class="panel hidden" id="world-form-panel">
-                <h3 id="world-form-title">Create World</h3>
-                <form id="world-form" class="world-action-form">
-                  <input type="hidden" id="world-form-id" />
-                  <div class="mutation-row">
-                    <div class="form-group">
-                      <label for="world-form-name">Name</label>
-                      <input type="text" id="world-form-name" placeholder="e.g. Cyberpunk 2099" required />
+                <div class="hidden" id="portal-form-wrapper">
+                  <hr class="panel-divider" />
+                  <h4 id="portal-form-title">Create Portal</h4>
+                  <form id="portal-form" class="world-action-form">
+                    <input type="hidden" id="portal-form-id" />
+                    <div class="mutation-row">
+                      <div class="form-group">
+                        <label for="portal-form-source-room">Source Room ID</label>
+                        <input type="text" id="portal-form-source-room" placeholder="e.g. town_gate" required />
+                      </div>
+                      <div class="form-group">
+                        <label for="portal-form-dest-world">Destination World</label>
+                        <select id="portal-form-dest-world" required></select>
+                      </div>
+                    </div>
+                    <div class="mutation-row">
+                      <div class="form-group">
+                        <label for="portal-form-dest-room">Destination Room ID (optional)</label>
+                        <input type="text" id="portal-form-dest-room" placeholder="Uses world spawn if blank" />
+                      </div>
+                      <div class="form-group">
+                        <label for="portal-form-min-level">Min Level (optional)</label>
+                        <input type="number" id="portal-form-min-level" min="1" />
+                      </div>
                     </div>
                     <div class="form-group">
-                      <label for="world-form-spawn">Spawn Room ID</label>
-                      <input type="text" id="world-form-spawn" placeholder="spawn" />
+                      <label for="portal-form-desc">Description</label>
+                      <input type="text" id="portal-form-desc" placeholder="A shimmering rift in the air..." />
                     </div>
-                  </div>
-                  <div class="form-group">
-                    <label for="world-form-desc">Description</label>
-                    <textarea id="world-form-desc" rows="2" placeholder="A brief description of this world..."></textarea>
-                  </div>
-                  <div class="form-group">
-                    <label for="world-form-tags">Tags (comma-separated)</label>
-                    <input type="text" id="world-form-tags" placeholder="fantasy, medieval, dark" />
-                  </div>
-                  <div class="world-action-buttons">
-                    <button class="btn btn-primary" type="submit" id="world-form-submit">Create World</button>
-                    <button class="btn btn-secondary" type="button" id="world-form-cancel">Cancel</button>
-                  </div>
-                  <div id="world-form-result" class="world-action-result"></div>
-                </form>
-              </div>
-
-              <!-- Selected World Context (hidden until a world is clicked) -->
-              <div id="world-context-section" class="hidden">
-                <div class="panel" id="world-detail-panel">
-                  <div class="panel-header-row">
-                    <h3 id="world-detail-name">World Detail</h3>
+                    <div class="form-group">
+                      <label for="portal-form-hint">Narrator Hint</label>
+                      <input type="text" id="portal-form-hint" placeholder="Describe the transition dramatically..." />
+                    </div>
+                    <label class="remember-toggle">
+                      <input type="checkbox" id="portal-form-admin-only" />
+                      <span>Admin only</span>
+                    </label>
                     <div class="world-action-buttons">
-                      <button class="btn btn-secondary btn-sm" id="btn-export-world" type="button">Export YAML</button>
-                      <button class="btn btn-secondary btn-sm" id="btn-edit-world" type="button">Edit</button>
-                      <button class="btn btn-danger btn-sm" id="btn-delete-world" type="button">Delete</button>
+                      <button class="btn btn-primary" type="submit" id="portal-form-submit">Create Portal</button>
+                      <button class="btn btn-secondary" type="button" id="portal-form-cancel">Cancel</button>
                     </div>
-                  </div>
-                  <div id="world-detail-body"></div>
-                  <div id="export-world-result" class="world-action-result"></div>
+                    <div id="portal-form-result" class="world-action-result"></div>
+                  </form>
                 </div>
-
-                <div class="world-toolbar">
-                  <button class="btn btn-primary btn-sm" id="btn-reseed-world" type="button">Re-Seed Rooms</button>
-                  <button class="btn btn-primary btn-sm" id="btn-seed-demo-world" type="button">Seed Demo Characters</button>
-                  <label class="remember-toggle" style="margin:0;">
-                    <input type="checkbox" id="seed-demo-replace" />
-                    <span>Replace existing</span>
-                  </label>
-                  <span class="toolbar-sep"></span>
-                  <button class="btn btn-danger btn-sm" id="btn-reset-world" type="button">Reset World</button>
-                  <label class="remember-toggle" style="margin:0;">
-                    <input type="checkbox" id="reset-keep-players" checked />
-                    <span>Keep players</span>
-                  </label>
-                </div>
-                <div id="reseed-result" class="world-action-result"></div>
-                <div id="seed-demo-result" class="world-action-result"></div>
-                <div id="reset-world-result" class="world-action-result"></div>
-
-                <!-- Portals -->
-                <div class="panel" id="portal-manager-panel">
-                  <div class="panel-header-row">
-                    <h3>Portals</h3>
-                    <button class="btn btn-primary btn-sm" id="btn-create-portal" type="button">+ New Portal</button>
-                  </div>
-                  <div id="portal-list" class="portal-list"></div>
-
-                  <div class="hidden" id="portal-form-wrapper">
-                    <hr class="panel-divider" />
-                    <h4 id="portal-form-title">Create Portal</h4>
-                    <form id="portal-form" class="world-action-form">
-                      <input type="hidden" id="portal-form-id" />
-                      <div class="mutation-row">
-                        <div class="form-group">
-                          <label for="portal-form-source-room">Source Room ID</label>
-                          <input type="text" id="portal-form-source-room" placeholder="e.g. town_gate" required />
-                        </div>
-                        <div class="form-group">
-                          <label for="portal-form-dest-world">Destination World</label>
-                          <select id="portal-form-dest-world" required></select>
-                        </div>
-                      </div>
-                      <div class="mutation-row">
-                        <div class="form-group">
-                          <label for="portal-form-dest-room">Destination Room ID (optional)</label>
-                          <input type="text" id="portal-form-dest-room" placeholder="Uses world spawn if blank" />
-                        </div>
-                        <div class="form-group">
-                          <label for="portal-form-min-level">Min Level (optional)</label>
-                          <input type="number" id="portal-form-min-level" min="1" />
-                        </div>
-                      </div>
-                      <div class="form-group">
-                        <label for="portal-form-desc">Description</label>
-                        <input type="text" id="portal-form-desc" placeholder="A shimmering rift in the air..." />
-                      </div>
-                      <div class="form-group">
-                        <label for="portal-form-hint">Narrator Hint</label>
-                        <input type="text" id="portal-form-hint" placeholder="Describe the transition dramatically..." />
-                      </div>
-                      <label class="remember-toggle">
-                        <input type="checkbox" id="portal-form-admin-only" />
-                        <span>Admin only</span>
-                      </label>
-                      <div class="world-action-buttons">
-                        <button class="btn btn-primary" type="submit" id="portal-form-submit">Create Portal</button>
-                        <button class="btn btn-secondary" type="button" id="portal-form-cancel">Cancel</button>
-                      </div>
-                      <div id="portal-form-result" class="world-action-result"></div>
-                    </form>
-                  </div>
-                </div>
-              </div><!-- /world-context-section -->
-            </details>
+              </div>
+            </div><!-- /world-context-section -->
 
           </div>
         </div>
