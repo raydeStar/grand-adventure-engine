@@ -1719,18 +1719,23 @@ public class GameEngine : IGameEngine
         if (player.Spellbook.Count == 0)
             return new ActionResult { ActionId = action.Id, Success = true, MechanicalSummary = "Your spellbook is empty. Try `cast <spell name>` to learn one!" };
 
+        const int w = 52; // inner width
         var sb = new System.Text.StringBuilder();
         sb.AppendLine("```");
-        sb.AppendLine("\u250c\u2500 SPELLBOOK \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510");
+        sb.AppendLine($"\u250c\u2500 SPELLBOOK {new string('\u2500', w - 11)}\u2510");
+        sb.AppendLine($"\u2502 {"Spell",-22} {"Dice",-10} {"Cost",-8} {"Type",-8} \u2502");
+        sb.AppendLine($"\u251c{new string('\u2500', w)}\u2524");
         foreach (var s in player.Spellbook)
         {
             var cat = s.Category.ToString()[..3].ToLower();
-            var name = s.Name.Length > 18 ? s.Name[..18] : s.Name;
-            sb.AppendLine($"\u2502 {name,-18} {s.DamageDice,-8} {s.MpCost,2}mp ({cat}) \u2502");
+            var name = s.Name.Length > 22 ? s.Name[..22] : s.Name;
+            var dice = string.IsNullOrEmpty(s.DamageDice) ? "\u2014" : s.DamageDice;
+            sb.AppendLine($"\u2502 {name,-22} {dice,-10} {s.MpCost + "mp",-8} {cat,-8} \u2502");
         }
-        sb.AppendLine($"\u2502                                   \u2502");
-        sb.AppendLine($"\u2502 MP: {player.Mp}/{player.MaxMp}                          \u2502");
-        sb.AppendLine("\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518");
+        var mpLine = $"MP: {player.Mp}/{player.MaxMp}";
+        sb.AppendLine($"\u251c{new string('\u2500', w)}\u2524");
+        sb.AppendLine($"\u2502 {mpLine.PadRight(w - 2)} \u2502");
+        sb.AppendLine($"\u2514{new string('\u2500', w)}\u2518");
         sb.Append("```");
 
         return new ActionResult { ActionId = action.Id, Success = true, MechanicalSummary = sb.ToString() };
