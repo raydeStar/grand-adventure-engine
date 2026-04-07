@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=12" />
+  <link rel="stylesheet" href="css/style.css?v=13" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.7/signalr.min.js"
           crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="https://cdn.jsdelivr.net/npm/rot-js@2/dist/rot.min.js"
@@ -259,6 +259,8 @@
                       <button class="dm-quick-btn" data-ov-quick="items" type="button">All Items</button>
                       <button class="dm-quick-btn" data-ov-quick="classes" type="button">All Classes</button>
                       <button class="dm-quick-btn" data-ov-quick="races" type="button">All Races</button>
+                      <button class="dm-quick-btn" data-ov-quick="monsters" type="button">All Monsters</button>
+                      <button class="dm-quick-btn" data-ov-quick="quests" type="button">All Quests</button>
                     </div>
                   </div>
                 </div>
@@ -569,14 +571,20 @@
           <div class="admin-tab-body">
             <div class="panel">
               <h3>Content Registry</h3>
-              <p class="panel-hint">Browse, create, and edit all game content -- spells, items, classes, races. Use the AI generator to describe what you want and it fills in the details.</p>
+              <p class="panel-hint">Browse, create, and edit all game content. Use the AI generator to describe what you want and it fills in the details.</p>
               <div class="registry-toolbar">
+                <select id="registry-world-select" title="Filter by world">
+                  <option value="">All Worlds</option>
+                </select>
                 <select id="registry-type-select">
                   <option value="spells">Spells</option>
                   <option value="items">Items</option>
                   <option value="classes">Classes</option>
                   <option value="races">Races</option>
+                  <option value="monsters">Monsters</option>
+                  <option value="quests">Quests</option>
                 </select>
+                <input type="text" id="registry-filter-input" placeholder="Filter by name..." autocomplete="off" class="registry-filter" />
                 <button class="btn btn-primary btn-sm" id="btn-refresh-registry" type="button">Refresh</button>
                 <button class="btn btn-primary btn-sm" id="btn-new-registry-entry" type="button">+ New</button>
                 <span class="registry-count" id="registry-count"></span>
@@ -659,7 +667,7 @@
   <script src="js/api.js?v=4"></script>
   <script src="js/signalr-client.js?v=3"></script>
   <script src="js/room-map.js?v=3"></script>
-  <script src="js/ui.js?v=14"></script>
-  <script src="js/app.js?v=15"></script>
+  <script src="js/ui.js?v=15"></script>
+  <script src="js/app.js?v=16"></script>
 </body>
 </html>

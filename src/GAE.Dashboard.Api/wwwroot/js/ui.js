@@ -886,6 +886,8 @@ const UI = {
           <button class="dm-quick-btn" data-ov-quick="items" type="button">All Items</button>
           <button class="dm-quick-btn" data-ov-quick="classes" type="button">All Classes</button>
           <button class="dm-quick-btn" data-ov-quick="races" type="button">All Races</button>
+          <button class="dm-quick-btn" data-ov-quick="monsters" type="button">All Monsters</button>
+          <button class="dm-quick-btn" data-ov-quick="quests" type="button">All Quests</button>
         </div>
       </div>`;
   },
@@ -1323,11 +1325,11 @@ const UI = {
     }
 
     const type = this._ovSelectedType;
-    const registryTypes = ['spell', 'item', 'class', 'race'];
+    const registryTypes = ['spell', 'item', 'class', 'race', 'monster', 'quest'];
     try {
       if (registryTypes.includes(type)) {
-        const pluralType = type + 's';
-        await API.upsertRegistryEntry(pluralType === 'classs' ? 'classes' : pluralType, this._ovSelectedItem);
+        const pluralType = type === 'class' ? 'classes' : type + 's';
+        await API.upsertRegistryEntry(pluralType, this._ovSelectedItem);
       } else if (type === 'player') {
         await API.editPlayer({ playerId: this._ovSelectedItem.id, ...this._ovSelectedItem });
       } else if (type === 'room') {
@@ -1349,9 +1351,9 @@ const UI = {
     if (!confirm(`Delete "${this._ovSelectedItem.name || this._ovSelectedItem.id}"?`)) return;
     const type = this._ovSelectedType;
     try {
-      if (['spell', 'item', 'class', 'race'].includes(type)) {
-        const plural = type + 's';
-        await API.deleteRegistryEntry(plural === 'classs' ? 'classes' : plural, this._ovSelectedItem.id);
+      if (['spell', 'item', 'class', 'race', 'monster', 'quest'].includes(type)) {
+        const plural = type === 'class' ? 'classes' : type + 's';
+        await API.deleteRegistryEntry(plural, this._ovSelectedItem.id);
       } else if (type === 'player') {
         await API.deletePlayer(this._ovSelectedItem.id);
       } else if (type === 'room') {
@@ -1368,7 +1370,7 @@ const UI = {
   async _ovFetchAndSelect(id, type) {
     try {
       let item;
-      const registryTypes = { spell: 'spells', item: 'items', class: 'classes', race: 'races' };
+      const registryTypes = { spell: 'spells', item: 'items', class: 'classes', race: 'races', monster: 'monsters', quest: 'quests' };
       if (registryTypes[type]) {
         item = await API.getRegistryEntry(registryTypes[type], id);
       } else if (type === 'player') {
@@ -2277,20 +2279,72 @@ const UI = {
 
   _registryData: [],
   _registryEditingId: null,
+  _registryFilterText: '',
+
+  populateRegistryWorldFilter(worlds) {
+    const sel = this.$('registry-world-select');
+    if (!sel) return;
+    const current = sel.value;
+    sel.innerHTML = '<option value="">All Worlds</option>';
+    for (const w of worlds) {
+      const opt = document.createElement('option');
+      opt.value = w.id;
+      opt.textContent = w.name;
+      sel.appendChild(opt);
+    }
+    if (current) sel.value = current;
+  },
 
   async loadRegistry() {
     const type = this.$('registry-type-select')?.value || 'spells';
+    const worldId = this.$('registry-world-select')?.value || '';
     const countEl = this.$('registry-count');
     const list = this.$('registry-list');
     if (!list) return;
 
     try {
       this._registryData = await API.getRegistry(type);
-      if (countEl) countEl.textContent = `${this._registryData.length} entries`;
-      this.renderRegistryList(type, this._registryData);
+      // Client-side world filter: entries have worldIds array
+      let filtered = this._registryData;
+      if (worldId) {
+        filtered = filtered.filter(e => {
+          const wids = e.worldIds || e.WorldIds || [];
+          return !wids.length || wids.some(id => id.toLowerCase() === worldId.toLowerCase());
+        });
+      }
+      if (countEl) countEl.textContent = `${filtered.length} entries`;
+      this._registryFilterText = '';
+      const filterInput = this.$('registry-filter-input');
+      if (filterInput) filterInput.value = '';
+      this.renderRegistryList(type, filtered);
     } catch (err) {
       list.innerHTML = `<div class="empty-state">Failed to load: ${this.esc(err.message)}</div>`;
     }
+  },
+
+  _registryApplyFilter() {
+    const type = this.$('registry-type-select')?.value || 'spells';
+    const worldId = this.$('registry-world-select')?.value || '';
+    const countEl = this.$('registry-count');
+    const q = (this.$('registry-filter-input')?.value || '').trim().toLowerCase();
+    this._registryFilterText = q;
+
+    let filtered = this._registryData;
+    if (worldId) {
+      filtered = filtered.filter(e => {
+        const wids = e.worldIds || e.WorldIds || [];
+        return !wids.length || wids.some(id => id.toLowerCase() === worldId.toLowerCase());
+      });
+    }
+    if (q) {
+      filtered = filtered.filter(e =>
+        (e.name || '').toLowerCase().includes(q) ||
+        (e.id || '').toLowerCase().includes(q) ||
+        (e.description || '').toLowerCase().includes(q)
+      );
+    }
+    if (countEl) countEl.textContent = `${filtered.length} entries`;
+    this.renderRegistryList(type, filtered);
   },
 
   renderRegistryList(type, entries) {
@@ -2329,6 +2383,10 @@ const UI = {
         return `${entry.hitDie || '?'} | ${entry.primaryStat || '?'}${entry.canCastSpells ? ' | Caster' : ' | Martial'} | ${(entry.spellList || []).length} spells`;
       case 'races':
         return `${(entry.traits || []).join(', ')}`;
+      case 'monsters':
+        return `CR ${entry.challengeRating ?? '?'} | ${entry.type || '?'} | HP ${entry.hp ?? '?'}${entry.xpReward ? ` | ${entry.xpReward} XP` : ''}`;
+      case 'quests':
+        return `${entry.type || '?'} | Lv.${entry.requiredLevel || 1}${entry.xpReward ? ` | ${entry.xpReward} XP` : ''}${entry.goldReward ? ` | ${entry.goldReward}g` : ''}`;
       default:
         return entry.id || '';
     }
@@ -2441,6 +2499,8 @@ const UI = {
 
   wireRegistryTab() {
     const typeSelect = this.$('registry-type-select');
+    const worldSelect = this.$('registry-world-select');
+    const filterInput = this.$('registry-filter-input');
     const refreshBtn = this.$('btn-refresh-registry');
     const newBtn = this.$('btn-new-registry-entry');
     const saveBtn = this.$('btn-registry-save');
@@ -2451,6 +2511,7 @@ const UI = {
     const listEl = this.$('registry-list');
 
     if (typeSelect) typeSelect.addEventListener('change', () => this.loadRegistry());
+    if (worldSelect) worldSelect.addEventListener('change', () => this.loadRegistry());
     if (refreshBtn) refreshBtn.addEventListener('click', () => this.loadRegistry());
     if (newBtn) newBtn.addEventListener('click', () => this.openRegistryEditor(null, (typeSelect?.value || 'spells').replace(/s$/, '')));
     if (saveBtn) saveBtn.addEventListener('click', () => this.saveRegistryEntry());
@@ -2460,6 +2521,15 @@ const UI = {
     if (chatInput) {
       chatInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') this.sendRegistryChat();
+      });
+    }
+
+    // Live filter-by-name input
+    let filterTimer = null;
+    if (filterInput) {
+      filterInput.addEventListener('input', () => {
+        clearTimeout(filterTimer);
+        filterTimer = setTimeout(() => this._registryApplyFilter(), 150);
       });
     }
 

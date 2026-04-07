@@ -1571,6 +1571,18 @@ public class DashboardController : ControllerBase
                 if (InWorld(r.WorldIds) && Matches(r.Id, r.Name, r.Description, null, r.Tags, query))
                     results.Add(new { type = "race", r.Id, r.Name, r.Description, meta = string.Join(", ", r.Traits), worldIds = r.WorldIds, data = r });
 
+        // Search monsters
+        if (filter is null or "monster")
+            foreach (var m in _registry.Monsters.GetAll())
+                if (InWorld(m.WorldIds) && Matches(m.Id, m.Name, m.Description, m.Rarity, m.Tags, query))
+                    results.Add(new { type = "monster", m.Id, m.Name, m.Description, meta = $"Lv.{m.MinLevel}-{m.MaxLevel} | HP {m.BaseHp} | {m.DamageDice} | {m.Rarity}{(m.IsBoss ? " | BOSS" : "")}", worldIds = m.WorldIds, data = m });
+
+        // Search quests
+        if (filter is null or "quest")
+            foreach (var qst in _registry.Quests.GetAll())
+                if (InWorld(qst.WorldIds) && Matches(qst.Id, qst.Name, qst.Description, qst.GiverId, qst.Tags, query))
+                    results.Add(new { type = "quest", qst.Id, qst.Name, qst.Description, meta = $"Lv.{qst.MinLevel} | {qst.Stages.Count} stages | Giver: {qst.GiverId}", worldIds = qst.WorldIds, data = qst });
+
         // Fetch rooms once if needed for room or NPC search
         var needRooms = filter is null or "room" or "npc";
         var rooms = needRooms ? await _stateManager.GetAllRoomsAsync(ct) : [];
@@ -1658,6 +1670,18 @@ public class DashboardController : ControllerBase
                         results.Add(new { type = "player", id = p.Id, name = p.Name,
                             description = $"Lv.{p.Level} {p.Race} {p.Class}",
                             meta = $"HP: {p.Hp}/{p.MaxHp} | MP: {p.Mp}/{p.MaxMp} | Gold: {p.Gold}", worldIds = new List<string> { p.ActiveWorldId }, data = p });
+                break;
+            case "monsters":
+                foreach (var m in _registry.Monsters.GetAll())
+                    if (InWorld(m.WorldIds))
+                        results.Add(new { type = "monster", m.Id, m.Name, m.Description,
+                            meta = $"Lv.{m.MinLevel}-{m.MaxLevel} | HP {m.BaseHp} | {m.DamageDice} | {m.Rarity}{(m.IsBoss ? " | BOSS" : "")}", worldIds = m.WorldIds, data = m });
+                break;
+            case "quests":
+                foreach (var qst in _registry.Quests.GetAll())
+                    if (InWorld(qst.WorldIds))
+                        results.Add(new { type = "quest", qst.Id, qst.Name, qst.Description,
+                            meta = $"Lv.{qst.MinLevel} | {qst.Stages.Count} stages | Giver: {qst.GiverId}", worldIds = qst.WorldIds, data = qst });
                 break;
         }
         return Ok(new { results, total = results.Count });

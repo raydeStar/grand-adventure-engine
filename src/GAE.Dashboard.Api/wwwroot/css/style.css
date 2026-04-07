@@ -2518,6 +2518,18 @@ textarea { resize: vertical; min-height: 80px; }
   font-family: var(--font);
   font-size: 12px;
 }
+.registry-filter {
+  flex: 1;
+  min-width: 100px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 0.4rem 0.6rem;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+}
+.registry-filter:focus { border-color: var(--accent); outline: none; }
 .registry-count { color: var(--dim); font-size: 11px; margin-left: auto; }
 
 .registry-entries { display: grid; gap: 0.3rem; max-height: 400px; overflow-y: auto; }

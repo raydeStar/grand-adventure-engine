@@ -592,6 +592,7 @@
       UI.loadConversationLogs();
     }
     if (tabName === 'registry') {
+      UI.populateRegistryWorldFilter(state.worlds);
       UI.loadRegistry();
     }
     // World management now lives inside DM Console
