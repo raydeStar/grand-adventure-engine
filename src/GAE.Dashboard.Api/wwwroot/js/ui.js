@@ -2287,6 +2287,7 @@ const UI = {
     const current = sel.value;
     sel.innerHTML = '<option value="">All Worlds</option>';
     for (const w of worlds) {
+      this._ovWorldMap[w.id] = w.name; // share world name map with registry renderer
       const opt = document.createElement('option');
       opt.value = w.id;
       opt.textContent = w.name;
@@ -2357,10 +2358,12 @@ const UI = {
     list.innerHTML = entries.map(entry => {
       const meta = this._getEntryMeta(type, entry);
       const tags = (entry.tags || []).slice(0, 5);
+      const worldIds = entry.worldIds || entry.WorldIds || [];
+      const worldLabels = worldIds.map(id => this._ovWorldMap[id] || id).filter(Boolean);
       return `
         <div class="registry-entry" data-registry-id="${this.esc(entry.id)}">
           <div>
-            <div class="registry-entry-name">${this.esc(entry.name)}</div>
+            <div class="registry-entry-name">${this.esc(entry.name)}${worldLabels.length ? worldLabels.map(w => ` <span class="registry-world-tag">${this.esc(w)}</span>`).join('') : ''}</div>
             <div class="registry-entry-meta">${this.esc(meta)}</div>
             ${tags.length ? `<div class="registry-entry-tags">${tags.map(t => `<span class="registry-entry-tag">${this.esc(t)}</span>`).join('')}</div>` : ''}
           </div>

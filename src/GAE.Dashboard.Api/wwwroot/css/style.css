@@ -2580,6 +2580,17 @@ textarea { resize: vertical; min-height: 80px; }
 .registry-entry:hover { border-color: var(--accent); }
 .registry-entry-name { color: var(--accent); font-weight: bold; font-size: 13px; }
 .registry-entry-meta { color: var(--dim); font-size: 11px; }
+.registry-world-tag {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--dim);
+  background: rgba(0,150,255,0.1);
+  border: 1px solid rgba(0,150,255,0.25);
+  border-radius: 3px;
+  padding: 0.05rem 0.35rem;
+  margin-left: 0.3rem;
+  vertical-align: middle;
+}
 .registry-entry-tags { display: flex; gap: 0.25rem; flex-wrap: wrap; }
 .registry-entry-tag {
   background: rgba(0, 255, 65, 0.08);
