@@ -866,8 +866,14 @@ public class NarratorService : INarratorService
             - Faction: {{npc.Faction}}
             - Current Disposition: {{interaction.NpcDisposition ?? npc.Disposition}}
 
+            CRITICAL RESPONSE RULES:
+            1. The NPC MUST speak with actual dialogue in quotes. Every response MUST include at least one line of NPC dialogue.
+            2. The NPC MUST respond to what the player actually said — address their question or statement directly.
+            3. Keep atmospheric description brief (1-2 sentences max). Prioritize NPC dialogue and reactions.
+
             QUEST INTERACTIONS:
             This NPC may offer quests, accept quest turn-ins, or discuss quest progress.
+            - If QUEST CONTEXT is provided below, the NPC MUST mention their quest naturally when the player asks for work or help.
             - If the player ACCEPTS a quest during conversation, return "acceptedQuestId" with the quest ID.
             - If the player DECLINES a quest, return "declinedQuestId" with the quest ID.
             - If the player is TURNING IN a completed quest, return "turnInQuestId" with the quest ID.
@@ -1260,9 +1266,18 @@ public class NarratorService : INarratorService
     /// <summary>Normalize common LLM JSON key variations (e.g. "narrative" → "narration").</summary>
     internal static string NormalizeFreeFormJsonKeys(string json)
     {
-        // Simple string replacement — "narrative" is not a substring of any other expected key
-        if (json.Contains("\"narrative\""))
-            json = json.Replace("\"narrative\"", "\"narration\"");
+        // LLMs commonly misspell or vary the narration key — normalize all known variants
+        string[] narrationVariants = ["\"narrative\"", "\"narratition\"", "\"narrattion\"",
+            "\"naration\"", "\"narrator\"", "\"narrate\"", "\"dialog\"", "\"dialogue\"",
+            "\"response\"", "\"text\"", "\"message\""];
+        foreach (var variant in narrationVariants)
+        {
+            if (json.Contains(variant))
+            {
+                json = json.Replace(variant, "\"narration\"");
+                break; // only replace the first match
+            }
+        }
         return json;
     }
 
@@ -2055,56 +2070,67 @@ public class NarratorService : INarratorService
     private static string BuildRoomAtmosphere(Room room)
     {
         var description = TrimToSentence(room.Description);
-        var roomText = $"{room.Name} {room.Description}".ToLowerInvariant();
-
-        if (roomText.Contains("qa") || roomText.Contains("lab") || roomText.Contains("sterile") || roomText.Contains("fixture") || roomText.Contains("test"))
-        {
-            return "It feels less like a chamber built for comfort and more like a proving ground left humming between trials, all cold light, hard edges, and patient machinery.";
-        }
-
-        if (roomText.Contains("inn") || roomText.Contains("tavern"))
-        {
-            return "Warmth clings to the place in stubborn pockets, softening the rougher smells and sounds that travel in from the road.";
-        }
 
         if (string.IsNullOrWhiteSpace(description))
         {
-            return "The place keeps its details close, revealing itself through echo, shadow, and the pressure of the air more than any easy explanation.";
+            return "The place reveals itself slowly — more through feeling than any obvious feature.";
         }
 
-        var atmosphereTemplates = new[]
-        {
-            $"The air here speaks of {description.TrimEnd('.').ToLowerInvariant()}.",
-            $"Everything about this place says {description.TrimEnd('.').ToLowerInvariant()}.",
-            $"{char.ToUpperInvariant(description[0])}{description[1..].TrimEnd('.')} — the room wears its purpose plainly.",
-            $"The smell of dust and purpose mingles in a space defined by {description.TrimEnd('.').ToLowerInvariant()}.",
-            $"This is unmistakably a place of {description.TrimEnd('.').ToLowerInvariant()}, and it makes no effort to pretend otherwise."
-        };
-        return atmosphereTemplates[Math.Abs(room.Id.GetHashCode()) % atmosphereTemplates.Length];
+        // Use the room's own description as-is — it's already been written to be atmospheric
+        return description.EndsWith('.') ? description : description + ".";
     }
 
     private static string BuildRoomFocalDetail(Room room)
     {
-        var details = new List<string>();
+        var parts = new List<string>();
 
         if (room.Npcs.Count > 0)
-            details.Add($"The eye keeps returning to {SummarizeEntities(room.Npcs, npc => npc.Name)}, whose presence gives the room its weight");
+        {
+            var npcSummary = SummarizeEntities(room.Npcs, npc => npc.Name);
+            var npcTemplates = new[]
+            {
+                $"{npcSummary} {(room.Npcs.Count == 1 ? "catches" : "catch")} your attention",
+                $"You notice {npcSummary} nearby",
+                $"{npcSummary} {(room.Npcs.Count == 1 ? "occupies" : "occupy")} the space with quiet purpose",
+            };
+            parts.Add(npcTemplates[Math.Abs(room.Id.GetHashCode() + room.Npcs.Count) % npcTemplates.Length]);
+        }
 
         if (room.Items.Count > 0)
-            details.Add($"{SummarizeEntities(room.Items, item => item.Name, item => item.Quantity)} glints with the promise of use or trouble");
+        {
+            var itemSummary = SummarizeEntities(room.Items, item => item.Name, item => item.Quantity);
+            var itemTemplates = new[]
+            {
+                $"{itemSummary} {(room.Items.Count == 1 ? "sits" : "sit")} within reach",
+                $"you spot {itemSummary}",
+                $"{itemSummary} {(room.Items.Count == 1 ? "draws" : "draw")} the eye",
+            };
+            parts.Add(itemTemplates[Math.Abs(room.Id.GetHashCode() + room.Items.Count) % itemTemplates.Length]);
+        }
 
-        return details.Count switch
+        return parts.Count switch
         {
             0 => string.Empty,
-            1 => details[0] + ".",
-            _ => details[0] + ", while " + details[1] + "."
+            1 => parts[0] + ".",
+            _ => parts[0] + ", and " + parts[1] + "."
         };
     }
 
     private static string BuildExitDetail(Room room)
-        => room.Exits.Count > 0
-            ? $"Only {HumanizeDirections(room.Exits.Keys)} offers a clean way onward."
-            : "No obvious road onward presents itself at first glance.";
+    {
+        if (room.Exits.Count == 0)
+            return "No obvious way onward presents itself.";
+
+        var dirs = HumanizeDirections(room.Exits.Keys);
+        var verb = room.Exits.Count == 1 ? "leads" : "lead";
+        var exitTemplates = new[]
+        {
+            $"Paths {verb} {dirs}.",
+            $"Exits {verb} {dirs}.",
+            $"You can go {dirs}.",
+        };
+        return exitTemplates[Math.Abs(room.Id.GetHashCode() + room.Exits.Count) % exitTemplates.Length];
+    }
 
     private static string BuildAmbientMissSentence(Room room)
     {

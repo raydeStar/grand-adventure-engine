@@ -8,4 +8,5 @@ public interface IGameEngine
     Task<PlayerCharacter> CreateCharacterFromConceptAsync(CharacterConcept concept, CancellationToken ct = default);
     GameAction ParseCommand(string playerId, string rawInput);
     Task<CombatState?> GetActiveCombatAsync(string roomId, string worldId, CancellationToken ct = default);
+    string? CheckAndApplyLevelUp(PlayerCharacter player);
 }

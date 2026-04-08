@@ -2518,6 +2518,24 @@ public class GameEngine : IGameEngine
                 InteractionUpdate = new InteractionUpdate { Mode = InteractionMode.Explore, NpcDisposition = npc.Disposition }
             };
 
+            // Process any last-moment quest updates from the farewell narration
+            if (freeForm.QuestUpdates is not null && _questTracker is not null)
+            {
+                var (qs, qr) = await _questTracker.ProcessNarratorQuestUpdatesAsync(player, freeForm.QuestUpdates, npc, ct);
+                if (qs is not null)
+                    result.MechanicalSummary += $"\n📜 {qs}";
+                if (qr is not null)
+                {
+                    player.Xp += qr.Xp;
+                    player.Gold += qr.Gold;
+                    if (qr.Xp > 0 || qr.Gold > 0)
+                        result.MechanicalSummary += $"\n**Rewards:** +{qr.Xp} XP | +{qr.Gold} gold";
+                    var lvlUp = CheckAndApplyLevelUp(player);
+                    if (lvlUp is not null) result.MechanicalSummary += $"\n{lvlUp}";
+                }
+                await _stateManager.SavePlayerAsync(player, ct);
+            }
+
             await PersistInteractionStoryEntry(player, action, result, ct);
             return result;
         }
@@ -2585,6 +2603,25 @@ public class GameEngine : IGameEngine
                     NpcDisposition = npc.Disposition
                 }
             };
+
+            // Process quest updates from narrator response (accept, decline, turn-in)
+            if (freeForm.QuestUpdates is not null && _questTracker is not null)
+            {
+                var (questSummary, questReward) = await _questTracker.ProcessNarratorQuestUpdatesAsync(player, freeForm.QuestUpdates, npc, ct);
+                if (questSummary is not null)
+                    result.MechanicalSummary += $"\n📜 {questSummary}";
+                if (questReward is not null)
+                {
+                    player.Xp += questReward.Xp;
+                    player.Gold += questReward.Gold;
+                    if (questReward.Xp > 0 || questReward.Gold > 0)
+                        result.MechanicalSummary += $"\n**Rewards:** +{questReward.Xp} XP | +{questReward.Gold} gold";
+                    var lvlUp = CheckAndApplyLevelUp(player);
+                    if (lvlUp is not null)
+                        result.MechanicalSummary += $"\n{lvlUp}";
+                }
+                await _stateManager.SavePlayerAsync(player, ct);
+            }
 
             ApplyFreeFormStatChanges(player, freeForm, result);
             await PersistInteractionStoryEntry(player, action, result, ct);
@@ -4592,7 +4629,7 @@ public class GameEngine : IGameEngine
     /// Returns a description of level-ups that occurred, or null if none.
     /// Heals the player to full on level-up.
     /// </summary>
-    private string? CheckAndApplyLevelUp(PlayerCharacter player)
+    public string? CheckAndApplyLevelUp(PlayerCharacter player)
     {
         int maxLevel = _rules.Leveling.MaxLevel;
         if (player.Level >= maxLevel) return null;

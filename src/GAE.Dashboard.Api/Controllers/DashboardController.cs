@@ -787,6 +787,13 @@ public class DashboardController : ControllerBase
         player.Gold = Math.Max(0, player.Gold);
         player.Xp = Math.Max(0, player.Xp);
         player.Level = Math.Max(1, player.Level);
+
+        // If XP was changed but level wasn't explicitly set, check for level-up
+        if ((request.XpDelta != 0 || request.SetXp.HasValue) && !request.SetLevel.HasValue && request.LevelDelta == 0)
+        {
+            _engine.CheckAndApplyLevelUp(player);
+        }
+
         player.LastActiveAt = DateTimeOffset.UtcNow;
 
         await _stateManager.SavePlayerAsync(player, ct);
