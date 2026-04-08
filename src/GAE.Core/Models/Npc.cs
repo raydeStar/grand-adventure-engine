@@ -32,8 +32,8 @@ public class Npc
 public class NpcDispositionState
 {
     public string Emotion { get; set; } = "neutral";
-    public int Intensity { get; set; } = 40;
-    public int Baseline { get; set; } = 40;
+    public int Intensity { get; set; } = 55;
+    public int Baseline { get; set; } = 55;
     public string? Reason { get; set; }
     public DateTimeOffset LastUpdated { get; set; } = DateTimeOffset.UtcNow;
 

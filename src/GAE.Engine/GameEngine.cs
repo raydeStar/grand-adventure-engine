@@ -2449,7 +2449,8 @@ public class GameEngine : IGameEngine
         ActionType.Inventory, ActionType.Stats, ActionType.Spellbook, ActionType.Help,
         ActionType.Journal, ActionType.CompletedQuests, ActionType.QuestInfo, ActionType.Map,
         ActionType.Lorebook, ActionType.LoreInfo,
-        ActionType.Narrator, ActionType.SetNarrator
+        ActionType.Narrator, ActionType.SetNarrator,
+        ActionType.AcceptQuest, ActionType.TurnInQuest, ActionType.AbandonQuest
     };
 
     private async Task<ActionResult?> ProcessConversationTurnAsync(PlayerCharacter player, GameAction action, CancellationToken ct)

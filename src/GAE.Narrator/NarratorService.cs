@@ -809,18 +809,20 @@ public class NarratorService : INarratorService
             NPC VOICE:
             - Write the NPC's actual dialogue in quotes. Give them verbal tics, catchphrases, or speech patterns.
             - Include physical reactions and body language — eye rolls, sighs, smirks, crossed arms.
-            - The NPC has a PERSONALITY. A gruff barmaid doesn't suddenly become helpful because the player asked
-              nicely. A nervous merchant stutters more when intimidated. A flirty rogue enjoys the banter.
+            - The NPC has a PERSONALITY but is CHATTY AND ENGAGED by default. Most NPCs WANT to talk to adventurers —
+              they're curious, bored, lonely, or eager to share gossip. Even gruff NPCs should be talkative in
+              their own way (complaining, bragging, warning). Only actively hostile or deeply suspicious NPCs
+              should be curt or dismissive. A nervous merchant still wants to make a sale. A guard still has
+              opinions. Default to FRIENDLY AND CONVERSATIONAL, not guarded or curt.
             - Humor is welcome. NPCs can be sarcastic, oblivious, self-important, or accidentally funny.
-            - CHA IS CRITICAL. Check the player's CHA stat carefully:
-              - CHA 18+: The player is extremely charismatic. NPCs are NOTICEABLY warmer, more helpful,
-                more willing to share secrets, give discounts, and bend rules. Even gruff or hostile NPCs
-                soften around this player. They may not love the player, but they can't help liking them.
-              - CHA 14-17: NPCs are generally friendly and cooperative.
-              - CHA 10-13: Normal reactions based on NPC personality.
-              - CHA 7-9: NPCs are slightly less patient and helpful.
-              - CHA 6 or below: NPCs are dismissive, rude, or uncooperative.
-              Never ignore CHA. A CHA 20+ player should feel like the most likeable person in the world.
+            - CHA modifies the warmth of the interaction:
+              - CHA 18+: NPCs are NOTICEABLY warmer, share secrets, give discounts, and bend rules.
+              - CHA 14-17: NPCs are friendly and cooperative.
+              - CHA 10-13: NPCs are pleasant and chatty — normal, good-natured interactions.
+              - CHA 7-9: NPCs are a touch less patient but still willing to engage.
+              - CHA 6 or below: NPCs are dismissive or rude — but even then, they talk.
+              Important: CHA should modify WARMTH, not willingness to speak. Even with CHA 8, NPCs
+              should still be talkative — they're just less impressed by you.
 
             SOCIAL SKILL CHECKS:
             When the player's input includes a [Social check: ...] line, the ENGINE has already rolled dice.
@@ -839,7 +841,7 @@ public class NarratorService : INarratorService
             The NPC has a mood that shifts during conversation. Current state:
             - Emotion: {{npc.DispositionState.Emotion}} (intensity: {{npc.DispositionState.Intensity}}/100, baseline: {{npc.DispositionState.Baseline}})
             - Memory flags: {{memoryFlagsSummary}}
-            Intensity scale: 0=hostile, 20=angry, 40=neutral, 60=friendly, 80=devoted/loyal
+            Intensity scale: 0=hostile, 20=angry, 40=wary, 55=neutral/chatty (DEFAULT), 70=friendly, 85=devoted/loyal
             The NPC remembers everything in their memory flags. Romance means they love the player.
             Friendship means they're loyal. Crime/betrayal means they hold a grudge.
             React accordingly — a romanced NPC is warm, a betrayed NPC is cold even if they're calm.
