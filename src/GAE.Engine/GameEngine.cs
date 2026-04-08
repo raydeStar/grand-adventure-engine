@@ -2063,7 +2063,7 @@ public class GameEngine : IGameEngine
     private static InventoryItem CloneInventoryItem(InventoryItem item, int quantity)
         => new()
         {
-            Id = Guid.NewGuid().ToString("N"),
+            Id = item.Id,  // Preserve original ID for quest tracking (Deliver objectives match by item ID)
             Name = item.Name,
             Description = item.Description,
             Type = item.Type,
