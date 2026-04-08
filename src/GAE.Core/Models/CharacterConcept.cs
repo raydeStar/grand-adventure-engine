@@ -9,6 +9,9 @@ public class CharacterConcept
     public string Backstory { get; set; } = string.Empty;
     public StatAllocationMethod StatMethod { get; set; } = StatAllocationMethod.StandardArray;
     public Dictionary<string, int>? ManualStats { get; set; }
+
+    /// <summary>AI-suggested starting gold. Null = use rules default.</summary>
+    public int? StartingGold { get; set; }
 }
 
 public enum StatAllocationMethod

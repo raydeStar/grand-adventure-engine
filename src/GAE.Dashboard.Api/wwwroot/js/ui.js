@@ -1821,13 +1821,26 @@ const UI = {
     }
   },
 
+  // Stat modifier baseline — fetched from server config. null = hide modifiers.
+  _statModifierBaseline: undefined,
+
+  async loadGameConfig() {
+    try {
+      const cfg = await API.getGameConfig();
+      this._statModifierBaseline = cfg.statModifierBaseline ?? null;
+    } catch { this._statModifierBaseline = null; }
+  },
+
   getStatEntries(player) {
+    const baseline = this._statModifierBaseline;
     const preferred = KNOWN_ABILITY_KEYS
       .filter((key) => this.isScalar(player[key]))
       .map((key) => ({
         label: key.toUpperCase(),
         value: player[key],
-        modifier: typeof player[key] === 'number' ? Math.trunc((player[key] - 10) / 2) : null
+        modifier: baseline != null && typeof player[key] === 'number'
+          ? Math.trunc((player[key] - baseline) / 2)
+          : null
       }));
 
     const extras = Object.entries(player)

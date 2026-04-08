@@ -52,6 +52,7 @@
 
   async function init() {
     UI.restoreTheme();
+    UI.loadGameConfig(); // fetch stat baseline config (non-blocking)
     bindEvents();
     state.mode = UI.setMode(state.mode, null);
     UI.showPortal(true);

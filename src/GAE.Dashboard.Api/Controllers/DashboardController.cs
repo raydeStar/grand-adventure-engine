@@ -354,6 +354,16 @@ public class DashboardController : ControllerBase
         return Ok(new { player, heroIntro });
     }
 
+    /// <summary>Returns display-relevant game config (stat baseline, etc.) for the web client.</summary>
+    [HttpGet("config")]
+    public IActionResult GetGameConfig()
+    {
+        return Ok(new
+        {
+            statModifierBaseline = _rules.StatModifierBaseline
+        });
+    }
+
     [Authorize(Policy = DashboardPolicies.AdminAccess)]
     [HttpGet("admin/summary")]
     public async Task<IActionResult> GetAdminSummary(CancellationToken ct)
@@ -693,12 +703,12 @@ public class DashboardController : ControllerBase
 
         int hpBase = _rules.Stats.GetValueOrDefault("hp")?.Base ?? 20;
         int mpBase = _rules.Stats.GetValueOrDefault("mp")?.Base ?? 10;
-        int conMod = PlayerCharacter.GetStatModifier(player.Con);
-        int intMod = PlayerCharacter.GetStatModifier(player.Int);
+        int conMod = PlayerCharacter.GetStatModifier(player.Con, _rules.EffectiveBaseline);
+        int intMod = PlayerCharacter.GetStatModifier(player.Int, _rules.EffectiveBaseline);
         int bonusLevels = Math.Max(0, player.Level - 1);
 
-        int baseHp = hpBase + conMod;
-        int baseMp = mpBase + intMod;
+        int baseHp = hpBase + conMod * 2;
+        int baseMp = mpBase + intMod * 2;
         player.MaxHp = Math.Max(1, (int)(baseHp * (1.0 + _rules.Leveling.HpScalePerLevel * bonusLevels)));
         player.MaxMp = Math.Max(0, (int)(baseMp * (1.0 + _rules.Leveling.MpScalePerLevel * bonusLevels)));
     }

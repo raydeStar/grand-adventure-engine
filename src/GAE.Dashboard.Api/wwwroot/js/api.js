@@ -65,6 +65,10 @@ const API = {
     return this.postJson(`${this.base}/characters`, data);
   },
 
+  async getGameConfig() {
+    return this.getJson(`${this.base}/config`);
+  },
+
   async getAdminSummary() {
     return this.getJson(`${this.base}/admin/summary`);
   },

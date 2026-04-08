@@ -248,7 +248,7 @@ public class GameEngine : IGameEngine
             Race = concept.Race,
             Class = concept.Class,
             Backstory = concept.Backstory,
-            Gold = _rules.CharacterCreation.StartingGold,
+            Gold = concept.StartingGold ?? _rules.CharacterCreation.StartingGold,
             CurrentRoomId = "spawn"
         };
 
@@ -843,12 +843,12 @@ public class GameEngine : IGameEngine
         // Determine attack stat — caster classes use the higher of melee stat or magic stat
         var weapon = player.Equipment.Weapon;
         string attackStat = weapon?.DamageStat ?? _rules.Combat.MeleeStat;
-        int attackMod = player.GetModifier(attackStat);
+        int attackMod = player.GetModifier(attackStat, _rules.EffectiveBaseline);
 
         // If the player's class is a caster and using default melee stat, let them use magic stat if it's better
         if (weapon?.DamageStat is null && IsCasterClass(player.Class))
         {
-            int magicMod = player.GetModifier(_rules.Combat.MagicStat);
+            int magicMod = player.GetModifier(_rules.Combat.MagicStat, _rules.EffectiveBaseline);
             if (magicMod > attackMod)
             {
                 attackStat = _rules.Combat.MagicStat;
@@ -918,7 +918,7 @@ public class GameEngine : IGameEngine
 
         // Hit (GlancingHit, Hit, or CriticalHit) — roll damage
         string damageDice = weapon?.DamageDice ?? "1d4";
-        int damageMod = player.GetModifier(attackStat) + dmgBonus;
+        int damageMod = player.GetModifier(attackStat, _rules.EffectiveBaseline) + dmgBonus;
         var damageRoll = _dice.RollDamage(damageDice, damageMod);
 
         int totalDamage = outcome switch
@@ -1518,12 +1518,12 @@ public class GameEngine : IGameEngine
     private ActionResult ProcessShortRest(PlayerCharacter player, GameAction action)
     {
         var hpRoll = _dice.Roll("1d8", "Short rest HP recovery");
-        int hpRecovery = Math.Max(1, hpRoll.Total + PlayerCharacter.GetStatModifier(player.Con));
+        int hpRecovery = Math.Max(1, hpRoll.Total + PlayerCharacter.GetStatModifier(player.Con, _rules.EffectiveBaseline));
         int oldHp = player.Hp;
         player.Hp = Math.Min(player.MaxHp, player.Hp + hpRecovery);
 
         var mpRoll = _dice.Roll("1d4", "Short rest MP recovery");
-        int mpRecovery = Math.Max(1, mpRoll.Total + PlayerCharacter.GetStatModifier(player.Int));
+        int mpRecovery = Math.Max(1, mpRoll.Total + PlayerCharacter.GetStatModifier(player.Int, _rules.EffectiveBaseline));
         int oldMp = player.Mp;
         player.Mp = Math.Min(player.MaxMp, player.Mp + mpRecovery);
 
@@ -1583,7 +1583,7 @@ public class GameEngine : IGameEngine
         };
     }
 
-    private static ActionResult ProcessStats(PlayerCharacter player, GameAction action)
+    private ActionResult ProcessStats(PlayerCharacter player, GameAction action)
     {
         return new ActionResult
         {
@@ -1592,7 +1592,7 @@ public class GameEngine : IGameEngine
             MechanicalSummary = $"""
                 **{player.Name}** -- Level {player.Level} {player.Race} {player.Class}
                 HP: {player.Hp}/{player.MaxHp} | MP: {player.Mp}/{player.MaxMp} | Gold: {player.Gold} | XP: {player.Xp}
-                {player.FormatStatsDetailed(" | ")} | Defense: {player.Defense}
+                {player.FormatStatsDetailed(" | ", _rules.StatModifierBaseline)} | Defense: {player.Defense}
                 """
         };
     }
@@ -1740,7 +1740,7 @@ public class GameEngine : IGameEngine
                 }
 
                 // Roll spell attack (INT-based)
-                int intMod = player.GetModifier("int");
+                int intMod = player.GetModifier("int", _rules.EffectiveBaseline);
                 int profBonus = 2 + (player.Level / 4);
                 var attackRoll = _dice.RollAttack(intMod + profBonus);
                 int targetDefense = target.Defense ?? 10;
@@ -1793,7 +1793,7 @@ public class GameEngine : IGameEngine
             }
             case SpellCategory.Healing:
             {
-                int intMod = player.GetModifier("int");
+                int intMod = player.GetModifier("int", _rules.EffectiveBaseline);
                 var healRoll = _dice.RollDamage(spell.DamageDice, intMod);
                 dice.Add(healRoll);
                 int healed = Math.Max(1, healRoll.Total);
@@ -2881,7 +2881,7 @@ public class GameEngine : IGameEngine
 
         var weapon = player.Equipment.Weapon;
         string attackStat = weapon?.DamageStat ?? _rules.Combat.MeleeStat;
-        int baseAttackMod = player.GetModifier(attackStat);
+        int baseAttackMod = player.GetModifier(attackStat, _rules.EffectiveBaseline);
         int proficiencyBonus = _rules.Combat.ProficiencyBaseBonus + (player.Level / _rules.Combat.ProficiencyScaleLevel);
 
         // Round header
@@ -2935,7 +2935,7 @@ public class GameEngine : IGameEngine
             else
             {
                 string damageDice = weapon?.DamageDice ?? "1d4";
-                int damageMod = player.GetModifier(attackStat) + attackDmgBonus;
+                int damageMod = player.GetModifier(attackStat, _rules.EffectiveBaseline) + attackDmgBonus;
                 var damageRoll = _dice.RollDamage(damageDice, damageMod);
                 int totalDamage = outcome switch
                 {
@@ -3178,7 +3178,7 @@ public class GameEngine : IGameEngine
         };
 
         // Player initiative
-        int playerDexMod = player.GetModifier("dex");
+        int playerDexMod = player.GetModifier("dex", _rules.EffectiveBaseline);
         var playerInit = _dice.RollInitiative(playerDexMod);
         combat.TurnOrder.Add(new CombatParticipant
         {
@@ -3364,11 +3364,11 @@ public class GameEngine : IGameEngine
 
             // Pick the better stat if an alt is available (e.g. intimidate: STR or CHA)
             // GetModifier returns +0 for unknown stats —  equivalent to stat value 10 (average)
-            int statMod = player.GetModifier(config.Stat);
+            int statMod = player.GetModifier(config.Stat, _rules.EffectiveBaseline);
             string statUsed = config.Stat;
             if (config.AltStat is not null)
             {
-                int altMod = player.GetModifier(config.AltStat);
+                int altMod = player.GetModifier(config.AltStat, _rules.EffectiveBaseline);
                 if (altMod > statMod)
                 {
                     statMod = altMod;
@@ -4829,15 +4829,16 @@ public class GameEngine : IGameEngine
 
         int hpBase = _rules.Stats.GetValueOrDefault("hp")?.Base ?? 20;
         int mpBase = _rules.Stats.GetValueOrDefault("mp")?.Base ?? 10;
-        int conMod = PlayerCharacter.GetStatModifier(player.Con);
-        int intMod = PlayerCharacter.GetStatModifier(player.Int);
+        int conMod = PlayerCharacter.GetStatModifier(player.Con, _rules.EffectiveBaseline);
+        int intMod = PlayerCharacter.GetStatModifier(player.Int, _rules.EffectiveBaseline);
         double hpScale = _rules.Leveling.HpScalePerLevel;
         double mpScale = _rules.Leveling.MpScalePerLevel;
         int bonusLevels = Math.Max(0, player.Level - 1);
 
-        // Base + stat modifier, then scale up by percentage per bonus level
-        int baseHp = hpBase + conMod;
-        int baseMp = mpBase + intMod;
+        // Base + stat modifier * 2 for meaningful stat impact, then scale up per level
+        // CON 8 (-1) = 18 HP, CON 10 (0) = 20 HP, CON 15 (+2) = 24 HP, CON 18 (+4) = 28 HP
+        int baseHp = hpBase + conMod * 2;
+        int baseMp = mpBase + intMod * 2;
         player.MaxHp = Math.Max(1, (int)(baseHp * (1.0 + hpScale * bonusLevels)));
         player.MaxMp = Math.Max(0, (int)(baseMp * (1.0 + mpScale * bonusLevels)));
 

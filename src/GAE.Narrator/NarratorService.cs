@@ -556,12 +556,26 @@ public class NarratorService : INarratorService
         string playerDescription, string? previousSheet, CancellationToken ct = default)
     {
         var systemPrompt = """
-            You are a character creation assistant for a D&D-style text adventure.
+            You are a character creation assistant for a dark-fantasy text adventure.
             The player will describe their character in natural language. Based on their
-            description, generate a character sheet.
+            description, generate a character sheet with INDIVIDUAL STAT VALUES.
 
-            You MUST assign stats from the standard array [15, 14, 13, 12, 10, 8].
-            Order them based on the player's description (strong character -> STR gets 15, etc.)
+            STAT ASSIGNMENT RULES:
+            - Stats: str, dex, con, int, wis, cha, luck
+            - Valid range: 3 to 20. Average human = 10. Heroic = 14-16. Legendary = 17-20.
+            - Assign stats that MATCH THE CHARACTER DESCRIPTION. A "mighty orc barbarian"
+              should have 17+ STR. A "brilliant elven scholar" should have 17+ INT.
+            - Be GENEROUS. These are HEROES. Most primary stats should be 13+.
+            - If the player describes something impressive ("buff", "genius", "lightning fast"),
+              reward that with high stats. Players who put effort into their description
+              deserve characters that reflect it.
+            - Secondary stats can be lower (8-12) to create interesting weaknesses.
+            - Luck defaults to 10 unless the player mentions being lucky/unlucky.
+            - Total stat points should be between 75-90 (generous but not absurd).
+
+            STARTING GOLD:
+            - Base: 50-150 gold depending on backstory (wealthy noble = 150, street urchin = 50)
+            - Default to 100 if unclear.
 
             The player can be ANYTHING they want. Use exactly what they say.
             Common races: Human, Elf, Dwarf, Halfling, Orc, Tiefling — but if they say
@@ -575,8 +589,10 @@ public class NarratorService : INarratorService
               "name": "suggested name or null if player did not say one",
               "race": "whatever the player said",
               "class": "whatever fits their description",
-              "statOrder": ["str", "con", "dex", "wis", "cha", "int"],
+              "stats": { "str": 14, "dex": 12, "con": 13, "int": 10, "wis": 11, "cha": 15, "luck": 10 },
+              "statOrder": ["cha", "str", "con", "dex", "wis", "int"],
               "backstory": "2-3 sentence backstory based on their description",
+              "startingGold": 100,
               "followUpQuestion": "optional question if the description was vague, or null"
             }
 

@@ -3,6 +3,7 @@ using Discord.Net;
 using Discord.WebSocket;
 using GAE.Core.Interfaces;
 using GAE.Core.Models;
+using GAE.Engine.Configuration;
 using GAE.Engine.Worlds;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -22,6 +23,7 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
     private readonly IStateManager _stateManager;
     private readonly INarratorService _narrator;
     private readonly IWorldRepository _worldRepository;
+    private readonly GameRulesConfig _rules;
     private readonly ILogger<DiscordBotService> _logger;
     private readonly string _token;
     private readonly string _sessionsPath;
@@ -46,6 +48,7 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         IStateManager stateManager,
         INarratorService narrator,
         IWorldRepository worldRepository,
+        GameRulesConfig rules,
         ILogger<DiscordBotService> logger,
         string token,
         string dataDir = "")
@@ -55,6 +58,7 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         _stateManager = stateManager;
         _narrator = narrator;
         _worldRepository = worldRepository;
+        _rules = rules;
         _logger = logger;
         _token = token;
         _sessionsPath = string.IsNullOrEmpty(dataDir) ? "" : Path.Combine(dataDir, "pending-creations.json");
@@ -563,8 +567,14 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
                 if (changed)
                 {
                     // Re-display updated sheet
-                    var standardArr = new[] { 15, 14, 13, 12, 10, 8 };
-                    var updatedStats = AssignStatsFromOrder(session.LastAiResponse.StatOrder, standardArr);
+                    Dictionary<string, int> updatedStats;
+                    if (session.LastAiResponse.Stats is not null && session.LastAiResponse.Stats.Count >= 6)
+                        updatedStats = new Dictionary<string, int>(session.LastAiResponse.Stats, StringComparer.OrdinalIgnoreCase);
+                    else
+                    {
+                        var standardArr = new[] { 15, 14, 13, 12, 10, 8 };
+                        updatedStats = AssignStatsFromOrder(session.LastAiResponse.StatOrder, standardArr);
+                    }
                     session.LastSheetJson = System.Text.Json.JsonSerializer.Serialize(session.LastAiResponse);
 
                     var updatedEmbed = new EmbedBuilder()
@@ -574,9 +584,9 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
                         .AddField("Race", session.LastAiResponse.Race, inline: true)
                         .AddField("Class", session.LastAiResponse.Class, inline: true)
                         .AddField("Stats",
-                            $"STR: {updatedStats["str"]} ({FormatMod(updatedStats["str"])})  DEX: {updatedStats["dex"]} ({FormatMod(updatedStats["dex"])})\n" +
-                            $"CON: {updatedStats["con"]} ({FormatMod(updatedStats["con"])})  INT: {updatedStats["int"]} ({FormatMod(updatedStats["int"])})\n" +
-                            $"WIS: {updatedStats["wis"]} ({FormatMod(updatedStats["wis"])})  CHA: {updatedStats["cha"]} ({FormatMod(updatedStats["cha"])})")
+                            $"STR: {updatedStats.GetValueOrDefault("str", 10)} ({FormatMod(updatedStats.GetValueOrDefault("str", 10))})  DEX: {updatedStats.GetValueOrDefault("dex", 10)} ({FormatMod(updatedStats.GetValueOrDefault("dex", 10))})\n" +
+                            $"CON: {updatedStats.GetValueOrDefault("con", 10)} ({FormatMod(updatedStats.GetValueOrDefault("con", 10))})  INT: {updatedStats.GetValueOrDefault("int", 10)} ({FormatMod(updatedStats.GetValueOrDefault("int", 10))})\n" +
+                            $"WIS: {updatedStats.GetValueOrDefault("wis", 10)} ({FormatMod(updatedStats.GetValueOrDefault("wis", 10))})  CHA: {updatedStats.GetValueOrDefault("cha", 10)} ({FormatMod(updatedStats.GetValueOrDefault("cha", 10))})")
                         .AddField("Backstory", session.LastAiResponse.Backstory)
                         .WithFooter("Say \"looks good\" to start, or describe changes you want.");
                     await thread.SendMessageAsync(embed: updatedEmbed.Build());
@@ -637,8 +647,17 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         session.HasSheet = true;
         PersistCreationSessions();
 
-        var standardArray = new[] { 15, 14, 13, 12, 10, 8 };
-        var stats = AssignStatsFromOrder(aiResponse.StatOrder, standardArray);
+        // Prefer AI-assigned stats; fall back to standard array ordering
+        Dictionary<string, int> stats;
+        if (aiResponse.Stats is not null && aiResponse.Stats.Count >= 6)
+        {
+            stats = new Dictionary<string, int>(aiResponse.Stats, StringComparer.OrdinalIgnoreCase);
+        }
+        else
+        {
+            var standardArray = new[] { 15, 14, 13, 12, 10, 8 };
+            stats = AssignStatsFromOrder(aiResponse.StatOrder, standardArray);
+        }
 
         session.LastSheetJson = System.Text.Json.JsonSerializer.Serialize(aiResponse);
 
@@ -649,9 +668,9 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
             .AddField("Race", string.IsNullOrWhiteSpace(aiResponse.Race) ? "???" : aiResponse.Race, inline: true)
             .AddField("Class", string.IsNullOrWhiteSpace(aiResponse.Class) ? "???" : aiResponse.Class, inline: true)
             .AddField("Stats",
-                $"STR: {stats["str"]} ({FormatMod(stats["str"])})  DEX: {stats["dex"]} ({FormatMod(stats["dex"])})\n" +
-                $"CON: {stats["con"]} ({FormatMod(stats["con"])})  INT: {stats["int"]} ({FormatMod(stats["int"])})\n" +
-                $"WIS: {stats["wis"]} ({FormatMod(stats["wis"])})  CHA: {stats["cha"]} ({FormatMod(stats["cha"])})")
+                $"STR: {stats.GetValueOrDefault("str", 10)} ({FormatMod(stats.GetValueOrDefault("str", 10))})  DEX: {stats.GetValueOrDefault("dex", 10)} ({FormatMod(stats.GetValueOrDefault("dex", 10))})\n" +
+                $"CON: {stats.GetValueOrDefault("con", 10)} ({FormatMod(stats.GetValueOrDefault("con", 10))})  INT: {stats.GetValueOrDefault("int", 10)} ({FormatMod(stats.GetValueOrDefault("int", 10))})\n" +
+                $"WIS: {stats.GetValueOrDefault("wis", 10)} ({FormatMod(stats.GetValueOrDefault("wis", 10))})  CHA: {stats.GetValueOrDefault("cha", 10)} ({FormatMod(stats.GetValueOrDefault("cha", 10))})")
             .AddField("Backstory", string.IsNullOrWhiteSpace(aiResponse.Backstory) ? "A mysterious past yet to be revealed..." : aiResponse.Backstory)
             .WithFooter("Say \"looks good\" to start, or describe changes you want.");
 
@@ -665,8 +684,18 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         AiCreationSession session, string discordId)
     {
         var ai = session.LastAiResponse!;
-        var standardArray = new[] { 15, 14, 13, 12, 10, 8 };
-        var stats = AssignStatsFromOrder(ai.StatOrder, standardArray);
+
+        // Prefer AI-assigned individual stats; fall back to standard array ordering
+        Dictionary<string, int> stats;
+        if (ai.Stats is not null && ai.Stats.Count >= 6)
+        {
+            stats = new Dictionary<string, int>(ai.Stats, StringComparer.OrdinalIgnoreCase);
+        }
+        else
+        {
+            var standardArray = new[] { 15, 14, 13, 12, 10, 8 };
+            stats = AssignStatsFromOrder(ai.StatOrder, standardArray);
+        }
 
         var concept = new CharacterConcept
         {
@@ -676,7 +705,8 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
             Class = ai.Class,
             Backstory = ai.Backstory,
             StatMethod = StatAllocationMethod.Manual,
-            ManualStats = stats
+            ManualStats = stats,
+            StartingGold = ai.StartingGold
         };
 
         var player = await _engine.CreateCharacterFromConceptAsync(concept);
@@ -1458,7 +1488,7 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
 
     // ==================== Embed Builders ====================
 
-    private static string BuildCharacterStatsText(PlayerCharacter player)
+    private string BuildCharacterStatsText(PlayerCharacter player)
     {
         // Each line: ║ (content padded to 36 chars) ║
         const int W = 38;
@@ -1486,15 +1516,21 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         sb.AppendLine($"╠{new string('═', W)}╣");
 
         var stats = player.GetAttributeStats().ToList();
+        var bl = _rules.EffectiveBaseline;
+        bool showMod = _rules.StatModifierBaseline.HasValue;
         for (int i = 0; i < stats.Count; i += 2)
         {
             var s1 = stats[i];
-            var left = $"{s1.Name}: {s1.Value,2} ({PlayerCharacter.GetStatModifier(s1.Value):+0;-0})";
+            var left = showMod
+                ? $"{s1.Name}: {s1.Value,2} ({PlayerCharacter.GetStatModifier(s1.Value, bl):+0;-0})"
+                : $"{s1.Name}: {s1.Value,2}";
             string right = "";
             if (i + 1 < stats.Count)
             {
                 var s2 = stats[i + 1];
-                right = $"{s2.Name}: {s2.Value,2} ({PlayerCharacter.GetStatModifier(s2.Value):+0;-0})";
+                right = showMod
+                    ? $"{s2.Name}: {s2.Value,2} ({PlayerCharacter.GetStatModifier(s2.Value, bl):+0;-0})"
+                    : $"{s2.Name}: {s2.Value,2}";
             }
             sb.AppendLine($"║  {left,-18}{right,-18}║");
         }
@@ -1644,9 +1680,9 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         return stats;
     }
 
-    private static string FormatMod(int stat)
+    private string FormatMod(int stat)
     {
-        var mod = (stat - 10) / 2;
+        var mod = (stat - _rules.EffectiveBaseline) / 2;
         return mod >= 0 ? $"+{mod}" : mod.ToString();
     }
 

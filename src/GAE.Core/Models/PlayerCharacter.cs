@@ -56,37 +56,41 @@ public class PlayerCharacter
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset LastActiveAt { get; set; } = DateTimeOffset.UtcNow;
 
-    public static int GetStatModifier(int statValue) => (statValue - 10) / 2;
+    /// <summary>
+    /// Calculates the modifier for a raw stat value using the given baseline.
+    /// Formula: (statValue - baseline) / 2. A stat equal to the baseline yields +0.
+    /// </summary>
+    public static int GetStatModifier(int statValue, int baseline = 10) => (statValue - baseline) / 2;
 
     /// <summary>
     /// Returns the total modifier for a stat: base stat modifier + equipment bonuses.
     /// </summary>
-    public int GetModifier(string stat)
+    public int GetModifier(string stat, int baseline = 10)
     {
         int baseMod = stat.ToLowerInvariant() switch
         {
-            "str" => GetStatModifier(Str),
-            "dex" => GetStatModifier(Dex),
-            "con" => GetStatModifier(Con),
-            "int" => GetStatModifier(Int),
-            "wis" => GetStatModifier(Wis),
-            "cha" => GetStatModifier(Cha),
-            "luck" => GetStatModifier(Luck),
+            "str" => GetStatModifier(Str, baseline),
+            "dex" => GetStatModifier(Dex, baseline),
+            "con" => GetStatModifier(Con, baseline),
+            "int" => GetStatModifier(Int, baseline),
+            "wis" => GetStatModifier(Wis, baseline),
+            "cha" => GetStatModifier(Cha, baseline),
+            "luck" => GetStatModifier(Luck, baseline),
             _ => 0
         };
         return baseMod + Equipment.GetStatBonus(stat);
     }
 
     /// <summary>Returns the raw base modifier without equipment bonuses.</summary>
-    public int GetBaseModifier(string stat) => stat.ToLowerInvariant() switch
+    public int GetBaseModifier(string stat, int baseline = 10) => stat.ToLowerInvariant() switch
     {
-        "str" => GetStatModifier(Str),
-        "dex" => GetStatModifier(Dex),
-        "con" => GetStatModifier(Con),
-        "int" => GetStatModifier(Int),
-        "wis" => GetStatModifier(Wis),
-        "cha" => GetStatModifier(Cha),
-        "luck" => GetStatModifier(Luck),
+        "str" => GetStatModifier(Str, baseline),
+        "dex" => GetStatModifier(Dex, baseline),
+        "con" => GetStatModifier(Con, baseline),
+        "int" => GetStatModifier(Int, baseline),
+        "wis" => GetStatModifier(Wis, baseline),
+        "cha" => GetStatModifier(Cha, baseline),
+        "luck" => GetStatModifier(Luck, baseline),
         _ => 0
     };
 
@@ -106,10 +110,16 @@ public class PlayerCharacter
     public string FormatStatsCompact() =>
         string.Join(" ", GetAttributeStats().Select(s => $"{s.Name}:{s.Value}"));
 
-    /// <summary>Formats stats with modifiers for detailed display. Example: STR: 12 (+1) | DEX: 10 (+0)</summary>
-    public string FormatStatsDetailed(string separator = " | ") =>
-        string.Join(separator, GetAttributeStats().Select(s =>
-            $"{s.Name}: {s.Value} ({GetStatModifier(s.Value):+0;-0})"));
+    /// <summary>
+    /// Formats stats with modifiers for detailed display. Example: STR: 12 (+1) | DEX: 10 (+0).
+    /// If baseline is null, modifiers are omitted: STR: 12 | DEX: 10.
+    /// </summary>
+    public string FormatStatsDetailed(string separator = " | ", int? baseline = 10) =>
+        baseline is int b
+            ? string.Join(separator, GetAttributeStats().Select(s =>
+                $"{s.Name}: {s.Value} ({GetStatModifier(s.Value, b):+0;-0})"))
+            : string.Join(separator, GetAttributeStats().Select(s =>
+                $"{s.Name}: {s.Value}"));
 
     public bool IsAlive => Hp > 0;
     public bool IsConscious => Hp > 0;

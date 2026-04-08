@@ -10,6 +10,15 @@ public class GameRulesConfig
     public DeathConfig Death { get; set; } = new();
     public LootConfig Loot { get; set; } = new();
     public LevelingConfig Leveling { get; set; } = new();
+
+    /// <summary>
+    /// The stat value that represents +0 modifier. Modifier = (stat - baseline) / 2.
+    /// If null, modifiers are hidden from display but engine defaults to 10 internally.
+    /// </summary>
+    public int? StatModifierBaseline { get; set; }
+
+    /// <summary>Returns the effective baseline for calculations (never null).</summary>
+    public int EffectiveBaseline => StatModifierBaseline ?? 10;
 }
 
 public class CharacterCreationConfig
