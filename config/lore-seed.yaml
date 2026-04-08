@@ -844,12 +844,13 @@ rooms:
         faction: "occuria_cult"
         knowledge_scopes: ["pharos", "ancient_evil", "occuria_cult", "espers"]
         is_hostile: true
-        level: 6
-        hp: 55
-        max_hp: 55
-        attack_bonus: 4
-        damage_dice: "1d8+1"
-        defense: 12
+        level: 8
+        hp: 95
+        max_hp: 95
+        ac: 15
+        attack_bonus: 5
+        damage_dice: "2d6+3"
+        defense: 15
         loot:
           - id: "goretusk_tusk"
             name: "Esper Shard"

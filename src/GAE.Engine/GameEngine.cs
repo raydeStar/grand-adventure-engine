@@ -783,6 +783,11 @@ public class GameEngine : IGameEngine
 
         var target = FindNamedEntity(room.Npcs, npc => npc.Name, action.Target);
 
+        // Auto-target: if no target specified, pick the first hostile NPC (or any NPC with HP)
+        if (target is null && string.IsNullOrWhiteSpace(action.Target))
+            target = room.Npcs.FirstOrDefault(n => n.IsHostile && n.Hp.HasValue && n.Hp.Value > 0)
+                  ?? room.Npcs.FirstOrDefault(n => n.Hp.HasValue && n.Hp.Value > 0);
+
         if (target is null)
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"Attack target '{action.Target}' was not found in the current room." };
 

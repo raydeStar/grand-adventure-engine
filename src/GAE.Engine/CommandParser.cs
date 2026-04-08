@@ -122,6 +122,12 @@ public partial class CommandParser
             action.Target = attackMatch.Groups["target"].Value.Trim();
             return action;
         }
+        // Bare "attack" / "fight" without a target — auto-target in engine
+        if (BareAttackRegex().IsMatch(input))
+        {
+            action.Type = ActionType.Attack;
+            return action;
+        }
 
         // Talk
         var talkMatch = TalkRegex().Match(input);
@@ -412,6 +418,9 @@ public partial class CommandParser
 
     [GeneratedRegex(@"^(?:flee|run|escape|run\s+away|retreat|bail)$", RegexOptions.IgnoreCase)]
     private static partial Regex FleeRegex();
+
+    [GeneratedRegex(@"^(?:attack|hit|strike|fight|slash)$", RegexOptions.IgnoreCase)]
+    private static partial Regex BareAttackRegex();
 
     [GeneratedRegex(@"^(?:attack|hit|strike|fight|slash)\s+(?<target>.+)$", RegexOptions.IgnoreCase)]
     private static partial Regex AttackRegex();
