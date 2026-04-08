@@ -3094,6 +3094,118 @@ public class NarratorService : INarratorService
         }
     }
 
+    public async Task<string> GenerateHeroIntroAsync(PlayerCharacter player, Room room, CancellationToken ct = default)
+    {
+        var voiceBlock = ResolveNarratorVoice(player);
+        var worldContext = await GetCurrentWorldContextBlockAsync(ct);
+        var loreContext = await GetRoomKnowledgeAsync(room, ct);
+
+        var systemPrompt = $"""
+            You are the NARRATOR of a dark-fantasy text adventure with classic Sierra adventure game humor.
+            A brand-new hero has just been created and is about to step into your world for the first time.
+
+            You need to produce THREE things in a single flowing passage:
+
+            1) NARRATOR INTRODUCTION (1-2 sentences):
+               Introduce yourself — you are the narrator, the voice that will guide them.
+               Be memorable. Show your personality. You're sardonic, witty, a little theatrical.
+               You've seen many heroes come and go, but something about THIS one catches your attention.
+               DO NOT say "I am the narrator" literally — show your voice through style.
+
+            2) STORY HOOK (1-2 sentences):
+               Paint the world they're stepping into. What's the situation? What's at stake?
+               Make it feel epic but grounded. The world has problems and this hero just walked into them.
+               Reference the world/setting if context is provided.
+
+            3) THE CROWD REACTION (2-3 sentences):
+               This is the big moment. The hero just showed up in {room.Name}.
+               The environment REACTS to their presence based on WHO they are:
+               - Their RACE matters: how do the locals react to seeing a {player.Race}?
+               - Their CLASS matters: does a {player.Class} turn heads? Inspire fear? Awe? Suspicion?
+               - Their LOOK matters: use their backstory to color the reaction.
+               People whisper. Heads turn. Someone drops a mug. A dog barks. The air shifts.
+               This is NOT "who are you?" — the crowd is reacting TO them. They are already someone.
+               Make the player feel like their CHARACTER CHOICES created a moment.
+
+            {voiceBlock}
+
+            RULES:
+            - Write in SECOND PERSON ("You", "Your").
+            - Total length: 5-8 sentences. This is the FIRST thing the player reads. Make it count.
+            - Do NOT list room details, exits, NPCs, or items — the room card handles that.
+            - Do NOT ask the player questions or prompt for input.
+            - Do NOT use headers, bullet points, or formatting — just flowing narrative prose.
+            - Make the player feel like THE HERO from sentence one. They matter. The world noticed.
+            """;
+
+        var npcsPresent = room.Npcs.Count > 0
+            ? string.Join(", ", room.Npcs.Select(n =>
+                $"{n.Name} ({n.Personality}{(n.IsHostile ? ", hostile" : "")})"
+              ))
+            : "A few unnamed locals, background characters";
+
+        var backstorySnippet = string.IsNullOrWhiteSpace(player.Backstory)
+            ? "No backstory provided — mysterious origins."
+            : player.Backstory.Length > 300 ? player.Backstory[..300] + "..." : player.Backstory;
+
+        var userPrompt = $"""
+            NEW HERO:
+            Name: {player.Name}
+            Race: {player.Race}
+            Class: {player.Class}
+            Level: {player.Level}
+            Backstory: {backstorySnippet}
+
+            STARTING LOCATION: {room.Name}
+            Room atmosphere: {room.Description}
+            Environment tags: {(room.EnvironmentTags.Count > 0 ? string.Join(", ", room.EnvironmentTags) : "none")}
+            People present: {npcsPresent}
+            {worldContext}
+            {loreContext}
+
+            Write the hero's grand entrance. Narrator intro → story hook → crowd reaction. Go.
+            """;
+
+        try
+        {
+            var response = await CompletionOrThrowAsync(systemPrompt, userPrompt, ct,
+                maxTokens: 512, operation: "hero-intro", playerId: player.Id, roomId: room.Id);
+            return response.Trim();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Hero intro generation failed, using fallback");
+            return BuildHeroIntroFallback(player, room);
+        }
+    }
+
+    private static string BuildHeroIntroFallback(PlayerCharacter player, Room room)
+    {
+        var raceReaction = player.Race?.ToLowerInvariant() switch
+        {
+            "elf" or "high elf" or "wood elf" => "A few patrons glance up — elven features tend to draw eyes in a place like this, equal parts curiosity and old grudges.",
+            "dwarf" => "The floorboards creak under sturdy boots. A bartender raises an eyebrow — dwarves usually mean business, or trouble, or both.",
+            "orc" or "half-orc" => "Conversations die mid-sentence. An orc walking in here? Bold. Several hands drift to belt knives, but nobody moves. Not yet.",
+            "halfling" or "hobbit" => "Most don't notice at first — halflings tend to slip under the radar. But the sharp-eyed ones do, and they know better than to underestimate what they see.",
+            "human" => "Another human. But something about this one is different. The way the room adjusts, the slight pause in conversation — this one carries weight.",
+            _ => $"A {player.Race} walks in, and the room takes notice. Not everyone, not all at once — but enough. Something just shifted."
+        };
+
+        var classReaction = player.Class?.ToLowerInvariant() switch
+        {
+            "warrior" or "fighter" => "The weapon at your side catches the light. Someone who's seen enough fights to know — this one can handle themselves.",
+            "mage" or "wizard" or "sorcerer" => "There's a faint crackle in the air, like static before a storm. The locals can feel it. Magic walks among them.",
+            "rogue" or "thief" => "You move differently than the others. Lighter. More aware. The kind of awareness that makes pickpockets check their own pockets.",
+            "cleric" or "priest" or "paladin" => "There's an aura — nothing visible, nothing you could point to — but the room feels it. Something righteous just walked in.",
+            "ranger" or "hunter" => "Trail dust and the faint scent of pine. The wilderness clings to you, and the city folk eye you with a mix of respect and unease.",
+            _ => $"A {player.Class} — not something you see every day around here. People notice. People remember."
+        };
+
+        return $"Well, well. Another hero stumbles into the story — though this one might actually survive the first chapter. " +
+               $"The world of Ivalice doesn't care about your feelings, but it's about to care about you. " +
+               $"{raceReaction} {classReaction}";
+    }
+
     public async Task<string> ProvideGuidanceAsync(PlayerCharacter player, Room room, string? question, CancellationToken ct = default)
     {
         var questSummary = BuildGuidanceQuestContext(player);

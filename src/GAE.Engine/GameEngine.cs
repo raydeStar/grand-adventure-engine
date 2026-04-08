@@ -314,6 +314,51 @@ public class GameEngine : IGameEngine
         return player;
     }
 
+    /// <inheritdoc />
+    public async Task<string> GenerateHeroIntroAsync(string playerId, CancellationToken ct = default)
+    {
+        var player = await _stateManager.GetPlayerAsync(playerId, ct);
+        if (player is null)
+        {
+            _logger.LogWarning("GenerateHeroIntroAsync: player {PlayerId} not found", playerId);
+            return string.Empty;
+        }
+
+        var room = await _stateManager.GetPlayerRoomAsync(playerId, player.CurrentRoomId, ct);
+        if (room is null)
+        {
+            _logger.LogWarning("GenerateHeroIntroAsync: room {RoomId} not found for {PlayerId}", player.CurrentRoomId, playerId);
+            return string.Empty;
+        }
+
+        string intro;
+        try
+        {
+            intro = await _narrator.GenerateHeroIntroAsync(player, room, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Hero intro generation failed for {PlayerId}", playerId);
+            intro = string.Empty;
+        }
+
+        if (!string.IsNullOrWhiteSpace(intro))
+        {
+            await _stateManager.AddStoryEntryAsync(new StoryEntry
+            {
+                ActionId = "hero-intro",
+                RawInput = "character-creation",
+                PlayerId = playerId,
+                WorldId = player.ActiveWorldId,
+                RoomId = player.CurrentRoomId,
+                MechanicalSummary = $"{player.Name} the {player.Race} {player.Class} enters the world.",
+                Narration = intro
+            }, ct);
+        }
+
+        return intro;
+    }
+
     /// <summary>
     /// Grants starting items to a new character by looking them up in the item registry
     /// or shop inventories from the starting room. Auto-equips weapons and armor.

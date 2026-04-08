@@ -9,4 +9,10 @@ public interface IGameEngine
     GameAction ParseCommand(string playerId, string rawInput);
     Task<CombatState?> GetActiveCombatAsync(string roomId, string worldId, CancellationToken ct = default);
     string? CheckAndApplyLevelUp(PlayerCharacter player);
+
+    /// <summary>
+    /// Generates the hero intro narration for a newly created character, saves it as the first
+    /// story entry, and returns the narration text. Call this immediately after character creation.
+    /// </summary>
+    Task<string> GenerateHeroIntroAsync(string playerId, CancellationToken ct = default);
 }

@@ -339,7 +339,19 @@ public class DashboardController : ControllerBase
 
         var concept = BuildCharacterConcept(request, playerId);
         var player = await _engine.CreateCharacterFromConceptAsync(concept, ct);
-        return Ok(player);
+
+        // Generate the hero intro (narrator introduction + crowd reaction) as the first story entry
+        string? heroIntro = null;
+        try
+        {
+            heroIntro = await _engine.GenerateHeroIntroAsync(player.Id, ct);
+        }
+        catch
+        {
+            // Intro generation is best-effort — character creation succeeds regardless
+        }
+
+        return Ok(new { player, heroIntro });
     }
 
     [Authorize(Policy = DashboardPolicies.AdminAccess)]

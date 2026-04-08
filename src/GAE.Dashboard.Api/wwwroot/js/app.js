@@ -793,7 +793,7 @@
     submit.textContent = 'Creating...';
 
     try {
-      const player = await API.createCharacter({
+      const result = await API.createCharacter({
         playerId: nullableText(UI.$('char-player-id').value),
         name: UI.$('char-name').value.trim(),
         race: UI.$('char-race').value,
@@ -801,6 +801,9 @@
         statMethod: UI.$('char-stats').value,
         backstory: nullableText(UI.$('char-backstory').value)
       });
+
+      // API now returns { player, heroIntro }
+      const player = result.player || result;
 
       UI.$('create-form').reset();
       UI.showCreateForm(false);

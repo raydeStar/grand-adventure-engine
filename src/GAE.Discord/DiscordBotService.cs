@@ -617,7 +617,7 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
 
                 await thread.ModifyAsync(props => props.Name = $"\u2694\uFE0F {player.Name}'s Adventure");
                 await SendCharacterCreatedEmbed(thread, player);
-                await SendRoomEntryAsync(thread, player);
+                await SendHeroIntroAndRoomAsync(thread, player);
             }
             else
             {
@@ -688,7 +688,7 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
 
         await thread.ModifyAsync(props => props.Name = $"\u2694\uFE0F {player.Name}'s Adventure");
         await SendCharacterCreatedEmbed(thread, player);
-        await SendRoomEntryAsync(thread, player);
+        await SendHeroIntroAndRoomAsync(thread, player);
 
         // Notify admin channel
         await PostToAdminChannelAsync($"\U0001F4E5 **{player.Name}** ({message.Author.Username}) created a character — {player.Race} {player.Class}");
@@ -838,6 +838,26 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         sb.Append($"\n> {FormatStatusBar(player)}");
 
         await SendChunkedAsync(thread, sb.ToString());
+    }
+
+    /// <summary>
+    /// Generates the hero intro narration, sends it, then shows the room card.
+    /// Used only after first character creation — not for normal room transitions.
+    /// </summary>
+    private async Task SendHeroIntroAndRoomAsync(SocketThreadChannel thread, PlayerCharacter player)
+    {
+        try
+        {
+            var intro = await _engine.GenerateHeroIntroAsync(player.Id);
+            if (!string.IsNullOrWhiteSpace(intro))
+                await SendChunkedAsync(thread, intro);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Hero intro failed for {PlayerId}, sending room directly", player.Id);
+        }
+
+        await SendRoomEntryAsync(thread, player);
     }
 
     private async Task SendRoomEntryAsync(SocketThreadChannel thread, PlayerCharacter player, ActionResult? result = null)
