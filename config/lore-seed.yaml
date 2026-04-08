@@ -847,10 +847,10 @@ rooms:
         level: 8
         hp: 95
         max_hp: 95
-        ac: 15
+        ac: 14
         attack_bonus: 5
         damage_dice: "2d6+3"
-        defense: 15
+        defense: 13
         loot:
           - id: "goretusk_tusk"
             name: "Esper Shard"
