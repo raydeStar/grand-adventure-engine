@@ -74,6 +74,7 @@ rooms:
         type: "Misc"
         is_consumable: true
         value: 1
+        effect: "Restores 1d4+1 HP"
       - id: "worn_playing_cards"
         name: "Triple Triad Deck"
         description: "A dog-eared deck of Triple Triad cards. Several are missing, and the rest are sticky with spilled ale. The Ifrit card has a mustache drawn on it."

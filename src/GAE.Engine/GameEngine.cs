@@ -2466,8 +2466,14 @@ public class GameEngine : IGameEngine
         // Load world-scoped NPC state for this conversation
         await OverlayWorldNpcStateAsync(npc, player.ActiveWorldId, player.Id, ct);
 
+        // "leave" / "exit" typed mid-conversation should end the conversation, not move
+        // The parser maps "leave" to ActionType.Move with direction "auto", so check before move handling
+        if (action.Type == ActionType.Move && action.Direction == "auto" && IsExitPhrase(action.RawInput))
+        {
+            // Fall through to the IsExitPhrase handler below
+        }
         // Movement mid-conversation: exit cleanly (no disposition penalty for walking away)
-        if (action.Type == ActionType.Move)
+        else if (action.Type == ActionType.Move)
         {
             player.Interaction.Reset();
             await PersistWorldNpcStateAsync(npc, player.ActiveWorldId, player.Id, ct);
@@ -4025,6 +4031,36 @@ public class GameEngine : IGameEngine
     private async Task<ActionResult> ProcessUseAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
     {
         var item = FindNamedEntity(player.Inventory, i => i.Name, action.Target);
+
+        // Auto-take from room if the item is on the ground and consumable
+        if (item is null)
+        {
+            var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
+            if (room is not null)
+            {
+                var roomItem = FindNamedEntity(room.Items, i => i.Name, action.Target);
+                if (roomItem is not null)
+                {
+                    // Transfer from room to inventory
+                    var clone = CloneInventoryItem(roomItem, 1);
+                    var existing = player.Inventory.FirstOrDefault(i => i.Name.Equals(clone.Name, StringComparison.OrdinalIgnoreCase));
+                    if (existing is not null)
+                        existing.Quantity += 1;
+                    else
+                        player.Inventory.Add(clone);
+
+                    if (roomItem.Quantity <= 1)
+                        room.Items.Remove(roomItem);
+                    else
+                        roomItem.Quantity--;
+
+                    await _stateManager.SaveRoomAsync(room, ct);
+                    item = existing ?? clone;
+                    _logger.LogInformation("Auto-picked up '{ItemName}' from room for use.", item.Name);
+                }
+            }
+        }
+
         if (item is null)
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"You don't have any '{action.Target}' to use." };
 

@@ -2054,17 +2054,18 @@ public class NarratorService : INarratorService
         if (TryBuildDeterministicLookNarration(context, out var lookNarration))
             return lookNarration;
 
-        var roomName = string.IsNullOrWhiteSpace(context.CurrentRoom.Name) ? "the room" : context.CurrentRoom.Name;
+        // When the LLM fails to narrate, just return the mechanical summary directly.
+        // No flowery wrapper — the mechanical text is clear enough on its own.
         if (!context.MechanicalResult.Success)
         {
             var failureReason = TrimToSentence(context.MechanicalResult.MechanicalSummary);
-            return $"You commit to the motion, but {roomName} gives nothing back except the hard truth of the attempt. {failureReason}";
+            return string.IsNullOrWhiteSpace(failureReason) ? "That didn't work." : failureReason;
         }
 
         var resolvedOutcome = TrimToSentence(context.MechanicalResult.MechanicalSummary);
         return string.IsNullOrWhiteSpace(resolvedOutcome)
-            ? $"You shift the scene in {roomName}, and the moment settles into a new shape without further ceremony."
-            : $"You act, and {roomName} answers in kind. {resolvedOutcome}";
+            ? "Done."
+            : resolvedOutcome;
     }
 
     private static string BuildRoomAtmosphere(Room room)

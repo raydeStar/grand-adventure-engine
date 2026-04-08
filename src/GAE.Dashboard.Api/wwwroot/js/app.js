@@ -1758,7 +1758,7 @@
     state.refreshTimer = window.setInterval(() => {
       if (!state.session) return;
       void refreshAll().catch((error) => handleError(error, { portal: true }));
-    }, 15000);
+    }, 120000); // Poll every 2 minutes instead of 15s to reduce LM Studio stuttering
   }
 
   function stopRefreshLoop() {
