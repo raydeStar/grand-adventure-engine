@@ -1016,6 +1016,27 @@ public class GameEngine : IGameEngine
             (narratorQuestSummary, questReward) = await _questTracker.ProcessNarratorQuestUpdatesAsync(player, freeForm.QuestUpdates, target, ct);
         }
 
+        // Auto-turn-in: if this NPC has ReadyToTurnIn quests and the LLM didn't handle it, complete them automatically
+        if (questReward is null && _questTracker is not null && _questEngine is not null)
+        {
+            var turnInable = _questEngine.GetTurnInableQuests(player, target);
+            foreach (var turnIn in turnInable)
+            {
+                var autoReward = await _questEngine.TurnInQuestAsync(player, turnIn.QuestId, target, ct);
+                if (autoReward is not null)
+                {
+                    var quest = _registry?.Quests.GetById(turnIn.QuestId);
+                    narratorQuestSummary = (narratorQuestSummary ?? "") + $"Completed quest: {quest?.Name ?? turnIn.QuestId}";
+                    questReward = autoReward;
+                    player.Xp += autoReward.Xp;
+                    player.Gold += autoReward.Gold;
+                    var lvlUp = CheckAndApplyLevelUp(player);
+                    if (lvlUp is not null)
+                        narratorQuestSummary += $"\n{lvlUp}";
+                }
+            }
+        }
+
         // Lore discovery: talking to this NPC
         string? loreDiscoveryNotice = null;
         if (_loreTracker is not null)
@@ -2989,6 +3010,14 @@ public class GameEngine : IGameEngine
             AppendHpBars(mech, player, enemies, room);
             mech.Add("> attack | power attack | defend | aimed strike | use <potion> | flee");
 
+            // Quest tracking: player survived another combat round
+            if (_questTracker is not null)
+            {
+                var surviveUpdate = await _questTracker.OnCombatRoundSurvivedAsync(player, room.Id, ct);
+                if (surviveUpdate is not null)
+                    mech.Add($"📜 {surviveUpdate}");
+            }
+
             if (combat is not null)
             {
                 combat.RoundNumber++;
@@ -4338,19 +4367,68 @@ public class GameEngine : IGameEngine
             return null;
         }
 
+        // Load world-scoped NPC state for quest context
+        await OverlayWorldNpcStateAsync(shopkeeper, player.ActiveWorldId, player.Id, ct);
+
         var freeForm = await _narrator.ProcessConversationTurnAsync(player, room, shopkeeper, player.Interaction, action.RawInput, ct);
         ApplyInteractionUpdate(player, room, shopkeeper, freeForm);
+
+        // Process quest updates from shopkeeper conversation (accept, decline, turn-in)
+        string? questSummary = null;
+        QuestReward? shopQuestReward = null;
+        if (freeForm.QuestUpdates is not null && _questTracker is not null)
+        {
+            var (qs, qr) = await _questTracker.ProcessNarratorQuestUpdatesAsync(player, freeForm.QuestUpdates, shopkeeper, ct);
+            if (qs is not null)
+                questSummary = $"\n📜 {qs}";
+            shopQuestReward = qr;
+            if (qr is not null)
+            {
+                player.Xp += qr.Xp;
+                player.Gold += qr.Gold;
+                if (qr.Xp > 0 || qr.Gold > 0)
+                    questSummary = (questSummary ?? "") + $"\n**Rewards:** +{qr.Xp} XP | +{qr.Gold} gold";
+                var lvlUp = CheckAndApplyLevelUp(player);
+                if (lvlUp is not null)
+                    questSummary = (questSummary ?? "") + $"\n{lvlUp}";
+            }
+        }
+
+        // Auto-turn-in for shopkeeper NPCs with ReadyToTurnIn quests
+        if (shopQuestReward is null && _questEngine is not null)
+        {
+            var turnInable = _questEngine.GetTurnInableQuests(player, shopkeeper);
+            foreach (var turnIn in turnInable)
+            {
+                var autoReward = await _questEngine.TurnInQuestAsync(player, turnIn.QuestId, shopkeeper, ct);
+                if (autoReward is not null)
+                {
+                    var quest = _registry?.Quests.GetById(turnIn.QuestId);
+                    questSummary = (questSummary ?? "") + $"\n📜 Completed quest: {quest?.Name ?? turnIn.QuestId}";
+                    player.Xp += autoReward.Xp;
+                    player.Gold += autoReward.Gold;
+                    if (autoReward.Xp > 0 || autoReward.Gold > 0)
+                        questSummary += $"\n**Rewards:** +{autoReward.Xp} XP | +{autoReward.Gold} gold";
+                    var lvlUp = CheckAndApplyLevelUp(player);
+                    if (lvlUp is not null)
+                        questSummary += $"\n{lvlUp}";
+                }
+            }
+        }
 
         await PersistWorldNpcStateAsync(shopkeeper, player.ActiveWorldId, player.Id, ct);
         await _stateManager.SavePlayerAsync(player, ct);
         await _stateManager.SaveRoomAsync(room, ct);
+
+        var mechSummary = $"[Trading with {shopkeeper.Name}]";
+        if (questSummary is not null) mechSummary += questSummary;
 
         var convoResult = new ActionResult
         {
             ActionId = action.Id,
             RawInput = action.RawInput,
             Success = freeForm.Success,
-            MechanicalSummary = $"[Trading with {shopkeeper.Name}]",
+            MechanicalSummary = mechSummary,
             Narration = freeForm.Narration,
             InteractionUpdate = freeForm.InteractionUpdate ?? new InteractionUpdate { Mode = InteractionMode.Trading }
         };

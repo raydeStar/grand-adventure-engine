@@ -339,6 +339,10 @@ rooms:
         faction: "merchants_guild"
         knowledge_scopes: ["black_market", "rumors", "pharos", "occuria_cult", "weapons", "dimensions"]
         quests_offered: ["gilgamesh_challenge", "tonberry_grudge"]
+        level: 6
+        hp: 45
+        ac: 14
+        damage_dice: "2d6+3"
         is_shopkeeper: true
         shop_inventory:
           - id: "shadow_dagger"
