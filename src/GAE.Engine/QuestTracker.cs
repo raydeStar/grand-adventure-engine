@@ -278,13 +278,15 @@ public class QuestTracker
 
                 if (!matches) continue;
 
+                var stageBeforeAdvance = progress.CurrentStageId;
                 if (await _questEngine.AdvanceObjectiveAsync(player, progress.QuestId, obj.Id, count, ct))
                 {
                     var objProgress = progress.Objectives.FirstOrDefault(o => o.ObjectiveId == obj.Id);
-                    if (objProgress?.IsComplete == true)
+                    // If stage advanced, the old objective is no longer in the list — treat as complete
+                    if (objProgress is null || objProgress.IsComplete || progress.CurrentStageId != stageBeforeAdvance)
                         updates.Add($"Objective complete: {obj.Description ?? obj.Id}");
                     else
-                        updates.Add($"Quest progress: {obj.Description ?? obj.Id} ({objProgress?.CurrentCount ?? 0}/{obj.RequiredCount})");
+                        updates.Add($"Quest progress: {obj.Description ?? obj.Id} ({objProgress.CurrentCount}/{obj.RequiredCount})");
                 }
             }
         }

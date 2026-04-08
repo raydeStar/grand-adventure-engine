@@ -163,6 +163,15 @@ public partial class CommandParser
             return action;
         }
 
+        // Turn in quest — "turn in <name>", "complete quest <name>", "finish quest <name>"
+        var turnInMatch = TurnInQuestRegex().Match(input);
+        if (turnInMatch.Success)
+        {
+            action.Type = ActionType.TurnInQuest;
+            action.Target = turnInMatch.Groups["quest"].Value.Trim();
+            return action;
+        }
+
         // Abandon quest — before Drop so "drop quest <name>" routes here
         var abandonMatch = AbandonQuestRegex().Match(input);
         if (abandonMatch.Success)
@@ -472,6 +481,9 @@ public partial class CommandParser
 
     [GeneratedRegex(@"^(?:accept\s+(?:quest\s+)?|take\s+quest\s+)(?<quest>.+)$", RegexOptions.IgnoreCase)]
     private static partial Regex AcceptQuestRegex();
+
+    [GeneratedRegex(@"^(?:turn\s+in\s+(?:quest\s+)?|complete\s+(?:quest\s+)?|finish\s+(?:quest\s+)?|hand\s+in\s+(?:quest\s+)?)(?<quest>.+)$", RegexOptions.IgnoreCase)]
+    private static partial Regex TurnInQuestRegex();
 
     [GeneratedRegex(@"^(?:abandon\s+(?:quest\s+)?|drop\s+quest\s+|cancel\s+(?:quest\s+)?)(?<quest>.+)$", RegexOptions.IgnoreCase)]
     private static partial Regex AbandonQuestRegex();

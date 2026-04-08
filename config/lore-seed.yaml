@@ -842,8 +842,8 @@ rooms:
         level: 6
         hp: 55
         max_hp: 55
-        attack_bonus: 5
-        damage_dice: "1d8+2"
+        attack_bonus: 4
+        damage_dice: "1d8+1"
         defense: 12
         loot:
           - id: "goretusk_tusk"
@@ -968,12 +968,12 @@ rooms:
         personality: "An ancient Esper bound to guard the Water Crystal since before Dalmasca existed. Leviathan is not mindless — it is proud, territorial, and contemptuous of mortals who dare enter its sanctum. It speaks in a voice like crashing waves, demanding to know why you have disturbed its eternal vigil. Only those who prove their strength in combat may claim the Crystal. Leviathan fights with tidal waves, crushing water pressure, and the sheer overwhelming force of the deep ocean. It will not negotiate. It will not yield. It will test you, and if you are found wanting, the sea will claim you."
         faction: "neutral"
         is_hostile: true
-        level: 4
-        hp: 40
-        max_hp: 40
-        attack_bonus: 5
-        damage_dice: "2d6+2"
-        defense: 14
+        level: 3
+        hp: 25
+        max_hp: 25
+        attack_bonus: 3
+        damage_dice: "1d6+1"
+        defense: 12
         loot:
           - id: "leviathan_scale"
             name: "Leviathan's Scale"
@@ -1064,11 +1064,11 @@ rooms:
         faction: "neutral"
         is_hostile: true
         level: 4
-        hp: 42
-        max_hp: 42
-        attack_bonus: 6
-        damage_dice: "2d6+3"
-        defense: 13
+        hp: 35
+        max_hp: 35
+        attack_bonus: 3
+        damage_dice: "1d6+2"
+        defense: 12
         loot:
           - id: "ifrit_horn"
             name: "Ifrit's Horn"
@@ -1155,11 +1155,11 @@ rooms:
         faction: "neutral"
         is_hostile: true
         level: 4
-        hp: 45
-        max_hp: 45
-        attack_bonus: 5
-        damage_dice: "2d6+3"
-        defense: 15
+        hp: 38
+        max_hp: 38
+        attack_bonus: 3
+        damage_dice: "1d6+2"
+        defense: 13
         loot:
           - id: "titan_geode"
             name: "Titan's Geode"
@@ -1246,11 +1246,11 @@ rooms:
         faction: "neutral"
         is_hostile: true
         level: 4
-        hp: 38
-        max_hp: 38
-        attack_bonus: 6
-        damage_dice: "2d6+2"
-        defense: 14
+        hp: 32
+        max_hp: 32
+        attack_bonus: 4
+        damage_dice: "1d6+2"
+        defense: 12
         loot:
           - id: "garuda_plume"
             name: "Garuda's Plume"
@@ -1334,12 +1334,12 @@ rooms:
         personality: "The final boss. A being who was once a tree in the Great Forest of Moore, into which countless evil souls were sealed — until the accumulated darkness achieved sentience. Exdeath sought the power of the Void to erase all existence, believing nothingness to be the ultimate form of perfection. He is theatrical, philosophical, and utterly convinced of his righteousness. He monologues about the beauty of oblivion with genuine passion. His power is immense — he wields the Void itself as a weapon, opening dimensional rifts, erasing matter, and warping reality. His ultimate attack, Grand Cross, inflicts every status ailment simultaneously. Defeating Exdeath is not just winning a fight — it is rejecting nothingness and affirming that existence, messy and painful as it is, matters."
         faction: "neutral"
         is_hostile: true
-        level: 8
-        hp: 80
-        max_hp: 80
-        attack_bonus: 8
-        damage_dice: "3d8+4"
-        defense: 16
+        level: 6
+        hp: 55
+        max_hp: 55
+        attack_bonus: 4
+        damage_dice: "1d8+2"
+        defense: 14
         loot:
           - id: "exdeath_crystal"
             name: "Crystal of the Void"

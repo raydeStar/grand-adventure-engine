@@ -140,6 +140,7 @@ public class GameEngine : IGameEngine
             ActionType.QuestInfo => ProcessQuestInfo(player, action),
             ActionType.AcceptQuest => await ProcessAcceptQuestAsync(player, action, ct),
             ActionType.AbandonQuest => await ProcessAbandonQuest(player, action, ct),
+            ActionType.TurnInQuest => await ProcessTurnInQuestAsync(player, action, ct),
             ActionType.TravelWorld => await ProcessTravelWorldAsync(player, action, ct),
             ActionType.Lorebook => ProcessLorebook(player, action),
             ActionType.LoreInfo => ProcessLoreInfo(player, action),
@@ -169,6 +170,7 @@ public class GameEngine : IGameEngine
             && action.Type != ActionType.QuestInfo
             && action.Type != ActionType.AcceptQuest
             && action.Type != ActionType.AbandonQuest
+            && action.Type != ActionType.TurnInQuest
             && action.Type != ActionType.Lorebook
             && action.Type != ActionType.LoreInfo
             && action.Type != ActionType.Narrator
@@ -949,6 +951,7 @@ public class GameEngine : IGameEngine
             if (surviveUpdate is not null)
                 result.MechanicalSummary += $"\n📜 {surviveUpdate}";
             await _stateManager.SavePlayerAsync(player, ct);
+            await _stateManager.SaveRoomAsync(room, ct);
         }
 
         return result;
@@ -2642,7 +2645,14 @@ public class GameEngine : IGameEngine
             RunEnemyAttacks(player, enemies, room, useMech, useDice, useSC, defenseBonus: 0);
 
             string useCombatStatus = player.Hp <= 0 ? "defeat" : "ongoing";
-            if (player.Hp <= 0) { player.Interaction.Reset(); if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, player.ActiveWorldId, ct); }
+            if (player.Hp <= 0)
+            {
+                player.Interaction.Reset();
+                if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, player.ActiveWorldId, ct);
+                var killer = enemies.FirstOrDefault(e => e.Hp.HasValue && e.Hp.Value > 0)?.Name ?? "the enemy";
+                var (deathMsg, deathChanges) = await HandlePlayerDeathAsync(player, room, killer, ct);
+                useMech.Add(""); useMech.Add(deathMsg); useSC.AddRange(deathChanges);
+            }
 
             // HP bar after item use
             if (useCombatStatus == "ongoing")
@@ -2665,7 +2675,14 @@ public class GameEngine : IGameEngine
             var defSC = new List<StateChange>();
             RunEnemyAttacks(player, enemies, room, defMech, defDice, defSC, defenseBonus: 4);
             string defStatus = player.Hp <= 0 ? "defeat" : "ongoing";
-            if (player.Hp <= 0) { player.Interaction.Reset(); if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, player.ActiveWorldId, ct); }
+            if (player.Hp <= 0)
+            {
+                player.Interaction.Reset();
+                if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, player.ActiveWorldId, ct);
+                var killer = enemies.FirstOrDefault(e => e.Hp.HasValue && e.Hp.Value > 0)?.Name ?? "the enemy";
+                var (deathMsg, deathChanges) = await HandlePlayerDeathAsync(player, room, killer, ct);
+                defMech.Add(""); defMech.Add(deathMsg); defSC.AddRange(deathChanges);
+            }
             if (defStatus == "ongoing") AppendHpBars(defMech, player, enemies, room);
             await _stateManager.SavePlayerAsync(player, ct);
             await _stateManager.SaveRoomAsync(room, ct);
@@ -2692,7 +2709,14 @@ public class GameEngine : IGameEngine
                     RunEnemyAttacks(player, aliveEnemies, room, castMech, castDice, castSC, defenseBonus: 0);
 
                     string castCombatStatus = player.Hp <= 0 ? "defeat" : "ongoing";
-                    if (player.Hp <= 0) { player.Interaction.Reset(); if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, player.ActiveWorldId, ct); }
+                    if (player.Hp <= 0)
+                    {
+                        player.Interaction.Reset();
+                        if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, player.ActiveWorldId, ct);
+                        var killer = aliveEnemies.FirstOrDefault()?.Name ?? "the enemy";
+                        var (deathMsg, deathChanges) = await HandlePlayerDeathAsync(player, room, killer, ct);
+                        castMech.Add(""); castMech.Add(deathMsg); castSC.AddRange(deathChanges);
+                    }
                     if (castCombatStatus == "ongoing") AppendHpBars(castMech, player, aliveEnemies, room);
 
                     await _stateManager.SavePlayerAsync(player, ct);
@@ -2723,8 +2747,10 @@ public class GameEngine : IGameEngine
             hasAdvantage = true;
         }
 
-        // ─── Multi-exchange combat (3 exchanges per turn) ───
-        const int ExchangesPerTurn = 3;
+        // ─── Multi-exchange combat ───
+        // Boss arenas use fewer exchanges per turn so bosses don't one-round the player.
+        bool isBossArena = room.EnvironmentTags.Contains("boss_arena");
+        int ExchangesPerTurn = isBossArena ? 1 : 3;
         var allDice = new List<DiceRoll>();
         var allSC = new List<StateChange>();
         var mech = new List<string>();
@@ -2824,6 +2850,14 @@ public class GameEngine : IGameEngine
                     room.Npcs.Remove(target);
                     combat?.TurnOrder.RemoveAll(t => t.Id == target.Id);
 
+                    // Quest tracking: enemy killed in combat
+                    if (_questTracker is not null)
+                    {
+                        var questUpdate = await _questTracker.OnEnemyKilledAsync(player, target.Id, target.Name, ct);
+                        if (questUpdate is not null)
+                            mech.Add($"📜 {questUpdate}");
+                    }
+
                     // Check if all enemies dead
                     if (!enemies.Any(e => e.Hp.HasValue && e.Hp.Value > 0 && room.Npcs.Contains(e)))
                     { combatOver = true; continue; }
@@ -2887,6 +2921,18 @@ public class GameEngine : IGameEngine
             if (rewards.Count > 0) mech.Add($"\n**Rewards:** {string.Join(" | ", rewards)}");
             var lvlUp = CheckAndApplyLevelUp(player);
             if (lvlUp is not null) mech.Add(lvlUp);
+
+            // Safety-net quest tracking for all killed enemies in case in-loop tracking was missed
+            if (_questTracker is not null)
+            {
+                var killedEnemies = enemies.Where(e => (e.Hp.HasValue && e.Hp.Value <= 0) || !room.Npcs.Contains(e)).ToList();
+                foreach (var killed in killedEnemies)
+                {
+                    var questUpdate = await _questTracker.OnEnemyKilledAsync(player, killed.Id, killed.Name, ct);
+                    if (questUpdate is not null)
+                        mech.Add($"📜 {questUpdate}");
+                }
+            }
         }
         else
         {
@@ -2939,9 +2985,22 @@ public class GameEngine : IGameEngine
         player.Hp = player.MaxHp;
         player.Mp = player.MaxMp;
 
+        // Determine the spawn room from the player's current world
+        var spawnRoomId = "spawn";
+        if (_worldRepository is not null)
+        {
+            var world = await _worldRepository.GetWorldAsync(player.ActiveWorldId, ct);
+            if (world is not null && !string.IsNullOrWhiteSpace(world.SpawnRoomId))
+                spawnRoomId = world.SpawnRoomId;
+        }
+
         // Teleport to spawn
-        player.CurrentRoomId = "spawn";
+        player.CurrentRoomId = spawnRoomId;
         player.Interaction.Reset();
+
+        // Look up the spawn room's display name
+        var spawnRoom = await _stateManager.GetRoomAsync(spawnRoomId, ct);
+        var spawnRoomName = spawnRoom?.Name ?? "safety";
 
         // Memory flag on the enemy
         var killer = room.Npcs.FirstOrDefault(n => n.Name == defeatedBy);
@@ -2951,11 +3010,11 @@ public class GameEngine : IGameEngine
         {
             new() { EntityType = "Player", EntityId = player.Id, Property = "Hp", OldValue = oldHp.ToString(), NewValue = player.Hp.ToString() },
             new() { EntityType = "Player", EntityId = player.Id, Property = "Mp", OldValue = oldMp.ToString(), NewValue = player.Mp.ToString() },
-            new() { EntityType = "Player", EntityId = player.Id, Property = "CurrentRoomId", OldValue = oldRoom, NewValue = "spawn" }
+            new() { EntityType = "Player", EntityId = player.Id, Property = "CurrentRoomId", OldValue = oldRoom, NewValue = spawnRoomId }
         };
 
         var summary = $"You have been defeated by {defeatedBy}! Everything goes dark...\n" +
-            $"You awaken in The Rusted Flagon, battered but alive. A kindly stranger must have dragged you to safety.\n" +
+            $"You awaken in {spawnRoomName}, battered but alive. A kindly stranger must have dragged you to safety.\n" +
             $"\u2764\uFE0F {player.Hp}/{player.MaxHp}  \u2728 {player.Mp}/{player.MaxMp}  \U0001F4B0 {player.Gold}g\n" +
             $"Your gear and experience are intact — but that foe still lurks out there...";
 
@@ -3641,6 +3700,73 @@ public class GameEngine : IGameEngine
             Success = true,
             MechanicalSummary = $"📜 Quest abandoned: **{quest?.Name ?? progress.QuestId}**",
             StateChanges = [new StateChange { EntityType = "Player", EntityId = player.Id, Property = "QuestLog", NewValue = $"abandoned {quest?.Name ?? progress.QuestId}" }]
+        };
+    }
+
+    private async Task<ActionResult> ProcessTurnInQuestAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
+    {
+        if (_questEngine is null || string.IsNullOrWhiteSpace(action.Target))
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "Usage: turn in <quest name>" };
+
+        // Find the quest by name or ID in the player's ready-to-turn-in quests
+        var progress = player.QuestLog.FirstOrDefault(q =>
+            q.Status == QuestStatus.ReadyToTurnIn &&
+            (q.QuestId.Equals(action.Target, StringComparison.OrdinalIgnoreCase) ||
+             (_registry?.Quests.GetById(q.QuestId)?.Name.Contains(action.Target, StringComparison.OrdinalIgnoreCase) == true)));
+
+        if (progress is null)
+        {
+            // Check if they have the quest but it's not ready
+            var activeMatch = player.QuestLog.FirstOrDefault(q =>
+                q.Status == QuestStatus.Active &&
+                (q.QuestId.Equals(action.Target, StringComparison.OrdinalIgnoreCase) ||
+                 (_registry?.Quests.GetById(q.QuestId)?.Name.Contains(action.Target, StringComparison.OrdinalIgnoreCase) == true)));
+            if (activeMatch is not null)
+            {
+                var activeName = _registry?.Quests.GetById(activeMatch.QuestId)?.Name ?? activeMatch.QuestId;
+                return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"Quest **{activeName}** is not ready to turn in yet. Complete all objectives first." };
+            }
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"No quest matching '{action.Target}' is ready to turn in." };
+        }
+
+        var quest = _registry?.Quests.GetById(progress.QuestId);
+        if (quest is null)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "Quest definition not found." };
+
+        // Check if the turn-in NPC is in the current room
+        var expectedTurnInNpcId = quest.TurnInNpcId ?? quest.GiverId;
+        var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
+        var turnInNpc = room?.Npcs.FirstOrDefault(n => n.Id.Equals(expectedTurnInNpcId, StringComparison.OrdinalIgnoreCase));
+
+        if (turnInNpc is null)
+        {
+            var npcName = expectedTurnInNpcId;
+            // Try to get a friendly name from the quest definition
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"You need to speak to **{npcName}** to turn in **{quest.Name}**. They're not in this room." };
+        }
+
+        var reward = await _questEngine.TurnInQuestAsync(player, quest.Id, turnInNpc, ct);
+        if (reward is null)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"Could not turn in quest **{quest.Name}**." };
+
+        // Check for level-up after XP reward
+        var levelUpMsg = CheckAndApplyLevelUp(player);
+
+        await _stateManager.SavePlayerAsync(player, ct);
+
+        var rewardParts = new List<string>();
+        if (reward.Xp > 0) rewardParts.Add($"+{reward.Xp} XP");
+        if (reward.Gold > 0) rewardParts.Add($"+{reward.Gold} gold");
+        if (reward.Items?.Count > 0) rewardParts.Add(string.Join(", ", reward.Items.Select(i => $"{i.ItemId} x{i.Quantity}")));
+        var rewardText = rewardParts.Count > 0 ? $"\nRewards: {string.Join(" | ", rewardParts)}" : "";
+        if (levelUpMsg is not null) rewardText += $"\n{levelUpMsg}";
+
+        return new ActionResult
+        {
+            ActionId = action.Id,
+            Success = true,
+            MechanicalSummary = $"📜 Quest completed: **{quest.Name}**!{rewardText}",
+            StateChanges = [new StateChange { EntityType = "Player", EntityId = player.Id, Property = "QuestLog", NewValue = $"completed {quest.Name}" }]
         };
     }
 
