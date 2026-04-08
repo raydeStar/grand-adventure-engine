@@ -14,9 +14,11 @@ public partial class CharacterCreationSession
     private CreationStep _step = CreationStep.FreeForm;
 
     public string? Name { get; private set; }
+    public string? Gender { get; private set; }
     public string? Race { get; private set; }
     public string? Class { get; private set; }
     public string? Backstory { get; private set; }
+    public List<string> PersonalItems { get; private set; } = [];
     public bool IsComplete { get; private set; }
 
     public CharacterCreationSession(string discordId)
@@ -106,9 +108,11 @@ public partial class CharacterCreationSession
     {
         PlayerDiscordId = _discordId,
         Name = Name ?? "Unnamed",
+        Gender = Gender ?? "",
         Race = Race ?? "Human",
         Class = Class ?? "Warrior",
         Backstory = Backstory ?? "",
+        PersonalItems = PersonalItems,
         StatMethod = StatAllocationMethod.StandardArray
     };
 
@@ -160,6 +164,18 @@ public partial class CharacterCreationSession
             var classWord = FindClassWord(text);
             if (classWord is not null)
                 Class = ToTitleCase(classWord);
+        }
+
+        // Gender: "female", "male", "she/her", "he/him", or gender-indicating words
+        Gender = InferGender(text);
+
+        // Personal items: "carry a X", "carrying a X", "hold a X", "have a X with me"
+        var itemMatches = PersonalItemPattern().Matches(text);
+        foreach (Match m in itemMatches)
+        {
+            var item = m.Groups[1].Value.Trim().TrimEnd('.', ',', '!');
+            if (!string.IsNullOrWhiteSpace(item) && item.Length < 50)
+                PersonalItems.Add(ToTitleCase(item));
         }
 
         // Backstory: use the full text
@@ -237,6 +253,24 @@ public partial class CharacterCreationSession
     // "class: X", "class is X"
     [GeneratedRegex(@"class[:\s]+\s*([^,.\n!]+)", RegexOptions.IgnoreCase)]
     private static partial Regex ClassExplicitPattern();
+
+    // "carry a X", "carrying a X", "hold a X", "have a X with me", "always have a X"
+    [GeneratedRegex(@"(?:carry|carrying|carries|hold|holding|have|has)\s+(?:a|an|my|the)\s+(.+?)(?:\s+(?:with|on|everywhere|always|at all)|[,.\n!]|$)", RegexOptions.IgnoreCase)]
+    private static partial Regex PersonalItemPattern();
+
+    private static string? InferGender(string text)
+    {
+        var lower = text.ToLowerInvariant();
+        // Explicit gender statements
+        if (Regex.IsMatch(lower, @"\b(?:gender[:\s]+)\s*(female|male|non-?binary|enby)", RegexOptions.IgnoreCase))
+            return ToTitleCase(Regex.Match(lower, @"gender[:\s]+\s*(\S+)", RegexOptions.IgnoreCase).Groups[1].Value);
+        // Pronoun hints
+        if (Regex.IsMatch(lower, @"\b(?:she|her|woman|girl|queen|witch|priestess|huntress|sorceress|empress)\b"))
+            return "Female";
+        if (Regex.IsMatch(lower, @"\b(?:he|him|his|man|boy|king|prince|emperor)\b"))
+            return "Male";
+        return null;
+    }
 
     private enum CreationStep
     {

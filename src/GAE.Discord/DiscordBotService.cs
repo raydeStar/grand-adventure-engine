@@ -916,8 +916,12 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
                         .WithColor(Color.Gold)
                         .AddField("Name", session.LastAiResponse.Name ?? "???", inline: true)
                         .AddField("Race", session.LastAiResponse.Race, inline: true)
-                        .AddField("Class", session.LastAiResponse.Class, inline: true)
-                        .AddField("Stats",
+                        .AddField("Class", session.LastAiResponse.Class, inline: true);
+                    if (!string.IsNullOrWhiteSpace(session.LastAiResponse.Gender))
+                        updatedEmbed.AddField("Gender", session.LastAiResponse.Gender, inline: true);
+                    if (session.LastAiResponse.PersonalItems.Count > 0)
+                        updatedEmbed.AddField("Personal Items", string.Join(", ", session.LastAiResponse.PersonalItems), inline: false);
+                    updatedEmbed.AddField("Stats",
                             $"STR: {updatedStats["str"]} ({FormatMod(updatedStats["str"])})  DEX: {updatedStats["dex"]} ({FormatMod(updatedStats["dex"])})\n" +
                             $"CON: {updatedStats["con"]} ({FormatMod(updatedStats["con"])})  INT: {updatedStats["int"]} ({FormatMod(updatedStats["int"])})\n" +
                             $"WIS: {updatedStats["wis"]} ({FormatMod(updatedStats["wis"])})  CHA: {updatedStats["cha"]} ({FormatMod(updatedStats["cha"])})")
@@ -986,20 +990,24 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
 
         session.LastSheetJson = System.Text.Json.JsonSerializer.Serialize(aiResponse);
 
-        var embed = new EmbedBuilder()
+        var sheetEmbed = new EmbedBuilder()
             .WithTitle("\u2694\uFE0F CHARACTER SHEET")
             .WithColor(Color.Gold)
             .AddField("Name", string.IsNullOrWhiteSpace(aiResponse.Name) ? "???" : aiResponse.Name, inline: true)
             .AddField("Race", string.IsNullOrWhiteSpace(aiResponse.Race) ? "???" : aiResponse.Race, inline: true)
-            .AddField("Class", string.IsNullOrWhiteSpace(aiResponse.Class) ? "???" : aiResponse.Class, inline: true)
-            .AddField("Stats",
+            .AddField("Class", string.IsNullOrWhiteSpace(aiResponse.Class) ? "???" : aiResponse.Class, inline: true);
+        if (!string.IsNullOrWhiteSpace(aiResponse.Gender))
+            sheetEmbed.AddField("Gender", aiResponse.Gender, inline: true);
+        if (aiResponse.PersonalItems.Count > 0)
+            sheetEmbed.AddField("Personal Items", string.Join(", ", aiResponse.PersonalItems), inline: false);
+        sheetEmbed.AddField("Stats",
                 $"STR: {stats["str"]} ({FormatMod(stats["str"])})  DEX: {stats["dex"]} ({FormatMod(stats["dex"])})\n" +
                 $"CON: {stats["con"]} ({FormatMod(stats["con"])})  INT: {stats["int"]} ({FormatMod(stats["int"])})\n" +
                 $"WIS: {stats["wis"]} ({FormatMod(stats["wis"])})  CHA: {stats["cha"]} ({FormatMod(stats["cha"])})")
             .AddField("Backstory", string.IsNullOrWhiteSpace(aiResponse.Backstory) ? "A mysterious past yet to be revealed..." : aiResponse.Backstory)
             .WithFooter("Say \"looks good\" to start, or describe changes you want.");
 
-        await thread.SendMessageAsync(embed: embed.Build());
+        await thread.SendMessageAsync(embed: sheetEmbed.Build());
 
         if (aiResponse.FollowUpQuestion is not null)
             await thread.SendMessageAsync(aiResponse.FollowUpQuestion);
@@ -1016,9 +1024,11 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         {
             PlayerDiscordId = discordId,
             Name = ai.Name ?? message.Author.Username,
+            Gender = ai.Gender,
             Race = ai.Race,
             Class = ai.Class,
             Backstory = ai.Backstory,
+            PersonalItems = ai.PersonalItems,
             StatMethod = StatAllocationMethod.Manual,
             ManualStats = stats
         };
@@ -1039,7 +1049,8 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         await SendRoomEntryAsync(thread, player);
 
         // Notify admin channel
-        await PostToAdminChannelAsync($"\U0001F4E5 **{player.Name}** ({message.Author.Username}) created a character — {player.Race} {player.Class}");
+        var genderTag = string.IsNullOrWhiteSpace(player.Gender) ? "" : $" ({player.Gender})";
+        await PostToAdminChannelAsync($"\U0001F4E5 **{player.Name}**{genderTag} ({message.Author.Username}) created a character — {player.Race} {player.Class}");
     }
 
     // ==================== Restart ====================
@@ -1797,9 +1808,11 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         var nameStr = player.Name ?? "Unknown";
         sb.AppendLine($"║  {nameStr,-36}║");
 
-        var raceClass = $"{player.Race} {player.Class}";
+        var raceClassGender = string.IsNullOrWhiteSpace(player.Gender)
+            ? $"{player.Race} {player.Class}"
+            : $"{player.Gender} {player.Race} {player.Class}";
         var levelStr = $"Lv.{player.Level}";
-        sb.AppendLine($"║  {raceClass,-25} {levelStr,10}║");
+        sb.AppendLine($"║  {raceClassGender,-25} {levelStr,10}║");
 
         sb.AppendLine($"╠{new string('═', W)}╣");
 
@@ -1834,6 +1847,21 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         sb.AppendLine($"║  Weapon: {(wpn?.Name ?? "none"),-28}║");
         sb.AppendLine($"║  Armor:  {(arm?.Name ?? "none"),-28}║");
         sb.AppendLine($"║  Shield: {(shd?.Name ?? "none"),-28}║");
+
+        // Show personal/backpack items if any
+        if (player.Inventory.Count > 0)
+        {
+            sb.AppendLine($"╠{new string('═', W)}╣");
+            foreach (var item in player.Inventory.Take(5))
+            {
+                var iname = item.Name.Length > 28 ? item.Name[..28] : item.Name;
+                var qty = item.Quantity > 1 ? $" x{item.Quantity}" : "";
+                sb.AppendLine($"║  🎒 {(iname + qty),-33}║");
+            }
+            if (player.Inventory.Count > 5)
+                sb.AppendLine($"║  ... and {player.Inventory.Count - 5} more{new string(' ', 23)}║");
+        }
+
         sb.AppendLine($"╚{new string('═', W)}╝");
         sb.Append("```");
         return sb.ToString();

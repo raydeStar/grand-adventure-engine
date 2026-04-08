@@ -554,13 +554,22 @@ public class NarratorService : INarratorService
             they're a Hitman, a Pirate, or a Cheese Wizard, USE THAT as their class.
             Never override the player's creative choices. Embrace the weird.
 
+            Also extract any personal items, treasured possessions, or things they carry.
+            These are flavor items that matter to the character's identity.
+            Examples: "a red flower", "my father's old pocket watch", "a lucky coin"
+
+            Infer gender from context clues (pronouns, descriptors like "she", "he", "wizard",
+            "witch", "king", "queen", etc.). If ambiguous, use empty string.
+
             Return ONLY valid JSON, no markdown fences:
             {
               "name": "suggested name or null if player did not say one",
+              "gender": "Female, Male, Non-binary, or empty string if unclear",
               "race": "whatever the player said",
               "class": "whatever fits their description",
               "statOrder": ["str", "con", "dex", "wis", "cha", "int"],
               "backstory": "2-3 sentence backstory based on their description",
+              "personalItems": ["item name 1", "item name 2"],
               "followUpQuestion": "optional question if the description was vague, or null"
             }
 
