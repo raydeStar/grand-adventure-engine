@@ -79,6 +79,7 @@ public class NarratorService : INarratorService
 
         var loreContext = await GetRoomKnowledgeAsync(context.CurrentRoom, ct);
         var worldContext = BuildWorldContextBlock(context);
+        var playerLoreContext = BuildPlayerLoreBlock(context.PlayerKnownLoreHints);
 
         var userPrompt = $"""
             Player: {context.Player.Name} ({context.Player.Race} {context.Player.Class}, Level {context.Player.Level})
@@ -91,6 +92,7 @@ public class NarratorService : INarratorService
             Resolved Outcome: {resolvedOutcome}
             {worldContext}
             {loreContext}
+            {playerLoreContext}
             """;
 
         try
@@ -1805,6 +1807,19 @@ public class NarratorService : INarratorService
         }
     }
 
+    /// <summary>
+    /// Builds a prompt block from player-discovered lore hints relevant to the current scene.
+    /// When the player knows lore, narration should be confident; when they don't, keep it mysterious.
+    /// </summary>
+    private static string BuildPlayerLoreBlock(List<string>? hints)
+    {
+        if (hints is null || hints.Count == 0)
+            return "PLAYER LORE KNOWLEDGE: The player knows little about this area — narrate with mystery and uncertainty.";
+
+        return "PLAYER LORE KNOWLEDGE (the player has learned these facts — reference them with confidence, weave naturally):\n" +
+               string.Join("\n", hints.Select(h => $"- {h}"));
+    }
+
     private async Task<string> GetRoomKnowledgeAsync(Room room, CancellationToken ct)
     {
         if (_knowledge is null) return "";
@@ -3026,5 +3041,101 @@ public class NarratorService : INarratorService
             _logger.LogWarning(ex, "Realm transition narration failed");
             return null;
         }
+    }
+
+    public async Task<string> ProvideGuidanceAsync(PlayerCharacter player, Room room, string? question, CancellationToken ct = default)
+    {
+        var questSummary = BuildGuidanceQuestContext(player);
+        var loreContext = await GetRoomKnowledgeAsync(room, ct);
+        var worldContext = await GetCurrentWorldContextBlockAsync(ct);
+
+        var systemPrompt = """
+            You are the NARRATOR — an omniscient, atmospheric storytelling voice in a dark fantasy RPG
+            with classic Sierra adventure game humor. The player is asking you for guidance.
+
+            Your role:
+            - Give thematic, in-character hints about what to do next
+            - Reference their active quests and suggest next steps
+            - Point toward unexplored exits or NPCs they haven't talked to
+            - If they seem stuck, give a clearer hint — but never outright spoil a puzzle
+            - If they have no active quests, suggest talking to NPCs or exploring new areas
+            - Keep the tone warm but mysterious — you're a helpful narrator, not a strategy guide
+            - Use second person ("You recall...", "Perhaps the path to the east...")
+            - Keep responses concise: 2-4 sentences max
+            - If the player asks a specific question, answer it as best you can in-character
+            - NEVER break character or reference game mechanics directly
+            """;
+
+        var userPrompt = $"""
+            Player: {player.Name} (Level {player.Level} {player.Race} {player.Class})
+            Location: {room.Name}
+            Available exits: {(room.Exits.Count > 0 ? string.Join(", ", room.Exits.Keys) : "None")}
+            NPCs here: {(room.Npcs.Count > 0 ? string.Join(", ", room.Npcs.Select(n => n.Name)) : "None")}
+
+            {questSummary}
+            {worldContext}
+            {loreContext}
+
+            {(string.IsNullOrWhiteSpace(question) ? "The player asks: \"What should I do next?\"" : $"The player asks: \"{question}\"")}
+
+            Give a brief, atmospheric hint. Reference their quest objectives if relevant.
+            """;
+
+        try
+        {
+            var response = await CompletionAsync(systemPrompt, userPrompt, ct,
+                maxTokens: 256, operation: "guidance", playerId: player.Id, roomId: room.Id);
+            return string.IsNullOrWhiteSpace(response) ? BuildFallbackGuidance(player, room) : response.Trim();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Narrator guidance failed, using fallback");
+            return BuildFallbackGuidance(player, room);
+        }
+    }
+
+    private string BuildGuidanceQuestContext(PlayerCharacter player)
+    {
+        if (player.QuestLog.Count == 0)
+            return "Active quests: None — the player has no active quests.";
+
+        var lines = new List<string> { "Active quests:" };
+        foreach (var q in player.QuestLog.Where(q => q.Status == QuestStatus.Active || q.Status == QuestStatus.ReadyToTurnIn))
+        {
+            var questDef = _registry?.Quests.GetById(q.QuestId);
+            var name = questDef?.Name ?? q.QuestId;
+            var status = q.Status == QuestStatus.ReadyToTurnIn ? " (READY TO TURN IN)" : "";
+            lines.Add($"- {name}{status}: {questDef?.Description ?? "Unknown quest"}");
+
+            var currentStage = questDef?.Stages.FirstOrDefault(s => s.Id == q.CurrentStageId)
+                ?? questDef?.Stages.FirstOrDefault();
+            if (currentStage?.Objectives is not null)
+            {
+                foreach (var obj in currentStage.Objectives)
+                {
+                    var progress = q.Objectives.FirstOrDefault(p => p.ObjectiveId == obj.Id);
+                    var complete = progress?.IsComplete == true ? "\u2713" : "\u25cb";
+                    lines.Add($"  {complete} {obj.Description ?? obj.Id}");
+                }
+            }
+        }
+        return string.Join("\n", lines);
+    }
+
+    private static string BuildFallbackGuidance(PlayerCharacter player, Room room)
+    {
+        if (player.QuestLog.Any(q => q.Status == QuestStatus.ReadyToTurnIn))
+            return "You feel a sense of accomplishment — perhaps it's time to report back to whoever sent you on your errand.";
+
+        if (player.QuestLog.Any(q => q.Status == QuestStatus.Active))
+            return "Your quest journal weighs heavy in your pocket. The answers you seek likely lie beyond the next threshold — or in the words of someone nearby.";
+
+        if (room.Npcs.Count > 0)
+            return $"The faces around you hold stories untold. Perhaps {room.Npcs[0].Name} has something worth hearing.";
+
+        if (room.Exits.Count > 0)
+            return $"The path stretches onward. To the {room.Exits.Keys.First()}, something beckons.";
+
+        return "The world is vast and full of secrets. Look around, talk to those you meet, and follow the threads of fate.";
     }
 }

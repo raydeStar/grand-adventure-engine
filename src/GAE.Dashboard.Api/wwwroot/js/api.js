@@ -127,6 +127,18 @@ const API = {
     return res.json();
   },
 
+  async updateRoom(roomId, data) {
+    return this.putJson(`${this.base}/admin/rooms/${encodeURIComponent(roomId)}`, data);
+  },
+
+  async createRoom(data) {
+    return this.postJson(`${this.base}/admin/rooms`, data);
+  },
+
+  async updatePlayer(playerId, data) {
+    return this.putJson(`${this.base}/admin/players/${encodeURIComponent(playerId)}`, data);
+  },
+
   async getHealth() {
     return this.getJson(`${this.base}/health`);
   },

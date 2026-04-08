@@ -353,6 +353,21 @@ public partial class CommandParser
             return action;
         }
 
+        // Ask narrator — "hint", "guidance", "ask narrator <question>"
+        var askNarratorMatch = AskNarratorRegex().Match(input);
+        if (askNarratorMatch.Success)
+        {
+            action.Type = ActionType.AskNarrator;
+            if (askNarratorMatch.Groups["question"].Success)
+                action.Target = askNarratorMatch.Groups["question"].Value.Trim();
+            return action;
+        }
+        if (BareHintRegex().IsMatch(input))
+        {
+            action.Type = ActionType.AskNarrator;
+            return action;
+        }
+
         // Help
         if (HelpRegex().IsMatch(input))
         {
@@ -511,4 +526,10 @@ public partial class CommandParser
 
     [GeneratedRegex(@"^(?:(?:set\s+)?narrator|(?:set\s+)?voice|(?:change\s+)?narrator)\s+(?<name>.+)$", RegexOptions.IgnoreCase)]
     private static partial Regex SetNarratorRegex();
+
+    [GeneratedRegex(@"^(?:ask\s+(?:the\s+)?narrator|narrator\s+(?:ask|hint|help|guidance)|ask\s+(?:for\s+)?(?:a\s+)?(?:hint|guidance|help|advice))\s*(?<question>.+)?$", RegexOptions.IgnoreCase)]
+    private static partial Regex AskNarratorRegex();
+
+    [GeneratedRegex(@"^(?:hint|hints|guidance|what\s+(?:should|do)\s+I\s+do|where\s+(?:should|do)\s+I\s+go|what(?:'s| is)\s+next)$", RegexOptions.IgnoreCase)]
+    private static partial Regex BareHintRegex();
 }

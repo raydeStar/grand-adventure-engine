@@ -50,5 +50,6 @@ public enum ActionType
     LoreInfo,
     Narrator,
     SetNarrator,
+    AskNarrator,
     Unknown
 }

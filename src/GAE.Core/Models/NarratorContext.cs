@@ -19,4 +19,11 @@ public class NarratorContext
 
     /// <summary>Summarised world rules (stat names, combat style) for the narrator.</summary>
     public string? WorldRulesSummary { get; set; }
+
+    /// <summary>
+    /// Narrator hints from lore the player has discovered that is relevant to the current scene.
+    /// When populated, the narrator should reference this knowledge confidently.
+    /// When empty, the narrator should treat things as mysterious/unknown.
+    /// </summary>
+    public List<string> PlayerKnownLoreHints { get; set; } = [];
 }

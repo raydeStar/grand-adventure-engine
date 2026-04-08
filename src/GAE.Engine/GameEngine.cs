@@ -146,6 +146,7 @@ public class GameEngine : IGameEngine
             ActionType.LoreInfo => ProcessLoreInfo(player, action),
             ActionType.Narrator => ProcessNarratorList(player, action),
             ActionType.SetNarrator => ProcessSetNarrator(player, action),
+            ActionType.AskNarrator => await ProcessAskNarratorAsync(player, action, ct),
             _ => await ProcessFreeFormActionAsync(player, action, ct)
         };
 
@@ -175,6 +176,7 @@ public class GameEngine : IGameEngine
             && action.Type != ActionType.LoreInfo
             && action.Type != ActionType.Narrator
             && action.Type != ActionType.SetNarrator
+            && action.Type != ActionType.AskNarrator
             && action.Type != ActionType.Unknown;
 
         if (shouldNarrate)
@@ -183,13 +185,15 @@ public class GameEngine : IGameEngine
             {
                 var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
                 var recentStory = await _stateManager.GetRecentStoryForRoomAsync(player.CurrentRoomId, player.ActiveWorldId, 5, ct);
+                var actualRoom = room ?? new Room { Id = player.CurrentRoomId, Name = "Unknown" };
                 var context = new NarratorContext
                 {
                     Player = player,
-                    CurrentRoom = room ?? new Room { Id = player.CurrentRoomId, Name = "Unknown" },
+                    CurrentRoom = actualRoom,
                     Action = action,
                     MechanicalResult = result,
-                    RecentStory = [.. recentStory]
+                    RecentStory = [.. recentStory],
+                    PlayerKnownLoreHints = BuildPlayerLoreHints(player, actualRoom)
                 };
                 result.Narration = await _narrator.NarrateActionAsync(context, ct);
             }
@@ -3968,6 +3972,50 @@ public class GameEngine : IGameEngine
         };
     }
 
+    /// <summary>
+    /// Build a list of narrator hints from lore the player has discovered that is relevant to the current room.
+    /// </summary>
+    private List<string> BuildPlayerLoreHints(PlayerCharacter player, Room room)
+    {
+        if (_registry is null || player.DiscoveredLore.Count == 0) return [];
+
+        var hints = new List<string>();
+        foreach (var loreId in player.DiscoveredLore)
+        {
+            var entry = _registry.LoreEntries.GetById(loreId);
+            if (entry is null || string.IsNullOrWhiteSpace(entry.NarratorHint)) continue;
+
+            // Include if linked to this room, or has tag overlap with room tags
+            var linked = entry.LinkedEntityIds.Any(id => id.Equals(room.Id, StringComparison.OrdinalIgnoreCase));
+            var tagOverlap = entry.Tags.Count > 0 && room.EnvironmentTags.Count > 0 &&
+                             entry.Tags.Intersect(room.EnvironmentTags, StringComparer.OrdinalIgnoreCase).Any();
+
+            // Also include region/city lore and faction lore (broadly relevant)
+            var broadScope = entry.LoreScope is "region" or "city" or "planet" or "faction";
+
+            if (linked || tagOverlap || broadScope)
+                hints.Add(entry.NarratorHint);
+        }
+
+        return hints.Take(5).ToList();
+    }
+
+    private async Task<ActionResult> ProcessAskNarratorAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
+    {
+        var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
+        room ??= new Room { Id = player.CurrentRoomId, Name = "Unknown" };
+
+        var guidance = await _narrator.ProvideGuidanceAsync(player, room, action.Target, ct);
+
+        return new ActionResult
+        {
+            ActionId = action.Id,
+            Success = true,
+            MechanicalSummary = "\U0001f52e **The Narrator speaks:**",
+            Narration = guidance
+        };
+    }
+
     private static ActionResult ProcessHelp(GameAction action)
     {
         return new ActionResult
@@ -4006,6 +4054,7 @@ public class GameEngine : IGameEngine
                 `lore <topic>` -- Read details about a specific lore entry
                 `narrator` -- View available narrator personalities
                 `narrator <name>` -- Change your narrator's personality
+                `hint` / `ask narrator <question>` -- Get guidance from the narrator
                 `travel to world <world-id>` -- Transfer to another world
                 `enter portal` -- Use an active portal in the current room
                 `help` -- Show this help message

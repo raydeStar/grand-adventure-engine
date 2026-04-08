@@ -411,6 +411,31 @@ public class DashboardController : ControllerBase
     }
 
     [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpPut("admin/players/{playerId}")]
+    public async Task<IActionResult> UpdatePlayer(string playerId, [FromBody] PlayerCharacter player, CancellationToken ct)
+    {
+        var existing = await _stateManager.GetPlayerAsync(playerId, ct);
+        if (existing is null)
+            return NotFound(new { error = $"Player '{playerId}' was not found." });
+
+        player.Id = playerId; // Ensure ID matches route
+        player.LastActiveAt = DateTimeOffset.UtcNow;
+        await _stateManager.SavePlayerAsync(player, ct);
+
+        await BroadcastAdminMutationAsync(
+            summary: $"Updated player {player.Name} ({playerId}).",
+            playerId: playerId,
+            data: new Dictionary<string, object?>
+            {
+                ["player"] = player,
+                ["mutation"] = "update-player"
+            },
+            ct: ct);
+
+        return Ok(new { summary = $"Updated player {player.Name} ({playerId}).", player });
+    }
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
     [HttpDelete("admin/rooms/{roomId}")]
     public async Task<IActionResult> DeleteRoom(string roomId, CancellationToken ct)
     {
@@ -432,6 +457,58 @@ public class DashboardController : ControllerBase
             ct: ct);
 
         return Ok(new { summary = $"Deleted room {room.Name} ({roomId})." });
+    }
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpPut("admin/rooms/{roomId}")]
+    public async Task<IActionResult> UpdateRoom(string roomId, [FromBody] Room room, CancellationToken ct)
+    {
+        var existing = await _stateManager.GetRoomAsync(roomId, ct);
+        if (existing is null)
+            return NotFound(new { error = $"Room '{roomId}' was not found." });
+
+        room.Id = roomId; // Ensure ID matches route
+        await _stateManager.SaveRoomAsync(room, ct);
+
+        await BroadcastAdminMutationAsync(
+            summary: $"Updated room {room.Name} ({roomId}).",
+            playerId: null,
+            data: new Dictionary<string, object?>
+            {
+                ["roomId"] = roomId,
+                ["roomName"] = room.Name,
+                ["mutation"] = "update-room"
+            },
+            ct: ct);
+
+        return Ok(new { summary = $"Updated room {room.Name} ({roomId}).", room });
+    }
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpPost("admin/rooms")]
+    public async Task<IActionResult> CreateRoom([FromBody] Room room, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(room.Id))
+            return BadRequest(new { error = "Room ID is required." });
+
+        var existing = await _stateManager.GetRoomAsync(room.Id, ct);
+        if (existing is not null)
+            return Conflict(new { error = $"Room '{room.Id}' already exists." });
+
+        await _stateManager.SaveRoomAsync(room, ct);
+
+        await BroadcastAdminMutationAsync(
+            summary: $"Created room {room.Name} ({room.Id}).",
+            playerId: null,
+            data: new Dictionary<string, object?>
+            {
+                ["roomId"] = room.Id,
+                ["roomName"] = room.Name,
+                ["mutation"] = "create-room"
+            },
+            ct: ct);
+
+        return Ok(new { summary = $"Created room {room.Name} ({room.Id}).", room });
     }
 
     [Authorize(Policy = DashboardPolicies.AdminAccess)]

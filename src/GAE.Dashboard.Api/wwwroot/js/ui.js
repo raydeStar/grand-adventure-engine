@@ -912,11 +912,28 @@ const UI = {
     // Player-specific action buttons + inline quick-actions
     const playerActions = type === 'player' ? `
       <div class="dm-player-actions">
-        <button class="btn btn-primary btn-sm" id="btn-ov-play" title="Play as this character"><span class="btn-icon">&#9654;</span> Play</button>
+        <button class="btn btn-primary btn-sm" id="btn-ov-play" title="Play as this character (switches to user view)"><span class="btn-icon">&#9654;</span> Play</button>
+        <button class="btn btn-primary btn-sm" id="btn-ov-impersonate" title="Open inline chat as this player"><span class="btn-icon">&#128483;</span> Impersonate</button>
         <button class="btn btn-secondary btn-sm" id="btn-ov-smoke" title="Run look/stats/inventory/help"><span class="btn-icon">&#9881;</span> Smoke Test</button>
         <button class="btn btn-secondary btn-sm" id="btn-ov-teleport-spawn" title="Teleport to spawn room"><span class="btn-icon">&#8634;</span> To Spawn</button>
         <button class="btn btn-secondary btn-sm" id="btn-ov-discord-msg" title="Send Discord message"${item.discordId ? '' : ' disabled'}><span class="btn-icon">&#9993;</span> Discord</button>
         <button class="btn btn-accent btn-sm" id="btn-ov-add-item" title="Grant item from registry"><span class="btn-icon">+</span> Item</button>
+      </div>
+      <div class="dm-impersonate-panel hidden" id="ov-impersonate-panel">
+        <div class="dm-impersonate-header">Playing as <strong>${this.esc(item.name || item.id)}</strong> <button class="dm-icon-btn" id="btn-ov-impersonate-close" title="Close">&#x2715;</button></div>
+        <div class="dm-impersonate-log" id="ov-impersonate-log"></div>
+        <div class="dm-impersonate-input-row">
+          <input type="text" id="ov-impersonate-input" placeholder="Type a command as ${this.esc(item.name || 'player')}..." autocomplete="off" />
+          <button class="btn btn-primary btn-sm" id="btn-ov-impersonate-send">Send</button>
+        </div>
+        <div class="dm-impersonate-quick">
+          <button class="btn btn-secondary btn-xs imp-qcmd" data-cmd="look">look</button>
+          <button class="btn btn-secondary btn-xs imp-qcmd" data-cmd="inventory">inv</button>
+          <button class="btn btn-secondary btn-xs imp-qcmd" data-cmd="journal">journal</button>
+          <button class="btn btn-secondary btn-xs imp-qcmd" data-cmd="stats">stats</button>
+          <button class="btn btn-secondary btn-xs imp-qcmd" data-cmd="hint">hint</button>
+          <button class="btn btn-secondary btn-xs imp-qcmd" data-cmd="lorebook">lore</button>
+        </div>
       </div>
       <div class="dm-item-picker hidden" id="ov-item-picker">
         <div class="dm-item-picker-row">
@@ -1040,6 +1057,16 @@ const UI = {
       if (this._ovSelectedItem?.id) {
         document.dispatchEvent(new CustomEvent('overview-play-player', { detail: { playerId: this._ovSelectedItem.id } }));
       }
+    });
+    this.$('btn-ov-impersonate')?.addEventListener('click', () => this._ovToggleImpersonate());
+    this.$('btn-ov-impersonate-close')?.addEventListener('click', () => this._ovToggleImpersonate(false));
+    this.$('btn-ov-impersonate-send')?.addEventListener('click', () => this._ovImpersonateSend());
+    this.$('ov-impersonate-input')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') this._ovImpersonateSend(); });
+    panel.querySelectorAll('.imp-qcmd').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const inp = this.$('ov-impersonate-input');
+        if (inp) { inp.value = btn.dataset.cmd; this._ovImpersonateSend(); }
+      });
     });
     this.$('btn-ov-smoke')?.addEventListener('click', () => {
       if (this._ovSelectedItem?.id) {
@@ -1254,6 +1281,39 @@ const UI = {
     `).join('')}</div>`;
   },
 
+  _ovToggleImpersonate(show) {
+    const panel = this.$('ov-impersonate-panel');
+    if (!panel) return;
+    const isVisible = show !== undefined ? show : panel.classList.contains('hidden');
+    panel.classList.toggle('hidden', !isVisible);
+    if (isVisible) {
+      this.$('ov-impersonate-input')?.focus();
+    }
+  },
+
+  async _ovImpersonateSend() {
+    const input = this.$('ov-impersonate-input');
+    const log = this.$('ov-impersonate-log');
+    if (!input || !log || !this._ovSelectedItem?.id) return;
+    const cmd = input.value.trim();
+    if (!cmd) return;
+    input.value = '';
+
+    log.innerHTML += `<div class="imp-msg player">&gt; ${this.esc(cmd)}</div>`;
+    log.scrollTop = log.scrollHeight;
+
+    try {
+      const result = await API.sendCommand(this._ovSelectedItem.id, cmd);
+      const narration = result.narration || result.mechanicalSummary || '(no response)';
+      const mechHtml = result.mechanicalSummary ? `<div class="imp-msg mech">${this.esc(result.mechanicalSummary)}</div>` : '';
+      const narrHtml = result.narration ? `<div class="imp-msg narr">${this.esc(result.narration)}</div>` : '';
+      log.innerHTML += mechHtml + narrHtml;
+    } catch (err) {
+      log.innerHTML += `<div class="imp-msg error">Error: ${this.esc(err.message)}</div>`;
+    }
+    log.scrollTop = log.scrollHeight;
+  },
+
   _ovToggleJson() {
     const section = this.$('ov-json-section');
     const btn = this.$('btn-ov-toggle-json');
@@ -1330,9 +1390,9 @@ const UI = {
       if (registryTypesMap[type]) {
         await API.upsertRegistryEntry(registryTypesMap[type], this._ovSelectedItem);
       } else if (type === 'player') {
-        await API.editPlayer({ playerId: this._ovSelectedItem.id, ...this._ovSelectedItem });
+        await API.updatePlayer(this._ovSelectedItem.id, this._ovSelectedItem);
       } else if (type === 'room') {
-        await API.upsertRoomFixture(this._ovSelectedItem);
+        await API.updateRoom(this._ovSelectedItem.id, this._ovSelectedItem);
       }
       const messages = this.$('ov-chat-messages');
       if (messages) {
