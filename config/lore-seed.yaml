@@ -45,7 +45,6 @@ rooms:
       east: "town_square"
       south: "back_alley"
       down: "tavern_cellar"
-      north: "qa-lab"
     environment_tags: ["indoor", "safe", "lit", "tavern", "busy", "hub"]
     npcs:
       - id: "innkeeper_mara"

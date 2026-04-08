@@ -2060,11 +2060,11 @@ public class NarratorService : INarratorService
         // No flowery wrapper — the mechanical text is clear enough on its own.
         if (!context.MechanicalResult.Success)
         {
-            var failureReason = TrimToSentence(context.MechanicalResult.MechanicalSummary);
+            var failureReason = context.MechanicalResult.MechanicalSummary?.Trim();
             return string.IsNullOrWhiteSpace(failureReason) ? "That didn't work." : failureReason;
         }
 
-        var resolvedOutcome = TrimToSentence(context.MechanicalResult.MechanicalSummary);
+        var resolvedOutcome = context.MechanicalResult.MechanicalSummary?.Trim();
         return string.IsNullOrWhiteSpace(resolvedOutcome)
             ? "Done."
             : resolvedOutcome;
@@ -2072,14 +2072,15 @@ public class NarratorService : INarratorService
 
     private static string BuildRoomAtmosphere(Room room)
     {
-        var description = TrimToSentence(room.Description);
+        var description = room.Description?.Trim();
 
         if (string.IsNullOrWhiteSpace(description))
         {
             return "The place reveals itself slowly — more through feeling than any obvious feature.";
         }
 
-        // Use the room's own description as-is — it's already been written to be atmospheric
+        // Use the room's full description — it's already been written to be atmospheric.
+        // Don't truncate to first sentence; multi-sentence room descriptions are intentional.
         return description.EndsWith('.') ? description : description + ".";
     }
 

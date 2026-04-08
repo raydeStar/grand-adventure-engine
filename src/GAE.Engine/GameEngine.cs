@@ -1072,7 +1072,9 @@ public class GameEngine : IGameEngine
             Success = true,
             MechanicalSummary = mechanicalSummary,
             Narration = freeForm.Narration,
-            InteractionUpdate = freeForm.InteractionUpdate
+            InteractionUpdate = freeForm.InteractionUpdate,
+            XpGained = questReward?.Xp ?? 0,
+            GoldChange = questReward?.Gold ?? 0
         };
 
         await PersistInteractionStoryEntry(player, action, result, ct);
@@ -1976,8 +1978,8 @@ public class GameEngine : IGameEngine
             result.MechanicalSummary += $"\n📜 {narratorQuestSummary}";
         if (questReward is not null)
         {
-            if (questReward.Xp > 0) result.MechanicalSummary += $"\n⭐ +{questReward.Xp} XP";
-            if (questReward.Gold > 0) result.MechanicalSummary += $"\n💰 +{questReward.Gold} gold";
+            if (questReward.Xp > 0) { result.MechanicalSummary += $"\n⭐ +{questReward.Xp} XP"; result.XpGained += questReward.Xp; }
+            if (questReward.Gold > 0) { result.MechanicalSummary += $"\n💰 +{questReward.Gold} gold"; result.GoldChange += questReward.Gold; }
         }
 
         // Persist mutations
@@ -2647,8 +2649,8 @@ public class GameEngine : IGameEngine
                 {
                     player.Xp += questReward.Xp;
                     player.Gold += questReward.Gold;
-                    if (questReward.Xp > 0 || questReward.Gold > 0)
-                        result.MechanicalSummary += $"\n**Rewards:** +{questReward.Xp} XP | +{questReward.Gold} gold";
+                    if (questReward.Xp > 0) { result.MechanicalSummary += $"\n⭐ +{questReward.Xp} XP"; result.XpGained += questReward.Xp; }
+                    if (questReward.Gold > 0) { result.MechanicalSummary += $"\n💰 +{questReward.Gold} gold"; result.GoldChange += questReward.Gold; }
                     var lvlUp = CheckAndApplyLevelUp(player);
                     if (lvlUp is not null)
                         result.MechanicalSummary += $"\n{lvlUp}";
@@ -3750,7 +3752,7 @@ public class GameEngine : IGameEngine
         {
             ActionId = action.Id,
             Success = true,
-            MechanicalSummary = $"📜 Quest accepted: **{quest.Name}**\n{quest.Description}",
+            MechanicalSummary = $"📜 Quest accepted: **{quest.Name}**\n{quest.Description}\n💡 Type `journal` to review your active quests.",
             StateChanges = [new StateChange { EntityType = "Player", EntityId = player.Id, Property = "QuestLog", NewValue = $"accepted {quest.Name}" }]
         };
     }
@@ -3844,6 +3846,8 @@ public class GameEngine : IGameEngine
             ActionId = action.Id,
             Success = true,
             MechanicalSummary = $"📜 Quest completed: **{quest.Name}**!{rewardText}",
+            XpGained = reward.Xp,
+            GoldChange = reward.Gold,
             StateChanges = [new StateChange { EntityType = "Player", EntityId = player.Id, Property = "QuestLog", NewValue = $"completed {quest.Name}" }]
         };
     }
@@ -4401,6 +4405,13 @@ public class GameEngine : IGameEngine
         }
 
         // Auto-turn-in for shopkeeper NPCs with ReadyToTurnIn quests
+        int totalQuestXp = 0;
+        int totalQuestGold = 0;
+        if (shopQuestReward is not null)
+        {
+            totalQuestXp = shopQuestReward.Xp;
+            totalQuestGold = shopQuestReward.Gold;
+        }
         if (shopQuestReward is null && _questEngine is not null)
         {
             var turnInable = _questEngine.GetTurnInableQuests(player, shopkeeper);
@@ -4413,8 +4424,10 @@ public class GameEngine : IGameEngine
                     questSummary = (questSummary ?? "") + $"\n📜 Completed quest: {quest?.Name ?? turnIn.QuestId}";
                     player.Xp += autoReward.Xp;
                     player.Gold += autoReward.Gold;
-                    if (autoReward.Xp > 0 || autoReward.Gold > 0)
-                        questSummary += $"\n**Rewards:** +{autoReward.Xp} XP | +{autoReward.Gold} gold";
+                    totalQuestXp += autoReward.Xp;
+                    totalQuestGold += autoReward.Gold;
+                    if (autoReward.Xp > 0) questSummary += $"\n⭐ +{autoReward.Xp} XP";
+                    if (autoReward.Gold > 0) questSummary += $"\n💰 +{autoReward.Gold} gold";
                     var lvlUp = CheckAndApplyLevelUp(player);
                     if (lvlUp is not null)
                         questSummary += $"\n{lvlUp}";
@@ -4436,7 +4449,9 @@ public class GameEngine : IGameEngine
             Success = freeForm.Success,
             MechanicalSummary = mechSummary,
             Narration = freeForm.Narration,
-            InteractionUpdate = freeForm.InteractionUpdate ?? new InteractionUpdate { Mode = InteractionMode.Trading }
+            InteractionUpdate = freeForm.InteractionUpdate ?? new InteractionUpdate { Mode = InteractionMode.Trading },
+            XpGained = totalQuestXp,
+            GoldChange = totalQuestGold
         };
 
         await PersistInteractionStoryEntry(player, action, convoResult, ct);
