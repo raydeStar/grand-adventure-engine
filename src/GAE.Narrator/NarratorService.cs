@@ -2859,6 +2859,50 @@ public class NarratorService : INarratorService
                   "luck": 10
                 }
                 """,
+            "narrator_preset" => """
+                {
+                  "id": "snake_id_format",
+                  "name": "Display Name",
+                  "description": "A short summary of the narrator's personality and vibe.",
+                  "worldIds": ["default-world"],
+                  "archetype": "sassy|stoic|kind|sardonic|mysterious|cheerful|dramatic|grim|whimsical",
+                  "personalityPrompt": "A detailed system prompt (2-3 paragraphs) defining how this narrator speaks, thinks, and reacts. Include their background, speech patterns, verbal tics, attitude toward the player, how they handle combat narration, how they describe environments, and what makes them unique. This is the most important field — it drives ALL narrator behavior.",
+                  "greetingText": "The narrator's introduction when a player first meets them or starts character creation. Should be in-character, 2-3 sentences. Example: 'Well, well... another brave soul stumbles into my story. I am Penelo, and trust me, darling — you are going to LOVE what I have planned for you.'",
+                  "loreDeliveryStyle": "How this narrator explains lore and world history. Example: 'Deliver lore like campfire ghost stories — dramatic pauses, rhetorical questions, and the occasional shudder.'",
+                  "failureReactionStyle": "How the narrator reacts when the player fails, dies, or makes mistakes. Example: 'Mock them gently with backhanded sympathy, then offer genuine encouragement wrapped in sarcasm.'",
+                  "successReactionStyle": "How the narrator reacts when the player wins battles or achieves goals. Example: 'Be genuinely impressed but try to hide it behind dismissive comments. Occasionally break character to cheer.'",
+                  "isSelectable": true,
+                  "sortOrder": 0,
+                  "tags": ["personality-tag-1", "personality-tag-2"]
+                }
+                """,
+            "lore_entry" => """
+                {
+                  "id": "snake_id_format",
+                  "name": "Display Name",
+                  "description": "The lore text itself — what the player learns.",
+                  "worldIds": ["default-world"],
+                  "category": "history|geography|faction|character|legend|religion|arcane",
+                  "isStarterLore": false,
+                  "tags": ["relevant-tag"]
+                }
+                """,
+            "quest" => """
+                {
+                  "id": "snake_id_format",
+                  "name": "Display Name",
+                  "description": "Quest description shown to the player.",
+                  "worldIds": ["default-world"],
+                  "type": "main|side|bounty|discovery",
+                  "objectives": [
+                    {"id": "obj_1", "description": "What the player must do", "isOptional": false}
+                  ],
+                  "rewards": {"xp": 100, "gold": 50, "items": []},
+                  "requiredLevel": 1,
+                  "prerequisites": [],
+                  "tags": ["adventure"]
+                }
+                """,
             _ => """{"id": "snake_id", "name": "Name", "description": "Description"}"""
         };
 
