@@ -89,7 +89,7 @@ public class NpcDispositionTests
     }
 
     [Theory]
-    [InlineData("neutral", 40, 40, "neutral")]
+    [InlineData("neutral", 40, 40, "slightly neutral")]
     [InlineData("angry", 85, 40, "overwhelmingly angry")]
     [InlineData("happy", 65, 40, "very happy")]
     [InlineData("curious", 50, 40, "somewhat curious")]
@@ -107,13 +107,13 @@ public class NpcDispositionTests
     }
 
     [Fact]
-    public void DefaultNpc_HasNeutralDispositionState()
+    public void DefaultNpc_HasFriendlyDispositionState()
     {
         var npc = new Npc();
 
-        Assert.Equal("neutral", npc.Disposition);
-        Assert.Equal("neutral", npc.DispositionState.Emotion);
-        Assert.Equal(40, npc.DispositionState.Intensity);
-        Assert.Equal(40, npc.DispositionState.Baseline);
+        Assert.Equal("friendly", npc.Disposition);
+        Assert.Equal("friendly", npc.DispositionState.Emotion);
+        Assert.Equal(65, npc.DispositionState.Intensity);
+        Assert.Equal(65, npc.DispositionState.Baseline);
     }
 }

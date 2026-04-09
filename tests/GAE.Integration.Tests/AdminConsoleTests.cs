@@ -69,7 +69,9 @@ public class AdminConsoleTests : IClassFixture<GaeWebApplicationFactory>
         });
         response.EnsureSuccessStatusCode();
 
-        var player = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var result = await response.Content.ReadFromJsonAsync<JsonElement>();
+        // Endpoint may return { player, heroIntro } wrapper or flat player object
+        var player = result.TryGetProperty("player", out var p) ? p : result;
         Assert.Equal("dashboard-create-1", player.GetProperty("id").GetString());
         Assert.Equal("Lyra of Tests", player.GetProperty("name").GetString());
         Assert.Equal("spawn", player.GetProperty("currentRoomId").GetString());
