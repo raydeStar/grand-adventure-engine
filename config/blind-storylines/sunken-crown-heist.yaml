@@ -1,0 +1,12 @@
+id: sunken-crown-heist
+name: "The Sunken Crown Heist"
+setting: "A drowned palace vault beneath a bustling canal city"
+tone: "Swashbuckling fantasy caper under constant pressure"
+theme: "Trust is harder to steal than treasure"
+plot_beats:
+  - "A rival thief offers an alliance with obvious strings attached"
+  - "The flooded archives reveal the vault's shifting route"
+  - "A royal revenant demands the crown be returned, not sold"
+  - "Escape becomes harder than the theft once the bells begin ringing"
+starting_room_description: "A candlelit smuggler cellar where damp maps, lockpicks, and canal charts cover a warped oak table."
+max_rooms: 16
