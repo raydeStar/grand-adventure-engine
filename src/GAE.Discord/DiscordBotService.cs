@@ -111,6 +111,8 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
                 new SlashCommandBuilder().WithName("inventory").WithDescription("View inventory and equipment"),
                 new SlashCommandBuilder().WithName("help").WithDescription("Show all commands"),
                 new SlashCommandBuilder().WithName("map").WithDescription("Show discovered rooms as ASCII map"),
+                new SlashCommandBuilder().WithName("cyoa").WithDescription("Start a Choose Your Own Adventure story")
+                    .AddOption("theme", ApplicationCommandOptionType.String, "Optional theme (e.g. 'a heist in a floating city')", isRequired: false),
             };
 
             foreach (var cmd in commands)
@@ -156,6 +158,10 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
                 case "map":
                     await command.DeferAsync(ephemeral: true);
                     await HandleMapSlashAsync(command, discordId);
+                    break;
+                case "cyoa":
+                    await command.DeferAsync(ephemeral: true);
+                    await HandleCyoaSlashAsync(command, discordId);
                     break;
             }
         }
@@ -289,6 +295,52 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         }
         var map = await BuildAsciiMapAsync(player);
         await command.FollowupAsync($"```\n{map}\n```", ephemeral: true);
+    }
+
+    private async Task HandleCyoaSlashAsync(SocketSlashCommand command, string discordId)
+    {
+        var player = await _stateManager.GetPlayerByDiscordIdAsync(discordId);
+        if (player is null)
+        {
+            await command.FollowupAsync("You don't have a character. Use `/create` first.", ephemeral: true);
+            return;
+        }
+
+        if (player.GameMode == Core.Models.GameMode.ChooseYourOwnAdventure)
+        {
+            await command.FollowupAsync("You're already in a CYOA adventure! Type choices or `cyoa end` to quit.", ephemeral: true);
+            return;
+        }
+
+        // Find the player's thread to send the CYOA response
+        SocketThreadChannel? thread = null;
+        if (player.ThreadId.HasValue && command.Channel is SocketTextChannel parentChannel)
+            thread = parentChannel.Guild.GetChannel(player.ThreadId.Value) as SocketThreadChannel;
+
+        if (thread is null)
+        {
+            await command.FollowupAsync("I can't find your adventure thread. Try sending a message in your thread first.", ephemeral: true);
+            return;
+        }
+
+        // Build the cyoa start command, optionally with a theme
+        var theme = command.Data.Options.FirstOrDefault(o => o.Name == "theme")?.Value as string;
+        var rawInput = string.IsNullOrWhiteSpace(theme) ? "cyoa start" : $"cyoa start {theme}";
+
+        await command.FollowupAsync("📖 Starting your adventure...", ephemeral: true);
+
+        await thread.TriggerTypingAsync();
+        var action = _engine.ParseCommand(player.Id, rawInput);
+        var result = await ProcessWithNarratorFallbackAsync(player, action, thread);
+
+        // Refresh player state after CYOA start
+        player = await _stateManager.GetPlayerByDiscordIdAsync(discordId) ?? player;
+
+        // Rename thread for CYOA mode
+        await RenameCyoaThreadAsync(thread, player, isCyoaActive: true);
+
+        // Send the opening scene as a CYOA embed
+        await SendGameResponseAsync(thread, player, action, result);
     }
 
     // ==================== Message Handler ====================
@@ -620,10 +672,16 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
 
         // Parse and process
         var action = _engine.ParseCommand(player.Id, command);
+        var wasCyoa = player.GameMode == Core.Models.GameMode.ChooseYourOwnAdventure;
         var result = await ProcessWithNarratorFallbackAsync(player, action, thread);
 
         // Refresh player state so status bar reflects changes from this action
         player = await _stateManager.GetPlayerByDiscordIdAsync(discordId) ?? player;
+
+        // Detect CYOA mode transitions and rename thread
+        var isCyoaNow = player.GameMode == Core.Models.GameMode.ChooseYourOwnAdventure;
+        if (!wasCyoa && isCyoaNow)
+            await RenameCyoaThreadAsync(thread, player, isCyoaActive: true);
 
         // Format and send response
         await SendGameResponseAsync(thread, player, action, result);
@@ -1102,6 +1160,14 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
 
     private async Task SendGameResponseAsync(SocketThreadChannel thread, PlayerCharacter player, GameAction action, ActionResult result)
     {
+        // CYOA mode — render as themed embed
+        if (player.GameMode == Core.Models.GameMode.ChooseYourOwnAdventure ||
+            action.Type is Core.Models.ActionType.CyoaStart or Core.Models.ActionType.CyoaEnd)
+        {
+            await SendCyoaResponseAsync(thread, player, action, result);
+            return;
+        }
+
         // Room entry — embed + narration (movement or plain "look" at room)
         if (result.NewRoom is not null)
         {
@@ -1224,6 +1290,128 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
 
         await SendChunkedAsync(thread, sb.ToString());
     }
+
+    // ==================== CYOA Response Formatting ====================
+
+    /// <summary>
+    /// Renders a CYOA action result as a Discord embed with health-colored border,
+    /// narration, numbered choices, and inventory/health in the footer.
+    /// </summary>
+    private async Task SendCyoaResponseAsync(SocketThreadChannel thread, PlayerCharacter player, GameAction action, ActionResult result)
+    {
+        var narration = result.Narration ?? result.MechanicalSummary ?? "";
+
+        // Ending — the narration already contains scene + epilogue + summary from the engine
+        if (action.Type == Core.Models.ActionType.CyoaEnd ||
+            result.StateChanges.Any(sc => sc.Property == "GameMode" && sc.NewValue == nameof(Core.Models.GameMode.FullRpg)))
+        {
+            var endEmbed = new EmbedBuilder()
+                .WithTitle("📖 The End")
+                .WithDescription(TruncateForEmbed(narration))
+                .WithColor(Color.Gold)
+                .WithFooter("Your adventure is complete. You've returned to the world.");
+            await thread.SendMessageAsync(embed: endEmbed.Build());
+
+            // Restore thread name
+            await RenameCyoaThreadAsync(thread, player, isCyoaActive: false);
+            return;
+        }
+
+        // Normal CYOA turn or opening
+        var cyoa = player.CyoaState;
+        var healthColor = GetCyoaHealthColor(cyoa?.Health);
+
+        var embed = new EmbedBuilder()
+            .WithColor(healthColor);
+
+        // Split narration from choices (engine formats as "narration\n\n1. choice\n2. choice...")
+        var (scene, choiceBlock) = SplitCyoaNarration(narration);
+        embed.WithDescription(TruncateForEmbed(scene));
+
+        if (!string.IsNullOrWhiteSpace(choiceBlock))
+            embed.AddField("Your choices", choiceBlock);
+
+        // Footer with health + inventory
+        var footerParts = new List<string>();
+        if (cyoa is not null)
+        {
+            footerParts.Add($"Health: {cyoa.Health}");
+            if (cyoa.Inventory.Count > 0)
+                footerParts.Add($"Items: {string.Join(", ", cyoa.Inventory)}");
+            else
+                footerParts.Add("Items: none");
+        }
+        if (footerParts.Count > 0)
+            embed.WithFooter(string.Join("  ·  ", footerParts));
+
+        // Save point notification
+        if (result.MechanicalSummary?.Contains("save point", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            await thread.SendMessageAsync("📌 **Save point reached.**");
+        }
+
+        await thread.SendMessageAsync(embed: embed.Build());
+    }
+
+    /// <summary>
+    /// Returns a Discord Color based on CYOA health level:
+    /// green (Healthy), yellow (Hurt), orange (Critical), red (Dead).
+    /// </summary>
+    private static Color GetCyoaHealthColor(Core.Models.CyoaHealthLevel? health) => health switch
+    {
+        Core.Models.CyoaHealthLevel.Healthy => Color.Green,
+        Core.Models.CyoaHealthLevel.Hurt => new Color(255, 204, 0), // yellow
+        Core.Models.CyoaHealthLevel.Critical => Color.Orange,
+        Core.Models.CyoaHealthLevel.Dead => Color.Red,
+        _ => Color.Teal
+    };
+
+    /// <summary>
+    /// Splits CYOA narration into (scene text, choice block).
+    /// The engine formats choices as numbered lines after the narration.
+    /// </summary>
+    private static (string Scene, string ChoiceBlock) SplitCyoaNarration(string narration)
+    {
+        // Look for the numbered choice list pattern that FormatCyoaNarration produces
+        var choicePattern = System.Text.RegularExpressions.Regex.Match(narration,
+            @"\n\n(\d+\.\s.+(?:\n\d+\.\s.+)*)$");
+
+        if (choicePattern.Success)
+        {
+            var scene = narration[..choicePattern.Index].TrimEnd();
+            var choices = choicePattern.Groups[1].Value.Trim();
+            return (scene, choices);
+        }
+
+        return (narration, string.Empty);
+    }
+
+    /// <summary>
+    /// Renames a player's thread to indicate CYOA mode (📖) or restore the original (⚔️).
+    /// </summary>
+    private async Task RenameCyoaThreadAsync(SocketThreadChannel thread, PlayerCharacter player, bool isCyoaActive)
+    {
+        try
+        {
+            var baseName = player.Name ?? "Adventurer";
+            var newName = isCyoaActive
+                ? $"📖 {baseName}'s Adventure"
+                : $"⚔️ {baseName}'s Adventure";
+
+            if (thread.Name != newName)
+                await thread.ModifyAsync(props => props.Name = newName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to rename thread {ThreadId} for CYOA mode change", thread.Id);
+        }
+    }
+
+    /// <summary>
+    /// Truncates text to fit within Discord embed description limit (4096 chars).
+    /// </summary>
+    private static string TruncateForEmbed(string text, int max = 4000)
+        => text.Length <= max ? text : text[..(max - 3)] + "...";
 
     /// <summary>
     /// Generates the hero intro narration, sends it, then shows the room card.
