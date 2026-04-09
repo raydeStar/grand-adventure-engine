@@ -5,6 +5,8 @@
 
 # Grand Adventure Engine
 
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+
 **A multiplayer text RPG that lives in your Discord server — powered by AI storytelling and real game mechanics.**
 
 You and your friends play a fantasy adventure right inside Discord. An AI narrator describes the world around you, reacts to your choices, and brings characters to life — but the actual game rules (combat, loot, skill checks) are handled by a fair, consistent engine under the hood. The AI tells the story. The math keeps it honest.
