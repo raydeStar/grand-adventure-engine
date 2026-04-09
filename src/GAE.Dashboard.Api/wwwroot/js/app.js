@@ -25,7 +25,9 @@
     worlds: [],
     selectedWorldId: localStorage.getItem('gae.admin.world') || '',
     selectedWorld: null,
-    selectedWorldPlayers: []
+    selectedWorldPlayers: [],
+    eventLog: [],
+    eventLogFilter: ''
   };
 
   // C# InteractionMode enum serializes as int — map to lowercase strings
@@ -69,6 +71,7 @@
     GameHub.on('roomEvent', handleRealtimeRoomEvent);
     GameHub.on('playerEvent', handleRealtimePlayerEvent);
     GameHub.on('actionResult', handleRealtimeActionResult);
+    GameHub.on('adminEvent', handleAdminEvent);
 
     state.loginHints = await API.getLoginOptions();
     UI.setSession(null, state.loginHints);
@@ -123,6 +126,14 @@
     bind('btn-seed-demo-admin', 'click', () => void seedDemoCharacters(false));
     bind('btn-llm-refresh', 'click', () => void refreshLlmModels());
     bind('llm-models-list', 'click', handleLlmModelClick);
+    bindOptional('btn-event-log-clear', 'click', () => {
+      state.eventLog.length = 0;
+      UI.clearEventLog();
+    });
+    bindOptional('event-log-filter', 'change', (e) => {
+      state.eventLogFilter = e.target.value;
+      UI.renderEventLog(state.eventLog, state.eventLogFilter);
+    });
 
     bind('create-form', 'submit', handleCreateCharacter);
     bind('command-input', 'keydown', handleCommandKeydown);
@@ -1762,6 +1773,10 @@
     state.transportLabel = status === 'connected' ? 'SignalR' : status === 'polling' ? 'Polling' : 'Offline';
     UI.setConnectionStatus(status);
     UI.renderSummary(state.summary, state.transportLabel, state.session);
+    // Admin clients join the admin feed to receive all game events for the event log
+    if (status === 'connected' && state.session?.isAdmin) {
+      void GameHub.joinAdminFeed();
+    }
   }
 
   function handleRealtimeActionResult(result) {
@@ -1788,6 +1803,33 @@
   function handleRealtimePlayerEvent() {
     if (!state.currentPlayerId) return;
     void refreshCurrentPlayer().catch((error) => handleError(error, { story: true }));
+  }
+
+  // ─── Admin event log ─────────────────────────────────
+  const EVENT_TYPE_ICONS = {
+    PlayerMoved: '🚶', CombatStarted: '⚔️', PlayerDied: '💀',
+    PlayerTalked: '💬', QuestUpdated: '📜', RoomUpdated: '🏠',
+    StoryAdvanced: '📖', PlayerCreated: '✨', PlayerRevived: '❤️',
+    CombatEnded: '🏁', NpcSpawned: '👤', NpcDied: '☠️',
+    SystemMessage: '⚙️'
+  };
+
+  function handleAdminEvent(event) {
+    if (!state.session?.isAdmin) return;
+    const entry = {
+      id: event.eventId || crypto.randomUUID(),
+      type: event.type,
+      typeName: typeof event.type === 'number'
+        ? (Object.keys(EVENT_TYPE_ICONS)[event.type] || 'Unknown')
+        : String(event.type),
+      playerId: event.playerId || '',
+      roomId: event.roomId || '',
+      summary: event.summary || '',
+      timestamp: event.timestamp || new Date().toISOString()
+    };
+    state.eventLog.unshift(entry);
+    if (state.eventLog.length > 200) state.eventLog.length = 200;
+    UI.appendEventLogEntry(entry, state.eventLogFilter);
   }
 
   function startRefreshLoop() {

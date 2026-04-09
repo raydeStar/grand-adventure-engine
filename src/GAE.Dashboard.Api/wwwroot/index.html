@@ -219,6 +219,7 @@
           <button class="admin-tab" data-admin-tab="tools" type="button">Tools</button>
           <button class="admin-tab" data-admin-tab="llm" type="button">LLM</button>
           <button class="admin-tab" data-admin-tab="registry" type="button">Registry</button>
+          <button class="admin-tab" data-admin-tab="events" type="button">Events</button>
           <button class="admin-tab" data-admin-tab="logs" type="button">AI Logs</button>
           <span class="admin-toolbar-spacer"></span>
           <button class="btn btn-secondary btn-sm" id="btn-seed-demo-admin" type="button">Seed Demo</button>
@@ -655,6 +656,33 @@
                 </div>
               </div>
             </div><!-- /registry-browse-layout -->
+          </div>
+        </div>
+
+        <!-- ═══ EVENTS TAB ═══ -->
+        <div class="admin-tab-content" data-admin-panel="events">
+          <div class="admin-tab-body">
+            <div class="panel">
+              <div class="panel-header-row">
+                <h3>Live Event Log</h3>
+                <div>
+                  <select id="event-log-filter" title="Filter events">
+                    <option value="">All Events</option>
+                    <option value="PlayerMoved">Moves</option>
+                    <option value="CombatStarted">Combat</option>
+                    <option value="PlayerDied">Deaths</option>
+                    <option value="PlayerTalked">Conversations</option>
+                    <option value="QuestUpdated">Quests</option>
+                    <option value="RoomUpdated">Room Changes</option>
+                  </select>
+                  <button class="btn btn-secondary btn-sm" id="btn-event-log-clear" type="button">Clear</button>
+                </div>
+              </div>
+              <p class="panel-hint">Real-time game events streamed via SignalR. Events appear as players act.</p>
+              <div class="event-log-list" id="event-log-list">
+                <div class="empty-state">Waiting for game events...</div>
+              </div>
+            </div>
           </div>
         </div>
 

@@ -22,6 +22,9 @@ public class SignalRGameEventBroadcaster : IGameEventBroadcaster
 
         if (!string.IsNullOrEmpty(gameEvent.RoomId))
             await _hubContext.Clients.Group($"room-{gameEvent.RoomId}").SendAsync("RoomEvent", gameEvent, ct);
+
+        // Always send to the admin feed so the event log panel stays current
+        await _hubContext.Clients.Group("admins").SendAsync("AdminEvent", gameEvent, ct);
     }
 
     public async Task BroadcastActionResultAsync(ActionResult result, string playerId, CancellationToken ct = default)

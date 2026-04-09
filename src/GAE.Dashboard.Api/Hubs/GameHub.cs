@@ -28,4 +28,10 @@ public class GameHub : Hub
     {
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"room-{roomId}");
     }
+
+    /// <summary>Subscribes the caller to the admin event feed (receives all game events).</summary>
+    public async Task JoinAdminFeed()
+    {
+        await Groups.AddToGroupAsync(Context.ConnectionId, "admins");
+    }
 }

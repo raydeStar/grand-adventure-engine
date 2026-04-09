@@ -2020,6 +2020,73 @@ textarea { resize: vertical; min-height: 80px; }
   color: var(--text);
 }
 
+/* ───────────────────── EVENT LOG ───────────────────── */
+
+.event-log-list {
+  max-height: 70vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-family: var(--font-mono, 'Courier New', monospace);
+  font-size: 12px;
+}
+
+.event-log-entry {
+  display: grid;
+  grid-template-columns: 80px 2em 100px 1fr;
+  gap: 0.4rem;
+  align-items: baseline;
+  padding: 0.3rem 0.5rem;
+  border-radius: 3px;
+  border-left: 3px solid transparent;
+  transition: background 0.15s;
+}
+
+.event-log-entry:hover {
+  background: var(--bg-panel);
+}
+
+.event-log-entry[data-event-type="PlayerMoved"]    { border-left-color: #5b9bd5; }
+.event-log-entry[data-event-type="CombatStarted"]  { border-left-color: #e74c3c; }
+.event-log-entry[data-event-type="PlayerDied"]      { border-left-color: #9b59b6; }
+.event-log-entry[data-event-type="PlayerTalked"]    { border-left-color: #2ecc71; }
+.event-log-entry[data-event-type="QuestUpdated"]    { border-left-color: #f39c12; }
+.event-log-entry[data-event-type="RoomUpdated"]     { border-left-color: #95a5a6; }
+.event-log-entry[data-event-type="StoryAdvanced"]   { border-left-color: #7f8fa6; }
+
+.event-log-time {
+  color: var(--dim);
+  white-space: nowrap;
+}
+
+.event-log-icon {
+  text-align: center;
+}
+
+.event-log-player {
+  color: var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.event-log-summary {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-log-entry.fade-in {
+  animation: eventFadeIn 0.3s ease-out;
+}
+
+@keyframes eventFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 /* ───────────────────── DM CONSOLE ───────────────────── */
 
 .dm-console-layout {

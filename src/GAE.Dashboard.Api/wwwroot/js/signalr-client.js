@@ -41,6 +41,7 @@ const GameHub = {
     this.connection.on('PlayerEvent', (evt) => this._emit('playerEvent', evt));
     this.connection.on('RoomEvent', (evt) => this._emit('roomEvent', evt));
     this.connection.on('ActionResult', (result) => this._emit('actionResult', result));
+    this.connection.on('AdminEvent', (evt) => this._emit('adminEvent', evt));
 
     try {
       await this.connection.start();
@@ -85,6 +86,12 @@ const GameHub = {
   async leaveRoomFeed(roomId) {
     if (this.connection?.state === signalR.HubConnectionState.Connected) {
       await this.connection.invoke('LeaveRoomFeed', roomId);
+    }
+  },
+
+  async joinAdminFeed() {
+    if (this.connection?.state === signalR.HubConnectionState.Connected) {
+      await this.connection.invoke('JoinAdminFeed');
     }
   },
 

@@ -281,10 +281,11 @@ public class StubWikiService : IWikiService
         => Task.FromResult<IReadOnlyList<WikiPageSummary>>([]);
 }
 
-/// <summary>Event broadcaster stub — no-op for tests.</summary>
+/// <summary>Event broadcaster stub — captures events for test assertions.</summary>
 public class StubGameEventBroadcaster : IGameEventBroadcaster
 {
     public List<GameEvent> BroadcastedEvents { get; } = [];
+    public List<(ActionResult Result, string PlayerId)> BroadcastedActions { get; } = [];
 
     public Task BroadcastEventAsync(GameEvent gameEvent, CancellationToken ct = default)
     {
@@ -293,5 +294,8 @@ public class StubGameEventBroadcaster : IGameEventBroadcaster
     }
 
     public Task BroadcastActionResultAsync(ActionResult result, string playerId, CancellationToken ct = default)
-        => Task.CompletedTask;
+    {
+        BroadcastedActions.Add((result, playerId));
+        return Task.CompletedTask;
+    }
 }

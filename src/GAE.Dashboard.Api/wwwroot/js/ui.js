@@ -2792,5 +2792,68 @@ const UI = {
     } finally {
       if (goBtn) goBtn.disabled = false;
     }
+  },
+
+  // ─── Event Log ──────────────────────────────────────────
+  _eventTypeIcons: {
+    PlayerMoved: '🚶', CombatStarted: '⚔️', PlayerDied: '💀',
+    PlayerTalked: '💬', QuestUpdated: '📜', RoomUpdated: '🏠',
+    StoryAdvanced: '📖', PlayerCreated: '✨', PlayerRevived: '❤️',
+    CombatEnded: '🏁', NpcSpawned: '👤', NpcDied: '☠️',
+    SystemMessage: '⚙️'
+  },
+
+  clearEventLog() {
+    const list = this.$('event-log-list');
+    if (list) list.innerHTML = '<div class="empty-state">Waiting for game events...</div>';
+  },
+
+  renderEventLog(events, filter) {
+    const list = this.$('event-log-list');
+    if (!list) return;
+    list.innerHTML = '';
+    const filtered = filter ? events.filter(e => e.typeName === filter) : events;
+    if (filtered.length === 0) {
+      list.innerHTML = '<div class="empty-state">No matching events.</div>';
+      return;
+    }
+    for (const entry of filtered) {
+      list.appendChild(this._buildEventLogNode(entry));
+    }
+  },
+
+  appendEventLogEntry(entry, filter) {
+    if (filter && entry.typeName !== filter) return;
+    const list = this.$('event-log-list');
+    if (!list) return;
+    const empty = list.querySelector('.empty-state');
+    if (empty) empty.remove();
+    const node = this._buildEventLogNode(entry);
+    node.classList.add('fade-in');
+    list.prepend(node);
+    // Cap DOM at 200 entries
+    while (list.children.length > 200) list.lastChild.remove();
+  },
+
+  _buildEventLogNode(entry) {
+    const div = document.createElement('div');
+    div.className = 'event-log-entry';
+    div.dataset.eventType = entry.typeName;
+
+    const ts = new Date(entry.timestamp);
+    const timeStr = ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const icon = this._eventTypeIcons[entry.typeName] || '📌';
+
+    div.innerHTML =
+      `<span class="event-log-time">${timeStr}</span>` +
+      `<span class="event-log-icon">${icon}</span>` +
+      `<span class="event-log-player" title="${entry.playerId}">${entry.playerId || '—'}</span>` +
+      `<span class="event-log-summary" title="${this._escapeHtml(entry.summary)}">${this._escapeHtml(entry.summary)}</span>`;
+    return div;
+  },
+
+  _escapeHtml(text) {
+    if (!text) return '';
+    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 };

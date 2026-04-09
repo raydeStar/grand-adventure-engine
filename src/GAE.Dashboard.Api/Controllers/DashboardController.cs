@@ -258,6 +258,10 @@ public class DashboardController : ControllerBase
         var action = _engine.ParseCommand(request.PlayerId, request.Command);
         var result = await _engine.ProcessActionAsync(request.PlayerId, action, ct);
 
+        // Broadcast real-time updates via SignalR
+        await _broadcaster.BroadcastActionResultAsync(result, request.PlayerId, ct);
+        await _broadcaster.BroadcastEventAsync(BuildGameEventFromAction(request.PlayerId, request.Command, result), ct);
+
         // Mirror the result to the player's Discord thread (if they have one)
         if (_discordNotifier is not null)
         {
@@ -1526,6 +1530,39 @@ public class DashboardController : ControllerBase
             Narration = summary,
             Data = data ?? new Dictionary<string, object?>()
         }, ct);
+    }
+
+    private static GameEvent BuildGameEventFromAction(string playerId, string command, Core.Models.ActionResult result)
+    {
+        var eventType = InferEventType(result);
+        return new GameEvent
+        {
+            ActionId = result.ActionId,
+            Type = eventType,
+            PlayerId = playerId,
+            RoomId = result.NewRoom?.Id,
+            Summary = $"[{command}] {result.MechanicalSummary ?? result.Narration?[..Math.Min(result.Narration.Length, 120)] ?? command}",
+            Narration = result.Narration,
+            Data = new Dictionary<string, object?>
+            {
+                ["command"] = command,
+                ["success"] = result.Success,
+                ["mode"] = result.InteractionUpdate?.Mode.ToString()
+            }
+        };
+    }
+
+    private static GameEventType InferEventType(Core.Models.ActionResult result)
+    {
+        if (result.NewRoom is not null) return GameEventType.PlayerMoved;
+        var mode = result.InteractionUpdate?.Mode;
+        if (mode == InteractionMode.Combat) return GameEventType.CombatStarted;
+        if (mode == InteractionMode.Conversation) return GameEventType.PlayerTalked;
+        if (result.MechanicalSummary?.Contains("died", StringComparison.OrdinalIgnoreCase) == true)
+            return GameEventType.PlayerDied;
+        if (result.MechanicalSummary?.Contains("level", StringComparison.OrdinalIgnoreCase) == true)
+            return GameEventType.StoryAdvanced;
+        return GameEventType.StoryAdvanced;
     }
 
     private static InventoryItem BuildRoomItem(RoomFixtureItemRequest request)
