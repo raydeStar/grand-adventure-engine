@@ -1,0 +1,12 @@
+id: haunted-manor
+name: "The Haunting of Ashwood Manor"
+setting: "A crumbling Victorian manor on a fog-shrouded hilltop"
+tone: "Gothic horror with dark humor"
+theme: "Uncovering family secrets"
+plot_beats:
+  - "The front door locks behind you"
+  - "You find a journal hinting at something in the basement"
+  - "The ghost of Lady Ashwood appears and offers a deal"
+  - "The final truth is in the attic"
+starting_room_description: "The grand foyer, all dusty chandeliers and portraits with eyes that seem to follow you."
+max_rooms: 20
