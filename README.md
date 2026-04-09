@@ -1,58 +1,121 @@
+<!-- TODO: Create a banner image (~1200x400) showing a fantasy tavern scene
+     with a Discord chat overlay on one side and dice/character sheet on the other.
+     Style: pixel art or stylized fantasy illustration. -->
+<!-- ![Grand Adventure Engine Banner](docs/images/banner.png) -->
+
 # Grand Adventure Engine
 
-A Discord-based, AI-narrated, multiplayer choose-your-own-adventure RPG engine.
+**A multiplayer text RPG that lives in your Discord server — powered by AI storytelling and real game mechanics.**
 
-## Architecture
+You and your friends play a fantasy adventure right inside Discord. An AI narrator describes the world around you, reacts to your choices, and brings characters to life — but the actual game rules (combat, loot, skill checks) are handled by a fair, consistent engine under the hood. The AI tells the story. The math keeps it honest.
 
-- **GAE.Core** — Domain models and interfaces (zero external dependencies)
-- **GAE.Engine** — Deterministic game engine (rules, probability, state)
-- **GAE.Narrator** — LLM integration via LM Studio
-- **GAE.WikiSync** — Wiki.js GraphQL client for persistent world state
-- **GAE.Discord** — Discord.NET bot
-- **GAE.Dashboard.Api** — ASP.NET Core Web API + SignalR hub + embedded browser dashboard
+<!-- TODO: Create a screenshot (~800x500) of a Discord thread showing a player
+     exploring a room, with the bot narrating the scene and presenting choices.
+     Capture a real session or mock one up in Discord. -->
+<!-- ![Gameplay Screenshot](docs/images/gameplay-discord.png) -->
 
-## Prerequisites
+---
 
-- .NET 10 SDK
-- Node.js 20+
-- LM Studio (local LLM)
-- Wiki.js (via Docker or standalone)
-- Discord Bot token
+## What Can You Do?
 
-## Quick Start
+**Create a Character by Just Talking** — No spreadsheets. No stat calculators. Just tell the game who you want to be — *"I want to be a sneaky goblin alchemist"* — and it builds your full character from there. Race, class, stats, backstory, starting gear, all of it.
+
+**Explore and Fight** — Wander through rooms, talk to characters, pick up items, and get into turn-based battles with HP, magic, and gold on the line. Die? You wake up at the tavern, a little poorer but ready to try again.
+
+**Your World, Your Story** — Every player gets their own version of the world. If you loot a chest or defeat a monster, that's *your* experience — it doesn't change things for other players.
+
+**Take On Quests** — Hunt monsters, deliver packages, discover hidden places. The game tracks your progress and rewards you when you're done.
+
+**Meet Characters Who Feel Alive** — NPCs remember how you've treated them. Some are friendly. Some are not. How they act depends on the game rules — how they *talk* depends on the AI.
+
+<!-- TODO: Create a screenshot (~800x500) of the browser dashboard showing
+     the admin view with player state, NPC panels, or quest tracking visible.
+     Use the running dashboard at localhost:8181 with the admin account. -->
+<!-- ![Dashboard Screenshot](docs/images/dashboard.png) -->
+
+---
+
+## How It Works
+
+> **The AI is the storyteller, not the referee.**
+
+The AI's job is to make the game feel alive — describing scenes, voicing characters, reacting to the unexpected. But it never decides whether your attack hits or how much gold you find. That's all handled by the game engine, the same way every time, for every player. Fair and square.
+
+The game world is stored in a wiki, so game masters can edit lore, characters, and quests from a browser. There's also an admin dashboard for managing players and inspecting the game in real time.
+
+*"The architecture is sound. The rules are fair. The dice are ready."* — Sir Thaddeus
+
+---
+
+## Want to Run Your Own?
+
+This is a self-hosted project — you run it on your own machine or server. Here's what you'll need:
+
+| What | Why |
+|---|---|
+| [.NET 10 SDK](https://dotnet.microsoft.com/) | Runs the game engine |
+| [Node.js 20+](https://nodejs.org/) | Powers the dashboard and tests |
+| [LM Studio](https://lmstudio.ai/) | Runs the AI locally on your machine (free, private, no API keys) |
+| [Docker](https://www.docker.com/) | Runs the wiki database |
+| A Discord bot token | Connects the game to your Discord server ([how to get one](https://discord.com/developers/applications)) |
+
+### Setup
 
 ```bash
-# Build
+# Build the project
 dotnet build GrandAdventureEngine.slnx
 
-# Run tests
+# Start everything (wiki + dashboard)
+powershell -ExecutionPolicy Bypass -File .\scripts\reset-docker-stack.ps1
+```
+
+Once it's running, open your browser to `http://localhost:8181` for the dashboard and `http://localhost:3000` for the wiki. If those ports are already in use, the script picks new ones and tells you.
+
+### Default Logins
+
+| Role | Username | Password |
+|---|---|---|
+| Player | `user` | `GAE-User-Local!123` |
+| Game Master | `admin` | `GAE-Admin-Local!123` |
+
+---
+
+## For Developers
+
+<details>
+<summary>Architecture & technical details</summary>
+
+### Project Structure
+
+| Module | What It Does |
+|---|---|
+| **GAE.Core** | Game data models and shared contracts (no external dependencies) |
+| **GAE.Engine** | The game rules — combat, loot, skill checks, state management |
+| **GAE.Narrator** | Connects to your local AI (LM Studio) for narration |
+| **GAE.WikiSync** | Pulls world data from Wiki.js via its API |
+| **GAE.Discord** | The Discord bot that players interact with |
+| **GAE.Dashboard.Api** | Web dashboard with real-time updates |
+
+### Running Tests
+
+```bash
+# Unit & integration tests
 dotnet test
 
-# Start the local stack
-powershell -ExecutionPolicy Bypass -File .\scripts\reset-docker-stack.ps1
-
-# Browser E2E
+# Browser-based end-to-end tests
 npm run test:e2e
 ```
 
-`reset-docker-stack.ps1` publishes the dashboard on `http://localhost:8181` and Wiki.js on `http://localhost:3000` by default, but will automatically move either service to the next free host port if those ports are already busy.
+### More Docs
 
-## Browser Dashboard
+- [Operator Guide](docs/dashboard-ops.md) — Dashboard admin workflows, environment variables, manual operations
 
-- Local URL: `http://localhost:8181` by default. Check the `reset-docker-stack.ps1` output for the actual URL if that port is already occupied.
-- Embedded in `src/GAE.Dashboard.Api/wwwroot`
-- Supports protected user and admin flows, live state inspection, manual mutation tools, and Playwright visual regression coverage
+</details>
 
-## Operator Guide
+---
 
-- Manual browser and PowerShell workflows: [docs/dashboard-ops.md](docs/dashboard-ops.md)
-- Default local credentials:
-	- `user` / `GAE-User-Local!123`
-	- `admin` / `GAE-Admin-Local!123`
+## License
 
-## Philosophy
+<!-- TODO: Choose and add a license (MIT, GPL, etc.) -->
 
-> The LLM is the storyteller, not the referee. All mechanical outcomes are computed by deterministic C# code.
-> The LLM narrates what the engine already decided. The wiki is the source of truth for persistent world state.
-
-*"The architecture is sound. The rules are fair. The dice are ready."* — Sir Thaddeus
+*License not yet specified.*
