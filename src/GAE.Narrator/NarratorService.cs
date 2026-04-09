@@ -3694,6 +3694,9 @@ public class NarratorService : INarratorService
             - Every ~5 nodes, set is_save_point to true (natural story break points).
             - NEVER ask the player questions in the narration. Present the scene, offer choices.
             - NEVER mention game mechanics, prompts, or that you are an AI.
+            - You MAY end the story by setting "ending" to one of: "victory", "tragedy", "cliffhanger", "open".
+              When an ending is set, write a FINAL scene with no choices (empty choices array).
+              Only end the story when the narrative arc has reached a natural conclusion.
 
             Respond ONLY with a JSON object in this exact format:
             {
@@ -3707,11 +3710,14 @@ public class NarratorService : INarratorService
               "health_change": null,
               "items_gained": [],
               "items_lost": [],
-              "required_items": {}
+              "required_items": {},
+              "ending": null
             }
 
             The "required_items" field is an object mapping choice IDs to arrays of item names required
             to see that choice. E.g. { "unlock-door": ["Rusty Key"] }. Omit or leave empty if no gating.
+            The "ending" field should be null unless the story is over. Set to "victory", "tragedy",
+            "cliffhanger", or "open" only for the FINAL node.
             """;
 
         var isOpening = choiceText is null;
@@ -3733,6 +3739,7 @@ public class NarratorService : INarratorService
                 {historyBlock}
 
                 PLAYER'S CHOICE: "{choiceText}"
+                CHOICES MADE SO FAR: {cyoa?.ChoiceHistory.Count ?? 0}
 
                 Generate the next scene based on what the player chose. Continue the story naturally.
                 The consequences of their choice should be clear in the narration.
@@ -3747,7 +3754,7 @@ public class NarratorService : INarratorService
             if (json is not null)
             {
                 var dto = System.Text.Json.JsonSerializer.Deserialize<CyoaNodeDto>(json, _jsonOptions);
-                if (dto is not null && dto.Choices.Count >= 2)
+                if (dto is not null && (dto.Choices.Count >= 2 || !string.IsNullOrEmpty(dto.Ending)))
                 {
                     return MapDtoToNode(dto, cyoa?.CurrentNode);
                 }
@@ -3776,7 +3783,8 @@ public class NarratorService : INarratorService
             IsSavePoint = dto.IsSavePoint,
             HealthChange = dto.HealthChange,
             ItemsGained = dto.ItemsGained ?? [],
-            ItemsLost = dto.ItemsLost ?? []
+            ItemsLost = dto.ItemsLost ?? [],
+            Ending = dto.Ending
         };
 
         foreach (var c in dto.Choices)
@@ -3828,6 +3836,7 @@ public class NarratorService : INarratorService
         public List<string>? ItemsGained { get; set; }
         public List<string>? ItemsLost { get; set; }
         public Dictionary<string, List<string>>? RequiredItems { get; set; }
+        public string? Ending { get; set; }
     }
 
     private class CyoaChoiceDto

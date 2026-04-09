@@ -33,6 +33,9 @@ public class CyoaState
 
     /// <summary>The narration text of the current node (displayed with choices).</summary>
     public string CurrentNarration { get; set; } = string.Empty;
+
+    /// <summary>How many times the player has died and been rewound to a save point.</summary>
+    public int DeathCount { get; set; }
 }
 
 /// <summary>

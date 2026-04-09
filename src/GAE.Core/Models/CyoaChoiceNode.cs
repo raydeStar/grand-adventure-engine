@@ -30,6 +30,12 @@ public class CyoaChoiceNode
 
     /// <summary>Items the player loses at this node.</summary>
     public List<string> ItemsLost { get; set; } = [];
+
+    /// <summary>
+    /// Ending signal from the narrator — null if the story continues.
+    /// Values: "victory", "tragedy", "cliffhanger", "open".
+    /// </summary>
+    public string? Ending { get; set; }
 }
 
 /// <summary>

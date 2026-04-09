@@ -4368,6 +4368,7 @@ public class GameEngine : IGameEngine
         // Check for death — rewind to last save if available
         if (cyoa.Health == CyoaHealthLevel.Dead)
         {
+            cyoa.DeathCount++;
             var deathNarration = node.NarrationText;
 
             if (cyoa.SavePoints.Count > 0)
@@ -4406,6 +4407,26 @@ public class GameEngine : IGameEngine
             };
             await PersistInteractionStoryEntry(player, action, deathResult, ct);
             return deathResult;
+        }
+
+        // Check for ending signal from narrator
+        if (!string.IsNullOrEmpty(node.Ending))
+        {
+            return await ProcessCyoaEndingAsync(player, action, node, ct);
+        }
+
+        // Forced ending: hint narrator to wrap up near max node count
+        if (cyoa.ChoiceHistory.Count >= CyoaMaxNodes)
+        {
+            // Force-end the story — the narrator had enough time
+            var forceNode = new CyoaChoiceNode
+            {
+                NodeId = $"forced-ending-{Guid.NewGuid():N}",
+                NarrationText = node.NarrationText + "\n\n*And so the story reaches its end — not with a crescendo, but with the quiet turning of a final page.*",
+                Ending = "open"
+            };
+            ApplyCyoaNode(player, forceNode);
+            return await ProcessCyoaEndingAsync(player, action, forceNode, ct);
         }
 
         var narrationWithChoices = FormatCyoaNarration(node.NarrationText, cyoa.CurrentChoices);
@@ -4530,6 +4551,93 @@ public class GameEngine : IGameEngine
         // Discard choice history after the save point
         if (save.ChoiceCountAtSave < cyoa.ChoiceHistory.Count)
             cyoa.ChoiceHistory.RemoveRange(save.ChoiceCountAtSave, cyoa.ChoiceHistory.Count - save.ChoiceCountAtSave);
+    }
+
+    /// <summary>Maximum choices before the engine forces the story to end.</summary>
+    private const int CyoaMaxNodes = 30;
+
+    /// <summary>
+    /// Handles a CYOA story ending — shows final narration, adventure summary, and cleans up the session.
+    /// </summary>
+    private async Task<ActionResult> ProcessCyoaEndingAsync(PlayerCharacter player, GameAction action, CyoaChoiceNode endingNode, CancellationToken ct)
+    {
+        var cyoa = player.CyoaState!;
+        cyoa.CurrentChoices.Clear();
+
+        var endingEmoji = endingNode.Ending switch
+        {
+            "victory" => "🏆",
+            "tragedy" => "💔",
+            "cliffhanger" => "⏳",
+            _ => "📖"
+        };
+
+        var summary = BuildCyoaSummary(cyoa, endingNode.Ending ?? "open");
+
+        var previousRoom = cyoa.PreviousRoomId;
+        var choiceCount = cyoa.ChoiceHistory.Count;
+
+        // Clean up — return to normal state
+        player.GameMode = GameMode.FullRpg;
+        player.CyoaState = null;
+        player.Interaction.Reset();
+        player.CurrentRoomId = previousRoom;
+
+        _logger.LogInformation("Player {PlayerId} completed CYOA ({Ending}) after {Choices} choices.", player.Id, endingNode.Ending, choiceCount);
+
+        var narration = $"{endingNode.NarrationText}\n\n{endingEmoji} **— The End —**\n\n{summary}";
+
+        await _stateManager.SavePlayerAsync(player, ct);
+        var result = new ActionResult
+        {
+            ActionId = action.Id,
+            Success = true,
+            MechanicalSummary = $"{endingEmoji} Adventure complete ({endingNode.Ending}). {choiceCount} choices made.",
+            Narration = narration,
+            StateChanges =
+            [
+                new StateChange
+                {
+                    EntityType = "Player", EntityId = player.Id,
+                    Property = "GameMode", OldValue = nameof(GameMode.ChooseYourOwnAdventure), NewValue = nameof(GameMode.FullRpg)
+                }
+            ],
+            InteractionUpdate = new InteractionUpdate { Mode = InteractionMode.Explore }
+        };
+        await PersistInteractionStoryEntry(player, action, result, ct);
+        return result;
+    }
+
+    /// <summary>
+    /// Builds a short adventure summary for the player at the end of a CYOA session.
+    /// </summary>
+    private static string BuildCyoaSummary(CyoaState cyoa, string endingType)
+    {
+        var sb = new System.Text.StringBuilder("📊 **Adventure Summary**\n");
+        sb.AppendLine($"- **Choices made:** {cyoa.ChoiceHistory.Count}");
+
+        var uniqueNodes = cyoa.ChoiceHistory.Select(c => c.Node).Distinct().Count();
+        sb.AppendLine($"- **Scenes visited:** {uniqueNodes}");
+
+        if (cyoa.Inventory.Count > 0)
+            sb.AppendLine($"- **Items collected:** {string.Join(", ", cyoa.Inventory)}");
+
+        if (cyoa.DeathCount > 0)
+            sb.AppendLine($"- **Deaths:** {cyoa.DeathCount}");
+
+        sb.AppendLine($"- **Save points used:** {cyoa.SavePoints.Count}");
+
+        var endingLabel = endingType switch
+        {
+            "victory" => "Victory 🏆",
+            "tragedy" => "Tragedy 💔",
+            "cliffhanger" => "Cliffhanger ⏳",
+            "open" => "Open Ending 📖",
+            _ => endingType
+        };
+        sb.AppendLine($"- **Ending:** {endingLabel}");
+
+        return sb.ToString().TrimEnd();
     }
 
     /// <summary>
