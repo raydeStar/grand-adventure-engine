@@ -228,6 +228,9 @@ public class StubNarratorService : INarratorService
         "up" => "down", "down" => "up",
         _ => "back"
     };
+
+    public Task<(string Narration, string Summary)> NarrateBlindAdventureConclusionAsync(StorylineContext storyline, IReadOnlyList<string> visitedRooms, IReadOnlyList<string> keyEvents, CancellationToken ct = default)
+        => Task.FromResult(("The adventure ends.", $"Explored {visitedRooms.Count} locations."));
 }
 
 /// <summary>Wiki stub — records calls without hitting Wiki.js.</summary>

@@ -228,4 +228,27 @@ public class CommandParserTests
         Assert.Equal(ActionType.AbandonQuest, action.Type);
         Assert.Equal(expectedTarget, action.Target);
     }
+
+    [Theory]
+    [InlineData("adventure start haunted-manor", "haunted-manor")]
+    [InlineData("blind start dark_forest", "dark_forest")]
+    [InlineData("ADVENTURE START my-story-01", "my-story-01")]
+    public void Parse_AdventureStart_ReturnsAdventureStartWithId(string input, string expectedId)
+    {
+        var action = _parser.Parse("player1", input);
+        Assert.Equal(ActionType.AdventureStart, action.Type);
+        Assert.Equal(expectedId, action.Target);
+    }
+
+    [Theory]
+    [InlineData("adventure end")]
+    [InlineData("blind end")]
+    [InlineData("adventure stop")]
+    [InlineData("adventure quit")]
+    [InlineData("blind finish")]
+    public void Parse_AdventureEnd_ReturnsAdventureEnd(string input)
+    {
+        var action = _parser.Parse("player1", input);
+        Assert.Equal(ActionType.AdventureEnd, action.Type);
+    }
 }

@@ -463,6 +463,43 @@ public class NarratorService : INarratorService
         _ => 50
     };
 
+    /// <inheritdoc />
+    public async Task<(string Narration, string Summary)> NarrateBlindAdventureConclusionAsync(
+        StorylineContext storyline,
+        IReadOnlyList<string> visitedRooms,
+        IReadOnlyList<string> keyEvents,
+        CancellationToken ct = default)
+    {
+        var systemPrompt = Prompts.BlindAdventurePrompts.BuildAdventureConclusionSystemPrompt();
+        var userPrompt = Prompts.BlindAdventurePrompts.BuildAdventureConclusionUserPrompt(
+            storylineName: storyline.Name,
+            setting: storyline.Setting,
+            tone: storyline.Tone,
+            theme: storyline.Theme,
+            visitedRooms: visitedRooms,
+            keyEvents: keyEvents);
+
+        try
+        {
+            var json = await CompletionAsync(systemPrompt, userPrompt, ct,
+                maxTokens: 512, operation: "blind-adventure-conclusion");
+            var result = JsonSerializer.Deserialize<BlindAdventureConclusionResult>(json, _jsonOptions);
+            if (result is not null && !string.IsNullOrWhiteSpace(result.Narration))
+                return (result.Narration, result.Summary ?? "The adventure has ended.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Blind adventure conclusion narration failed, using fallback");
+        }
+
+        var fallbackJson = Prompts.BlindAdventurePrompts.BuildAdventureConclusionFallback(
+            storyline.Name, storyline.Theme, keyEvents);
+        var fallback = JsonSerializer.Deserialize<BlindAdventureConclusionResult>(fallbackJson, _jsonOptions);
+        return (
+            fallback?.Narration ?? "The adventure ends — and with it, a chapter of your story closes.",
+            fallback?.Summary ?? "The adventure has ended.");
+    }
+
     public async Task<Room> GenerateDungeonEntranceAsync(string dungeonId, int playerLevel, Room sourceRoom, CancellationToken ct = default)
     {
         // Scale difficulty: easy (1-3), medium (4-6), hard (7-9), deadly (10+)
@@ -2787,6 +2824,12 @@ public class NarratorService : INarratorService
         public string? Name { get; set; }
         public string? Description { get; set; }
         public string? Type { get; set; }
+    }
+
+    private class BlindAdventureConclusionResult
+    {
+        public string? Narration { get; set; }
+        public string? Summary { get; set; }
     }
 
     private class GeneratedNpc

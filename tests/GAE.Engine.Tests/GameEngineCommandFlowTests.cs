@@ -879,5 +879,8 @@ public class GameEngineCommandFlowTests
 
         public Task<Room> GenerateBlindAdventureRoomAsync(string roomId, string direction, Room sourceRoom, StorylineContext storyline, IReadOnlyList<string> visitedRoomSummaries, string? nextPlotBeat, int roomsRemaining, CancellationToken ct = default)
             => throw new NotSupportedException();
+
+        public Task<(string Narration, string Summary)> NarrateBlindAdventureConclusionAsync(StorylineContext storyline, IReadOnlyList<string> visitedRooms, IReadOnlyList<string> keyEvents, CancellationToken ct = default)
+            => Task.FromResult(("The adventure ends.", "A brief tale."));
     }
 }

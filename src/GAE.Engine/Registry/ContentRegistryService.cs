@@ -20,6 +20,7 @@ public class ContentRegistryService : IContentRegistryService
     public IContentRegistry<QuestDefinition> Quests { get; } = new ContentRegistry<QuestDefinition>();
     public IContentRegistry<LoreEntry> LoreEntries { get; } = new ContentRegistry<LoreEntry>();
     public IContentRegistry<NarratorPreset> NarratorPresets { get; } = new ContentRegistry<NarratorPreset>();
+    public IContentRegistry<StorylineContext> Storylines { get; } = new ContentRegistry<StorylineContext>();
 
     public ContentRegistryService(ILogger<ContentRegistryService> logger)
     {

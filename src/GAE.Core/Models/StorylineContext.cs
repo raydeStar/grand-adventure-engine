@@ -1,3 +1,5 @@
+using GAE.Core.Registry;
+
 namespace GAE.Core.Models;
 
 /// <summary>
@@ -5,10 +7,11 @@ namespace GAE.Core.Models;
 /// This is intentionally small so narrator-driven room generation can stay coherent
 /// without locking the player into a rigid quest script.
 /// </summary>
-public class StorylineContext
+public class StorylineContext : IRegistryEntry
 {
     public string Id { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
     public string Setting { get; set; } = string.Empty;
     public string Tone { get; set; } = string.Empty;
     public string Theme { get; set; } = string.Empty;

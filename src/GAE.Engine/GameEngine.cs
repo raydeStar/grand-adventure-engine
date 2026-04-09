@@ -2,6 +2,7 @@ using System.Text;
 using GAE.Core.Interfaces;
 using GAE.Core.Models;
 using GAE.Core.Registry;
+using GAE.Engine.BlindAdventure;
 using GAE.Engine.Configuration;
 using GAE.Engine.Worlds;
 using Microsoft.Extensions.Logging;
@@ -22,6 +23,7 @@ public class GameEngine : IGameEngine
     private readonly IRealmTravelService? _realmTravelService;
     private readonly IWorldRepository? _worldRepository;
     private readonly LoreTracker? _loreTracker;
+    private readonly BlindAdventureService? _blindAdventureService;
 
 
     public GameEngine(
@@ -36,7 +38,8 @@ public class GameEngine : IGameEngine
         QuestTracker? questTracker = null,
         IRealmTravelService? realmTravelService = null,
         IWorldRepository? worldRepository = null,
-        LoreTracker? loreTracker = null)
+        LoreTracker? loreTracker = null,
+        BlindAdventureService? blindAdventureService = null)
     {
         _stateManager = stateManager;
         _dice = dice;
@@ -50,6 +53,7 @@ public class GameEngine : IGameEngine
         _realmTravelService = realmTravelService;
         _worldRepository = worldRepository;
         _loreTracker = loreTracker;
+        _blindAdventureService = blindAdventureService;
     }
 
     public GameAction ParseCommand(string playerId, string rawInput)
@@ -147,6 +151,8 @@ public class GameEngine : IGameEngine
             ActionType.Narrator => ProcessNarratorList(player, action),
             ActionType.SetNarrator => ProcessSetNarrator(player, action),
             ActionType.AskNarrator => await ProcessAskNarratorAsync(player, action, ct),
+            ActionType.AdventureStart => await ProcessAdventureStartAsync(player, action, ct),
+            ActionType.AdventureEnd => await ProcessAdventureEndAsync(player, action, ct),
             _ => await ProcessFreeFormActionAsync(player, action, ct)
         };
 
@@ -2510,6 +2516,7 @@ public class GameEngine : IGameEngine
             InteractionMode.Conversation => await ProcessConversationTurnAsync(player, action, ct),
             InteractionMode.Combat => await ProcessCombatTurnAsync(player, action, ct),
             InteractionMode.Trading => await ProcessTradingTurnAsync(player, action, ct),
+            InteractionMode.BlindAdventure => ProcessBlindAdventureTurn(player, action),
             _ => null
         };
     }
@@ -4079,6 +4086,79 @@ public class GameEngine : IGameEngine
             MechanicalSummary = "\U0001f52e **The Narrator speaks:**",
             Narration = guidance
         };
+    }
+
+    private async Task<ActionResult> ProcessAdventureStartAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
+    {
+        if (_blindAdventureService is null)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "Blind adventures are not available." };
+
+        if (player.BlindAdventure is not null)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "You are already on an adventure. End it first with `adventure end`." };
+
+        var storylineId = action.Target;
+        if (string.IsNullOrWhiteSpace(storylineId))
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "Specify a storyline: `adventure start <storyline-id>`." };
+
+        // Look up the storyline from the content registry
+        var storyline = _registry?.GetStoryline(storylineId);
+        if (storyline is null)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"Unknown storyline: **{storylineId}**." };
+
+        var (startingRoom, narration) = await _blindAdventureService.StartAdventureAsync(player, storyline, ct);
+
+        return new ActionResult
+        {
+            ActionId = action.Id,
+            Success = true,
+            MechanicalSummary = $"⚔️ **Blind Adventure started:** {storyline.Name}",
+            Narration = narration,
+            NewRoom = startingRoom,
+            StateChanges = [new StateChange
+            {
+                EntityType = "Player", EntityId = player.Id,
+                Property = "BlindAdventure", OldValue = null, NewValue = storyline.Id
+            }],
+            InteractionUpdate = new InteractionUpdate { Mode = InteractionMode.BlindAdventure }
+        };
+    }
+
+    private async Task<ActionResult> ProcessAdventureEndAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
+    {
+        if (_blindAdventureService is null || player.BlindAdventure is null)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "You are not on a blind adventure." };
+
+        var (narration, summary, finalSession) = await _blindAdventureService.EndAdventureAsync(player, ct);
+
+        var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
+
+        return new ActionResult
+        {
+            ActionId = action.Id,
+            Success = true,
+            MechanicalSummary = $"📖 **Adventure Complete** — {summary}\n🗺️ Rooms explored: {finalSession.VisitedRoomIds.Count} | Events: {finalSession.KeyEvents.Count}",
+            Narration = narration,
+            NewRoom = room,
+            StateChanges = [new StateChange
+            {
+                EntityType = "Player", EntityId = player.Id,
+                Property = "BlindAdventure", OldValue = finalSession.Storyline.Id, NewValue = null
+            }],
+            InteractionUpdate = new InteractionUpdate { Mode = InteractionMode.Explore }
+        };
+    }
+
+    /// <summary>
+    /// During a blind adventure, most commands pass through to normal processing.
+    /// Only AdventureEnd is intercepted; everything else (Move, Look, Take, etc.) works normally.
+    /// </summary>
+    private static ActionResult? ProcessBlindAdventureTurn(PlayerCharacter player, GameAction action)
+    {
+        // AdventureEnd is routed through the main switch, not intercepted here
+        // All other commands (Move, Look, Attack, Talk, etc.) fall through to normal processing
+        _ = player;
+        _ = action;
+        return null;
     }
 
     private static ActionResult ProcessHelp(GameAction action)

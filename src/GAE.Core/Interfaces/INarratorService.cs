@@ -63,6 +63,17 @@ public interface INarratorService
         string? nextPlotBeat, int roomsRemaining, CancellationToken ct = default);
 
     /// <summary>
+    /// Narrates the conclusion of a Blind Adventure session.
+    /// Returns a (narration, summary) tuple: narration is the dramatic ending,
+    /// summary is a concise recap of achievements.
+    /// </summary>
+    Task<(string Narration, string Summary)> NarrateBlindAdventureConclusionAsync(
+        StorylineContext storyline,
+        IReadOnlyList<string> visitedRooms,
+        IReadOnlyList<string> keyEvents,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Generates a dungeon entrance room scaled to the player's level.
     /// The room will have environment tags like "dungeon", "generated_dungeon", "difficulty_X"
     /// so that subsequent GenerateRoomAsync calls maintain dungeon theming.

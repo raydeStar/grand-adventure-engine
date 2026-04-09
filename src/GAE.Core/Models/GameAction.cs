@@ -51,5 +51,7 @@ public enum ActionType
     Narrator,
     SetNarrator,
     AskNarrator,
+    AdventureStart,
+    AdventureEnd,
     Unknown
 }

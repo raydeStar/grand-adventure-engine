@@ -51,5 +51,6 @@ public enum InteractionMode
     Combat,
     Trading,
     Stealth,
-    Event
+    Event,
+    BlindAdventure
 }

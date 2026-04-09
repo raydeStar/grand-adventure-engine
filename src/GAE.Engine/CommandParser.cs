@@ -368,6 +368,20 @@ public partial class CommandParser
             return action;
         }
 
+        // Adventure — "adventure start <id>", "adventure end", "blind start <id>", etc.
+        var adventureStartMatch = AdventureStartRegex().Match(input);
+        if (adventureStartMatch.Success)
+        {
+            action.Type = ActionType.AdventureStart;
+            action.Target = adventureStartMatch.Groups["id"].Value.Trim();
+            return action;
+        }
+        if (AdventureEndRegex().IsMatch(input))
+        {
+            action.Type = ActionType.AdventureEnd;
+            return action;
+        }
+
         // Help
         if (HelpRegex().IsMatch(input))
         {
@@ -532,4 +546,10 @@ public partial class CommandParser
 
     [GeneratedRegex(@"^(?:hint|hints|guidance|what\s+(?:should|do)\s+I\s+do|where\s+(?:should|do)\s+I\s+go|what(?:'s| is)\s+next)$", RegexOptions.IgnoreCase)]
     private static partial Regex BareHintRegex();
+
+    [GeneratedRegex(@"^(?:adventure|blind)\s+start\s+(?<id>[a-zA-Z0-9_-]+)$", RegexOptions.IgnoreCase)]
+    private static partial Regex AdventureStartRegex();
+
+    [GeneratedRegex(@"^(?:adventure|blind)\s+(?:end|stop|quit|finish)$", RegexOptions.IgnoreCase)]
+    private static partial Regex AdventureEndRegex();
 }

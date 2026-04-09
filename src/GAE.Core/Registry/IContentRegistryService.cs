@@ -13,6 +13,7 @@ public interface IContentRegistryService
     IContentRegistry<QuestDefinition> Quests { get; }
     IContentRegistry<LoreEntry> LoreEntries { get; }
     IContentRegistry<NarratorPreset> NarratorPresets { get; }
+    IContentRegistry<StorylineContext> Storylines { get; }
 
     /// <summary>Get the maximum improvised spell power level a character can attempt.</summary>
     int GetImprovisedSpellCap(string className, int level);
@@ -22,6 +23,9 @@ public interface IContentRegistryService
 
     /// <summary>Validate whether a player can cast a registered spell.</summary>
     SpellValidationResult ValidateSpellCast(string spellIdOrName, string playerClass, int playerLevel, int playerMp);
+
+    /// <summary>Look up a storyline by ID or name.</summary>
+    StorylineContext? GetStoryline(string idOrName) => Storylines.GetById(idOrName) ?? Storylines.FindByName(idOrName);
 }
 
 public class SpellValidationResult

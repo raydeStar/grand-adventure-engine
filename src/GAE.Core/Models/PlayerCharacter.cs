@@ -37,6 +37,9 @@ public class PlayerCharacter
     // Interaction state
     public InteractionState Interaction { get; set; } = new();
 
+    /// <summary>Active Blind Adventure session, or null if not in one.</summary>
+    public BlindAdventureSession? BlindAdventure { get; set; }
+
     // Equipment and inventory
     public EquipmentLoadout Equipment { get; set; } = new();
     public List<InventoryItem> Inventory { get; set; } = [];
