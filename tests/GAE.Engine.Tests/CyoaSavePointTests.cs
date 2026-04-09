@@ -709,6 +709,12 @@ public class CyoaSavePointTests
         var narrator = new Mock<INarratorService>();
         narrator.Setup(s => s.NarrateActionAsync(It.IsAny<NarratorContext>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("Narrated.");
+        narrator.Setup(s => s.GenerateCyoaDeathNarrationAsync(
+                It.IsAny<PlayerCharacter>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .Returns<PlayerCharacter, string, bool, CancellationToken>((_, scene, _, _) => Task.FromResult(scene));
+        narrator.Setup(s => s.GenerateCyoaEndingNarrationAsync(
+                It.IsAny<PlayerCharacter>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("And so the story ends.");
         narrator.Setup(s => s.GenerateCyoaNodeAsync(
                 It.IsAny<PlayerCharacter>(), null,
                 It.IsAny<IReadOnlyList<CyoaChoiceRecord>>(), It.IsAny<CancellationToken>()))

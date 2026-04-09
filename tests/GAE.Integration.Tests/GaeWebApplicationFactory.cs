@@ -234,6 +234,12 @@ public class StubNarratorService : INarratorService
 
     public Task<CyoaChoiceNode> GenerateCyoaNodeAsync(PlayerCharacter player, string? choiceText, IReadOnlyList<CyoaChoiceRecord> recentHistory, CancellationToken ct = default)
         => throw new NotSupportedException();
+
+    public Task<string> GenerateCyoaDeathNarrationAsync(PlayerCharacter player, string deathSceneNarration, bool hasCheckpoint, CancellationToken ct = default)
+        => Task.FromResult("The darkness takes you.");
+
+    public Task<string> GenerateCyoaEndingNarrationAsync(PlayerCharacter player, string endingType, string finalSceneNarration, string adventureSummary, CancellationToken ct = default)
+        => Task.FromResult("And so the story ends.");
 }
 
 /// <summary>Wiki stub — records calls without hitting Wiki.js.</summary>

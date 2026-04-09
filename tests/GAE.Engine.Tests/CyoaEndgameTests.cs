@@ -431,6 +431,12 @@ public class CyoaEndgameTests
         var narrator = new Mock<INarratorService>();
         narrator.Setup(s => s.NarrateActionAsync(It.IsAny<NarratorContext>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("Narrated.");
+        narrator.Setup(s => s.GenerateCyoaDeathNarrationAsync(
+                It.IsAny<PlayerCharacter>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("The darkness takes you.");
+        narrator.Setup(s => s.GenerateCyoaEndingNarrationAsync(
+                It.IsAny<PlayerCharacter>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("And so your story concludes.");
         narrator.Setup(s => s.GenerateCyoaNodeAsync(
                 It.IsAny<PlayerCharacter>(), null,
                 It.IsAny<IReadOnlyList<CyoaChoiceRecord>>(), It.IsAny<CancellationToken>()))

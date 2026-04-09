@@ -3673,9 +3673,7 @@ public class NarratorService : INarratorService
         var inventoryList = cyoa?.Inventory.Count > 0
             ? string.Join(", ", cyoa.Inventory)
             : "nothing";
-        var historyBlock = recentHistory.Count > 0
-            ? string.Join("\n", recentHistory.TakeLast(5).Select(h => $"- At [{h.Node}]: chose \"{h.ChoiceText}\""))
-            : "This is the beginning of the story.";
+        var historyBlock = BuildCyoaStoryContext(recentHistory);
 
         var systemPrompt = $$"""
             You are the NARRATOR of a Choose Your Own Adventure story.
@@ -3824,6 +3822,174 @@ public class NarratorService : INarratorService
             ]
         };
     }
+
+    /// <summary>
+    /// Builds condensed story context from choice history. For short histories (&lt;= 8 choices)
+    /// every choice is listed. For longer histories the early choices are summarized and only
+    /// the last 5 are shown individually, keeping token count manageable.
+    /// </summary>
+    internal static string BuildCyoaStoryContext(IReadOnlyList<CyoaChoiceRecord> history)
+    {
+        if (history.Count == 0)
+            return "This is the beginning of the story.";
+
+        const int recentWindow = 5;
+        const int summaryThreshold = 8;
+
+        if (history.Count <= summaryThreshold)
+            return string.Join("\n", history.Select(h => $"- At [{h.Node}]: chose \"{h.ChoiceText}\""));
+
+        // Summarize older choices, show recent ones in detail
+        var olderCount = history.Count - recentWindow;
+        var olderChoices = history.Take(olderCount);
+        var recentChoices = history.Skip(olderCount);
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"EARLIER STORY ({olderCount} choices summarized):");
+        sb.AppendLine($"- The adventure began at [{history[0].Node}] and progressed through {olderCount} scenes.");
+        // Highlight a few key waypoints from the older history
+        var waypoints = olderChoices
+            .Where((_, i) => i == 0 || (i + 1) % 5 == 0 || i == olderCount - 1)
+            .Select(h => $"  \"{h.ChoiceText}\"");
+        sb.AppendLine($"- Key decisions: {string.Join(", ", waypoints)}");
+        sb.AppendLine();
+        sb.AppendLine("RECENT CHOICES:");
+        foreach (var h in recentChoices)
+            sb.AppendLine($"- At [{h.Node}]: chose \"{h.ChoiceText}\"");
+
+        return sb.ToString().TrimEnd();
+    }
+
+    /// <inheritdoc />
+    public async Task<string> GenerateCyoaDeathNarrationAsync(
+        PlayerCharacter player,
+        string deathSceneNarration,
+        bool hasCheckpoint,
+        CancellationToken ct = default)
+    {
+        var voiceBlock = ResolveNarratorVoice(player);
+        var rewindHint = hasCheckpoint
+            ? "End the narration with a sense of fading — the player will rewind to a save point."
+            : "End the narration with finality — this is a true game over.";
+
+        var systemPrompt = $$"""
+            You are the NARRATOR of a Choose Your Own Adventure story.
+            A player character has just died. Write a dramatic death narration.
+
+            {{voiceBlock}}
+
+            RULES:
+            - Write in SECOND PERSON present tense.
+            - 2-4 sentences. Dense, visceral, poetic. This moment should HURT.
+            - Reference the character by name at least once.
+            - Do NOT mention game mechanics, save points, or rewinding.
+            - Do NOT ask questions or offer choices.
+            - {{rewindHint}}
+
+            Respond with ONLY the death narration text. No JSON. No formatting. Just prose.
+            """;
+
+        var userPrompt = $"""
+            CHARACTER: {player.Name}
+            SCENE THAT CAUSED DEATH:
+            {deathSceneNarration}
+
+            Write the death narration.
+            """;
+
+        try
+        {
+            var raw = await CompletionOrThrowAsync(systemPrompt, userPrompt, ct,
+                maxTokens: 256, operation: "cyoa-death", playerId: player.Id);
+            var text = raw?.Trim();
+            if (!string.IsNullOrEmpty(text))
+                return text;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "CYOA death narration generation failed, using fallback.");
+        }
+
+        return BuildCyoaDeathFallback(player.Name);
+    }
+
+    private static string BuildCyoaDeathFallback(string playerName)
+        => $"The world dims around {playerName}. A cold silence swallows every sound, every thought, every breath that was and will never be again.";
+
+    /// <inheritdoc />
+    public async Task<string> GenerateCyoaEndingNarrationAsync(
+        PlayerCharacter player,
+        string endingType,
+        string finalSceneNarration,
+        string adventureSummary,
+        CancellationToken ct = default)
+    {
+        var voiceBlock = ResolveNarratorVoice(player);
+
+        var toneGuidance = endingType switch
+        {
+            "victory" => "Triumphant but grounded. The player earned this. Let the prose breathe with relief and accomplishment.",
+            "tragedy" => "Somber and beautiful. Loss should feel meaningful, not cheap. Find the dignity in defeat.",
+            "cliffhanger" => "Tense and unresolved. Leave threads hanging. The reader should ache for what comes next.",
+            _ => "Reflective and open. The journey mattered more than the destination. Let it settle like dust after a long road."
+        };
+
+        var systemPrompt = $$"""
+            You are the NARRATOR of a Choose Your Own Adventure story.
+            The adventure has reached its conclusion. Write an epilogue.
+
+            {{voiceBlock}}
+
+            TONE: {{toneGuidance}}
+
+            RULES:
+            - Write in SECOND PERSON present tense.
+            - 3-5 sentences. This is the FINAL thing the player reads. Make it count.
+            - Reference the character by name.
+            - Reflect on the journey — the choices, the consequences, the arc.
+            - Do NOT list stats, mechanics, or game data.
+            - Do NOT ask questions or set up a sequel.
+
+            Respond with ONLY the epilogue narration. No JSON. No formatting. Just prose.
+            """;
+
+        var userPrompt = $"""
+            CHARACTER: {player.Name}
+            ENDING TYPE: {endingType}
+
+            FINAL SCENE:
+            {finalSceneNarration}
+
+            ADVENTURE STATS:
+            {adventureSummary}
+
+            Write the epilogue.
+            """;
+
+        try
+        {
+            var raw = await CompletionOrThrowAsync(systemPrompt, userPrompt, ct,
+                maxTokens: 512, operation: "cyoa-ending", playerId: player.Id);
+            var text = raw?.Trim();
+            if (!string.IsNullOrEmpty(text))
+                return text;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "CYOA ending narration generation failed, using fallback.");
+        }
+
+        return BuildCyoaEndingFallback(player.Name, endingType);
+    }
+
+    private static string BuildCyoaEndingFallback(string playerName, string endingType)
+        => endingType switch
+        {
+            "victory" => $"And so {playerName} stands at journey's end — battered, changed, but triumphant. The world will remember.",
+            "tragedy" => $"The story of {playerName} ends here, in silence and shadow. Some roads have no return.",
+            "cliffhanger" => $"The tale of {playerName} pauses, but does not end. Somewhere, a clock is still ticking.",
+            _ => $"{playerName}'s adventure fades like a dream upon waking — vivid, fleeting, and impossible to forget."
+        };
 
     // DTO for CYOA node JSON deserialization
     private class CyoaNodeDto

@@ -139,4 +139,25 @@ public interface INarratorService
         string? choiceText,
         IReadOnlyList<CyoaChoiceRecord> recentHistory,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Generates a dramatic death narration for a CYOA scene, then transitions to rewind
+    /// or game-over text. Returns the full narration string.
+    /// </summary>
+    Task<string> GenerateCyoaDeathNarrationAsync(
+        PlayerCharacter player,
+        string deathSceneNarration,
+        bool hasCheckpoint,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Generates a dramatic ending narration for a completed CYOA adventure, including
+    /// an epilogue that reflects on the player's journey.
+    /// </summary>
+    Task<string> GenerateCyoaEndingNarrationAsync(
+        PlayerCharacter player,
+        string endingType,
+        string finalSceneNarration,
+        string adventureSummary,
+        CancellationToken ct = default);
 }

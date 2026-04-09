@@ -4369,7 +4369,8 @@ public class GameEngine : IGameEngine
         if (cyoa.Health == CyoaHealthLevel.Dead)
         {
             cyoa.DeathCount++;
-            var deathNarration = node.NarrationText;
+            var deathNarration = await _narrator.GenerateCyoaDeathNarrationAsync(
+                player, node.NarrationText, cyoa.SavePoints.Count > 0, ct);
 
             if (cyoa.SavePoints.Count > 0)
             {
@@ -4574,6 +4575,10 @@ public class GameEngine : IGameEngine
 
         var summary = BuildCyoaSummary(cyoa, endingNode.Ending ?? "open");
 
+        // Generate AI epilogue narration
+        var epilogue = await _narrator.GenerateCyoaEndingNarrationAsync(
+            player, endingNode.Ending ?? "open", endingNode.NarrationText, summary, ct);
+
         var previousRoom = cyoa.PreviousRoomId;
         var choiceCount = cyoa.ChoiceHistory.Count;
 
@@ -4585,7 +4590,7 @@ public class GameEngine : IGameEngine
 
         _logger.LogInformation("Player {PlayerId} completed CYOA ({Ending}) after {Choices} choices.", player.Id, endingNode.Ending, choiceCount);
 
-        var narration = $"{endingNode.NarrationText}\n\n{endingEmoji} **— The End —**\n\n{summary}";
+        var narration = $"{endingNode.NarrationText}\n\n{epilogue}\n\n{endingEmoji} **— The End —**\n\n{summary}";
 
         await _stateManager.SavePlayerAsync(player, ct);
         var result = new ActionResult

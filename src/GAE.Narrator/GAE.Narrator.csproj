@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="GAE.Narrator.Tests" />
+    <InternalsVisibleTo Include="GAE.Engine.Tests" />
   </ItemGroup>
 
   <ItemGroup>
