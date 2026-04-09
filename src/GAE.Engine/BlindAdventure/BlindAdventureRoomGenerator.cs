@@ -12,6 +12,13 @@ namespace GAE.Engine.BlindAdventure;
 /// </summary>
 public class BlindAdventureRoomGenerator : IBlindAdventureRoomGenerator
 {
+    private static readonly HashSet<string> ValidDirections = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "north", "south", "east", "west", "up", "down",
+        "northeast", "northwest", "southeast", "southwest",
+        "forward", "back", "left", "right"
+    };
+
     private readonly INarratorService _narrator;
     private readonly IStateManager _stateManager;
     private readonly ILogger<BlindAdventureRoomGenerator> _logger;
@@ -79,8 +86,8 @@ public class BlindAdventureRoomGenerator : IBlindAdventureRoomGenerator
         generated.DiscoveredAt = DateTimeOffset.UtcNow;
         generated.WorldIds = currentRoom.WorldIds?.ToList() ?? [WorldDefaults.DefaultWorldId];
 
-        // Ensure reverse exit back to source
-        generated.Exits[OppositeDirection(direction)] = sourceRoomId;
+        // Validate and sanitize exits
+        generated.Exits = SanitizeExits(generated.Exits, direction, sourceRoomId, targetRoomId, roomsRemaining);
 
         // Wire forward exit on the source room if it doesn't already point here
         if (!currentRoom.Exits.ContainsKey(direction))
@@ -92,10 +99,56 @@ public class BlindAdventureRoomGenerator : IBlindAdventureRoomGenerator
         await _stateManager.SaveRoomAsync(generated, ct);
 
         _logger.LogInformation(
-            "Blind adventure generated room {RoomId} ({RoomName}) {Direction} of {SourceRoom}",
-            targetRoomId, generated.Name, direction, sourceRoomId);
+            "Blind adventure generated room {RoomId} ({RoomName}) {Direction} of {SourceRoom} — exits: [{Exits}]",
+            targetRoomId, generated.Name, direction, sourceRoomId,
+            string.Join(", ", generated.Exits.Keys));
 
         return generated;
+    }
+
+    /// <summary>
+    /// Validates and sanitizes the exits dictionary returned by the narrator.
+    /// Guarantees: back-link always present, only valid direction names,
+    /// no duplicate or self-referencing exits, and dead-end when room cap is reached.
+    /// </summary>
+    internal static Dictionary<string, string> SanitizeExits(
+        Dictionary<string, string> rawExits,
+        string arrivalDirection,
+        string sourceRoomId,
+        string targetRoomId,
+        int roomsRemaining)
+    {
+        var backDirection = OppositeDirection(arrivalDirection);
+        var sanitized = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            [backDirection] = sourceRoomId
+        };
+
+        // If we've exhausted the room budget, this is a dead-end (no forward exits)
+        if (roomsRemaining <= 0)
+            return sanitized;
+
+        foreach (var (dir, id) in rawExits)
+        {
+            var normalized = dir.Trim().ToLowerInvariant();
+
+            // Skip invalid directions
+            if (!ValidDirections.Contains(normalized))
+                continue;
+
+            // Skip: already have back-link
+            if (string.Equals(normalized, backDirection, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            // Skip: self-referencing
+            var cleanId = string.IsNullOrWhiteSpace(id) ? $"blind_{targetRoomId}_{normalized}" : id;
+            if (string.Equals(cleanId, targetRoomId, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            sanitized.TryAdd(normalized, cleanId);
+        }
+
+        return sanitized;
     }
 
     private static Room BuildMinimalFallback(string roomId, string direction, string sourceRoomId) => new()
