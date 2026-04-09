@@ -52,6 +52,7 @@ public static class StorylineContextLoader
 
     private static IDeserializer BuildDeserializer() => new DeserializerBuilder()
         .WithNamingConvention(UnderscoredNamingConvention.Instance)
+        .WithEnumNamingConvention(UnderscoredNamingConvention.Instance)
         .IgnoreUnmatchedProperties()
         .Build();
 }

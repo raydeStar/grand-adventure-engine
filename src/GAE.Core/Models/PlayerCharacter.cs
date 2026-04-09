@@ -53,6 +53,16 @@ public class PlayerCharacter
     public List<StatusEffect> StatusEffects { get; set; } = [];
     public List<LearnedSpell> Spellbook { get; set; } = [];
 
+    // Race traits & class abilities
+    /// <summary>IDs of active racial traits (from RaceDefinition.TraitEffects).</summary>
+    public List<string> ActiveTraits { get; set; } = [];
+
+    /// <summary>IDs of unlocked class abilities (filtered by level from ClassDefinition.Abilities).</summary>
+    public List<string> UnlockedAbilities { get; set; } = [];
+
+    /// <summary>Ability cooldowns: abilityId → turns remaining. 0 = ready.</summary>
+    public Dictionary<string, int> AbilityCooldowns { get; set; } = new();
+
     // Quest log
     public List<QuestProgress> QuestLog { get; set; } = [];
 

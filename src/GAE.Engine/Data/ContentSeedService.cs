@@ -75,6 +75,7 @@ public class ContentSeedService
                 var yamlContent = await File.ReadAllTextAsync(rulesPath, ct);
                 var deserializer = new YamlDotNet.Serialization.DeserializerBuilder()
                     .WithNamingConvention(YamlDotNet.Serialization.NamingConventions.UnderscoredNamingConvention.Instance)
+                    .WithEnumNamingConvention(YamlDotNet.Serialization.NamingConventions.UnderscoredNamingConvention.Instance)
                     .IgnoreUnmatchedProperties()
                     .Build();
                 var rules = deserializer.Deserialize<GameRulesConfig>(yamlContent);
@@ -377,6 +378,7 @@ public class ContentSeedService
     {
         var deserializer = new YamlDotNet.Serialization.DeserializerBuilder()
             .WithNamingConvention(YamlDotNet.Serialization.NamingConventions.UnderscoredNamingConvention.Instance)
+            .WithEnumNamingConvention(YamlDotNet.Serialization.NamingConventions.UnderscoredNamingConvention.Instance)
             .IgnoreUnmatchedProperties()
             .Build();
         return deserializer.Deserialize<T>(yaml);

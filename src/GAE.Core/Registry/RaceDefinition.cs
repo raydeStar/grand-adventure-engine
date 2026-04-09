@@ -16,6 +16,9 @@ public class RaceDefinition : IRegistryEntry
     /// <summary>Narrative traits (e.g. "Darkvision", "Fey Ancestry").</summary>
     public List<string> Traits { get; set; } = [];
 
+    /// <summary>Mechanical trait effects applied passively (damage resistance, stat bonuses, etc.).</summary>
+    public List<TraitDefinition> TraitEffects { get; set; } = [];
+
     /// <summary>Classes this race can play. Empty = all classes allowed.</summary>
     public List<string> AllowedClasses { get; set; } = [];
 

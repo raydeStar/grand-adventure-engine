@@ -269,6 +269,7 @@ public static class RegistrySeedLoader
     private static IDeserializer BuildDeserializer() =>
         new DeserializerBuilder()
             .WithNamingConvention(YamlDotNet.Serialization.NamingConventions.UnderscoredNamingConvention.Instance)
+            .WithEnumNamingConvention(YamlDotNet.Serialization.NamingConventions.UnderscoredNamingConvention.Instance)
             .IgnoreUnmatchedProperties()
             .Build();
 

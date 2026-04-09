@@ -21,6 +21,33 @@ classes:
       con: 1
     starting_equipment: [iron_sword, leather_armor]
     improvised_spell_cap: [1, 1, 1, 2, 2, 2, 3, 3, 3, 4]
+    abilities:
+      - id: shield_bash
+        name: Shield Bash
+        description: "Slam your shield into the enemy, dealing damage and staggering them."
+        unlock_level: 1
+        mp_cost: 0
+        cooldown_turns: 3
+        effect: damage
+        damage_dice: 1d6
+      - id: second_wind
+        name: Second Wind
+        description: "Recover health through sheer willpower."
+        unlock_level: 2
+        mp_cost: 0
+        cooldown_turns: 5
+        effect: heal
+        heal_amount: 8
+      - id: rally
+        name: Rally
+        description: "Channel battle fury for a temporary surge of strength."
+        unlock_level: 4
+        mp_cost: 2
+        cooldown_turns: 4
+        effect: buff
+        target_stat: str
+        buff_value: 2
+        duration: 3
     tags: [martial, tank, melee]
 
   - id: mage
@@ -39,6 +66,25 @@ classes:
       wis: 1
     starting_equipment: [wooden_staff]
     improvised_spell_cap: [2, 3, 4, 5, 6, 7, 8, 9, 10, 10]
+    abilities:
+      - id: arcane_surge
+        name: Arcane Surge
+        description: "Channel raw arcane energy into a devastating blast."
+        unlock_level: 1
+        mp_cost: 3
+        cooldown_turns: 4
+        effect: damage
+        damage_dice: 2d8
+      - id: mana_shield
+        name: Mana Shield
+        description: "Weave a protective barrier of pure mana around yourself."
+        unlock_level: 3
+        mp_cost: 4
+        cooldown_turns: 6
+        effect: buff
+        target_stat: con
+        buff_value: 3
+        duration: 2
     tags: [caster, arcane, ranged]
 
   - id: rogue
@@ -57,6 +103,25 @@ classes:
       cha: 1
     starting_equipment: [iron_dagger, leather_armor]
     improvised_spell_cap: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5]
+    abilities:
+      - id: backstab
+        name: Backstab
+        description: "Strike from the shadows for devastating critical damage."
+        unlock_level: 1
+        mp_cost: 0
+        cooldown_turns: 3
+        effect: damage
+        damage_dice: 2d6
+      - id: smoke_bomb
+        name: Smoke Bomb
+        description: "Hurl a smoke bomb to disorient enemies and boost evasion."
+        unlock_level: 3
+        mp_cost: 2
+        cooldown_turns: 5
+        effect: buff
+        target_stat: dex
+        buff_value: 3
+        duration: 2
     tags: [stealth, precision, melee, ranged]
 
   - id: cleric
@@ -75,6 +140,23 @@ classes:
       con: 1
     starting_equipment: [iron_mace, chain_mail]
     improvised_spell_cap: [2, 3, 4, 5, 6, 7, 8, 8, 9, 10]
+    abilities:
+      - id: divine_light
+        name: Divine Light
+        description: "Channel sacred energy to heal your wounds."
+        unlock_level: 1
+        mp_cost: 2
+        cooldown_turns: 3
+        effect: heal
+        heal_amount: 10
+      - id: holy_smite
+        name: Holy Smite
+        description: "Call down divine wrath upon your enemy."
+        unlock_level: 3
+        mp_cost: 4
+        cooldown_turns: 4
+        effect: damage
+        damage_dice: 2d6
     tags: [caster, divine, healer, support]
 
   - id: ranger
@@ -93,6 +175,25 @@ classes:
       wis: 1
     starting_equipment: [hunting_bow, leather_armor]
     improvised_spell_cap: [1, 2, 3, 3, 4, 5, 5, 6, 7, 8]
+    abilities:
+      - id: aimed_shot
+        name: Aimed Shot
+        description: "Take careful aim for a devastating precision strike."
+        unlock_level: 1
+        mp_cost: 0
+        cooldown_turns: 3
+        effect: damage
+        damage_dice: 1d10
+      - id: nature_ward
+        name: Nature Ward
+        description: "Call upon the forest spirits to toughen your hide."
+        unlock_level: 3
+        mp_cost: 3
+        cooldown_turns: 5
+        effect: buff
+        target_stat: con
+        buff_value: 2
+        duration: 3
     tags: [hybrid, nature, ranged, tracker]
 
   - id: sorcerer
@@ -111,6 +212,25 @@ classes:
       int: 1
     starting_equipment: [crystal_focus]
     improvised_spell_cap: [3, 4, 5, 6, 7, 8, 9, 10, 10, 10]
+    abilities:
+      - id: wild_surge
+        name: Wild Surge
+        description: "Unleash a chaotic burst of Esper energy."
+        unlock_level: 1
+        mp_cost: 2
+        cooldown_turns: 3
+        effect: damage
+        damage_dice: 2d8
+      - id: esper_shield
+        name: Esper Shield
+        description: "Channel an Esper's protection to fortify yourself."
+        unlock_level: 4
+        mp_cost: 5
+        cooldown_turns: 6
+        effect: buff
+        target_stat: con
+        buff_value: 3
+        duration: 3
     tags: [caster, arcane, innate, wild]
 
   - id: monk
@@ -129,4 +249,21 @@ classes:
       wis: 1
     starting_equipment: [wooden_staff]
     improvised_spell_cap: [1, 2, 2, 3, 3, 4, 4, 5, 5, 6]
+    abilities:
+      - id: flurry_of_blows
+        name: Flurry of Blows
+        description: "Unleash a rapid barrage of unarmed strikes."
+        unlock_level: 1
+        mp_cost: 2
+        cooldown_turns: 2
+        effect: damage
+        damage_dice: 3d4
+      - id: inner_peace
+        name: Inner Peace
+        description: "Meditate briefly to restore health through chakra flow."
+        unlock_level: 3
+        mp_cost: 3
+        cooldown_turns: 5
+        effect: heal
+        heal_amount: 12
     tags: [martial, melee, agile, ki]

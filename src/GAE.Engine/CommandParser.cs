@@ -222,6 +222,15 @@ public partial class CommandParser
             return action;
         }
 
+        // Ability — "ability shield bash", "activate second wind", "use ability backstab"
+        var abilityMatch = AbilityRegex().Match(input);
+        if (abilityMatch.Success)
+        {
+            action.Type = ActionType.Ability;
+            action.Target = abilityMatch.Groups["ability"].Value.Trim();
+            return action;
+        }
+
         // Shop / browse
         if (ShopRegex().IsMatch(input))
         {
@@ -490,6 +499,9 @@ public partial class CommandParser
 
     [GeneratedRegex(@"^(?:use|consume|drink|eat)\s+(?<target>.+)$", RegexOptions.IgnoreCase)]
     private static partial Regex UseRegex();
+
+    [GeneratedRegex(@"^(?:ability|activate|technique|skill)\s+(?<ability>.+)$", RegexOptions.IgnoreCase)]
+    private static partial Regex AbilityRegex();
 
     [GeneratedRegex(@"^(?:shop|browse|wares|merchandise|what(?:'s| is) for sale|show me (?:your |the )?(?:wares|goods|inventory|merchandise|stock|shop))$", RegexOptions.IgnoreCase)]
     private static partial Regex ShopRegex();

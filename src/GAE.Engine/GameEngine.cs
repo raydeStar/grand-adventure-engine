@@ -181,6 +181,7 @@ public class GameEngine : IGameEngine
             ActionType.Take => await ProcessTakeAsync(player, action, ct),
             ActionType.Drop => await ProcessDropAsync(player, action, ct),
             ActionType.Use => await ProcessUseAsync(player, action, ct),
+            ActionType.Ability => await ProcessAbilityAsync(player, action, ct),
             ActionType.Buy => await ProcessBuyAsync(player, action, ct),
             ActionType.Sell => await ProcessSellAsync(player, action, ct),
             ActionType.Shop => await ProcessShopAsync(player, action, ct),
@@ -332,6 +333,12 @@ public class GameEngine : IGameEngine
 
         // Set starting level
         player.Level = _rules.CharacterCreation.StartingLevel;
+
+        // Assign race traits and apply passive stat bonuses
+        AssignRaceTraits(player);
+
+        // Assign level-appropriate class abilities
+        AssignClassAbilities(player);
 
         // Calculate HP/MP from rules — scale with level using percentage model
         RecalculateMaxHpMp(player);
@@ -502,6 +509,66 @@ public class GameEngine : IGameEngine
 
         itemLookups.AddRange(_rules.CharacterCreation.StartingItems);
         return itemLookups;
+    }
+
+    /// <summary>Assigns racial traits to the player and applies passive stat bonuses from trait effects.</summary>
+    internal void AssignRaceTraits(PlayerCharacter player)
+    {
+        if (_registry is null) return;
+
+        var race = _registry.Races.GetAll()
+            .FirstOrDefault(r =>
+                r.Id.Equals(player.Race, StringComparison.OrdinalIgnoreCase)
+                || r.Name.Equals(player.Race, StringComparison.OrdinalIgnoreCase));
+
+        if (race is null) return;
+
+        player.ActiveTraits.Clear();
+        foreach (var trait in race.TraitEffects)
+        {
+            player.ActiveTraits.Add(trait.Id);
+
+            // Apply permanent stat bonuses at creation time
+            if (trait.Effect == TraitEffectType.StatBonus && !string.IsNullOrEmpty(trait.TargetType))
+                ApplyStatBonus(player, trait.TargetType, trait.Value);
+        }
+
+        if (player.ActiveTraits.Count > 0)
+            _logger.LogDebug("Assigned {Count} race traits to {PlayerId}: {Traits}", player.ActiveTraits.Count, player.Id, string.Join(", ", player.ActiveTraits));
+    }
+
+    /// <summary>Assigns level-appropriate class abilities to the player.</summary>
+    internal void AssignClassAbilities(PlayerCharacter player)
+    {
+        if (_registry is null) return;
+
+        var classDef = _registry.Classes.GetAll()
+            .FirstOrDefault(c =>
+                c.Id.Equals(player.Class, StringComparison.OrdinalIgnoreCase)
+                || c.Name.Equals(player.Class, StringComparison.OrdinalIgnoreCase));
+
+        if (classDef is null) return;
+
+        player.UnlockedAbilities.Clear();
+        foreach (var ability in classDef.Abilities.Where(a => a.UnlockLevel <= player.Level))
+            player.UnlockedAbilities.Add(ability.Id);
+
+        if (player.UnlockedAbilities.Count > 0)
+            _logger.LogDebug("Assigned {Count} class abilities to {PlayerId}: {Abilities}", player.UnlockedAbilities.Count, player.Id, string.Join(", ", player.UnlockedAbilities));
+    }
+
+    private static void ApplyStatBonus(PlayerCharacter player, string stat, int value)
+    {
+        switch (stat.ToLowerInvariant())
+        {
+            case "str": player.Str += value; break;
+            case "dex": player.Dex += value; break;
+            case "con": player.Con += value; break;
+            case "int": player.Int += value; break;
+            case "wis": player.Wis += value; break;
+            case "cha": player.Cha += value; break;
+            case "luck": player.Luck += value; break;
+        }
     }
 
     private async Task<InventoryItem?> ResolveStartingItemAsync(PlayerCharacter player, string itemLookup, CancellationToken ct)
@@ -2971,6 +3038,49 @@ public class GameEngine : IGameEngine
             return castResult;
         }
 
+        // ─── Use ability during combat ───
+        if (action.Type == ActionType.Ability)
+        {
+            TickAbilityCooldowns(player);
+            var abilityResult = await ProcessAbilityAsync(player, action, ct);
+            if (abilityResult.Success && player.Interaction.Mode == InteractionMode.Combat)
+            {
+                var aliveEnemies = enemies.Where(e => e.Hp.HasValue && e.Hp.Value > 0 && room.Npcs.Contains(e)).ToList();
+                if (aliveEnemies.Count > 0)
+                {
+                    var abMech = new List<string> { abilityResult.MechanicalSummary };
+                    var abDice = new List<DiceRoll>(abilityResult.DiceRolls);
+                    var abSC = new List<StateChange>(abilityResult.StateChanges);
+                    RunEnemyAttacks(player, aliveEnemies, room, abMech, abDice, abSC, defenseBonus: 0);
+
+                    string abCombatStatus = player.Hp <= 0 ? "defeat" : "ongoing";
+                    if (player.Hp <= 0)
+                    {
+                        player.Interaction.Reset();
+                        if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, player.ActiveWorldId, ct);
+                        var killer = aliveEnemies.FirstOrDefault()?.Name ?? "the enemy";
+                        var (deathMsg, deathChanges) = await HandlePlayerDeathAsync(player, room, killer, ct);
+                        abMech.Add(""); abMech.Add(deathMsg); abSC.AddRange(deathChanges);
+                    }
+                    // Check if all enemies are dead from the ability
+                    else if (!aliveEnemies.Any(e => e.Hp.HasValue && e.Hp.Value > 0 && room.Npcs.Contains(e)))
+                    {
+                        abCombatStatus = "victory";
+                    }
+                    if (abCombatStatus == "ongoing") AppendHpBars(abMech, player, aliveEnemies, room);
+
+                    await _stateManager.SavePlayerAsync(player, ct);
+                    await _stateManager.SaveRoomAsync(room, ct);
+                    var combatAbResult = new ActionResult { ActionId = action.Id, RawInput = action.RawInput, Success = true,
+                        MechanicalSummary = string.Join("\n", abMech), DiceRolls = abDice, StateChanges = abSC,
+                        InteractionUpdate = new InteractionUpdate { Mode = abCombatStatus == "ongoing" ? InteractionMode.Combat : InteractionMode.Explore, CombatStatus = abCombatStatus } };
+                    await PersistInteractionStoryEntry(player, action, combatAbResult, ct);
+                    return combatAbResult;
+                }
+            }
+            return abilityResult;
+        }
+
         // ─── Resolve attack modifiers for special moves ───
         int attackHitBonus = 0;
         int attackDmgBonus = 0;
@@ -3121,6 +3231,9 @@ public class GameEngine : IGameEngine
                 int eDmg = eRoll.IsCritical ? eDmgRoll.Total * _rules.Combat.CriticalMultiplier : eDmgRoll.Total;
                 eDmg = Math.Max(1, eDmg + eDispMods.DamageBonus);
                 allDice.Add(eDmgRoll);
+
+                // Apply passive trait damage resistance (physical attacks from NPCs)
+                eDmg = ApplyTraitDamageResistance(player, eDmg, "physical");
 
                 var oldPHp = player.Hp;
                 player.Hp = Math.Max(0, player.Hp - eDmg);
@@ -5014,6 +5127,179 @@ public class GameEngine : IGameEngine
         var roll = _dice.Roll(value, "Item effect");
         _logger.LogInformation("Rolled item effect '{Expression}' = {Total}", value, roll.Total);
         return Math.Max(1, roll.Total);
+    }
+
+    // --- Race & Class Abilities ---
+
+    /// <summary>
+    /// Handles the "ability &lt;name&gt;" command — activates a class ability, spending MP and applying effects.
+    /// </summary>
+    internal async Task<ActionResult> ProcessAbilityAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(action.Target))
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "Use which ability? Try: `ability shield bash`" };
+
+        if (_registry is null)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "No abilities are registered." };
+
+        var classDef = _registry.Classes.GetAll()
+            .FirstOrDefault(c =>
+                c.Id.Equals(player.Class, StringComparison.OrdinalIgnoreCase)
+                || c.Name.Equals(player.Class, StringComparison.OrdinalIgnoreCase));
+
+        if (classDef is null)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "Your class has no abilities." };
+
+        // Fuzzy match by name or ID
+        var ability = classDef.Abilities
+            .FirstOrDefault(a =>
+                a.Id.Equals(action.Target, StringComparison.OrdinalIgnoreCase)
+                || a.Name.Equals(action.Target, StringComparison.OrdinalIgnoreCase)
+                || a.Name.Contains(action.Target, StringComparison.OrdinalIgnoreCase));
+
+        if (ability is null)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"You don't have an ability called '{action.Target}'." };
+
+        // Level check
+        if (ability.UnlockLevel > player.Level)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"{ability.Name} requires level {ability.UnlockLevel}. You are level {player.Level}." };
+
+        // Not in unlocked list
+        if (!player.UnlockedAbilities.Contains(ability.Id))
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"You haven't learned {ability.Name} yet." };
+
+        // Cooldown check
+        if (player.AbilityCooldowns.TryGetValue(ability.Id, out var remaining) && remaining > 0)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"{ability.Name} is on cooldown ({remaining} turn{(remaining == 1 ? "" : "s")} remaining)." };
+
+        // MP check
+        if (ability.MpCost > 0 && player.Mp < ability.MpCost)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"Not enough MP for {ability.Name}. Need {ability.MpCost}, have {player.Mp}." };
+
+        // Spend MP
+        var stateChanges = new List<StateChange>();
+        if (ability.MpCost > 0)
+        {
+            var oldMp = player.Mp;
+            player.Mp -= ability.MpCost;
+            stateChanges.Add(new StateChange { EntityType = "Player", EntityId = player.Id, Property = "Mp", OldValue = oldMp.ToString(), NewValue = player.Mp.ToString() });
+        }
+
+        // Set cooldown
+        if (ability.CooldownTurns > 0)
+            player.AbilityCooldowns[ability.Id] = ability.CooldownTurns;
+
+        // Apply effect
+        var mechanicalParts = new List<string> { $"Used {ability.Name}." };
+
+        switch (ability.Effect)
+        {
+            case AbilityEffectType.Damage:
+            {
+                var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
+                var target = room?.Npcs.FirstOrDefault(n => n.Hp.HasValue && n.Hp.Value > 0);
+                if (target is null)
+                {
+                    mechanicalParts.Add("No enemy to target.");
+                    break;
+                }
+
+                string dice = ability.DamageDice ?? "1d6";
+                var dmgRoll = _dice.Roll(dice, $"{ability.Name} dmg");
+                int damage = Math.Max(1, dmgRoll.Total);
+                var oldHp = target.Hp ?? 0;
+                target.Hp = Math.Max(0, oldHp - damage);
+                stateChanges.Add(new StateChange { EntityType = "Npc", EntityId = target.Name, Property = "Hp", OldValue = oldHp.ToString(), NewValue = target.Hp.Value.ToString() });
+                mechanicalParts.Add($"Dealt {damage} damage to {target.Name}. ({target.Hp}/{target.MaxHp ?? oldHp} HP)");
+
+                if (room is not null)
+                    await _stateManager.SaveRoomAsync(room, ct);
+                break;
+            }
+
+            case AbilityEffectType.Heal:
+            {
+                int healAmount = ability.HealAmount ?? 8;
+                var oldHp = player.Hp;
+                player.Hp = Math.Min(player.MaxHp, player.Hp + healAmount);
+                stateChanges.Add(new StateChange { EntityType = "Player", EntityId = player.Id, Property = "Hp", OldValue = oldHp.ToString(), NewValue = player.Hp.ToString() });
+                mechanicalParts.Add($"Restored {player.Hp - oldHp} HP. ({player.Hp}/{player.MaxHp} HP)");
+                break;
+            }
+
+            case AbilityEffectType.Buff:
+            {
+                if (!string.IsNullOrEmpty(ability.TargetStat) && ability.BuffValue.HasValue)
+                {
+                    int duration = ability.Duration ?? 3;
+                    player.StatusEffects.Add(new StatusEffect
+                    {
+                        Name = ability.Name,
+                        Description = $"+{ability.BuffValue} {ability.TargetStat.ToUpper()} for {duration} turns",
+                        Type = StatusEffectType.Buff,
+                        RemainingTurns = duration,
+                        StatModifiers = new Dictionary<string, int> { [ability.TargetStat] = ability.BuffValue.Value }
+                    });
+                    ApplyStatBonus(player, ability.TargetStat, ability.BuffValue.Value);
+                    mechanicalParts.Add($"+{ability.BuffValue} {ability.TargetStat.ToUpper()} for {duration} turns.");
+                }
+                break;
+            }
+        }
+
+        mechanicalParts.Add($"(HP: {player.Hp}/{player.MaxHp}, MP: {player.Mp}/{player.MaxMp})");
+        await _stateManager.SavePlayerAsync(player, ct);
+
+        return new ActionResult
+        {
+            ActionId = action.Id,
+            Success = true,
+            MechanicalSummary = string.Join(" ", mechanicalParts),
+            StateChanges = stateChanges
+        };
+    }
+
+    /// <summary>Decrements all ability cooldowns by one turn. Call at the start of each combat turn.</summary>
+    internal static void TickAbilityCooldowns(PlayerCharacter player)
+    {
+        var expired = new List<string>();
+        foreach (var kvp in player.AbilityCooldowns)
+        {
+            player.AbilityCooldowns[kvp.Key] = kvp.Value - 1;
+            if (kvp.Value - 1 <= 0)
+                expired.Add(kvp.Key);
+        }
+        foreach (var key in expired)
+            player.AbilityCooldowns.Remove(key);
+    }
+
+    /// <summary>
+    /// Reduces incoming damage based on the player's active racial traits with DamageResistance effects.
+    /// Returns the reduced damage (minimum 1).
+    /// </summary>
+    internal int ApplyTraitDamageResistance(PlayerCharacter player, int damage, string damageType)
+    {
+        if (_registry is null || player.ActiveTraits.Count == 0)
+            return damage;
+
+        var race = _registry.Races.GetAll()
+            .FirstOrDefault(r =>
+                r.Id.Equals(player.Race, StringComparison.OrdinalIgnoreCase)
+                || r.Name.Equals(player.Race, StringComparison.OrdinalIgnoreCase));
+
+        if (race is null) return damage;
+
+        int totalReduction = 0;
+        foreach (var traitId in player.ActiveTraits)
+        {
+            var trait = race.TraitEffects.FirstOrDefault(t => t.Id.Equals(traitId, StringComparison.OrdinalIgnoreCase));
+            if (trait is null) continue;
+            if (trait.Effect != TraitEffectType.DamageResistance) continue;
+            if (!string.Equals(trait.TargetType, damageType, StringComparison.OrdinalIgnoreCase)) continue;
+            totalReduction += trait.Value;
+        }
+
+        return totalReduction > 0 ? Math.Max(1, damage - totalReduction) : damage;
     }
 
     // --- P3: Buy / Sell System ---

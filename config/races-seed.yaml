@@ -13,6 +13,19 @@ races:
       dex: 1
       con: 1
     traits: [Versatile, Ambitious, Adaptive]
+    trait_effects:
+      - id: versatile
+        name: Versatile
+        description: "Humes adapt to any situation — advantage on CHA-based skill checks."
+        effect: skill_advantage
+        target_type: cha
+        value: 1
+      - id: ambitious
+        name: Ambitious
+        effect: narrative
+      - id: adaptive
+        name: Adaptive
+        effect: narrative
     allowed_classes: []
     tags: [common, adaptable]
 
@@ -23,6 +36,25 @@ races:
       dex: 2
       int: 1
     traits: [Keen Senses, Wood Affinity, Heightened Reflexes, Long-lived]
+    trait_effects:
+      - id: keen_senses
+        name: Keen Senses
+        description: "Viera senses are supernaturally sharp — advantage on WIS-based perception checks."
+        effect: skill_advantage
+        target_type: wis
+        value: 1
+      - id: wood_affinity
+        name: Wood Affinity
+        effect: narrative
+      - id: heightened_reflexes
+        name: Heightened Reflexes
+        description: "Lightning-fast reactions grant +1 DEX passively."
+        effect: stat_bonus
+        target_type: dex
+        value: 1
+      - id: long_lived
+        name: Long-lived
+        effect: narrative
     allowed_classes: []
     tags: [forest, graceful, magical]
 
@@ -33,6 +65,22 @@ races:
       con: 2
       str: 1
     traits: [Armored Hide, Warrior Culture, Resilient]
+    trait_effects:
+      - id: armored_hide
+        name: Armored Hide
+        description: "Thick reptilian scales reduce incoming physical damage by 2."
+        effect: damage_resistance
+        target_type: physical
+        value: 2
+      - id: warrior_culture
+        name: Warrior Culture
+        effect: narrative
+      - id: resilient
+        name: Resilient
+        description: "Bangaa constitution shrugs off poisons — reduce poison damage by 3."
+        effect: damage_resistance
+        target_type: poison
+        value: 3
     allowed_classes: []
     tags: [sturdy, reptilian, resilient]
 
@@ -43,6 +91,25 @@ races:
       dex: 2
       luck: 2
     traits: [Lucky, Brave, Flight, Moogle Charm]
+    trait_effects:
+      - id: lucky
+        name: Lucky
+        description: "Moogles are inexplicably fortunate — advantage on LUCK-based checks."
+        effect: skill_advantage
+        target_type: luck
+        value: 1
+      - id: brave
+        name: Brave
+        effect: narrative
+      - id: flight
+        name: Flight
+        effect: narrative
+      - id: moogle_charm
+        name: Moogle Charm
+        description: "Irresistibly cute — advantage on CHA-based social checks."
+        effect: skill_advantage
+        target_type: cha
+        value: 1
     allowed_classes: []
     tags: [small, lucky, brave, moogle]
 
@@ -53,6 +120,22 @@ races:
       str: 3
       con: 1
     traits: [Mighty Roar, Savage Attacks, Mountain Born]
+    trait_effects:
+      - id: mighty_roar
+        name: Mighty Roar
+        effect: narrative
+      - id: savage_attacks
+        name: Savage Attacks
+        description: "Ronso fury adds +1 STR passively."
+        effect: stat_bonus
+        target_type: str
+        value: 1
+      - id: mountain_born
+        name: Mountain Born
+        description: "Raised in frozen peaks — reduce cold damage by 2."
+        effect: damage_resistance
+        target_type: cold
+        value: 2
     allowed_classes: []
     tags: [fierce, strong, tribal]
 
@@ -63,6 +146,22 @@ races:
       cha: 2
       int: 1
     traits: [Arcane Heritage, Magical Resistance, Ancient Knowledge]
+    trait_effects:
+      - id: arcane_heritage
+        name: Arcane Heritage
+        effect: narrative
+      - id: magical_resistance
+        name: Magical Resistance
+        description: "Deep attunement to the Mist grants resistance to magical attacks — reduce magic damage by 3."
+        effect: damage_resistance
+        target_type: magic
+        value: 3
+      - id: ancient_knowledge
+        name: Ancient Knowledge
+        description: "Millennia of accumulated wisdom — advantage on INT-based lore checks."
+        effect: skill_advantage
+        target_type: int
+        value: 1
     allowed_classes: []
     tags: [magical, scholarly, wise]
 
@@ -73,6 +172,19 @@ races:
       int: 2
       dex: 1
     traits: [Cunning, Merchant Instinct, Quick Wits]
+    trait_effects:
+      - id: cunning
+        name: Cunning
+        effect: narrative
+      - id: merchant_instinct
+        name: Merchant Instinct
+        effect: narrative
+      - id: quick_wits
+        name: Quick Wits
+        description: "Lalafell minds work at blistering speed — advantage on INT-based checks."
+        effect: skill_advantage
+        target_type: int
+        value: 1
     allowed_classes: []
     tags: [small, clever, inventive]
 
@@ -83,6 +195,19 @@ races:
       str: 2
       cha: 1
     traits: [Dragon Wings, Draconic Resistance, Breath Weapon]
+    trait_effects:
+      - id: dragon_wings
+        name: Dragon Wings
+        effect: narrative
+      - id: draconic_resistance
+        name: Draconic Resistance
+        description: "Draconic blood grants immunity to searing heat — reduce fire damage by 3."
+        effect: damage_resistance
+        target_type: fire
+        value: 3
+      - id: breath_weapon
+        name: Breath Weapon
+        effect: narrative
     allowed_classes: []
     tags: [draconic, proud, powerful, flight]
 
@@ -93,5 +218,24 @@ races:
       cha: 2
       dex: 1
     traits: [Flight, Fairy Magic, Mist Affinity, Tiny]
+    trait_effects:
+      - id: flight_pixie
+        name: Flight
+        effect: narrative
+      - id: fairy_magic
+        name: Fairy Magic
+        description: "Innate fey magic — advantage on CHA-based magical checks."
+        effect: skill_advantage
+        target_type: cha
+        value: 1
+      - id: mist_affinity
+        name: Mist Affinity
+        description: "Mist-infused nature grants partial protection — reduce magic damage by 2."
+        effect: damage_resistance
+        target_type: magic
+        value: 2
+      - id: tiny
+        name: Tiny
+        effect: narrative
     allowed_classes: []
     tags: [fey, tiny, magical, flight]

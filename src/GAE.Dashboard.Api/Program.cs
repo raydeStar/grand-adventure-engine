@@ -45,6 +45,7 @@ var rulesPath = Path.Combine(configDir, "game-rules.yaml");
 var rulesYaml = File.Exists(rulesPath) ? await File.ReadAllTextAsync(rulesPath) : "";
 var yamlDeserializer = new DeserializerBuilder()
     .WithNamingConvention(UnderscoredNamingConvention.Instance)
+    .WithEnumNamingConvention(UnderscoredNamingConvention.Instance)
     .IgnoreUnmatchedProperties()
     .Build();
 var gameRules = !string.IsNullOrEmpty(rulesYaml)

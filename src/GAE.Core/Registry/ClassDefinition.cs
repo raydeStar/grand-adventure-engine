@@ -43,6 +43,9 @@ public class ClassDefinition : IRegistryEntry
     /// <summary>Maximum improvised spell power level at each character level. Index 0 = level 1.</summary>
     public List<int> ImprovisedSpellCap { get; set; } = [2, 3, 4, 5, 6, 7, 8, 9, 10, 10];
 
+    /// <summary>Active abilities unlocked at specific levels.</summary>
+    public List<ClassAbility> Abilities { get; set; } = [];
+
     /// <summary>Tags for search/filter.</summary>
     public List<string> Tags { get; set; } = [];
 }

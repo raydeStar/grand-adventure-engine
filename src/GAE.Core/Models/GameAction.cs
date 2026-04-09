@@ -38,6 +38,7 @@ public enum ActionType
     Defend,
     AimedStrike,
     Flee,
+    Ability,
     Spellbook,
     Journal,
     CompletedQuests,
