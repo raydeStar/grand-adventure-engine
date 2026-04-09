@@ -1705,7 +1705,8 @@ public class GameEngine : IGameEngine
 
         if (vet is null)
         {
-            // AI unavailable - create a basic damage spell mechanically
+            // AI unavailable - create a basic damage spell mechanically.
+            // Scale power with player level so fallback spells stay relevant at higher levels.
             vet = new SpellVetResponse
             {
                 Approved = true,
@@ -1713,8 +1714,8 @@ public class GameEngine : IGameEngine
                 Description = "A burst of raw magical energy.",
                 Category = "damage",
                 TargetType = "enemy",
-                BasePower = Math.Min(3, player.Level),
-                MpCost = 4,
+                BasePower = Math.Clamp(player.Level, 1, 10),
+                MpCost = Math.Max(2, player.Level * 2),
                 Narration = "You channel raw magic, shaping it by force of will alone."
             };
         }
