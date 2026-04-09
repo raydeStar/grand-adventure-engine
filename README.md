@@ -41,7 +41,7 @@ You and your friends play a fantasy adventure right inside Discord. An AI narrat
 
 The AI's job is to make the game feel alive — describing scenes, voicing characters, reacting to the unexpected. But it never decides whether your attack hits or how much gold you find. That's all handled by the game engine, the same way every time, for every player. Fair and square.
 
-The game world is stored in a wiki, so game masters can edit lore, characters, and quests from a browser. There's also an admin dashboard for managing players and inspecting the game in real time.
+There's an admin dashboard for managing players, editing lore, and inspecting the game in real time.
 
 *"The architecture is sound. The rules are fair. The dice are ready."* — Sir Thaddeus
 
@@ -56,7 +56,7 @@ This is a self-hosted project — you run it on your own machine or server. Here
 | [.NET 10 SDK](https://dotnet.microsoft.com/) | Runs the game engine |
 | [Node.js 20+](https://nodejs.org/) | Powers the dashboard and tests |
 | [LM Studio](https://lmstudio.ai/) | Runs the AI locally on your machine (free, private, no API keys) |
-| [Docker](https://www.docker.com/) | Runs the wiki database |
+| [Docker](https://www.docker.com/) | Runs supporting services |
 | A Discord bot token | Connects the game to your Discord server ([how to get one](https://discord.com/developers/applications)) |
 
 ### Setup
@@ -65,11 +65,11 @@ This is a self-hosted project — you run it on your own machine or server. Here
 # Build the project
 dotnet build GrandAdventureEngine.slnx
 
-# Start everything (wiki + dashboard)
+# Start the dashboard
 powershell -ExecutionPolicy Bypass -File .\scripts\reset-docker-stack.ps1
 ```
 
-Once it's running, open your browser to `http://localhost:8181` for the dashboard and `http://localhost:3000` for the wiki. If those ports are already in use, the script picks new ones and tells you.
+Once it's running, open your browser to `http://localhost:8181` for the dashboard. If that port is already in use, the script picks a new one and tells you.
 
 ### Default Logins
 
@@ -92,7 +92,7 @@ Once it's running, open your browser to `http://localhost:8181` for the dashboar
 | **GAE.Core** | Game data models and shared contracts (no external dependencies) |
 | **GAE.Engine** | The game rules — combat, loot, skill checks, state management |
 | **GAE.Narrator** | Connects to your local AI (LM Studio) for narration |
-| **GAE.WikiSync** | Pulls world data from Wiki.js via its API |
+| **GAE.WikiSync** | *(deprecated — world data now loaded from YAML seed files via content registry)* |
 | **GAE.Discord** | The Discord bot that players interact with |
 | **GAE.Dashboard.Api** | Web dashboard with real-time updates |
 

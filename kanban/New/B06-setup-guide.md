@@ -19,7 +19,6 @@ If you want anyone besides yourself to host this, they need instructions. Even f
 - [ ] Covers: LM Studio installation, model selection, endpoint config
 - [ ] Covers: Docker stack startup (`reset-docker-stack.ps1`), what it creates, how to verify
 - [ ] Covers: Database setup (PostgreSQL, `gae_app` user)
-- [ ] Covers: Wiki.js initial setup (if needed for content)
 - [ ] Includes a `.env.example` or `appsettings.example.json` with all required config keys and comments
 - [ ] Linked from README "Want to Run Your Own?" section
 - [ ] Troubleshooting section: common issues (port conflicts, LM Studio not responding, bot not connecting)

@@ -89,39 +89,34 @@ An NPC remembers being insulted, kissed, helped, or ignored.
 
 ## NPC Knowledge Scoping
 
-NPCs have bounded knowledge via `Npc.KnowledgeScopes` — a list of string tags that control which wiki pages
+NPCs have bounded knowledge via `Npc.KnowledgeScopes` — a list of string tags that control which lore entries
 the narrator can reference when voicing that NPC.
 
 **Example:** Mara the Innkeeper has scopes `["ironhold", "thornveil", "shadow_market", "local"]`.
 Ask her about Ironhold trade disputes? She knows. Ask about the Iron Guard's internal command structure? She shrugs.
 
-Knowledge is assembled by `WorldKnowledgeBuilder.BuildScopedContextAsync()` which fetches:
-1. Room page (common knowledge — everyone knows where they are)
-2. NPC's own wiki page (backstory, personal history)
-3. Pages matching their KnowledgeScopes (factions, regions)
-4. Their own faction page
+Knowledge is assembled by `WorldKnowledgeBuilder.BuildScopedContextAsync()` which fetches lore entries
+matching the NPC's scopes, faction, and current room tags.
 
 Dynamically generated NPCs get scopes inferred from their faction + room environment tags.
 
 ---
 
-## Wiki Knowledge Pipeline
+## World Knowledge Pipeline
 
-The wiki (Wiki.js via GraphQL) serves as the narrator's long-term memory:
+Lore entries (seeded from YAML, stored in the content registry) serve as the narrator's long-term memory:
 
 ```
-lore-seed.yaml → wiki pages (synced at startup)
-WorldKnowledgeBuilder → reads wiki → injects into narrator prompts
+lore-seed.yaml → ContentRegistry (loaded at startup)
+WorldKnowledgeBuilder → reads registry → injects into narrator prompts
 NarratorService → uses world knowledge for all narrator calls
 ```
 
 **Key classes:**
-- `WorldKnowledgeBuilder` — pre-fetches relevant wiki pages before narrator calls
-  - `BuildContextAsync(room, player)` — generic, fetches room/NPC/faction/region pages
-  - `BuildScopedContextAsync(room, npc, player)` — NPC-scoped, respects KnowledgeScopes
+- `WorldKnowledgeBuilder` — pulls relevant lore entries from `IContentRegistryService` before narrator calls
+  - `BuildContextAsync(room)` — generic, fetches lore linked to room, environment tags, and region
+  - `BuildScopedContextAsync(room, npc)` — NPC-scoped, respects KnowledgeScopes
   - `SearchContextAsync(query)` — keyword search for free-form actions
-- `IWikiService.SearchAsync()` / `GetPagesAsync()` — GraphQL read operations
-- `IWikiService.CreateOrUpdatePageAsync()` — write operations
 
 **All four narrator methods** (NarrateAction, ProcessFreeForm, ProcessConversation, ProcessCombat)
 inject world knowledge into their user prompts. Conversation uses scoped knowledge; others use generic.
@@ -269,9 +264,9 @@ npm run test:e2e:update-snapshots:safe  # Update visual baselines
 5. **Input is owned by the stream.** `_startStreaming()` disables the command input. The `finally` block in `executeUserCommand` must NOT re-enable it if `UI._streamNode` is set.
 6. **Disposition persists and is dual-layer.** When a conversation ends, `ApplyInteractionUpdate()` saves both `Npc.Disposition` (flat) and `Npc.DispositionState` (rich). Always keep them in sync. The rich state is preferred for narrator prompts.
 7. **All action results must go through `afterCommand()`.** Never update player/room state from the UI without going through the server.
-8. **NPC knowledge is scoped.** Never give an NPC access to wiki knowledge outside their `KnowledgeScopes`. Use `BuildScopedContextAsync()` for conversations, `BuildContextAsync()` for generic narration.
+8. **NPC knowledge is scoped.** Never give an NPC access to lore outside their `KnowledgeScopes`. Use `BuildScopedContextAsync()` for conversations, `BuildContextAsync()` for generic narration.
 9. **Dynamically generated NPCs must have KnowledgeScopes and DispositionState.** Infer scopes from faction + environment tags. Initialize DispositionState with sensible defaults (see `GenerateNpcAsync` for the pattern).
-10. **Wiki is the narrator's memory.** If a significant world event occurs (NPC death, faction shift, discovery), consider writing it to the wiki so future narrator calls have context.
+10. **Lore is the narrator's memory.** If a significant world event occurs (NPC death, faction shift, discovery), consider adding a lore entry so future narrator calls have context.
 11. **WorldNpcState is world-scoped.** NPC disposition differs per world. Always call `OverlayWorldNpcStateAsync()` before conversation and `PersistWorldNpcStateAsync()` after each turn. Never assume NPC feelings are global.
 12. **Content must be world-tagged.** New rooms, NPCs, quests, and registry items must have `WorldIds` set. Default to `[WorldDefaults.DefaultWorldId]` if unspecified.
 13. **Stat translation is AI-driven.** When transferring players between worlds with different stat systems, use `RealmTravelService` — never manually map stats. SemanticTags on StatConfig guide the AI translation.

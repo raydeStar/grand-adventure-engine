@@ -342,6 +342,97 @@ public class NarratorServiceTests
         Assert.NotEmpty(response.Narration);
     }
 
+    // ── Retry logic tests ─────────────────────────────────────────
+
+    [Fact]
+    public async Task CompletionRetry_TransientFailureThenSuccess_ReturnsNarration()
+    {
+        // First call fails, second succeeds. retryCount=1 means 2 total attempts.
+        var handler = new TransientFailureHandler(
+            failCount: 1,
+            successBody: """{"choices":[{"message":{"content":"{\"narration\":\"The gate gleams.\",\"success\":true,\"statChanges\":{},\"inventoryChanges\":[],\"entityChanges\":[],\"combatInitiated\":false}"}}]}""");
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") };
+        var narrator = new NarratorService(httpClient, NullLogger<NarratorService>.Instance, retryCount: 1, retryDelayMs: 0);
+
+        var response = await narrator.ProcessFreeFormAsync(
+            new PlayerCharacter { Name = "Test", Race = "Human", Class = "Warrior" },
+            new Room { Id = "lab", Name = "QA Lab", Description = "A test room." },
+            "polish the gate",
+            []);
+
+        Assert.True(response.Success);
+        Assert.Contains("gleams", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(2, handler.CallCount);
+    }
+
+    [Fact]
+    public async Task CompletionRetry_AllRetriesExhausted_FallsBackGracefully()
+    {
+        // 3 total attempts (retryCount=2), all fail → CompletionAsync catches and returns fallback
+        var handler = new FakeHttpMessageHandler(new HttpRequestException("Connection refused"));
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") };
+        var narrator = new NarratorService(httpClient, NullLogger<NarratorService>.Instance, retryCount: 2, retryDelayMs: 0);
+
+        var response = await narrator.ProcessFreeFormAsync(
+            new PlayerCharacter { Name = "Test", Race = "Human", Class = "Warrior" },
+            new Room { Id = "lab", Name = "QA Lab", Description = "A test room." },
+            "open the chest",
+            []);
+
+        // Should get fallback (not throw), meaning all retries were attempted
+        Assert.NotNull(response);
+        Assert.NotEmpty(response.Narration);
+    }
+
+    [Fact]
+    public async Task CompletionRetry_ZeroRetries_SingleAttemptOnly()
+    {
+        var handler = new TransientFailureHandler(
+            failCount: 1,
+            successBody: """{"choices":[{"message":{"content":"ok"}}]}""");
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") };
+        var narrator = new NarratorService(httpClient, NullLogger<NarratorService>.Instance, retryCount: 0, retryDelayMs: 0);
+
+        // With retryCount=0, only 1 attempt — it fails, falls through to CompletionAsync fallback
+        var response = await narrator.ProcessFreeFormAsync(
+            new PlayerCharacter { Name = "Test", Race = "Human", Class = "Warrior" },
+            new Room { Id = "lab", Name = "QA Lab", Description = "A test room." },
+            "kick the door",
+            []);
+
+        Assert.NotNull(response);
+        Assert.Equal(1, handler.CallCount); // Only one attempt, no retry
+    }
+
+    [Fact]
+    public async Task CompletionRetry_CancellationDuringRetry_DoesNotRetryAfterCancellation()
+    {
+        // With a pre-cancelled token, the first HTTP call throws OperationCanceledException.
+        // The retry filter (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+        // should NOT catch it — it should propagate through CompletionOrThrowAsync.
+        // CompletionAsync catches it and returns fallback (which is fine — fast exit).
+        var handler = new TransientFailureHandler(failCount: 99, successBody: "{}");
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") };
+        var narrator = new NarratorService(httpClient, NullLogger<NarratorService>.Instance, retryCount: 5, retryDelayMs: 50_000);
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var response = await narrator.ProcessFreeFormAsync(
+            new PlayerCharacter { Name = "Test", Race = "Human", Class = "Warrior" },
+            new Room { Id = "lab", Name = "QA Lab", Description = "A test room." },
+            "open the door",
+            [],
+            ct: cts.Token);
+
+        // Should get fallback quickly — cancelled token prevents retry delay from completing,
+        // so only the first attempt fires before cancellation kicks in
+        Assert.NotNull(response);
+        Assert.Equal(1, handler.CallCount);
+    }
+
+    // ── Test helpers ──────────────────────────────────────────────
+
     private class FakeHttpMessageHandler : HttpMessageHandler
     {
         private readonly Exception _exception;
@@ -373,6 +464,42 @@ public class NarratorServiceTests
             return Task.FromResult(new HttpResponseMessage(_statusCode)
             {
                 Content = new StringContent(_responseBody)
+            });
+        }
+    }
+
+    private class TransientFailureHandler : HttpMessageHandler
+    {
+        private readonly int _failCount;
+        private readonly string _successBody;
+        private int _callCount;
+
+        public int CallCount => _callCount;
+
+        public TransientFailureHandler(int failCount, string successBody)
+        {
+            _failCount = failCount;
+            _successBody = successBody;
+        }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            // Skip model-resolution requests (GET /v1/models) — always succeed
+            if (request.Method == HttpMethod.Get)
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("""{"data":[{"id":"test-model"}]}""")
+                });
+            }
+
+            _callCount++;
+            if (_callCount <= _failCount)
+                throw new HttpRequestException("Transient failure");
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(_successBody)
             });
         }
     }

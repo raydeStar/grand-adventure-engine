@@ -8,6 +8,6 @@ argument-hint: The inputs this agent expects, e.g., "a task to implement" or "a 
 <!-- Tip: Use /create-agent in chat to generate content with agent assistance -->
 
 - [User Profile](user_profile.md) — project author, building GAE, uses Cowork + Claude Code workflow
-- [GAE Architecture](project_gae_architecture.md) — LM Studio, Wiki.js, no DB, in-memory state, dual disposition
+- [GAE Architecture](project_gae_architecture.md) — LM Studio, no DB, in-memory state, dual disposition
 
 

@@ -26,7 +26,7 @@ These make the project look finished. Do them before sharing publicly.
 | Order | Task | Effort | Why This Order |
 |---|---|---|---|
 | 7 | **P02** Choose a license | Tiny | 2-minute decision. Just do it. |
-| 8 | **P04** Wiki sync docs | Tiny | Another quick one. Prevents confusion. |
+| ~~8~~ | ~~**P04** Wiki sync docs~~ | ~~Tiny~~ | ~~Obsolete — Wiki.js removed~~ |
 | 9 | **P01** README images | Small | Needs a running game for screenshots. By now you'll have one. |
 | 10 | **P03** Dashboard UI baseline | Med-Large | Biggest polish task. Tackle it last — functional dashboard is nice but not critical for Discord players. |
 
@@ -73,7 +73,7 @@ None of these block launch. Tackle them based on player feedback.
 | **X02** Party quest sync | Medium | Do when multiplayer quests are getting used |
 | **X03** NPC disposition → combat | Small-Med | Cool flavor feature, not urgent |
 | **X04** SignalR live dashboard | Med-Large | Do when you're actively monitoring games |
-| **X05** Wiki read-back | Large | Big architectural change. Do when you want wiki-as-CMS |
+| ~~**X05** Wiki read-back~~ | ~~Large~~ | ~~Obsolete — Wiki.js removed~~ |
 | **X06** Race & class abilities | Large | Do when players want more character depth |
 
 ---

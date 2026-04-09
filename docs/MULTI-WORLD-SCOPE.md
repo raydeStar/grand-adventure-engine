@@ -126,7 +126,7 @@ When an NPC exists in multiple worlds, their personality and identity are shared
 
 - `NpcDispositionState` (emotion, intensity, memory flags) is stored per `(npc_id, world_id, player_id)` — not just per NPC
 - Story entries carry a `world_id` — when building narrator context, only entries from the current world are included
-- The wiki knowledge pipeline (if active) filters by world tags
+- The lore/knowledge pipeline filters by world tags
 - Future Lore Book entries will be tagged with world IDs and only injected into narrator prompts for matching worlds
 
 ---
@@ -692,7 +692,7 @@ This ensures the narrator writes in the appropriate tone and references the corr
 When building NPC conversation context:
 - Only include story entries where `world_id == current_world_id`
 - Only include NPC disposition from `world_npc_states` for current world
-- Only include wiki knowledge tagged to current world (future lore book)
+- Only include lore knowledge tagged to current world
 - NPCs do NOT know about events in other worlds unless explicitly tagged
 
 ---

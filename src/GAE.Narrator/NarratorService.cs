@@ -20,10 +20,12 @@ public class NarratorService : INarratorService
     private readonly IContentRegistryService? _registry;
     private readonly IWorldContext? _worldContext;
     private readonly IWorldRepository? _worldRepository;
+    private readonly int _retryCount;
+    private readonly int _retryDelayMs;
     private string _model;
     private bool _modelResolved;
 
-    public NarratorService(HttpClient httpClient, ILogger<NarratorService> logger, string model = "default", WorldKnowledgeBuilder? knowledge = null, IConversationLogger? conversationLogger = null, IContentRegistryService? registry = null, IWorldContext? worldContext = null, IWorldRepository? worldRepository = null)
+    public NarratorService(HttpClient httpClient, ILogger<NarratorService> logger, string model = "default", WorldKnowledgeBuilder? knowledge = null, IConversationLogger? conversationLogger = null, IContentRegistryService? registry = null, IWorldContext? worldContext = null, IWorldRepository? worldRepository = null, int retryCount = 1, int retryDelayMs = 2000)
     {
         _httpClient = httpClient;
         _logger = logger;
@@ -32,6 +34,8 @@ public class NarratorService : INarratorService
         _registry = registry;
         _worldContext = worldContext;
         _worldRepository = worldRepository;
+        _retryCount = Math.Max(0, retryCount);
+        _retryDelayMs = Math.Max(0, retryDelayMs);
         _model = model;
         _modelResolved = !string.Equals(model, "default", StringComparison.OrdinalIgnoreCase);
     }
@@ -1834,6 +1838,44 @@ public class NarratorService : INarratorService
         await ResolveModelAsync(ct);
         var sw = Stopwatch.StartNew();
 
+        var totalAttempts = 1 + _retryCount;
+        Exception? lastException = null;
+
+        for (var attempt = 1; attempt <= totalAttempts; attempt++)
+        {
+            try
+            {
+                var completionContent = await SendCompletionRequestAsync(systemPrompt, userPrompt, ct, operation, logPayload, maxTokens);
+
+                // Log the full exchange for training-data collection
+                sw.Stop();
+                await LogConversationAsync(operation, systemPrompt, userPrompt, completionContent,
+                    maxTokens, sw.ElapsedMilliseconds, success: true, playerId: playerId, roomId: roomId);
+
+                return completionContent;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+            {
+                lastException = ex;
+
+                if (attempt < totalAttempts)
+                {
+                    _logger.LogWarning(ex, "LM Studio {Operation} attempt {Attempt}/{Total} failed, retrying in {DelayMs}ms",
+                        operation, attempt, totalAttempts, _retryDelayMs);
+                    await Task.Delay(_retryDelayMs, ct);
+                }
+                else
+                {
+                    _logger.LogWarning(ex, "LM Studio {Operation} failed after {Total} attempt(s)", operation, totalAttempts);
+                }
+            }
+        }
+
+        throw lastException!;
+    }
+
+    private async Task<string> SendCompletionRequestAsync(string systemPrompt, string userPrompt, CancellationToken ct, string operation, bool logPayload, int maxTokens)
+    {
         var request = new LmStudioRequest
         {
             Model = _model,
@@ -1926,11 +1968,6 @@ public class NarratorService : INarratorService
             if (string.IsNullOrWhiteSpace(completionContent))
                 throw new InvalidOperationException($"LM Studio {operation} streamed response was empty.");
         }
-
-        // Log the full exchange for training-data collection
-        sw.Stop();
-        await LogConversationAsync(operation, systemPrompt, userPrompt, completionContent,
-            maxTokens, sw.ElapsedMilliseconds, success: true, playerId: playerId, roomId: roomId);
 
         return completionContent;
     }

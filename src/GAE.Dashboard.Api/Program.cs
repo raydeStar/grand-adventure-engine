@@ -115,6 +115,8 @@ builder.Services.AddSingleton<IGameEngine, GameEngine>();
 // Narrator — LM Studio HTTP client
 var lmStudioEndpoint = builder.Configuration["LmStudio:Endpoint"] ?? "http://localhost:1234";
 var lmStudioModel = builder.Configuration["LmStudio:Model"] ?? "default";
+var lmRetryCount = int.TryParse(builder.Configuration["LmStudio:RetryCount"], out var rc) ? rc : 1;
+var lmRetryDelayMs = int.TryParse(builder.Configuration["LmStudio:RetryDelayMs"], out var rd) ? rd : 2000;
 builder.Services.AddHttpClient("LmStudio", client =>
 {
     client.BaseAddress = new Uri(lmStudioEndpoint + "/");
@@ -130,7 +132,7 @@ builder.Services.AddSingleton<INarratorService>(sp =>
     var registry = sp.GetRequiredService<IContentRegistryService>();
     var worldContext = sp.GetService<IWorldContext>();
     var worldRepository = sp.GetService<IWorldRepository>();
-    return new NarratorService(httpClient, logger, lmStudioModel, knowledge, conversationLogger, registry, worldContext, worldRepository);
+    return new NarratorService(httpClient, logger, lmStudioModel, knowledge, conversationLogger, registry, worldContext, worldRepository, lmRetryCount, lmRetryDelayMs);
 });
 
 builder.Services.AddSingleton<IRealmTravelService>(sp =>
