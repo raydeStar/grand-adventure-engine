@@ -97,6 +97,42 @@ public class GameEngine : IGameEngine
             // (e.g., the interaction ended and the action should be handled normally)
         }
 
+        // --- Unprovoked NPC aggression ---
+        // Extremely enraged NPCs (intensity 90+, hostile/angry emotion) attack without provocation.
+        if (player.Interaction.Mode == InteractionMode.Explore)
+        {
+            var aggroRoom = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
+            if (aggroRoom is not null)
+            {
+                var aggressor = aggroRoom.Npcs.FirstOrDefault(n =>
+                    !n.IsHostile && n.Hp.HasValue && n.Hp.Value > 0 &&
+                    n.DispositionState.Intensity >= 90 &&
+                    n.DispositionState.Emotion is "hostile" or "angry");
+
+                if (aggressor is not null)
+                {
+                    _logger.LogInformation("NPC {NpcName} attacks {Player} unprovoked — {Emotion} at intensity {Intensity}",
+                        aggressor.Name, player.Name, aggressor.DispositionState.Emotion, aggressor.DispositionState.Intensity);
+                    aggressor.IsHostile = true;
+                    var aggroEnemies = aggroRoom.Npcs.Where(n => n.IsHostile && n.Hp.HasValue && n.Hp.Value > 0).ToList();
+                    await EnterCombatAsync(player, aggroRoom, aggroEnemies, ct);
+                    await _stateManager.SaveRoomAsync(aggroRoom, ct);
+                    await _stateManager.SavePlayerAsync(player, ct);
+
+                    var aggroResult = new ActionResult
+                    {
+                        ActionId = action.Id,
+                        RawInput = action.RawInput,
+                        Success = true,
+                        MechanicalSummary = $"**{aggressor.Name} attacks you!** {aggressor.DispositionState.Reason ?? "Their fury boils over."}",
+                        InteractionUpdate = new InteractionUpdate { Mode = InteractionMode.Combat, CombatStatus = "initiated" }
+                    };
+                    await PersistInteractionStoryEntry(player, action, aggroResult, ct);
+                    return aggroResult;
+                }
+            }
+        }
+
         // NLP fallback: when regex parsing fails, ask the narrator to interpret natural language
         if (action.Type == ActionType.Unknown)
         {
@@ -3053,7 +3089,8 @@ public class GameEngine : IGameEngine
             foreach (var enemy in enemies.Where(e => e.Hp.HasValue && e.Hp.Value > 0 && room.Npcs.Contains(e)))
             {
                 int eSeed = flavorSeed + enemy.Name.Length * 5;
-                int atkBonus = enemy.AttackBonus ?? 0;
+                var eDispMods = GetDispositionCombatMods(enemy);
+                int atkBonus = (enemy.AttackBonus ?? 0) + eDispMods.AttackBonus;
                 var eRoll = _dice.RollAttack(atkBonus);
                 allDice.Add(eRoll);
 
@@ -3063,7 +3100,7 @@ public class GameEngine : IGameEngine
                 string eDmgDice = enemy.DamageDice ?? "1d4";
                 var eDmgRoll = _dice.Roll(eDmgDice, $"{enemy.Name} dmg");
                 int eDmg = eRoll.IsCritical ? eDmgRoll.Total * _rules.Combat.CriticalMultiplier : eDmgRoll.Total;
-                eDmg = Math.Max(1, eDmg);
+                eDmg = Math.Max(1, eDmg + eDispMods.DamageBonus);
                 allDice.Add(eDmgRoll);
 
                 var oldPHp = player.Hp;
@@ -3072,6 +3109,15 @@ public class GameEngine : IGameEngine
                 mech.Add(DescribeEnemyHit(enemy.Name, eDmg, eRoll.IsCritical, eSeed));
 
                 if (player.Hp <= 0) { mech.Add(PickFlavor(DefeatVerbs, eSeed)); combatOver = true; break; }
+            }
+
+            // ── NPC morale check — surrender/flee ──
+            if (!combatOver && player.Hp > 0)
+            {
+                var moraleMessages = CheckNpcMorale(enemies, room);
+                mech.AddRange(moraleMessages);
+                if (!enemies.Any(e => e.Hp.HasValue && e.Hp.Value > 0 && room.Npcs.Contains(e)))
+                    combatOver = true;
             }
         }
 
@@ -3249,10 +3295,11 @@ public class GameEngine : IGameEngine
             Initiative = playerInit.Total, Hp = player.Hp, MaxHp = player.MaxHp
         });
 
-        // Enemy initiative
+        // Enemy initiative (disposition affects readiness)
         foreach (var enemy in enemies)
         {
-            int enemyDexMod = (enemy.AttackBonus ?? 0) / 2;
+            var dispMods = GetDispositionCombatMods(enemy);
+            int enemyDexMod = (enemy.AttackBonus ?? 0) / 2 + dispMods.InitiativeBonus;
             var enemyInit = _dice.RollInitiative(enemyDexMod);
             combat.TurnOrder.Add(new CombatParticipant
             {
@@ -5380,6 +5427,67 @@ public class GameEngine : IGameEngine
 
     // ─── Combat Helpers ────────────────────────────────────────────────────
 
+    /// <summary>Combat stat modifiers derived from an NPC's emotional disposition.</summary>
+    internal record DispositionCombatMods(int AttackBonus, int DamageBonus, int InitiativeBonus);
+
+    /// <summary>
+    /// Calculates combat modifiers from NPC disposition. Furious NPCs hit harder;
+    /// reluctant combatants fight poorly. Scared NPCs are unreliable in a fight.
+    /// </summary>
+    internal static DispositionCombatMods GetDispositionCombatMods(Npc npc)
+    {
+        var emotion = npc.DispositionState.Emotion.ToLowerInvariant();
+        int intensity = npc.DispositionState.Intensity;
+
+        return emotion switch
+        {
+            "hostile" when intensity >= 80 => new(2, 2, 2),
+            "hostile" or "contemptuous" when intensity >= 50 => new(1, 1, 1),
+            "angry" when intensity >= 80 => new(2, 1, 1),
+            "angry" when intensity >= 50 => new(1, 0, 0),
+            "scared" => new(-2, -1, -1),
+            "friendly" or "grateful" or "amused" when intensity >= 50 => new(-2, -2, -2),
+            _ => new(0, 0, 0)
+        };
+    }
+
+    /// <summary>
+    /// Checks if wounded NPCs surrender or flee based on their disposition.
+    /// NPCs with non-hostile baselines may give up when badly wounded.
+    /// Scared NPCs flee when their HP drops below half.
+    /// </summary>
+    private static List<string> CheckNpcMorale(List<Npc> enemies, Room room)
+    {
+        var messages = new List<string>();
+        for (int i = enemies.Count - 1; i >= 0; i--)
+        {
+            var npc = enemies[i];
+            if (!npc.Hp.HasValue || npc.Hp.Value <= 0) continue;
+
+            double hpPct = (double)npc.Hp.Value / Math.Max(1, npc.MaxHp ?? npc.Hp.Value);
+            var ds = npc.DispositionState;
+
+            // Non-hostile baseline NPCs surrender when badly wounded
+            if (ds.Baseline >= 50 && hpPct < 0.25)
+            {
+                npc.IsHostile = false;
+                ds.Emotion = "resigned";
+                ds.Intensity = 80;
+                ds.Reason = "Surrendered after being grievously wounded.";
+                messages.Add($"**{npc.Name} throws down their weapon and surrenders!**");
+                enemies.Remove(npc);
+            }
+            // Scared NPCs flee at half HP
+            else if (ds.Emotion.Equals("scared", StringComparison.OrdinalIgnoreCase) && hpPct < 0.5)
+            {
+                room.Npcs.Remove(npc);
+                enemies.Remove(npc);
+                messages.Add($"**{npc.Name} panics and flees!**");
+            }
+        }
+        return messages;
+    }
+
     /// <summary>Runs a single round of enemy attacks against the player.</summary>
     private void RunEnemyAttacks(PlayerCharacter player, List<Npc> enemies, Room room,
         List<string> mech, List<DiceRoll> dice, List<StateChange> sc, int defenseBonus)
@@ -5389,7 +5497,8 @@ public class GameEngine : IGameEngine
         foreach (var enemy in enemies.Where(e => e.Hp.HasValue && e.Hp.Value > 0 && room.Npcs.Contains(e)))
         {
             int eSeed = idx * 11 + enemy.Name.Length * 3;
-            int atkBonus = enemy.AttackBonus ?? 0;
+            var dispMods = GetDispositionCombatMods(enemy);
+            int atkBonus = (enemy.AttackBonus ?? 0) + dispMods.AttackBonus;
             var eRoll = _dice.RollAttack(atkBonus);
             dice.Add(eRoll);
 
@@ -5400,7 +5509,7 @@ public class GameEngine : IGameEngine
             string eDmgDice = enemy.DamageDice ?? "1d4";
             var eDmgRoll = _dice.Roll(eDmgDice, $"{enemy.Name} dmg");
             int eDmg = eRoll.IsCritical ? eDmgRoll.Total * _rules.Combat.CriticalMultiplier : eDmgRoll.Total;
-            eDmg = Math.Max(1, eDmg);
+            eDmg = Math.Max(1, eDmg + dispMods.DamageBonus);
             dice.Add(eDmgRoll);
 
             var oldHp = player.Hp;
@@ -5412,6 +5521,10 @@ public class GameEngine : IGameEngine
             if (player.Hp <= 0) { mech.Add(PickFlavor(DefeatVerbs, eSeed)); break; }
             idx++;
         }
+
+        // NPC morale check after attacks resolve
+        if (player.Hp > 0)
+            mech.AddRange(CheckNpcMorale(enemies, room));
     }
 
     /// <summary>Generates a code-block HP bar panel for all combatants (console-style).</summary>
