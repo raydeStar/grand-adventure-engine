@@ -245,6 +245,7 @@ public class GameEngine : IGameEngine
             Id = concept.PlayerDiscordId,
             DiscordId = concept.PlayerDiscordId,
             Name = concept.Name,
+            Gender = concept.Gender,
             Race = concept.Race,
             Class = concept.Class,
             Backstory = concept.Backstory,
@@ -275,6 +276,25 @@ public class GameEngine : IGameEngine
 
         // Grant starting items from the registry / lore seed
         await GrantStartingItemsAsync(player, ct);
+
+        // Grant personal items the player mentioned during creation (flavor/keepsake items)
+        foreach (var personalItem in concept.PersonalItems)
+        {
+            if (string.IsNullOrWhiteSpace(personalItem)) continue;
+            var existing = player.Inventory.FirstOrDefault(i =>
+                string.Equals(i.Name, personalItem, StringComparison.OrdinalIgnoreCase));
+            if (existing is not null) continue; // already have it
+            player.Inventory.Add(new InventoryItem
+            {
+                Name = personalItem,
+                Description = $"A personal belonging — {personalItem.ToLowerInvariant()}.",
+                Type = ItemType.Misc,
+                Value = 0,
+                IsEquippable = false,
+                IsConsumable = false
+            });
+            _logger.LogInformation("Granted personal item '{Item}' to {PlayerId}", personalItem, player.Id);
+        }
 
         // Grant starter lore for the world
         if (_loreTracker is not null)

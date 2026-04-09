@@ -2145,7 +2145,7 @@ public class DashboardController : ControllerBase
 
     [Authorize(Policy = DashboardPolicies.AdminAccess)]
     [HttpPost("admin/worlds/{worldId}/generate-intro")]
-    public async Task<IActionResult> GenerateWorldIntro(string worldId, CancellationToken ct)
+    public async Task<IActionResult> GenerateWorldIntro(string worldId, [FromBody] GenerateIntroRequest? request, CancellationToken ct)
     {
         var world = await _worldRepository.GetWorldAsync(worldId, ct);
         if (world is null) return NotFound(new { error = $"World '{worldId}' not found." });
@@ -2172,6 +2172,24 @@ public class DashboardController : ControllerBase
             ? "\nMain storyline quests (hint at but don't spoil):\n" + string.Join("\n", mainQuests.Take(5))
             : "";
 
+        // Load narrator voice if selected
+        var narratorVoice = "";
+        if (!string.IsNullOrWhiteSpace(request?.NarratorPresetId))
+        {
+            var preset = _registry.NarratorPresets.GetById(request.NarratorPresetId);
+            if (preset is not null)
+            {
+                narratorVoice = $"""
+
+                    IMPORTANT — Write in this narrator's voice:
+                    Narrator name: {preset.Name}
+                    Archetype: {preset.Archetype}
+                    Personality: {preset.PersonalityPrompt}
+                    The narrator should introduce themselves by name as "{preset.Name}".
+                    """;
+            }
+        }
+
         var prompt = $"""
             Generate a Discord character creation intro message for a text RPG world.
             The message should:
@@ -2184,9 +2202,9 @@ public class DashboardController : ControllerBase
             World description: {world.Description}
             {loreContext}
             {questContext}
+            {narratorVoice}
 
             Write the intro using Discord markdown (bold, italics, etc). Keep it 3-5 paragraphs.
-            The Narrator should have personality — dry wit, slight amusement, world-weary wisdom.
             Return ONLY the message text, no JSON wrapping.
             """;
 
@@ -2248,6 +2266,33 @@ public class DashboardController : ControllerBase
         world.UpdatedAt = DateTimeOffset.UtcNow;
         await _worldRepository.SaveWorldAsync(world, ct);
         return Ok(new { success = true, id = worldId, isActive = false });
+    }
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpPost("admin/worlds/{worldId}/set-discord-default")]
+    public async Task<IActionResult> SetDiscordDefaultWorld(string worldId, CancellationToken ct)
+    {
+        var target = await _worldRepository.GetWorldAsync(worldId, ct);
+        if (target is null) return NotFound(new { error = $"World '{worldId}' not found." });
+
+        // Remove the discord-default tag from all worlds
+        var allWorlds = await _worldRepository.GetAllWorldsAsync(ct);
+        foreach (var w in allWorlds)
+        {
+            if (w.Tags.Remove("discord-default"))
+            {
+                w.UpdatedAt = DateTimeOffset.UtcNow;
+                await _worldRepository.SaveWorldAsync(w, ct);
+            }
+        }
+
+        // Add the tag to the target world
+        if (!target.Tags.Contains("discord-default"))
+            target.Tags.Add("discord-default");
+        target.UpdatedAt = DateTimeOffset.UtcNow;
+        await _worldRepository.SaveWorldAsync(target, ct);
+
+        return Ok(new { success = true, id = worldId, isDiscordDefault = true });
     }
 
     [Authorize(Policy = DashboardPolicies.AdminAccess)]
@@ -2741,6 +2786,11 @@ public class UpdateWorldRequest
     public string? CharacterCreationIntro { get; set; }
     public string? DefaultNarratorPresetId { get; set; }
     public List<string>? NarratorPresetIds { get; set; }
+}
+
+public class GenerateIntroRequest
+{
+    public string? NarratorPresetId { get; set; }
 }
 
 public class CreatePortalRequest

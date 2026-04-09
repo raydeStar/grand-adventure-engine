@@ -4,6 +4,7 @@ using GAE.Engine.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
@@ -11,9 +12,10 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GAE.Engine.Data.Migrations
 {
     [DbContext(typeof(GaeDbContext))]
-    partial class GaeDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260408010000_AddPlayerGender")]
+    partial class AddPlayerGender
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

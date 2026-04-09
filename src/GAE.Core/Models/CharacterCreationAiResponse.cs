@@ -4,8 +4,10 @@ namespace GAE.Core.Models;
 public class CharacterCreationAiResponse
 {
     public string? Name { get; set; }
+    public string Gender { get; set; } = string.Empty;
     public string Race { get; set; } = "Human";
     public string Class { get; set; } = "Fighter";
+    public List<string> PersonalItems { get; set; } = [];
 
     /// <summary>Legacy: stat priority ordering for standard array assignment.</summary>
     public List<string> StatOrder { get; set; } = ["str", "con", "dex", "wis", "cha", "int"];

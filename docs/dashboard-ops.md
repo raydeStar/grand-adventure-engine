@@ -78,7 +78,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\reset-docker-stack.ps1
 - Reset the Docker stack on explicit host ports:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\reset-docker-stack.ps1 -GaePort 8182 -WikiPort 3001
+powershell -ExecutionPolicy Bypass -File .\scripts\reset-docker-stack.ps1 -GaePort 8181 -WikiPort 3001
 ```
 
 - Force a clean rebuild of the `gae` image before restart:

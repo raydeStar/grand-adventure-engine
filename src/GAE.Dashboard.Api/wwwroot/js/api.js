@@ -239,8 +239,8 @@ const API = {
     return res.json();
   },
 
-  async generateWorldIntro(worldId) {
-    return this.postJson(`${this.base}/admin/worlds/${encodeURIComponent(worldId)}/generate-intro`, {});
+  async generateWorldIntro(worldId, narratorPresetId) {
+    return this.postJson(`${this.base}/admin/worlds/${encodeURIComponent(worldId)}/generate-intro`, { narratorPresetId: narratorPresetId || null });
   },
 
   async activateWorld(worldId) {
@@ -249,6 +249,10 @@ const API = {
 
   async deactivateWorld(worldId) {
     return this.postJson(`${this.base}/admin/worlds/${encodeURIComponent(worldId)}/deactivate`, {});
+  },
+
+  async setDiscordDefaultWorld(worldId) {
+    return this.postJson(`${this.base}/admin/worlds/${encodeURIComponent(worldId)}/set-discord-default`, {});
   },
 
   async getWorldPlayers(worldId) {

@@ -584,14 +584,23 @@ public class NarratorService : INarratorService
             they're a Hitman, a Pirate, or a Cheese Wizard, USE THAT as their class.
             Never override the player's creative choices. Embrace the weird.
 
+            Also extract any personal items, treasured possessions, or things they carry.
+            These are flavor items that matter to the character's identity.
+            Examples: "a red flower", "my father's old pocket watch", "a lucky coin"
+
+            Infer gender from context clues (pronouns, descriptors like "she", "he", "wizard",
+            "witch", "king", "queen", etc.). If ambiguous, use empty string.
+
             Return ONLY valid JSON, no markdown fences:
             {
               "name": "suggested name or null if player did not say one",
+              "gender": "Female, Male, Non-binary, or empty string if unclear",
               "race": "whatever the player said",
               "class": "whatever fits their description",
               "stats": { "str": 14, "dex": 12, "con": 13, "int": 10, "wis": 11, "cha": 15, "luck": 10 },
               "statOrder": ["cha", "str", "con", "dex", "wis", "int"],
               "backstory": "2-3 sentence backstory based on their description",
+              "personalItems": ["item name 1", "item name 2"],
               "startingGold": 100,
               "followUpQuestion": "optional question if the description was vague, or null"
             }
@@ -3017,6 +3026,50 @@ public class NarratorService : INarratorService
                   "wis": 10,
                   "cha": 10,
                   "luck": 10
+                }
+                """,
+            "narrator_preset" => """
+                {
+                  "id": "snake_id_format",
+                  "name": "Display Name",
+                  "description": "A short summary of the narrator's personality and vibe.",
+                  "worldIds": ["default-world"],
+                  "archetype": "sassy|stoic|kind|sardonic|mysterious|cheerful|dramatic|grim|whimsical",
+                  "personalityPrompt": "A detailed system prompt (2-3 paragraphs) defining how this narrator speaks, thinks, and reacts. Include their background, speech patterns, verbal tics, attitude toward the player, how they handle combat narration, how they describe environments, and what makes them unique. This is the most important field — it drives ALL narrator behavior.",
+                  "greetingText": "The narrator's introduction when a player first meets them or starts character creation. Should be in-character, 2-3 sentences. Example: 'Well, well... another brave soul stumbles into my story. I am Penelo, and trust me, darling — you are going to LOVE what I have planned for you.'",
+                  "loreDeliveryStyle": "How this narrator explains lore and world history. Example: 'Deliver lore like campfire ghost stories — dramatic pauses, rhetorical questions, and the occasional shudder.'",
+                  "failureReactionStyle": "How the narrator reacts when the player fails, dies, or makes mistakes. Example: 'Mock them gently with backhanded sympathy, then offer genuine encouragement wrapped in sarcasm.'",
+                  "successReactionStyle": "How the narrator reacts when the player wins battles or achieves goals. Example: 'Be genuinely impressed but try to hide it behind dismissive comments. Occasionally break character to cheer.'",
+                  "isSelectable": true,
+                  "sortOrder": 0,
+                  "tags": ["personality-tag-1", "personality-tag-2"]
+                }
+                """,
+            "lore_entry" => """
+                {
+                  "id": "snake_id_format",
+                  "name": "Display Name",
+                  "description": "The lore text itself — what the player learns.",
+                  "worldIds": ["default-world"],
+                  "category": "history|geography|faction|character|legend|religion|arcane",
+                  "isStarterLore": false,
+                  "tags": ["relevant-tag"]
+                }
+                """,
+            "quest" => """
+                {
+                  "id": "snake_id_format",
+                  "name": "Display Name",
+                  "description": "Quest description shown to the player.",
+                  "worldIds": ["default-world"],
+                  "type": "main|side|bounty|discovery",
+                  "objectives": [
+                    {"id": "obj_1", "description": "What the player must do", "isOptional": false}
+                  ],
+                  "rewards": {"xp": 100, "gold": 50, "items": []},
+                  "requiredLevel": 1,
+                  "prerequisites": [],
+                  "tags": ["adventure"]
                 }
                 """,
             _ => """{"id": "snake_id", "name": "Name", "description": "Description"}"""

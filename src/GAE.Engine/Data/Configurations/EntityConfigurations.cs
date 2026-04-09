@@ -24,6 +24,7 @@ public class PlayerConfiguration : IEntityTypeConfiguration<PlayerEntity>
         builder.HasKey(p => p.Id);
         builder.Property(p => p.Id).HasColumnName("id");
         builder.Property(p => p.Name).HasColumnName("name").IsRequired();
+        builder.Property(p => p.Gender).HasColumnName("gender");
         builder.Property(p => p.Race).HasColumnName("race").IsRequired();
         builder.Property(p => p.Class).HasColumnName("class").IsRequired();
         builder.Property(p => p.Faction).HasColumnName("faction").IsRequired();

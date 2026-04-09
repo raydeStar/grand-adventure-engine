@@ -1172,6 +1172,7 @@
       UI.renderWorldDetail(world, state.selectedWorldPlayers);
       await wireWorldNarratorControls(world);
       wireStatControls(world);
+      wireCollapsibleHeadings();
       UI.renderPortalList(world?.portals || [], state.worlds);
       UI.populateWorldSelects(state.worlds, worldId);
       if (ctx) ctx.classList.remove('hidden');
@@ -1185,6 +1186,20 @@
   }
 
   function handleWorldListClick(event) {
+    // Handle "Set Default" button
+    const setDefaultBtn = event.target.closest('[data-set-default-world]');
+    if (setDefaultBtn) {
+      event.stopPropagation();
+      const worldId = setDefaultBtn.dataset.setDefaultWorld;
+      setDefaultBtn.disabled = true;
+      setDefaultBtn.textContent = '...';
+      API.setDiscordDefaultWorld(worldId)
+        .then(() => refreshWorlds())
+        .catch(e => alert('Failed to set default: ' + e.message))
+        .finally(() => { setDefaultBtn.disabled = false; setDefaultBtn.textContent = 'Set Default'; });
+      return;
+    }
+
     const card = event.target.closest('[data-world-id]');
     if (!card) return;
     const worldId = card.dataset.worldId;
@@ -1192,7 +1207,7 @@
   }
 
   async function wireWorldNarratorControls(world) {
-    // Populate narrator select & checkboxes from registry
+    // Populate narrator select from registry
     try {
       const summary = await API.getRegistrySummary();
       const presets = summary.narratorPresets || 0;
@@ -1201,29 +1216,13 @@
         allPresets = await API.getRegistry('narrator_presets');
       }
 
-      // Default narrator select
       const sel = document.getElementById('world-default-narrator');
       if (sel) {
         sel.innerHTML = '<option value="">System default</option>' +
-          allPresets.map(p => `<option value="${UI.esc(p.id)}" ${p.id === (world.defaultNarratorPresetId || '') ? 'selected' : ''}>${UI.esc(p.name || p.id)}</option>`).join('');
-      }
-
-      // Available narrators checkboxes
-      const cbContainer = document.getElementById('world-narrator-checkboxes');
-      if (cbContainer) {
-        const selected = world.narratorPresetIds || [];
-        cbContainer.innerHTML = allPresets.map(p => {
-          const checked = selected.includes(p.id) ? 'checked' : '';
-          return `<label style="display:flex;align-items:center;gap:0.35rem;cursor:pointer;">
-            <input type="checkbox" class="world-narrator-cb" value="${UI.esc(p.id)}" ${checked}>
-            ${UI.esc(p.name || p.id)} <span style="color:var(--dim);font-size:10px;">(${UI.esc(p.archetype || '')})</span>
-          </label>`;
-        }).join('');
+          allPresets.map(p => `<option value="${UI.esc(p.id)}" ${p.id === (world.defaultNarratorPresetId || '') ? 'selected' : ''}>${UI.esc(p.name || p.id)} (${UI.esc(p.archetype || '')})</option>`).join('');
       }
     } catch (e) {
       console.error('Failed to load narrator presets for world settings:', e);
-      const cbContainer = document.getElementById('world-narrator-checkboxes');
-      if (cbContainer) cbContainer.innerHTML = `<div style="color:var(--error);font-size:11px;">Error loading presets: ${e.message}</div>`;
     }
 
     // Wire save button
@@ -1232,16 +1231,13 @@
       saveBtn.onclick = async () => {
         const intro = document.getElementById('world-intro-text')?.value || '';
         const defaultNarrator = document.getElementById('world-default-narrator')?.value || '';
-        const cbs = document.querySelectorAll('.world-narrator-cb:checked');
-        const narratorIds = Array.from(cbs).map(cb => cb.value);
 
         try {
           saveBtn.disabled = true;
           saveBtn.textContent = 'Saving...';
           await API.updateWorld(world.id, {
             characterCreationIntro: intro || '',
-            defaultNarratorPresetId: defaultNarrator || '',
-            narratorPresetIds: narratorIds
+            defaultNarratorPresetId: defaultNarrator || ''
           });
           saveBtn.textContent = 'Saved!';
           setTimeout(() => { saveBtn.textContent = 'Save Settings'; saveBtn.disabled = false; }, 1500);
@@ -1253,29 +1249,66 @@
       };
     }
 
-    // Wire generate button
+    // Wire generate button with spinner
     const genBtn = document.getElementById('world-intro-generate');
+    let generating = false;
     if (genBtn) {
       genBtn.onclick = async () => {
-        const textarea = document.getElementById('world-intro-text');
+        if (generating) return;
+        generating = true;
+        const narratorId = document.getElementById('world-default-narrator')?.value || '';
         const wid = world?.id;
-        console.log('Generate intro clicked, world.id:', wid);
-        if (!wid) { genBtn.textContent = 'Error: no world'; return; }
+        if (!wid) { generating = false; return; }
         try {
           genBtn.disabled = true;
-          genBtn.textContent = 'Generating...';
-          const result = await API.generateWorldIntro(wid);
-          console.log('Generate result:', result);
-          if (textarea && result.intro) textarea.value = result.intro;
-          genBtn.textContent = 'AI Generate';
-          genBtn.disabled = false;
+          genBtn.style.pointerEvents = 'none';
+          genBtn.innerHTML = '<span class="spinner"></span> Generating...';
+          const statusBefore = document.getElementById('world-intro-status');
+          if (statusBefore) { statusBefore.style.color = 'var(--dim)'; statusBefore.textContent = 'Asking the narrator to write an intro...'; }
+
+          // Pause auto-refresh so it doesn't re-render the DOM and destroy our textarea
+          stopRefreshLoop();
+
+          const result = await API.generateWorldIntro(wid, narratorId);
+
+          // Re-query DOM elements AFTER the await — the refresh loop may have
+          // replaced the DOM during the (potentially long) AI call
+          const textarea = document.getElementById('world-intro-text');
+          const statusEl = document.getElementById('world-intro-status');
+          const introText = (result && result.intro) ? result.intro : JSON.stringify(result);
+
+          if (textarea) {
+            textarea.value = introText;
+          }
+          if (statusEl) { statusEl.style.color = 'var(--accent)'; statusEl.textContent = 'Intro generated! Review and click Save Settings.'; }
+          setTimeout(() => { const el = document.getElementById('world-intro-status'); if (el) { el.textContent = ''; el.style.color = 'var(--dim)'; } }, 8000);
         } catch (e) {
-          console.error('Generate intro failed:', e, 'status:', e.status, 'code:', e.code);
-          genBtn.textContent = `Failed (${e.status || '?'})`;
-          setTimeout(() => { genBtn.textContent = 'AI Generate'; genBtn.disabled = false; }, 4000);
+          console.error('Generate intro failed:', e);
+          const statusEl = document.getElementById('world-intro-status');
+          if (statusEl) { statusEl.style.color = 'var(--error)'; statusEl.textContent = `Generation failed: ${e.message || 'unknown error'}`; }
+          setTimeout(() => { const el = document.getElementById('world-intro-status'); if (el) { el.textContent = ''; el.style.color = 'var(--dim)'; } }, 5000);
+        } finally {
+          const btn = document.getElementById('world-intro-generate');
+          if (btn) { btn.innerHTML = 'AI Generate'; btn.disabled = false; btn.style.pointerEvents = ''; }
+          generating = false;
+          startRefreshLoop();
         }
       };
     }
+  }
+
+  // ── Collapsible section headings ──────────────────────
+  function wireCollapsibleHeadings() {
+    document.querySelectorAll('.collapsible-heading[data-toggle]').forEach(heading => {
+      heading.onclick = () => {
+        const target = document.getElementById(heading.dataset.toggle);
+        if (!target) return;
+        const isHidden = target.style.display === 'none';
+        target.style.display = isHidden ? '' : 'none';
+        const indicator = heading.querySelector('span');
+        if (indicator) indicator.textContent = indicator.textContent.replace(/[▾▸]/, isHidden ? '▾' : '▸');
+      };
+    });
   }
 
   // ── Stat Definitions CRUD ─────────────────────────────

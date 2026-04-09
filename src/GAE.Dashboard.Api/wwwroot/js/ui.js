@@ -1523,14 +1523,15 @@ const UI = {
 
     container.innerHTML = worlds.map(w => {
       const isSelected = w.id === selectedWorldId;
-      const isDefault = w.id === 'default';
+      const isDiscordDefault = (w.tags || []).includes('discord-default');
       const badges = [];
-      if (isDefault) badges.push('<span class="world-badge default">Default</span>');
+      if (isDiscordDefault) badges.push('<span class="world-badge default">⚔ Discord Default</span>');
       badges.push(w.isActive
         ? '<span class="world-badge active">Active</span>'
         : '<span class="world-badge inactive">Inactive</span>');
       if (w.playerCount > 0) badges.push(`<span class="world-badge players">${w.playerCount} player${w.playerCount !== 1 ? 's' : ''}</span>`);
       if (w.portalCount > 0) badges.push(`<span class="world-badge portals">${w.portalCount} portal${w.portalCount !== 1 ? 's' : ''}</span>`);
+      if (!isDiscordDefault) badges.push(`<button class="btn btn-secondary btn-sm world-set-default-btn" data-set-default-world="${this.esc(w.id)}" type="button" style="font-size:10px;padding:1px 8px;">Set Default</button>`);
 
       return `<div class="world-card${isSelected ? ' selected' : ''}" data-world-id="${this.esc(w.id)}">
         <div class="world-card-info">
@@ -1580,8 +1581,8 @@ const UI = {
         <div class="world-detail-tags">${tags.map(t => `<span class="world-tag">${this.esc(t)}</span>`).join('')}</div>
       </div>` : ''}
       ${playerCount > 0 ? `<div class="world-detail-section">
-        <h4>Players in World</h4>
-        <div class="portal-player-list">${players.map(p => `
+        <h4 class="collapsible-heading" data-toggle="world-player-list" style="cursor:pointer;user-select:none;">Players in World <span style="font-size:10px;color:var(--dim);font-weight:400;">(${playerCount}) ▾</span></h4>
+        <div id="world-player-list" class="portal-player-list" style="max-height:180px;overflow-y:auto;">${players.map(p => `
           <div class="registry-row">
             <div class="registry-meta">
               <div class="registry-name">${this.esc(p.name)}</div>
@@ -1591,14 +1592,10 @@ const UI = {
         </div>
       </div>` : ''}
       <div class="world-detail-section">
-        <h4>Default Narrator</h4>
+        <h4>Narrator Voice</h4>
         <select id="world-default-narrator" style="width:100%;padding:4px 6px;font-size:12px;background:var(--bg-secondary);color:var(--text);border:1px solid var(--border);border-radius:4px;">
           <option value="">System default</option>
         </select>
-      </div>
-      <div class="world-detail-section">
-        <h4>Available Narrators</h4>
-        <div id="world-narrator-checkboxes" style="display:grid;gap:0.25rem;font-size:12px;max-height:120px;overflow-y:auto;"></div>
       </div>
       <div class="world-detail-section">
         <h4>Character Creation Intro</h4>
@@ -1607,6 +1604,7 @@ const UI = {
           <button class="btn btn-secondary btn-sm" id="world-intro-generate" type="button">AI Generate</button>
           <button class="btn btn-primary btn-sm" id="world-intro-save" type="button">Save Settings</button>
         </div>
+        <div id="world-intro-status" style="font-size:11px;margin-top:0.25rem;color:var(--dim);"></div>
       </div>
       <div class="world-detail-section">
         <h4>Stat Definitions <button class="btn btn-secondary btn-sm" id="world-stat-add" type="button" style="margin-left:0.5rem;font-size:10px;padding:1px 8px;">+ Add</button></h4>
@@ -2425,10 +2423,27 @@ const UI = {
     const list = this.$('registry-list');
     if (!list) return;
 
+    // Toggle edit/delete/new/generate buttons visibility for live-entity types
+    const isLiveType = type === 'players' || type === 'rooms';
+    const newBtn = this.$('btn-new-registry-entry');
+    const questBtn = this.$('btn-generate-quest');
+    if (newBtn) newBtn.style.display = isLiveType ? 'none' : '';
+    if (questBtn) questBtn.style.display = isLiveType ? 'none' : '';
+
     try {
-      this._registryData = await API.getRegistry(type);
-      // Client-side world filter: entries have worldIds array
+      // Players and rooms are live game entities, not content registry
+      if (type === 'players') {
+        this._registryData = await API.getPlayers();
+      } else if (type === 'rooms') {
+        this._registryData = await API.getRooms();
+      } else {
+        this._registryData = await API.getRegistry(type);
+      }
+      // Client-side world filter: entries have worldIds array or activeWorldId
       let filtered = this._registryData;
+      if (worldId && type === 'players') {
+        filtered = filtered.filter(e => (e.activeWorldId || e.homeWorldId || '') === worldId);
+      } else
       if (worldId) {
         filtered = filtered.filter(e => {
           const wids = e.worldIds || e.WorldIds || [];
@@ -2453,7 +2468,9 @@ const UI = {
     this._registryFilterText = q;
 
     let filtered = this._registryData;
-    if (worldId) {
+    if (worldId && type === 'players') {
+      filtered = filtered.filter(e => (e.activeWorldId || e.homeWorldId || '') === worldId);
+    } else if (worldId) {
       filtered = filtered.filter(e => {
         const wids = e.worldIds || e.WorldIds || [];
         return !wids.length || wids.some(id => id.toLowerCase() === worldId.toLowerCase());
@@ -2463,7 +2480,10 @@ const UI = {
       filtered = filtered.filter(e =>
         (e.name || '').toLowerCase().includes(q) ||
         (e.id || '').toLowerCase().includes(q) ||
-        (e.description || '').toLowerCase().includes(q)
+        (e.description || '').toLowerCase().includes(q) ||
+        (e.race || '').toLowerCase().includes(q) ||
+        (e.class || '').toLowerCase().includes(q) ||
+        (e.currentRoomId || '').toLowerCase().includes(q)
       );
     }
     if (countEl) countEl.textContent = `${filtered.length} entries`;
@@ -2477,6 +2497,7 @@ const UI = {
       return;
     }
 
+    const isLiveType = type === 'players' || type === 'rooms';
     list.innerHTML = entries.map(entry => {
       const meta = this._getEntryMeta(type, entry);
       const tags = (entry.tags || []).slice(0, 5);
@@ -2485,14 +2506,14 @@ const UI = {
       return `
         <div class="registry-entry" data-registry-id="${this.esc(entry.id)}">
           <div>
-            <div class="registry-entry-name">${this.esc(entry.name)}${worldLabels.length ? worldLabels.map(w => ` <span class="registry-world-tag">${this.esc(w)}</span>`).join('') : ''}</div>
+            <div class="registry-entry-name">${this.esc(entry.name || entry.id)}${worldLabels.length ? worldLabels.map(w => ` <span class="registry-world-tag">${this.esc(w)}</span>`).join('') : ''}</div>
             <div class="registry-entry-meta">${this.esc(meta)}</div>
             ${tags.length ? `<div class="registry-entry-tags">${tags.map(t => `<span class="registry-entry-tag">${this.esc(t)}</span>`).join('')}</div>` : ''}
           </div>
-          <div class="registry-entry-actions">
+          ${isLiveType ? '' : `<div class="registry-entry-actions">
             <button class="btn btn-primary btn-sm" data-reg-action="edit" data-reg-id="${this.esc(entry.id)}" type="button">Edit</button>
             <button class="btn btn-danger btn-sm" data-reg-action="delete" data-reg-id="${this.esc(entry.id)}" type="button">Del</button>
-          </div>
+          </div>`}
         </div>
       `;
     }).join('');
@@ -2500,6 +2521,10 @@ const UI = {
 
   _getEntryMeta(type, entry) {
     switch (type) {
+      case 'players':
+        return `Lv.${entry.level || 1} ${entry.race || '?'} ${entry.class || '?'} | ${entry.currentRoomId || '?'} | HP ${entry.hp ?? '?'}/${entry.maxHp ?? '?'} | ${entry.gold ?? 0}g | World: ${entry.activeWorldId || '?'}`;
+      case 'rooms':
+        return `${Object.keys(entry.exits || {}).length} exits | ${(entry.npcs || []).length} NPCs | ${(entry.fixtures || []).length} fixtures${(entry.worldIds || []).length ? ' | ' + (entry.worldIds || []).join(', ') : ''}`;
       case 'spells':
         return `${entry.school || '?'} | Power ${entry.powerLevel || '?'} | ${entry.manaCost || 0} MP | Lv.${entry.requiredLevel || 1}${entry.damageDice ? ` | ${entry.damageDice}` : ''}${entry.healDice ? ` | Heal ${entry.healDice}` : ''}`;
       case 'items':

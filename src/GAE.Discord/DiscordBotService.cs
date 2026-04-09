@@ -3,6 +3,7 @@ using Discord.Net;
 using Discord.WebSocket;
 using GAE.Core.Interfaces;
 using GAE.Core.Models;
+using GAE.Core.Registry;
 using GAE.Engine.Configuration;
 using GAE.Engine.Worlds;
 using Microsoft.Extensions.Hosting;
@@ -23,6 +24,7 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
     private readonly IStateManager _stateManager;
     private readonly INarratorService _narrator;
     private readonly IWorldRepository _worldRepository;
+    private readonly IContentRegistryService _registry;
     private readonly GameRulesConfig _rules;
     private readonly ILogger<DiscordBotService> _logger;
     private readonly string _token;
@@ -48,6 +50,7 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         IStateManager stateManager,
         INarratorService narrator,
         IWorldRepository worldRepository,
+        IContentRegistryService registry,
         GameRulesConfig rules,
         ILogger<DiscordBotService> logger,
         string token,
@@ -58,6 +61,7 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         _stateManager = stateManager;
         _narrator = narrator;
         _worldRepository = worldRepository;
+        _registry = registry;
         _rules = rules;
         _logger = logger;
         _token = token;
@@ -168,8 +172,50 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         var existing = await _stateManager.GetPlayerByDiscordIdAsync(discordId);
         if (existing is not null)
         {
-            var threadLink = existing.ThreadId.HasValue ? $"<#{existing.ThreadId}>" : "your adventure thread";
-            await command.FollowupAsync($"You already have a character: **{existing.Name}**. Head to {threadLink} to play!", ephemeral: true);
+            // Verify the thread still exists — if deleted/lost, recreate it
+            SocketThreadChannel? existingThread = null;
+            if (existing.ThreadId.HasValue && command.Channel is SocketTextChannel parentChannel)
+            {
+                existingThread = parentChannel.Guild.GetChannel(existing.ThreadId.Value) as SocketThreadChannel;
+            }
+
+            if (existingThread is null)
+            {
+                // Thread is gone — recreate it and re-link the player
+                _logger.LogWarning("Thread {ThreadId} for player {Name} no longer exists, recreating",
+                    existing.ThreadId, existing.Name);
+
+                var newThread = await CreatePlayerThreadAsync(command.Channel, command.User);
+                if (newThread is null)
+                {
+                    await command.FollowupAsync("Your adventure thread was lost and I couldn't create a new one. Make sure I have Thread permissions.", ephemeral: true);
+                    return;
+                }
+
+                existing.ThreadId = newThread.Id;
+                await _stateManager.SavePlayerAsync(existing);
+
+                await command.FollowupAsync(
+                    $"Welcome back, **{existing.Name}**! Your old thread was lost, so I created a new one. Head to <#{newThread.Id}> to continue your adventure!\n" +
+                    $"*(If you'd rather start over with a new character, use `/restart`.)*", ephemeral: true);
+
+                // Send a welcome-back message in the new thread
+                await newThread.SendMessageAsync(
+                    $"⚔️ **{existing.Name}** returns! Your adventure thread was recreated.\n" +
+                    $"You can pick up where you left off — just type a command like `look` or `stats`.");
+                return;
+            }
+
+            // Thread exists — unarchive if needed
+            if (existingThread.IsArchived)
+            {
+                try { await existingThread.ModifyAsync(props => props.Archived = false); }
+                catch (Exception ex) { _logger.LogWarning(ex, "Failed to unarchive thread {ThreadId}", existingThread.Id); }
+            }
+
+            await command.FollowupAsync(
+                $"You already have a character: **{existing.Name}**. Head to <#{existingThread.Id}> to play!\n" +
+                $"*(If you need to start over, use `/restart`.)*", ephemeral: true);
             return;
         }
 
@@ -299,9 +345,38 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         bool isMentioned = message.MentionedUsers.Any(u => u.Id == botUser.Id);
         if (!isMentioned) return;
 
-        // Bot was @mentioned — respond helpfully with commands and status
+        // Strip the @mention to get the player's actual question
+        var question = content
+            .Replace($"<@{botUser.Id}>", "")
+            .Replace($"<@!{botUser.Id}>", "")
+            .Trim();
+
         var player = await _stateManager.GetPlayerByDiscordIdAsync(discordId);
-        if (player is not null)
+
+        // No character yet — welcome message with getting-started info
+        if (player is null)
+        {
+            if (string.IsNullOrWhiteSpace(question) || question.Length < 3)
+            {
+                await message.Channel.SendMessageAsync(
+                    $"Hey {message.Author.Mention}! Welcome to the Grand Adventure Engine! ⚔️\n\n" +
+                    "**Getting Started:**\n" +
+                    "> `/create` — Begin your adventure! I'll help you create a character.\n\n" +
+                    "**Other Commands:**\n" +
+                    "> `/stats` — View your character sheet\n" +
+                    "> `/inventory` — Check your gear\n" +
+                    "> `/map` — See discovered rooms\n" +
+                    "> `/help` — Full command list");
+                return;
+            }
+
+            // Even without a character, let them chat with the guide
+            await HandleGuideChat(message, null, null, question);
+            return;
+        }
+
+        // Player exists — if it's just a bare @mention with no question, show status
+        if (string.IsNullOrWhiteSpace(question) || question.Length < 3)
         {
             var link = player.ThreadId.HasValue ? $"<#{player.ThreadId}>" : "your adventure thread";
             await message.Channel.SendMessageAsync(
@@ -311,19 +386,116 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
                 "> `/stats` — View your character sheet\n" +
                 "> `/inventory` — Check your gear\n" +
                 "> `/map` — See discovered rooms\n" +
-                "> `/restart` — Start over with a new character");
+                "> `/restart` — Start over with a new character\n\n" +
+                "*Or just @mention me with a question and I'll answer in character!*");
+            return;
         }
-        else
+
+        // Player asked a question — guide chat!
+        await HandleGuideChat(message, player, player.ActiveWorldId, question);
+    }
+
+    private async Task HandleGuideChat(SocketUserMessage message, PlayerCharacter? player, string? worldId, string question)
+    {
+        // Show typing indicator while the AI thinks
+        using var typing = message.Channel.EnterTypingState();
+
+        try
         {
+            // Resolve world — use player's world, or find the Discord default
+            World? resolvedWorld = null;
+            if (worldId is not null)
+                resolvedWorld = await _worldRepository.GetWorldAsync(worldId);
+            resolvedWorld ??= await GetDiscordDefaultWorldAsync();
+            worldId ??= resolvedWorld?.Id;
+
+            // Resolve the narrator voice
+            NarratorPreset? narrator = null;
+            if (player?.NarratorPresetId is not null)
+                narrator = _registry.NarratorPresets.GetById(player.NarratorPresetId);
+
+            if (narrator is null && resolvedWorld?.DefaultNarratorPresetId is not null)
+                narrator = _registry.NarratorPresets.GetById(resolvedWorld.DefaultNarratorPresetId);
+
+            // Fall back to first selectable narrator if none set
+            narrator ??= _registry.NarratorPresets.GetAll()
+                .Where(n => n.IsSelectable)
+                .OrderBy(n => n.SortOrder)
+                .FirstOrDefault();
+
+            // Build discovered lore context for the player
+            var loreContext = "";
+            if (player is not null && player.DiscoveredLore.Count > 0)
+            {
+                var discoveredEntries = player.DiscoveredLore
+                    .Select(id => _registry.LoreEntries.GetById(id))
+                    .Where(e => e is not null)
+                    .Take(15) // Cap to avoid prompt bloat
+                    .Select(e => $"- **{e!.Name}**: {e.Content}")
+                    .ToList();
+
+                if (discoveredEntries.Count > 0)
+                    loreContext = "\n\nLore the player has discovered (use this to inform your answers):\n" + string.Join("\n", discoveredEntries);
+            }
+
+            // Build world context
+            var worldContext = resolvedWorld is not null
+                ? $"\nWorld: {resolvedWorld.Name} — {resolvedWorld.Description}"
+                : "";
+
+            // Build the narrator voice block
+            var voiceBlock = narrator is not null
+                ? $"You are **{narrator.Name}**, the player's guide.\n" +
+                  $"Archetype: {narrator.Archetype}\n" +
+                  $"Personality: {narrator.PersonalityPrompt}\n" +
+                  $"Lore delivery style: {narrator.LoreDeliveryStyle ?? "engaging and in-character"}\n"
+                : "You are a mysterious, world-weary guide in a fantasy RPG. Speak with personality and flavor.\n";
+
+            var playerContext = player is not null
+                ? $"You are speaking with **{player.Name}**, a Lv.{player.Level} {player.Race} {player.Class}."
+                : "You are speaking with a newcomer who hasn't created a character yet.";
+
+            var prompt = $"""
+                {voiceBlock}
+                {playerContext}
+                {worldContext}
+                {loreContext}
+
+                This is a casual, in-character conversation in the tavern (the public channel).
+                You are NOT narrating gameplay — no game state changes, no combat, no movement.
+                Just chat as the guide/narrator. Be helpful, entertaining, and stay in character.
+                If they ask about game lore, draw from what they've discovered.
+                If they ask about mechanics, answer helpfully but in character.
+                If they haven't started yet, encourage them to use /create.
+
+                Keep your response under 300 words. Use Discord markdown.
+
+                The player says: "{question}"
+                """;
+
+            await _narratorLock.WaitAsync();
+            string response;
+            try
+            {
+                response = await _narrator.GenerateContentAsync("text", prompt, null);
+            }
+            finally
+            {
+                _narratorLock.Release();
+            }
+
+            // Discord has a 2000 char limit — truncate if needed
+            if (response.Length > 1900)
+                response = response[..1900] + "\n\n*...the guide trails off, lost in thought.*";
+
+            await message.Channel.SendMessageAsync($"{message.Author.Mention} {response}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Guide chat failed for {User}", message.Author.Username);
             await message.Channel.SendMessageAsync(
-                $"Hey {message.Author.Mention}! Welcome to the Grand Adventure Engine! ⚔️\n\n" +
-                "**Getting Started:**\n" +
-                "> `/create` — Begin your adventure! I'll help you create a character.\n\n" +
-                "**Other Commands:**\n" +
-                "> `/stats` — View your character sheet\n" +
-                "> `/inventory` — Check your gear\n" +
-                "> `/map` — See discovered rooms\n" +
-                "> `/help` — Full command list");
+                $"{message.Author.Mention} *The guide opens their mouth to speak, but the words fade to silence.* " +
+                "(The AI narrator is unavailable right now. Try again in a moment!)");
         }
     }
 
@@ -457,6 +629,28 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         await SendGameResponseAsync(thread, player, action, result);
     }
 
+    // ==================== World Resolution ====================
+
+    /// <summary>
+    /// Find the world tagged 'discord-default', falling back to the hardcoded default,
+    /// then to the first active world.
+    /// </summary>
+    private async Task<World?> GetDiscordDefaultWorldAsync()
+    {
+        var worlds = await _worldRepository.GetAllWorldsAsync();
+
+        // Prefer the world tagged as Discord default
+        var tagged = worlds.FirstOrDefault(w => w.Tags.Contains("discord-default", StringComparer.OrdinalIgnoreCase));
+        if (tagged is not null) return tagged;
+
+        // Fallback: hardcoded default world ID
+        var hardcoded = worlds.FirstOrDefault(w => string.Equals(w.Id, WorldDefaults.DefaultWorldId, StringComparison.OrdinalIgnoreCase));
+        if (hardcoded is not null) return hardcoded;
+
+        // Last resort: first active world
+        return worlds.FirstOrDefault(w => w.IsActive);
+    }
+
     // ==================== Thread Management ====================
 
     private async Task<SocketThreadChannel?> CreatePlayerThreadAsync(ISocketMessageChannel channel, SocketUser user)
@@ -490,7 +684,7 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
 
     // ==================== AI Character Creation ====================
 
-    private static readonly string DefaultCharacterCreationIntro = """
+    private static readonly string FallbackCharacterCreationIntro = """
         A voice emerges from the ether — dry, amused, and impossibly old.
 
         *"Ah. Another soul stumbles through my door. I am the Narrator — the voice behind the curtain, the pen that writes your story as you live it. Adventures await, and I need someone to narrate. That's where you come in."*
@@ -506,21 +700,171 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         _creationSessions[userId] = session;
         PersistCreationSessions();
 
-        // Fetch the active world's custom intro, falling back to the generic one
-        string intro = DefaultCharacterCreationIntro;
+        // Try to load the Discord default world's saved intro first
+        string? savedIntro = null;
+        World? activeWorld = null;
         try
         {
-            var worlds = await _worldRepository.GetAllWorldsAsync();
-            var activeWorld = worlds.FirstOrDefault(w => w.IsActive);
+            activeWorld = await GetDiscordDefaultWorldAsync();
+            _logger.LogInformation("Character creation: resolved world={WorldId}, narrator={NarratorId}, hasIntro={HasIntro}",
+                activeWorld?.Id ?? "null",
+                activeWorld?.DefaultNarratorPresetId ?? "null",
+                !string.IsNullOrWhiteSpace(activeWorld?.CharacterCreationIntro));
             if (activeWorld is not null && !string.IsNullOrWhiteSpace(activeWorld.CharacterCreationIntro))
-                intro = activeWorld.CharacterCreationIntro;
+                savedIntro = activeWorld.CharacterCreationIntro;
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to fetch world intro, using default");
+            _logger.LogWarning(ex, "Failed to fetch world intro");
+        }
+
+        // If we have a saved intro, use it directly
+        if (!string.IsNullOrWhiteSpace(savedIntro))
+        {
+            _logger.LogInformation("Using saved character creation intro from world {WorldId}", activeWorld?.Id);
+            await thread.SendMessageAsync(savedIntro);
+            return;
+        }
+
+        // No saved intro — generate one dynamically using the narrator's voice
+        string intro = FallbackCharacterCreationIntro;
+        try
+        {
+            // Resolve the world's narrator
+            NarratorPreset? narrator = null;
+            if (activeWorld?.DefaultNarratorPresetId is not null)
+                narrator = _registry.NarratorPresets.GetById(activeWorld.DefaultNarratorPresetId);
+
+            narrator ??= _registry.NarratorPresets.GetAll()
+                .Where(n => n.IsSelectable)
+                .OrderBy(n => n.SortOrder)
+                .FirstOrDefault();
+
+            _logger.LogInformation("Generating dynamic intro with narrator={NarratorName} ({NarratorId})",
+                narrator?.Name ?? "none", narrator?.Id ?? "none");
+
+            if (narrator is not null)
+            {
+                var worldContext = activeWorld is not null
+                    ? $"World: {activeWorld.Name} — {activeWorld.Description}"
+                    : "A fantasy RPG world";
+
+                var prompt = $"""
+                    You are **{narrator.Name}**, the narrator/guide for a text RPG.
+                    Archetype: {narrator.Archetype}
+                    Personality: {narrator.PersonalityPrompt}
+                    {worldContext}
+
+                    Write a character creation greeting for a new player arriving in their adventure thread.
+                    You MUST:
+                    1. Introduce yourself by name — e.g. "I am {narrator.Name}" — make it fun and memorable
+                    2. Give a brief, flavorful hint about the world and its conflict (don't spoil)
+                    3. Ask the player to describe who they are
+                    4. End with this exact instruction in italics:
+                       *(Describe yourself however you like: "I'm a sneaky halfling who picks pockets" or "I'm a massive orc who solves problems with fists" — or just tell me your name and I'll ask questions.)*
+
+                    Keep it 3-4 paragraphs. Use Discord markdown (bold, italics). Stay fully in character.
+                    Return ONLY the message text, no JSON wrapping.
+                    """;
+
+                await _narratorLock.WaitAsync();
+                try
+                {
+                    intro = await _narrator.GenerateContentAsync("text", prompt, null);
+                }
+                finally
+                {
+                    _narratorLock.Release();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to generate narrator intro, using fallback");
         }
 
         await thread.SendMessageAsync(intro);
+    }
+
+    /// <summary>
+    /// After character creation is finalized, the narrator describes the player arriving
+    /// in the world — a cinematic moment before the room card appears.
+    /// </summary>
+    private async Task SendArrivalNarration(SocketThreadChannel thread, PlayerCharacter player)
+    {
+        try
+        {
+            await thread.TriggerTypingAsync();
+
+            var world = await GetDiscordDefaultWorldAsync();
+
+            // Resolve narrator
+            NarratorPreset? narrator = null;
+            if (player.NarratorPresetId is not null)
+                narrator = _registry.NarratorPresets.GetById(player.NarratorPresetId);
+            if (narrator is null && world?.DefaultNarratorPresetId is not null)
+                narrator = _registry.NarratorPresets.GetById(world.DefaultNarratorPresetId);
+            narrator ??= _registry.NarratorPresets.GetAll()
+                .Where(n => n.IsSelectable).OrderBy(n => n.SortOrder).FirstOrDefault();
+
+            // Get the spawn room for flavor
+            var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId);
+
+            var voiceBlock = narrator is not null
+                ? $"You are **{narrator.Name}**, the narrator.\nArchetype: {narrator.Archetype}\nPersonality: {narrator.PersonalityPrompt}\n"
+                : "You are a mysterious narrator in a fantasy RPG.\n";
+
+            var worldContext = world is not null
+                ? $"World: {world.Name} — {world.Description}"
+                : "";
+
+            var roomContext = room is not null
+                ? $"The player's starting location is: {room.Name} — {room.Description}"
+                : "The player arrives at a tavern.";
+
+            var prompt = $"""
+                {voiceBlock}
+                {worldContext}
+                {roomContext}
+
+                The player just finished creating their character. Write a short, atmospheric
+                arrival scene describing them materializing/arriving in the world for the first time.
+
+                Character: **{player.Name}**, a Lv.{player.Level} {player.Race} {player.Class}.
+                Backstory hint: {player.Backstory ?? "mysterious origins"}
+
+                Guidelines:
+                - Address the player in second person ("You step through...", "The mists part...")
+                - Describe the sensory experience of arriving — sights, sounds, smells
+                - End with a hint of what they see (the room/tavern) but don't describe the full room
+                - Stay in your narrator voice
+                - 2-3 short paragraphs, use Discord markdown (bold, italics)
+                - Return ONLY the narration, no JSON
+                """;
+
+            await _narratorLock.WaitAsync();
+            string narration;
+            try
+            {
+                narration = await _narrator.GenerateContentAsync("text", prompt, null);
+            }
+            finally
+            {
+                _narratorLock.Release();
+            }
+
+            if (narration.Length > 1900)
+                narration = narration[..1900] + "\n*...the vision sharpens.*";
+
+            await thread.SendMessageAsync(narration);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to generate arrival narration for {Player}", player.Name);
+            // Graceful fallback — just skip the arrival narration
+            await thread.SendMessageAsync(
+                $"*The mists part, and **{player.Name}** steps into a new world...*");
+        }
     }
 
     private async Task HandleAiCreationInputAsync(SocketUserMessage message, SocketThreadChannel thread,
@@ -582,8 +926,12 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
                         .WithColor(Color.Gold)
                         .AddField("Name", session.LastAiResponse.Name ?? "???", inline: true)
                         .AddField("Race", session.LastAiResponse.Race, inline: true)
-                        .AddField("Class", session.LastAiResponse.Class, inline: true)
-                        .AddField("Stats",
+                        .AddField("Class", session.LastAiResponse.Class, inline: true);
+                    if (!string.IsNullOrWhiteSpace(session.LastAiResponse.Gender))
+                        updatedEmbed.AddField("Gender", session.LastAiResponse.Gender, inline: true);
+                    if (session.LastAiResponse.PersonalItems.Count > 0)
+                        updatedEmbed.AddField("Personal Items", string.Join(", ", session.LastAiResponse.PersonalItems), inline: false);
+                    updatedEmbed.AddField("Stats",
                             $"STR: {updatedStats.GetValueOrDefault("str", 10)} ({FormatMod(updatedStats.GetValueOrDefault("str", 10))})  DEX: {updatedStats.GetValueOrDefault("dex", 10)} ({FormatMod(updatedStats.GetValueOrDefault("dex", 10))})\n" +
                             $"CON: {updatedStats.GetValueOrDefault("con", 10)} ({FormatMod(updatedStats.GetValueOrDefault("con", 10))})  INT: {updatedStats.GetValueOrDefault("int", 10)} ({FormatMod(updatedStats.GetValueOrDefault("int", 10))})\n" +
                             $"WIS: {updatedStats.GetValueOrDefault("wis", 10)} ({FormatMod(updatedStats.GetValueOrDefault("wis", 10))})  CHA: {updatedStats.GetValueOrDefault("cha", 10)} ({FormatMod(updatedStats.GetValueOrDefault("cha", 10))})")
@@ -661,20 +1009,24 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
 
         session.LastSheetJson = System.Text.Json.JsonSerializer.Serialize(aiResponse);
 
-        var embed = new EmbedBuilder()
+        var sheetEmbed = new EmbedBuilder()
             .WithTitle("\u2694\uFE0F CHARACTER SHEET")
             .WithColor(Color.Gold)
             .AddField("Name", string.IsNullOrWhiteSpace(aiResponse.Name) ? "???" : aiResponse.Name, inline: true)
             .AddField("Race", string.IsNullOrWhiteSpace(aiResponse.Race) ? "???" : aiResponse.Race, inline: true)
-            .AddField("Class", string.IsNullOrWhiteSpace(aiResponse.Class) ? "???" : aiResponse.Class, inline: true)
-            .AddField("Stats",
+            .AddField("Class", string.IsNullOrWhiteSpace(aiResponse.Class) ? "???" : aiResponse.Class, inline: true);
+        if (!string.IsNullOrWhiteSpace(aiResponse.Gender))
+            sheetEmbed.AddField("Gender", aiResponse.Gender, inline: true);
+        if (aiResponse.PersonalItems.Count > 0)
+            sheetEmbed.AddField("Personal Items", string.Join(", ", aiResponse.PersonalItems), inline: false);
+        sheetEmbed.AddField("Stats",
                 $"STR: {stats.GetValueOrDefault("str", 10)} ({FormatMod(stats.GetValueOrDefault("str", 10))})  DEX: {stats.GetValueOrDefault("dex", 10)} ({FormatMod(stats.GetValueOrDefault("dex", 10))})\n" +
                 $"CON: {stats.GetValueOrDefault("con", 10)} ({FormatMod(stats.GetValueOrDefault("con", 10))})  INT: {stats.GetValueOrDefault("int", 10)} ({FormatMod(stats.GetValueOrDefault("int", 10))})\n" +
                 $"WIS: {stats.GetValueOrDefault("wis", 10)} ({FormatMod(stats.GetValueOrDefault("wis", 10))})  CHA: {stats.GetValueOrDefault("cha", 10)} ({FormatMod(stats.GetValueOrDefault("cha", 10))})")
             .AddField("Backstory", string.IsNullOrWhiteSpace(aiResponse.Backstory) ? "A mysterious past yet to be revealed..." : aiResponse.Backstory)
             .WithFooter("Say \"looks good\" to start, or describe changes you want.");
 
-        await thread.SendMessageAsync(embed: embed.Build());
+        await thread.SendMessageAsync(embed: sheetEmbed.Build());
 
         if (aiResponse.FollowUpQuestion is not null)
             await thread.SendMessageAsync(aiResponse.FollowUpQuestion);
@@ -701,9 +1053,11 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         {
             PlayerDiscordId = discordId,
             Name = ai.Name ?? message.Author.Username,
+            Gender = ai.Gender,
             Race = ai.Race,
             Class = ai.Class,
             Backstory = ai.Backstory,
+            PersonalItems = ai.PersonalItems,
             StatMethod = StatAllocationMethod.Manual,
             ManualStats = stats,
             StartingGold = ai.StartingGold
@@ -721,7 +1075,8 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         await SendHeroIntroAndRoomAsync(thread, player);
 
         // Notify admin channel
-        await PostToAdminChannelAsync($"\U0001F4E5 **{player.Name}** ({message.Author.Username}) created a character — {player.Race} {player.Class}");
+        var genderTag = string.IsNullOrWhiteSpace(player.Gender) ? "" : $" ({player.Gender})";
+        await PostToAdminChannelAsync($"\U0001F4E5 **{player.Name}**{genderTag} ({message.Author.Username}) created a character — {player.Race} {player.Class}");
     }
 
     // ==================== Restart ====================
@@ -1499,9 +1854,11 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         var nameStr = player.Name ?? "Unknown";
         sb.AppendLine($"║  {nameStr,-36}║");
 
-        var raceClass = $"{player.Race} {player.Class}";
+        var raceClassGender = string.IsNullOrWhiteSpace(player.Gender)
+            ? $"{player.Race} {player.Class}"
+            : $"{player.Gender} {player.Race} {player.Class}";
         var levelStr = $"Lv.{player.Level}";
-        sb.AppendLine($"║  {raceClass,-25} {levelStr,10}║");
+        sb.AppendLine($"║  {raceClassGender,-25} {levelStr,10}║");
 
         sb.AppendLine($"╠{new string('═', W)}╣");
 
@@ -1542,6 +1899,21 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         sb.AppendLine($"║  Weapon: {(wpn?.Name ?? "none"),-28}║");
         sb.AppendLine($"║  Armor:  {(arm?.Name ?? "none"),-28}║");
         sb.AppendLine($"║  Shield: {(shd?.Name ?? "none"),-28}║");
+
+        // Show personal/backpack items if any
+        if (player.Inventory.Count > 0)
+        {
+            sb.AppendLine($"╠{new string('═', W)}╣");
+            foreach (var item in player.Inventory.Take(5))
+            {
+                var iname = item.Name.Length > 28 ? item.Name[..28] : item.Name;
+                var qty = item.Quantity > 1 ? $" x{item.Quantity}" : "";
+                sb.AppendLine($"║  🎒 {(iname + qty),-33}║");
+            }
+            if (player.Inventory.Count > 5)
+                sb.AppendLine($"║  ... and {player.Inventory.Count - 5} more{new string(' ', 23)}║");
+        }
+
         sb.AppendLine($"╚{new string('═', W)}╝");
         sb.Append("```");
         return sb.ToString();

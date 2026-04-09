@@ -9,8 +9,6 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       Discord__Token: "${DISCORD_TOKEN:-}"
       Discord__ChannelId: "${DISCORD_CHANNEL_ID:-}"
-      WikiJs__Url: "http://wikijs:3000"
-      WikiJs__ApiKey: "${WIKI_API_KEY:-}"
       LmStudio__Endpoint: "http://host.docker.internal:1234"
       LmStudio__Model: "${LM_STUDIO_MODEL:-default}"
       DashboardAuth__User__Username: "${GAE_DASHBOARD_USER_USERNAME:-user}"
@@ -24,8 +22,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      wikijs:
-        condition: service_started
     restart: unless-stopped
 
   postgres:
@@ -45,18 +41,6 @@ services:
       retries: 5
     restart: unless-stopped
 
-  wikijs:
-    image: requarks/wiki:2
-    ports:
-      - "${WIKIJS_HOST_PORT:-3000}:3000"
-    environment:
-      DB_TYPE: sqlite
-      DB_FILEPATH: /wiki/data/wiki.sqlite
-    volumes:
-      - wikijs_data:/wiki/data
-    restart: unless-stopped
-
 volumes:
-  wikijs_data:
   gae_data:
   pgdata:
