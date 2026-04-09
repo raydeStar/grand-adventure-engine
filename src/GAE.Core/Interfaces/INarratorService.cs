@@ -54,6 +54,15 @@ public interface INarratorService
     Task<FreeFormResponse> ProcessCombatTurnAsync(PlayerCharacter player, Room room, Npc enemy, InteractionState interaction, string rawInput, CancellationToken ct = default);
 
     /// <summary>
+    /// Generates a room for a Blind Adventure session using storyline context and visited room history.
+    /// Returns a fully wired Room (with reverse exit) ready to persist.
+    /// </summary>
+    Task<Room> GenerateBlindAdventureRoomAsync(
+        string roomId, string direction, Room sourceRoom,
+        StorylineContext storyline, IReadOnlyList<string> visitedRoomSummaries,
+        string? nextPlotBeat, int roomsRemaining, CancellationToken ct = default);
+
+    /// <summary>
     /// Generates a dungeon entrance room scaled to the player's level.
     /// The room will have environment tags like "dungeon", "generated_dungeon", "difficulty_X"
     /// so that subsequent GenerateRoomAsync calls maintain dungeon theming.

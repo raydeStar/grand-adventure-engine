@@ -342,6 +342,127 @@ public class NarratorService : INarratorService
         };
     }
 
+    public async Task<Room> GenerateBlindAdventureRoomAsync(
+        string roomId, string direction, Room sourceRoom,
+        StorylineContext storyline, IReadOnlyList<string> visitedRoomSummaries,
+        string? nextPlotBeat, int roomsRemaining, CancellationToken ct = default)
+    {
+        var systemPrompt = Prompts.BlindAdventurePrompts.BuildRoomGenerationSystemPrompt();
+        var userPrompt = Prompts.BlindAdventurePrompts.BuildRoomGenerationUserPrompt(
+            currentRoomName: sourceRoom.Name,
+            currentRoomDescription: sourceRoom.Description,
+            visibleExits: sourceRoom.Exits.Keys.ToList(),
+            environmentTags: sourceRoom.EnvironmentTags,
+            direction: direction,
+            storylineName: storyline.Name,
+            setting: storyline.Setting,
+            tone: storyline.Tone,
+            theme: storyline.Theme,
+            plotBeats: storyline.PlotBeats,
+            visitedRoomSummaries: visitedRoomSummaries,
+            nextPlotBeat: nextPlotBeat,
+            roomsRemaining: roomsRemaining);
+
+        try
+        {
+            var json = await CompletionAsync(systemPrompt, userPrompt, ct,
+                maxTokens: 768, operation: "blind-adventure-room", roomId: roomId);
+            var generated = JsonSerializer.Deserialize<BlindAdventureGeneratedRoom>(json, _jsonOptions);
+            if (generated is not null)
+            {
+                var exits = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    [OppositeDirection(direction)] = sourceRoom.Id
+                };
+
+                // Add additional exits the narrator suggested (direction-only, no target yet)
+                if (generated.Exits is not null)
+                {
+                    foreach (var exit in generated.Exits)
+                    {
+                        var normalized = exit.Trim().ToLowerInvariant();
+                        if (normalized != OppositeDirection(direction))
+                            exits.TryAdd(normalized, $"blind_{roomId}_{normalized}");
+                    }
+                }
+
+                return new Room
+                {
+                    Id = roomId,
+                    Name = generated.Name ?? $"Unexplored ({roomId})",
+                    Description = generated.Description ?? "A mysterious place.",
+                    EnvironmentTags = ["blind_adventure"],
+                    Npcs = generated.Npcs?.Select(n => new Npc
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        Name = n.Name ?? "Unknown",
+                        Personality = n.Description ?? "",
+                        IsHostile = string.Equals(n.Disposition, "hostile", StringComparison.OrdinalIgnoreCase),
+                        Disposition = n.Disposition ?? "neutral",
+                        DispositionState = new NpcDispositionState
+                        {
+                            Emotion = n.Disposition ?? "neutral",
+                            Intensity = 50,
+                            Baseline = MapDispositionToBaseline(n.Disposition),
+                            Reason = "First encounter"
+                        }
+                    }).ToList() ?? [],
+                    Items = generated.Items?.Select(i =>
+                    {
+                        var itemType = Enum.TryParse<ItemType>(i.Type, ignoreCase: true, out var parsed)
+                            ? parsed : ItemType.Misc;
+                        return new InventoryItem
+                        {
+                            Id = Guid.NewGuid().ToString("N"),
+                            Name = i.Name ?? "Mysterious Object",
+                            Description = i.Description ?? "",
+                            Quantity = 1,
+                            Type = itemType,
+                            IsEquippable = InventoryItem.IsEquippableType(itemType),
+                            Value = 1
+                        };
+                    }).ToList() ?? [],
+                    Exits = exits
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Blind adventure room generation failed for {RoomId}, using fallback", roomId);
+        }
+
+        // Deterministic fallback
+        var fallbackJson = Prompts.BlindAdventurePrompts.BuildRoomGenerationFallback(
+            direction, storyline.Name, storyline.Setting, storyline.Tone, roomsRemaining);
+        var fallback = JsonSerializer.Deserialize<BlindAdventureGeneratedRoom>(fallbackJson, _jsonOptions);
+
+        var fallbackExits = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            [OppositeDirection(direction)] = sourceRoom.Id
+        };
+        if (roomsRemaining > 1)
+            fallbackExits.TryAdd("forward", $"blind_{roomId}_forward");
+
+        return new Room
+        {
+            Id = roomId,
+            Name = fallback?.Name ?? "The Next Uncertain Chamber",
+            Description = fallback?.Description ?? "A dimly lit area stretches before you.",
+            EnvironmentTags = ["blind_adventure"],
+            Npcs = [],
+            Items = [],
+            Exits = fallbackExits
+        };
+    }
+
+    private static int MapDispositionToBaseline(string? disposition) => disposition?.ToLowerInvariant() switch
+    {
+        "friendly" => 75,
+        "hostile" => 15,
+        "wary" => 35,
+        _ => 50
+    };
+
     public async Task<Room> GenerateDungeonEntranceAsync(string dungeonId, int playerLevel, Room sourceRoom, CancellationToken ct = default)
     {
         // Scale difficulty: easy (1-3), medium (4-6), hard (7-9), deadly (10+)
@@ -2643,6 +2764,29 @@ public class NarratorService : INarratorService
         public List<GeneratedNpc>? Npcs { get; set; }
         public List<GeneratedItem>? Items { get; set; }
         public Dictionary<string, string>? Exits { get; set; }
+    }
+
+    private class BlindAdventureGeneratedRoom
+    {
+        public string? Name { get; set; }
+        public string? Description { get; set; }
+        public List<string>? Exits { get; set; }
+        public List<BlindAdventureGeneratedNpc>? Npcs { get; set; }
+        public List<BlindAdventureGeneratedItem>? Items { get; set; }
+    }
+
+    private class BlindAdventureGeneratedNpc
+    {
+        public string? Name { get; set; }
+        public string? Description { get; set; }
+        public string? Disposition { get; set; }
+    }
+
+    private class BlindAdventureGeneratedItem
+    {
+        public string? Name { get; set; }
+        public string? Description { get; set; }
+        public string? Type { get; set; }
     }
 
     private class GeneratedNpc

@@ -211,6 +211,16 @@ public class StubNarratorService : INarratorService
     public Task<string> GenerateHeroIntroAsync(PlayerCharacter player, Room room, CancellationToken ct = default)
         => Task.FromResult("Well, well. Another hero stumbles into the story.");
 
+    public Task<Room> GenerateBlindAdventureRoomAsync(string roomId, string direction, Room sourceRoom, StorylineContext storyline, IReadOnlyList<string> visitedRoomSummaries, string? nextPlotBeat, int roomsRemaining, CancellationToken ct = default)
+        => Task.FromResult(new Room
+        {
+            Id = roomId,
+            Name = $"Blind Adventure Room ({roomId})",
+            Description = $"A storyline room generated to the {direction}.",
+            EnvironmentTags = ["blind_adventure"],
+            Exits = new Dictionary<string, string> { [OppositeDir(direction)] = sourceRoom.Id }
+        });
+
     private static string OppositeDir(string dir) => dir switch
     {
         "north" => "south", "south" => "north",

@@ -876,5 +876,8 @@ public class GameEngineCommandFlowTests
 
         public Task<string> GenerateHeroIntroAsync(PlayerCharacter player, Room room, CancellationToken ct = default)
             => Task.FromResult("Well, well. Another hero stumbles into the story.");
+
+        public Task<Room> GenerateBlindAdventureRoomAsync(string roomId, string direction, Room sourceRoom, StorylineContext storyline, IReadOnlyList<string> visitedRoomSummaries, string? nextPlotBeat, int roomsRemaining, CancellationToken ct = default)
+            => throw new NotSupportedException();
     }
 }
