@@ -7,7 +7,7 @@ public class Npc
     public string Personality { get; set; } = string.Empty;
     public List<string> WorldIds { get; set; } = [WorldDefaults.DefaultWorldId];
     public string Faction { get; set; } = "neutral";
-    public string Disposition { get; set; } = "neutral";
+    public string Disposition { get; set; } = "friendly";
     public NpcDispositionState DispositionState { get; set; } = new();
     public List<string> KnowledgeScopes { get; set; } = [];
     public bool IsHostile { get; set; }
@@ -31,9 +31,9 @@ public class Npc
 
 public class NpcDispositionState
 {
-    public string Emotion { get; set; } = "neutral";
-    public int Intensity { get; set; } = 55;
-    public int Baseline { get; set; } = 55;
+    public string Emotion { get; set; } = "friendly";
+    public int Intensity { get; set; } = 65;
+    public int Baseline { get; set; } = 65;
     public string? Reason { get; set; }
     public DateTimeOffset LastUpdated { get; set; } = DateTimeOffset.UtcNow;
 
@@ -78,15 +78,16 @@ public class NpcDispositionState
     /// <summary>Flat string summary for the Disposition field sync.</summary>
     public string ToFlatDisposition()
     {
-        if (Emotion == "neutral" || Intensity <= Baseline)
-            return "neutral";
+        if (Emotion == "neutral" && Intensity >= 55)
+            return Intensity >= 65 ? "friendly" : "neutral";
 
         var intensityWord = Intensity switch
         {
             >= 80 => "overwhelmingly",
-            >= 60 => "very",
-            >= 45 => "somewhat",
-            _ => "slightly"
+            >= 65 => "very",
+            >= 50 => "somewhat",
+            >= 35 => "slightly",
+            _ => "barely"
         };
 
         return $"{intensityWord} {Emotion}";

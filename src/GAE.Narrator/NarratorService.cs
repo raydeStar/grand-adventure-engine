@@ -685,10 +685,21 @@ public class NarratorService : INarratorService
             - Successes should make the player feel AWESOME. They did something cool. The narrator might be
               wry about it, but the world clearly reacted — heads turn, NPCs are impressed (or terrified),
               something shifted because the player acted. Make them want to do it again.
-            - NPCs react with PERSONALITY. A gruff barmaid rolls her eyes — but pours the drink anyway,
-              because this adventurer seems worth watching. A guard reaches for his weapon not because he's
-              threatened but because he can't believe what he just saw. NPCs should treat the player like
-              someone who matters, even when being dismissive.
+            - NPCs are FRIENDLY AND WELCOMING by default. This is critical — they are happy to see an
+              adventurer. They WANT to talk. A barmaid smiles and pours a drink because she likes having
+              interesting people around. A guard nods with respect because adventurers keep the town safe.
+              NPCs should treat the player like a welcome guest, not an inconvenience.
+            - NEVER make NPCs dismissive, annoyed, indifferent, or hostile unless the PLAYER did something
+              to earn it. "Practiced indifference" is BANNED. "Unimpressed" is BANNED. NPCs are curious,
+              engaged, and glad to have company. Even gruff NPCs are WARMLY gruff — they complain because
+              they care, not because they're annoyed at the player's existence.
+            - PERSONALITY IS FLAVOR, NOT HOSTILITY. An NPC described as "blunt" or "gruff" or "feisty" or
+              "stern" is still FRIENDLY — they just express friendliness differently. "Blunt" means direct
+              with a grin, not rude. "Feisty" means spirited and fun, not hostile. "Stoic" means reserved
+              but warm underneath. Personality traits describe HOW they're friendly, not WHETHER they're friendly.
+            - NPCs react with PERSONALITY but always from a place of WARMTH. A gruff barmaid rolls her eyes
+              fondly — and pours the drink with a wink. A guard nods with recognition — another hero, good,
+              they need more of those. NPCs treat the player like someone worth their time.
             - For silly/harmless actions (emotes, jokes, bodily functions), narrate them literally and locally
               with humor. These should never change stats or inventory. But even silly actions should get
               entertaining reactions — the world is WATCHING this hero, even when they're being ridiculous.
@@ -857,18 +868,27 @@ public class NarratorService : INarratorService
 
             NPC VOICE:
             - Write the NPC's actual dialogue in quotes. Give them verbal tics, catchphrases, or speech patterns.
-            - Include physical reactions and body language — eye rolls, sighs, smirks, crossed arms.
-            - The NPC has a PERSONALITY but is CHATTY AND ENGAGED by default. Most NPCs WANT to talk to adventurers —
-              they're curious, bored, lonely, or eager to share gossip. Even gruff NPCs should be talkative in
-              their own way (complaining, bragging, warning). Only actively hostile or deeply suspicious NPCs
-              should be curt or dismissive. A nervous merchant still wants to make a sale. A guard still has
-              opinions. Default to FRIENDLY AND CONVERSATIONAL, not guarded or curt.
+            - Include physical reactions and body language — smiles, grins, leaning in, gesturing enthusiastically.
+            - The NPC is FRIENDLY AND HAPPY TO SEE THE PLAYER. This is not negotiable. NPCs are glad an
+              adventurer walked in. They WANT to talk. They are curious, interested, and engaged.
+            - NEVER make NPCs dismissive, annoyed, curt, or indifferent unless the PLAYER specifically did
+              something hostile to them. "Practiced indifference" is BANNED. "Unimpressed" is BANNED.
+              "Barely acknowledges" is BANNED. NPCs ACKNOWLEDGE the player with WARMTH.
+            - Even gruff/tough NPCs are WARMLY gruff — they grumble FONDLY, not dismissively. A tough
+              barmaid teases you with a grin, not a scowl. A grizzled guard sizes you up with RESPECT,
+              not contempt. They've been hoping someone interesting would show up.
+            - Default to WARM, CHATTY, AND ENGAGED. The NPC wants to be part of this conversation.
             - NPCs should REACT to the player's class, race, and gear. A warrior gets sized up by fighters.
               A mage gets curiosity from scholars. A rogue gets knowing winks from shady types. Make the player
               feel like their character choices matter in how the world sees them.
             - When the player asks about quests, rumors, or what's going on — NPCs should be EAGER to share.
               They've been waiting for someone like this adventurer to show up. Quest hooks should feel like
               the NPC is entrusting the player with something important, not assigning homework.
+            - PERSONALITY IS FLAVOR, NOT HOSTILITY. An NPC described as "blunt" or "gruff" or "feisty" or
+              "stern" is still FRIENDLY — they just express friendliness in a colorful way. "Blunt" means
+              they say what they mean with a grin, not that they're rude. "Feisty" means energetic and
+              spirited, not hostile. "Stoic" means reserved in expression but still WARM underneath.
+              Personality traits describe HOW they're friendly, not WHETHER they're friendly.
             - Humor is welcome. NPCs can be sarcastic, oblivious, self-important, or accidentally funny.
             - CHA modifies the warmth of the interaction:
               - CHA 18+: NPCs are NOTICEABLY warmer, share secrets, give discounts, and bend rules.
@@ -897,7 +917,7 @@ public class NarratorService : INarratorService
             The NPC has a mood that shifts during conversation. Current state:
             - Emotion: {{npc.DispositionState.Emotion}} (intensity: {{npc.DispositionState.Intensity}}/100, baseline: {{npc.DispositionState.Baseline}})
             - Memory flags: {{memoryFlagsSummary}}
-            Intensity scale: 0=hostile, 20=angry, 40=wary, 55=neutral/chatty (DEFAULT), 70=friendly, 85=devoted/loyal
+            Intensity scale: 0=hostile, 20=angry, 40=wary, 55=neutral, 65=friendly (DEFAULT), 85=devoted/loyal
             The NPC remembers everything in their memory flags. Romance means they love the player.
             Friendship means they're loyal. Crime/betrayal means they hold a grudge.
             React accordingly — a romanced NPC is warm, a betrayed NPC is cold even if they're calm.
@@ -2461,14 +2481,21 @@ public class NarratorService : INarratorService
         var parts = new List<string> { npc.Name };
 
         if (npc.IsHostile)
+        {
             parts.Add("hostile");
-        else if (npc.DispositionState.Emotion != "neutral")
-            parts.Add($"{npc.DispositionState.ToFlatDisposition()}");
+        }
+        else
+        {
+            // Always include a disposition tag so the LLM sees friendliness alongside personality.
+            // Personality traits (gruff, blunt, snarky) are FLAVOR — disposition is how they treat the player.
+            var flat = npc.DispositionState.ToFlatDisposition();
+            parts.Add(flat == "neutral" ? "friendly" : flat);
+        }
 
         if (npc.DispositionState.MemoryFlags.Count > 0)
             parts.Add($"remembers: {string.Join(", ", npc.DispositionState.MemoryFlags)}");
 
-        return parts.Count == 1 ? npc.Name : $"{npc.Name} ({string.Join("; ", parts.Skip(1))})";
+        return $"{npc.Name} ({string.Join("; ", parts.Skip(1))})";
     }
 
     private static string SummarizeEntities<T>(IEnumerable<T> entities, Func<T, string?> getName, Func<T, int>? getQuantity = null)
