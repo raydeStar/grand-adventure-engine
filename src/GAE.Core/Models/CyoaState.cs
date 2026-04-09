@@ -27,6 +27,12 @@ public class CyoaState
 
     /// <summary>The room the player was in before starting the CYOA session (for restoration).</summary>
     public string PreviousRoomId { get; set; } = string.Empty;
+
+    /// <summary>The choices currently available to the player. Populated by the narrator.</summary>
+    public List<CyoaChoice> CurrentChoices { get; set; } = [];
+
+    /// <summary>The narration text of the current node (displayed with choices).</summary>
+    public string CurrentNarration { get; set; } = string.Empty;
 }
 
 /// <summary>

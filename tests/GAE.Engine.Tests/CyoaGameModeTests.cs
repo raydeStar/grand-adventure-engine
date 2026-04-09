@@ -31,11 +31,15 @@ public class CyoaGameModeTests
         Assert.Equal(GameMode.ChooseYourOwnAdventure, updated.GameMode);
         Assert.NotNull(updated.CyoaState);
         Assert.Equal(CyoaHealthLevel.Healthy, updated.CyoaState.Health);
-        Assert.Equal("start", updated.CyoaState.CurrentNode);
+        Assert.Equal("opening", updated.CyoaState.CurrentNode); // Set by narrator node
         Assert.Empty(updated.CyoaState.Inventory);
         Assert.Empty(updated.CyoaState.ChoiceHistory);
         Assert.Empty(updated.CyoaState.SavePoints);
         Assert.Equal(InteractionMode.Cyoa, updated.Interaction.Mode);
+        Assert.Equal(2, updated.CyoaState.CurrentChoices.Count);
+        Assert.NotNull(result.Narration);
+        Assert.Contains("threshold of adventure", result.Narration);
+        Assert.Contains("Take the left path", result.Narration);
     }
 
     [Fact]
@@ -262,11 +266,25 @@ public class CyoaGameModeTests
         HomeWorldId = WorldDefaults.DefaultWorldId
     };
 
-    private static GameEngine CreateEngine(IStateManager stateManager)
+    private static GameEngine CreateEngine(IStateManager stateManager, Mock<INarratorService>? narratorOverride = null)
     {
-        var narrator = new Mock<INarratorService>();
+        var narrator = narratorOverride ?? new Mock<INarratorService>();
         narrator.Setup(s => s.NarrateActionAsync(It.IsAny<NarratorContext>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("Narrated.");
+        // Default CYOA node for start — tests can override via narratorOverride
+        narrator.Setup(s => s.GenerateCyoaNodeAsync(
+                It.IsAny<PlayerCharacter>(), It.IsAny<string?>(),
+                It.IsAny<IReadOnlyList<CyoaChoiceRecord>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CyoaChoiceNode
+            {
+                NodeId = "opening",
+                NarrationText = "You stand at the threshold of adventure.",
+                Choices =
+                [
+                    new CyoaChoice { Id = "go-left", Text = "Take the left path" },
+                    new CyoaChoice { Id = "go-right", Text = "Take the right path" }
+                ]
+            });
         var dice = new Mock<IProbabilityEngine>();
         var parser = new CommandParser(NullLogger<CommandParser>.Instance);
         return new GameEngine(stateManager, dice.Object, narrator.Object, parser, new GameRulesConfig(), NullLogger<GameEngine>.Instance);

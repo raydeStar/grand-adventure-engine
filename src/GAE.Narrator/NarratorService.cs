@@ -3657,4 +3657,182 @@ public class NarratorService : INarratorService
 
         return "The world is vast and full of secrets. Look around, talk to those you meet, and follow the threads of fate.";
     }
+
+    // ── CYOA Node Generation ────────────────────────────────────
+
+    /// <inheritdoc />
+    public async Task<CyoaChoiceNode> GenerateCyoaNodeAsync(
+        PlayerCharacter player,
+        string? choiceText,
+        IReadOnlyList<CyoaChoiceRecord> recentHistory,
+        CancellationToken ct = default)
+    {
+        var voiceBlock = ResolveNarratorVoice(player);
+        var cyoa = player.CyoaState;
+        var healthDesc = cyoa is not null ? cyoa.Health.ToString() : "Healthy";
+        var inventoryList = cyoa?.Inventory.Count > 0
+            ? string.Join(", ", cyoa.Inventory)
+            : "nothing";
+        var historyBlock = recentHistory.Count > 0
+            ? string.Join("\n", recentHistory.TakeLast(5).Select(h => $"- At [{h.Node}]: chose \"{h.ChoiceText}\""))
+            : "This is the beginning of the story.";
+
+        var systemPrompt = $$"""
+            You are the NARRATOR of a Choose Your Own Adventure story.
+            You generate rich, atmospheric scenes and present the player with meaningful choices.
+
+            {{voiceBlock}}
+
+            RULES:
+            - Write narration in SECOND PERSON present tense ("You step into...", "You see...").
+            - Narration should be 2-5 sentences. Dense sensory detail. Dark humor welcome.
+            - Present 2-4 CHOICES for the player. Each choice should feel meaningfully different.
+            - Choices should be short (1 sentence max). They describe what the player DOES, not thinks.
+            - If the player has specific items, you MAY offer choices that USE those items.
+            - You MAY signal health changes: set health_change to "worse", "better", "hurt", "critical", or "dead".
+            - You MAY signal item changes: add items to items_gained, items to items_lost.
+            - Every ~5 nodes, set is_save_point to true (natural story break points).
+            - NEVER ask the player questions in the narration. Present the scene, offer choices.
+            - NEVER mention game mechanics, prompts, or that you are an AI.
+
+            Respond ONLY with a JSON object in this exact format:
+            {
+              "node_id": "short-kebab-case-id",
+              "narration": "Your scene narration here...",
+              "choices": [
+                { "id": "choice-id", "text": "What the player does" },
+                { "id": "choice-id-2", "text": "A different option" }
+              ],
+              "is_save_point": false,
+              "health_change": null,
+              "items_gained": [],
+              "items_lost": [],
+              "required_items": {}
+            }
+
+            The "required_items" field is an object mapping choice IDs to arrays of item names required
+            to see that choice. E.g. { "unlock-door": ["Rusty Key"] }. Omit or leave empty if no gating.
+            """;
+
+        var isOpening = choiceText is null;
+        var userPrompt = isOpening
+            ? $"""
+                CHARACTER: {player.Name}
+                HEALTH: {healthDesc}
+                INVENTORY: {inventoryList}
+
+                Generate the OPENING scene of a new adventure. Set the stage, introduce the setting,
+                and present the first set of choices. Make it dramatic and inviting.
+                """
+            : $"""
+                CHARACTER: {player.Name}
+                HEALTH: {healthDesc}
+                INVENTORY: {inventoryList}
+
+                RECENT HISTORY:
+                {historyBlock}
+
+                PLAYER'S CHOICE: "{choiceText}"
+
+                Generate the next scene based on what the player chose. Continue the story naturally.
+                The consequences of their choice should be clear in the narration.
+                """;
+
+        try
+        {
+            var raw = await CompletionOrThrowAsync(systemPrompt, userPrompt, ct,
+                maxTokens: 1024, operation: "cyoa-node", playerId: player.Id);
+
+            var json = ExtractJson(raw);
+            if (json is not null)
+            {
+                var dto = System.Text.Json.JsonSerializer.Deserialize<CyoaNodeDto>(json, _jsonOptions);
+                if (dto is not null && dto.Choices.Count >= 2)
+                {
+                    return MapDtoToNode(dto, cyoa?.CurrentNode);
+                }
+                _logger.LogWarning("CYOA node DTO had fewer than 2 choices, using fallback.");
+            }
+            else
+            {
+                _logger.LogWarning("Failed to extract JSON from CYOA narrator response, using fallback.");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "CYOA node generation failed, using fallback.");
+        }
+
+        return BuildCyoaFallbackNode(choiceText, cyoa?.CurrentNode);
+    }
+
+    private static CyoaChoiceNode MapDtoToNode(CyoaNodeDto dto, string? parentNodeId)
+    {
+        var node = new CyoaChoiceNode
+        {
+            NodeId = string.IsNullOrWhiteSpace(dto.NodeId) ? $"node-{Guid.NewGuid():N}" : dto.NodeId,
+            NarrationText = dto.Narration ?? "The story continues...",
+            ParentNodeId = parentNodeId,
+            IsSavePoint = dto.IsSavePoint,
+            HealthChange = dto.HealthChange,
+            ItemsGained = dto.ItemsGained ?? [],
+            ItemsLost = dto.ItemsLost ?? []
+        };
+
+        foreach (var c in dto.Choices)
+        {
+            var choice = new CyoaChoice
+            {
+                Id = string.IsNullOrWhiteSpace(c.Id) ? $"choice-{Guid.NewGuid():N}" : c.Id,
+                Text = c.Text ?? "Continue..."
+            };
+
+            // Wire required items from the separate map
+            if (c.Id is not null && dto.RequiredItems?.TryGetValue(c.Id, out var items) == true && items is not null)
+                choice.RequiredItems = items;
+
+            node.Choices.Add(choice);
+        }
+
+        return node;
+    }
+
+    private static CyoaChoiceNode BuildCyoaFallbackNode(string? choiceText, string? parentNodeId)
+    {
+        var narration = choiceText is not null
+            ? "The path ahead is uncertain, but you press on regardless. The world shifts around you."
+            : "You stand at the threshold of a new adventure. The air is thick with possibility and danger.";
+
+        return new CyoaChoiceNode
+        {
+            NodeId = $"fallback-{Guid.NewGuid():N}",
+            NarrationText = narration,
+            ParentNodeId = parentNodeId,
+            Choices =
+            [
+                new CyoaChoice { Id = "continue-forward", Text = "Press onward into the unknown" },
+                new CyoaChoice { Id = "look-around", Text = "Take a moment to observe your surroundings" },
+                new CyoaChoice { Id = "turn-back", Text = "Reconsider — perhaps there's another way" }
+            ]
+        };
+    }
+
+    // DTO for CYOA node JSON deserialization
+    private class CyoaNodeDto
+    {
+        public string? NodeId { get; set; }
+        public string? Narration { get; set; }
+        public List<CyoaChoiceDto> Choices { get; set; } = [];
+        public bool IsSavePoint { get; set; }
+        public string? HealthChange { get; set; }
+        public List<string>? ItemsGained { get; set; }
+        public List<string>? ItemsLost { get; set; }
+        public Dictionary<string, List<string>>? RequiredItems { get; set; }
+    }
+
+    private class CyoaChoiceDto
+    {
+        public string? Id { get; set; }
+        public string? Text { get; set; }
+    }
 }

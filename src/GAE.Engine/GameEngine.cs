@@ -153,7 +153,7 @@ public class GameEngine : IGameEngine
             ActionType.AskNarrator => await ProcessAskNarratorAsync(player, action, ct),
             ActionType.AdventureStart => await ProcessAdventureStartAsync(player, action, ct),
             ActionType.AdventureEnd => await ProcessAdventureEndAsync(player, action, ct),
-            ActionType.CyoaStart => ProcessCyoaStart(player, action),
+            ActionType.CyoaStart => await ProcessCyoaStartAsync(player, action, ct),
             ActionType.CyoaEnd => ProcessCyoaEnd(player, action),
             _ => await ProcessFreeFormActionAsync(player, action, ct)
         };
@@ -185,6 +185,7 @@ public class GameEngine : IGameEngine
             && action.Type != ActionType.Narrator
             && action.Type != ActionType.SetNarrator
             && action.Type != ActionType.AskNarrator
+            && action.Type != ActionType.CyoaStart
             && action.Type != ActionType.Unknown;
 
         if (shouldNarrate)
@@ -2550,7 +2551,7 @@ public class GameEngine : IGameEngine
             InteractionMode.Combat => await ProcessCombatTurnAsync(player, action, ct),
             InteractionMode.Trading => await ProcessTradingTurnAsync(player, action, ct),
             InteractionMode.BlindAdventure => ProcessBlindAdventureTurn(player, action),
-            InteractionMode.Cyoa => ProcessCyoaTurn(player, action),
+            InteractionMode.Cyoa => await ProcessCyoaTurnAsync(player, action, ct),
             _ => null
         };
     }
@@ -4198,10 +4199,10 @@ public class GameEngine : IGameEngine
     // ── CYOA (Choose Your Own Adventure) ────────────────────────────────
 
     /// <summary>
-    /// Starts a CYOA session for the player. Switches game mode, initializes
-    /// simplified state, and sets interaction mode to Cyoa.
+    /// Starts a CYOA session: switches game mode, generates the opening story node
+    /// via the narrator, and presents the first set of choices.
     /// </summary>
-    private ActionResult ProcessCyoaStart(PlayerCharacter player, GameAction action)
+    private async Task<ActionResult> ProcessCyoaStartAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
     {
         if (player.CyoaState is not null)
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "You are already in a Choose Your Own Adventure. End it first with `cyoa end`." };
@@ -4221,11 +4222,18 @@ public class GameEngine : IGameEngine
 
         _logger.LogInformation("Player {PlayerId} started a CYOA session.", player.Id);
 
+        // Generate the opening scene via the narrator
+        var node = await _narrator.GenerateCyoaNodeAsync(player, null, [], ct);
+        ApplyCyoaNode(player, node);
+
+        var narrationWithChoices = FormatCyoaNarration(node.NarrationText, player.CyoaState.CurrentChoices);
+
         return new ActionResult
         {
             ActionId = action.Id,
             Success = true,
             MechanicalSummary = "📖 **Choose Your Own Adventure started!** Your choices will shape the story.",
+            Narration = narrationWithChoices,
             StateChanges =
             [
                 new StateChange
@@ -4274,15 +4282,155 @@ public class GameEngine : IGameEngine
     }
 
     /// <summary>
-    /// During a CYOA session, most commands fall through to normal processing.
-    /// CyoaEnd is handled by the main switch. Future tasks (C02) will add
-    /// choice-tree navigation here.
+    /// Processes a player's input during a CYOA session. Matches the input to a
+    /// numbered choice or fuzzy-matches against choice text, then generates the
+    /// next story node via the narrator.
     /// </summary>
-    private static ActionResult? ProcessCyoaTurn(PlayerCharacter player, GameAction action)
+    private async Task<ActionResult?> ProcessCyoaTurnAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
     {
-        _ = player;
-        _ = action;
-        return null;
+        // Let CyoaEnd, info commands, and other passthrough actions fall through to normal processing
+        if (action.Type == ActionType.CyoaEnd
+            || action.Type == ActionType.Stats
+            || action.Type == ActionType.Inventory
+            || action.Type == ActionType.Help)
+            return null;
+
+        var cyoa = player.CyoaState;
+        if (cyoa is null)
+            return null; // Safety: shouldn't happen, but fall through
+
+        var choices = cyoa.CurrentChoices;
+        if (choices.Count == 0)
+            return null; // No choices presented yet, fall through
+
+        // --- Match input to a choice ---
+        CyoaChoice? selectedChoice = null;
+        var input = action.RawInput?.Trim() ?? string.Empty;
+
+        // Try numeric choice (1, 2, 3, 4)
+        if (int.TryParse(input, out var choiceNum) && choiceNum >= 1 && choiceNum <= choices.Count)
+        {
+            selectedChoice = choices[choiceNum - 1];
+        }
+        else
+        {
+            // Fuzzy text match: find the choice whose text best matches the input
+            selectedChoice = choices
+                .FirstOrDefault(c => c.Text.Contains(input, StringComparison.OrdinalIgnoreCase))
+                ?? choices
+                    .FirstOrDefault(c => input.Contains(c.Text, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (selectedChoice is null)
+        {
+            // Invalid choice — re-present options
+            var reprompt = FormatCyoaNarration(
+                "That's not one of your options. Choose wisely:",
+                choices);
+            return new ActionResult
+            {
+                ActionId = action.Id,
+                Success = false,
+                MechanicalSummary = "Invalid choice. Pick a number or describe your action.",
+                Narration = reprompt
+            };
+        }
+
+        // Record the choice in history
+        cyoa.ChoiceHistory.Add(new CyoaChoiceRecord
+        {
+            Node = cyoa.CurrentNode,
+            ChoiceText = selectedChoice.Text,
+            Timestamp = DateTimeOffset.UtcNow
+        });
+
+        // Generate the next node from the narrator
+        var recentHistory = cyoa.ChoiceHistory
+            .TakeLast(5)
+            .ToList()
+            .AsReadOnly();
+
+        var node = await _narrator.GenerateCyoaNodeAsync(player, selectedChoice.Text, recentHistory, ct);
+        ApplyCyoaNode(player, node);
+
+        // Check for death
+        if (cyoa.Health == CyoaHealthLevel.Dead)
+        {
+            var deathNarration = node.NarrationText + "\n\n💀 **Your adventure has ended in death.** Type `cyoa end` to return to the world.";
+            cyoa.CurrentChoices.Clear();
+
+            await _stateManager.SavePlayerAsync(player, ct);
+            var deathResult = new ActionResult
+            {
+                ActionId = action.Id,
+                Success = true,
+                MechanicalSummary = "💀 You have died. The adventure is over.",
+                Narration = deathNarration
+            };
+            await PersistInteractionStoryEntry(player, action, deathResult, ct);
+            return deathResult;
+        }
+
+        var narrationWithChoices = FormatCyoaNarration(node.NarrationText, cyoa.CurrentChoices);
+
+        await _stateManager.SavePlayerAsync(player, ct);
+        var result = new ActionResult
+        {
+            ActionId = action.Id,
+            Success = true,
+            MechanicalSummary = $"Choice: {selectedChoice.Text}",
+            Narration = narrationWithChoices
+        };
+        await PersistInteractionStoryEntry(player, action, result, ct);
+        return result;
+    }
+
+    /// <summary>
+    /// Applies a narrator-generated CYOA node to the player's state: updates current node,
+    /// narration, available choices (filtered by required items), health, and inventory.
+    /// </summary>
+    private static void ApplyCyoaNode(PlayerCharacter player, CyoaChoiceNode node)
+    {
+        var cyoa = player.CyoaState!;
+
+        cyoa.CurrentNode = node.NodeId;
+        cyoa.CurrentNarration = node.NarrationText;
+
+        // Filter choices by required items
+        cyoa.CurrentChoices = node.Choices
+            .Where(c => c.RequiredItems.Count == 0 || CyoaMechanics.HasItems(cyoa, c.RequiredItems))
+            .ToList();
+
+        // Apply health change if signaled
+        if (!string.IsNullOrEmpty(node.HealthChange))
+            CyoaMechanics.ApplyHealthChange(cyoa, node.HealthChange);
+
+        // Apply item changes
+        if (node.ItemsGained.Count > 0)
+            CyoaMechanics.AddItems(cyoa, node.ItemsGained);
+        if (node.ItemsLost.Count > 0)
+            CyoaMechanics.RemoveItems(cyoa, node.ItemsLost);
+
+        // Track save points
+        if (node.IsSavePoint && !cyoa.SavePoints.Contains(node.NodeId))
+            cyoa.SavePoints.Add(node.NodeId);
+    }
+
+    /// <summary>
+    /// Formats CYOA narration text with numbered choices appended.
+    /// </summary>
+    private static string FormatCyoaNarration(string narration, List<CyoaChoice> choices)
+    {
+        if (choices.Count == 0)
+            return narration;
+
+        var sb = new System.Text.StringBuilder(narration);
+        sb.AppendLine();
+        sb.AppendLine();
+        for (var i = 0; i < choices.Count; i++)
+            sb.AppendLine($"**{i + 1}.** {choices[i].Text}");
+
+        return sb.ToString().TrimEnd();
     }
 
     private static ActionResult ProcessHelp(GameAction action)

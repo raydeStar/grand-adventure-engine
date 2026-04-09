@@ -127,4 +127,16 @@ public interface INarratorService
     /// The narrator introduces himself, sets the story, and the world reacts to the hero's arrival.
     /// </summary>
     Task<string> GenerateHeroIntroAsync(PlayerCharacter player, Room room, CancellationToken ct = default);
+
+    /// <summary>
+    /// Generates the next CYOA node: narration text, 2-4 choices, and optional state effects
+    /// (health change, item gain/loss, save point flag).
+    /// <paramref name="choiceText"/> is null for the opening node; for subsequent nodes it contains
+    /// the text of the choice the player picked.
+    /// </summary>
+    Task<CyoaChoiceNode> GenerateCyoaNodeAsync(
+        PlayerCharacter player,
+        string? choiceText,
+        IReadOnlyList<CyoaChoiceRecord> recentHistory,
+        CancellationToken ct = default);
 }

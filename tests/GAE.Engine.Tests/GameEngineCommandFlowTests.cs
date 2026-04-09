@@ -882,5 +882,8 @@ public class GameEngineCommandFlowTests
 
         public Task<(string Narration, string Summary)> NarrateBlindAdventureConclusionAsync(StorylineContext storyline, IReadOnlyList<string> visitedRooms, IReadOnlyList<string> keyEvents, CancellationToken ct = default)
             => Task.FromResult(("The adventure ends.", "A brief tale."));
+
+        public Task<CyoaChoiceNode> GenerateCyoaNodeAsync(PlayerCharacter player, string? choiceText, IReadOnlyList<CyoaChoiceRecord> recentHistory, CancellationToken ct = default)
+            => throw new NotSupportedException();
     }
 }
