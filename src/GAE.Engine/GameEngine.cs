@@ -1594,6 +1594,21 @@ public class GameEngine : IGameEngine
 
     private static ActionResult ProcessInventory(PlayerCharacter player, GameAction action)
     {
+        // CYOA mode: flat string inventory, no equipment
+        if (player.GameMode == GameMode.ChooseYourOwnAdventure && player.CyoaState is not null)
+        {
+            var cyoaItems = player.CyoaState.Inventory.Count > 0
+                ? string.Join("\n", player.CyoaState.Inventory.Select(i => $"  - {i}"))
+                : "  You're not carrying anything.";
+            var healthDesc = CyoaMechanics.DescribeHealth(player.CyoaState.Health);
+            return new ActionResult
+            {
+                ActionId = action.Id,
+                Success = true,
+                MechanicalSummary = $"**Health:** {healthDesc}\n**Inventory:**\n{cyoaItems}"
+            };
+        }
+
         var items = player.Inventory.Count > 0
             ? string.Join("\n", player.Inventory.Select(i => $"  - {i.Name} (x{i.Quantity}) -- {i.Description}"))
             : "  Your inventory is empty.";
@@ -1613,6 +1628,22 @@ public class GameEngine : IGameEngine
 
     private ActionResult ProcessStats(PlayerCharacter player, GameAction action)
     {
+        // CYOA mode: show health flavor text instead of RPG stats
+        if (player.GameMode == GameMode.ChooseYourOwnAdventure && player.CyoaState is not null)
+        {
+            var healthDesc = CyoaMechanics.DescribeHealth(player.CyoaState.Health);
+            var itemCount = player.CyoaState.Inventory.Count;
+            var choices = player.CyoaState.ChoiceHistory.Count;
+            return new ActionResult
+            {
+                ActionId = action.Id,
+                Success = true,
+                MechanicalSummary = $"**{player.Name}** — Choose Your Own Adventure\n" +
+                    $"Health: {healthDesc}\n" +
+                    $"Items: {itemCount} | Choices made: {choices}"
+            };
+        }
+
         return new ActionResult
         {
             ActionId = action.Id,
