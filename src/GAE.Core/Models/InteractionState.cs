@@ -52,5 +52,6 @@ public enum InteractionMode
     Trading,
     Stealth,
     Event,
-    BlindAdventure
+    BlindAdventure,
+    Cyoa
 }

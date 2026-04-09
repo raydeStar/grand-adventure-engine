@@ -69,8 +69,8 @@ public class GameEngine : IGameEngine
         // (fixes existing characters created before level scaling was added)
         RecalculateMaxHpMp(player);
 
-        // Dead players auto-respawn at the tavern with penalties
-        if (!player.IsAlive)
+        // Dead players auto-respawn at the tavern with penalties (full RPG only)
+        if (player.GameMode == GameMode.FullRpg && !player.IsAlive)
         {
             var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
             room ??= new Room { Id = player.CurrentRoomId, Name = "Unknown" };
@@ -153,6 +153,8 @@ public class GameEngine : IGameEngine
             ActionType.AskNarrator => await ProcessAskNarratorAsync(player, action, ct),
             ActionType.AdventureStart => await ProcessAdventureStartAsync(player, action, ct),
             ActionType.AdventureEnd => await ProcessAdventureEndAsync(player, action, ct),
+            ActionType.CyoaStart => ProcessCyoaStart(player, action),
+            ActionType.CyoaEnd => ProcessCyoaEnd(player, action),
             _ => await ProcessFreeFormActionAsync(player, action, ct)
         };
 
@@ -2517,6 +2519,7 @@ public class GameEngine : IGameEngine
             InteractionMode.Combat => await ProcessCombatTurnAsync(player, action, ct),
             InteractionMode.Trading => await ProcessTradingTurnAsync(player, action, ct),
             InteractionMode.BlindAdventure => ProcessBlindAdventureTurn(player, action),
+            InteractionMode.Cyoa => ProcessCyoaTurn(player, action),
             _ => null
         };
     }
@@ -4161,6 +4164,96 @@ public class GameEngine : IGameEngine
         return null;
     }
 
+    // ── CYOA (Choose Your Own Adventure) ────────────────────────────────
+
+    /// <summary>
+    /// Starts a CYOA session for the player. Switches game mode, initializes
+    /// simplified state, and sets interaction mode to Cyoa.
+    /// </summary>
+    private ActionResult ProcessCyoaStart(PlayerCharacter player, GameAction action)
+    {
+        if (player.CyoaState is not null)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "You are already in a Choose Your Own Adventure. End it first with `cyoa end`." };
+
+        if (player.BlindAdventure is not null)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "You are on a blind adventure. End it first before starting a CYOA." };
+
+        player.GameMode = GameMode.ChooseYourOwnAdventure;
+        player.CyoaState = new CyoaState
+        {
+            Health = CyoaHealthLevel.Healthy,
+            PreviousRoomId = player.CurrentRoomId,
+            CurrentNode = "start",
+            StartedAt = DateTimeOffset.UtcNow
+        };
+        player.Interaction.Mode = InteractionMode.Cyoa;
+
+        _logger.LogInformation("Player {PlayerId} started a CYOA session.", player.Id);
+
+        return new ActionResult
+        {
+            ActionId = action.Id,
+            Success = true,
+            MechanicalSummary = "📖 **Choose Your Own Adventure started!** Your choices will shape the story.",
+            StateChanges =
+            [
+                new StateChange
+                {
+                    EntityType = "Player", EntityId = player.Id,
+                    Property = "GameMode", OldValue = nameof(GameMode.FullRpg), NewValue = nameof(GameMode.ChooseYourOwnAdventure)
+                }
+            ],
+            InteractionUpdate = new InteractionUpdate { Mode = InteractionMode.Cyoa }
+        };
+    }
+
+    /// <summary>
+    /// Ends a CYOA session, restoring the player to full RPG mode.
+    /// </summary>
+    private ActionResult ProcessCyoaEnd(PlayerCharacter player, GameAction action)
+    {
+        if (player.CyoaState is null)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "You are not in a Choose Your Own Adventure." };
+
+        var previousRoom = player.CyoaState.PreviousRoomId;
+        var choiceCount = player.CyoaState.ChoiceHistory.Count;
+
+        player.GameMode = GameMode.FullRpg;
+        player.CyoaState = null;
+        player.Interaction.Reset();
+        player.CurrentRoomId = previousRoom;
+
+        _logger.LogInformation("Player {PlayerId} ended CYOA session after {Choices} choices.", player.Id, choiceCount);
+
+        return new ActionResult
+        {
+            ActionId = action.Id,
+            Success = true,
+            MechanicalSummary = $"📖 **Adventure ended.** You made {choiceCount} choice(s). Welcome back to the world.",
+            StateChanges =
+            [
+                new StateChange
+                {
+                    EntityType = "Player", EntityId = player.Id,
+                    Property = "GameMode", OldValue = nameof(GameMode.ChooseYourOwnAdventure), NewValue = nameof(GameMode.FullRpg)
+                }
+            ],
+            InteractionUpdate = new InteractionUpdate { Mode = InteractionMode.Explore }
+        };
+    }
+
+    /// <summary>
+    /// During a CYOA session, most commands fall through to normal processing.
+    /// CyoaEnd is handled by the main switch. Future tasks (C02) will add
+    /// choice-tree navigation here.
+    /// </summary>
+    private static ActionResult? ProcessCyoaTurn(PlayerCharacter player, GameAction action)
+    {
+        _ = player;
+        _ = action;
+        return null;
+    }
+
     private static ActionResult ProcessHelp(GameAction action)
     {
         return new ActionResult
@@ -4917,6 +5010,9 @@ public class GameEngine : IGameEngine
     /// </summary>
     private void RecalculateMaxHpMp(PlayerCharacter player)
     {
+        // CYOA mode does not use HP/MP numbers
+        if (player.GameMode == GameMode.ChooseYourOwnAdventure) return;
+
         // Enforce stat caps (protects against inflated values from free-form RP)
         int statMax = _rules.Stats.GetValueOrDefault("str")?.Max ?? 20;
         player.Str = Math.Clamp(player.Str, 1, statMax);
@@ -4961,6 +5057,9 @@ public class GameEngine : IGameEngine
     /// </summary>
     public string? CheckAndApplyLevelUp(PlayerCharacter player)
     {
+        // CYOA mode has no XP or leveling
+        if (player.GameMode == GameMode.ChooseYourOwnAdventure) return null;
+
         int maxLevel = _rules.Leveling.MaxLevel;
         if (player.Level >= maxLevel) return null;
 

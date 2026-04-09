@@ -53,5 +53,7 @@ public enum ActionType
     AskNarrator,
     AdventureStart,
     AdventureEnd,
+    CyoaStart,
+    CyoaEnd,
     Unknown
 }

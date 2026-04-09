@@ -34,11 +34,18 @@ public class PlayerCharacter
     public int Cha { get; set; } = 10;
     public int Luck { get; set; } = 10;
 
+    // Game mode
+    /// <summary>Which rule set this player uses. Defaults to FullRpg.</summary>
+    public GameMode GameMode { get; set; } = GameMode.FullRpg;
+
     // Interaction state
     public InteractionState Interaction { get; set; } = new();
 
     /// <summary>Active Blind Adventure session, or null if not in one.</summary>
     public BlindAdventureSession? BlindAdventure { get; set; }
+
+    /// <summary>Active CYOA session state, or null if not in one.</summary>
+    public CyoaState? CyoaState { get; set; }
 
     // Equipment and inventory
     public EquipmentLoadout Equipment { get; set; } = new();

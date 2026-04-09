@@ -382,6 +382,18 @@ public partial class CommandParser
             return action;
         }
 
+        // CYOA — "cyoa start", "cyoa end", "book start", "book end"
+        if (CyoaStartRegex().IsMatch(input))
+        {
+            action.Type = ActionType.CyoaStart;
+            return action;
+        }
+        if (CyoaEndRegex().IsMatch(input))
+        {
+            action.Type = ActionType.CyoaEnd;
+            return action;
+        }
+
         // Help
         if (HelpRegex().IsMatch(input))
         {
@@ -552,4 +564,10 @@ public partial class CommandParser
 
     [GeneratedRegex(@"^(?:adventure|blind)\s+(?:end|stop|quit|finish)$", RegexOptions.IgnoreCase)]
     private static partial Regex AdventureEndRegex();
+
+    [GeneratedRegex(@"^(?:cyoa|book)\s+start$", RegexOptions.IgnoreCase)]
+    private static partial Regex CyoaStartRegex();
+
+    [GeneratedRegex(@"^(?:cyoa|book)\s+(?:end|stop|quit|finish)$", RegexOptions.IgnoreCase)]
+    private static partial Regex CyoaEndRegex();
 }
