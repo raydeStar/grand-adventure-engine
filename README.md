@@ -28,6 +28,8 @@ You and your friends play a fantasy adventure right inside Discord. An AI narrat
 
 **Meet Characters Who Feel Alive** — NPCs remember how you've treated them. Some are friendly. Some are not. How they act depends on the game rules — how they *talk* depends on the AI.
 
+**New here?** Read the [Player Guide](docs/player-guide.md) for a full walkthrough of commands, combat, and quests.
+
 <!-- TODO: Create a screenshot (~800x500) of the browser dashboard showing
      the admin view with player state, NPC panels, or quest tracking visible.
      Use the running dashboard at localhost:8181 with the admin account. -->
@@ -116,6 +118,7 @@ npm run test:e2e
 
 ### More Docs
 
+- [Player Guide](docs/player-guide.md) — How to play: commands, combat, quests, tips
 - [Self-Hosting Setup Guide](docs/setup-guide.md) — Full installation and configuration walkthrough
 - [Operator Guide](docs/dashboard-ops.md) — Dashboard admin workflows, environment variables, manual operations
 
