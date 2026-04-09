@@ -4299,6 +4299,14 @@ public class GameEngine : IGameEngine
         if (cyoa is null)
             return null; // Safety: shouldn't happen, but fall through
 
+        // Handle !save — list save points
+        if (action.Type == ActionType.CyoaSaveList)
+            return ProcessCyoaSaveList(player, action);
+
+        // Handle !load — rewind to a save point
+        if (action.Type == ActionType.CyoaLoad)
+            return await ProcessCyoaLoadAsync(player, action, ct);
+
         var choices = cyoa.CurrentChoices;
         if (choices.Count == 0)
             return null; // No choices presented yet, fall through
@@ -4353,10 +4361,39 @@ public class GameEngine : IGameEngine
         var node = await _narrator.GenerateCyoaNodeAsync(player, selectedChoice.Text, recentHistory, ct);
         ApplyCyoaNode(player, node);
 
-        // Check for death
+        // Auto-save every N choices (unless this node is already a narrator-triggered save point)
+        if (!node.IsSavePoint && cyoa.ChoiceHistory.Count % CyoaAutoSaveInterval == 0)
+            CreateSaveSnapshot(cyoa);
+
+        // Check for death — rewind to last save if available
         if (cyoa.Health == CyoaHealthLevel.Dead)
         {
-            var deathNarration = node.NarrationText + "\n\n💀 **Your adventure has ended in death.** Type `cyoa end` to return to the world.";
+            var deathNarration = node.NarrationText;
+
+            if (cyoa.SavePoints.Count > 0)
+            {
+                // Rewind to last save point
+                var save = cyoa.SavePoints[^1];
+                RestoreFromSnapshot(cyoa, save);
+
+                _logger.LogInformation("Player {PlayerId} died and rewound to save point {NodeId}.", player.Id, save.NodeId);
+
+                var rewindNarration = $"{deathNarration}\n\n💀 **Death claims you... but fate is not done with you yet.**\n\n*You find yourself back at a familiar moment. The memory of what happened lingers...*\n\n{FormatCyoaNarration(save.NarrationText, cyoa.CurrentChoices)}";
+
+                await _stateManager.SavePlayerAsync(player, ct);
+                var rewindResult = new ActionResult
+                {
+                    ActionId = action.Id,
+                    Success = true,
+                    MechanicalSummary = $"💀 You died and rewound to save point: {save.NodeId}",
+                    Narration = rewindNarration
+                };
+                await PersistInteractionStoryEntry(player, action, rewindResult, ct);
+                return rewindResult;
+            }
+
+            // No save points — game over
+            var gameOverNarration = deathNarration + "\n\n💀 **Your adventure has ended in death.** Type `cyoa end` to return to the world.";
             cyoa.CurrentChoices.Clear();
 
             await _stateManager.SavePlayerAsync(player, ct);
@@ -4365,7 +4402,7 @@ public class GameEngine : IGameEngine
                 ActionId = action.Id,
                 Success = true,
                 MechanicalSummary = "💀 You have died. The adventure is over.",
-                Narration = deathNarration
+                Narration = gameOverNarration
             };
             await PersistInteractionStoryEntry(player, action, deathResult, ct);
             return deathResult;
@@ -4383,6 +4420,116 @@ public class GameEngine : IGameEngine
         };
         await PersistInteractionStoryEntry(player, action, result, ct);
         return result;
+    }
+
+    /// <summary>
+    /// Lists available CYOA save points for the player.
+    /// </summary>
+    private static ActionResult ProcessCyoaSaveList(PlayerCharacter player, GameAction action)
+    {
+        var cyoa = player.CyoaState!;
+        if (cyoa.SavePoints.Count == 0)
+        {
+            return new ActionResult
+            {
+                ActionId = action.Id,
+                Success = true,
+                MechanicalSummary = "No save points yet.",
+                Narration = "📌 **No save points yet.** Keep making choices — save points are created automatically."
+            };
+        }
+
+        var sb = new System.Text.StringBuilder("📌 **Save Points:**\n\n");
+        for (var i = 0; i < cyoa.SavePoints.Count; i++)
+        {
+            var save = cyoa.SavePoints[i];
+            var preview = save.NarrationText.Length > 60
+                ? save.NarrationText[..60] + "..."
+                : save.NarrationText;
+            sb.AppendLine($"**{i + 1}.** {preview} ({save.Health}, {save.Inventory.Count} item(s))");
+        }
+        sb.AppendLine();
+        sb.Append("Type `!load <number>` to return to a save point.");
+
+        return new ActionResult
+        {
+            ActionId = action.Id,
+            Success = true,
+            MechanicalSummary = $"📌 {cyoa.SavePoints.Count} save point(s) available.",
+            Narration = sb.ToString()
+        };
+    }
+
+    /// <summary>
+    /// Rewinds to a specific CYOA save point, discarding all progress after it.
+    /// </summary>
+    private async Task<ActionResult> ProcessCyoaLoadAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
+    {
+        var cyoa = player.CyoaState!;
+        if (cyoa.SavePoints.Count == 0)
+        {
+            return new ActionResult
+            {
+                ActionId = action.Id,
+                Success = false,
+                MechanicalSummary = "No save points to load.",
+                Narration = "📌 **No save points available.** There's nothing to rewind to."
+            };
+        }
+
+        // Parse save number from input (e.g. "!load 2" or "cyoa load 3")
+        var input = action.RawInput?.Trim() ?? string.Empty;
+        var numberMatch = System.Text.RegularExpressions.Regex.Match(input, @"\d+");
+        var saveIndex = numberMatch.Success ? int.Parse(numberMatch.Value) - 1 : cyoa.SavePoints.Count - 1;
+
+        if (saveIndex < 0 || saveIndex >= cyoa.SavePoints.Count)
+        {
+            return new ActionResult
+            {
+                ActionId = action.Id,
+                Success = false,
+                MechanicalSummary = $"Invalid save point. Choose 1-{cyoa.SavePoints.Count}.",
+                Narration = $"📌 **Invalid save point.** You have {cyoa.SavePoints.Count} save(s). Type `!load 1` through `!load {cyoa.SavePoints.Count}`."
+            };
+        }
+
+        var save = cyoa.SavePoints[saveIndex];
+        RestoreFromSnapshot(cyoa, save);
+
+        // Discard saves after the loaded one
+        if (saveIndex + 1 < cyoa.SavePoints.Count)
+            cyoa.SavePoints.RemoveRange(saveIndex + 1, cyoa.SavePoints.Count - saveIndex - 1);
+
+        _logger.LogInformation("Player {PlayerId} loaded save point {Index} ({NodeId}).", player.Id, saveIndex + 1, save.NodeId);
+
+        var narration = $"📌 **Rewinding to save point {saveIndex + 1}...**\n\n*The world shimmers and reforms around you.*\n\n{FormatCyoaNarration(save.NarrationText, cyoa.CurrentChoices)}";
+
+        await _stateManager.SavePlayerAsync(player, ct);
+        var result = new ActionResult
+        {
+            ActionId = action.Id,
+            Success = true,
+            MechanicalSummary = $"📌 Loaded save point {saveIndex + 1}: {save.NodeId}",
+            Narration = narration
+        };
+        await PersistInteractionStoryEntry(player, action, result, ct);
+        return result;
+    }
+
+    /// <summary>
+    /// Restores CYOA state from a save snapshot — node, narration, health, inventory, choices, and history.
+    /// </summary>
+    private static void RestoreFromSnapshot(CyoaState cyoa, CyoaSaveSnapshot save)
+    {
+        cyoa.CurrentNode = save.NodeId;
+        cyoa.CurrentNarration = save.NarrationText;
+        cyoa.Health = save.Health;
+        cyoa.Inventory = [.. save.Inventory];
+        cyoa.CurrentChoices = save.Choices.ToList();
+
+        // Discard choice history after the save point
+        if (save.ChoiceCountAtSave < cyoa.ChoiceHistory.Count)
+            cyoa.ChoiceHistory.RemoveRange(save.ChoiceCountAtSave, cyoa.ChoiceHistory.Count - save.ChoiceCountAtSave);
     }
 
     /// <summary>
@@ -4411,9 +4558,33 @@ public class GameEngine : IGameEngine
         if (node.ItemsLost.Count > 0)
             CyoaMechanics.RemoveItems(cyoa, node.ItemsLost);
 
-        // Track save points
-        if (node.IsSavePoint && !cyoa.SavePoints.Contains(node.NodeId))
-            cyoa.SavePoints.Add(node.NodeId);
+        // Track save points as full snapshots (captures state AFTER applying this node)
+        if (node.IsSavePoint && !cyoa.SavePoints.Any(s => s.NodeId == node.NodeId))
+            CreateSaveSnapshot(cyoa);
+
+        // Cap at 10 most recent saves
+        while (cyoa.SavePoints.Count > 10)
+            cyoa.SavePoints.RemoveAt(0);
+    }
+
+    /// <summary>Auto-save interval: create a snapshot every N choices.</summary>
+    private const int CyoaAutoSaveInterval = 5;
+
+    /// <summary>
+    /// Creates a frozen snapshot of the current CYOA state for death rewind or voluntary load.
+    /// </summary>
+    private static void CreateSaveSnapshot(CyoaState cyoa)
+    {
+        cyoa.SavePoints.Add(new CyoaSaveSnapshot
+        {
+            NodeId = cyoa.CurrentNode,
+            NarrationText = cyoa.CurrentNarration,
+            Health = cyoa.Health,
+            Inventory = [.. cyoa.Inventory],
+            Choices = cyoa.CurrentChoices.ToList(),
+            CreatedAt = DateTimeOffset.UtcNow,
+            ChoiceCountAtSave = cyoa.ChoiceHistory.Count
+        });
     }
 
     /// <summary>

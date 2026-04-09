@@ -368,7 +368,7 @@ public class CyoaChoiceTreeTests
         await engine.ProcessActionAsync("test-player", action);
 
         var updated = (await state.GetPlayerAsync("test-player"))!;
-        Assert.Contains("checkpoint-1", updated.CyoaState!.SavePoints);
+        Assert.Contains(updated.CyoaState!.SavePoints, s => s.NodeId == "checkpoint-1");
     }
 
     [Fact]
@@ -378,7 +378,13 @@ public class CyoaChoiceTreeTests
 
         // Pre-add the save point
         var player = (await state.GetPlayerAsync("test-player"))!;
-        player.CyoaState!.SavePoints.Add("checkpoint-1");
+        player.CyoaState!.SavePoints.Add(new CyoaSaveSnapshot
+        {
+            NodeId = "checkpoint-1",
+            NarrationText = "Previous save.",
+            Health = CyoaHealthLevel.Healthy,
+            Choices = [new CyoaChoice { Id = "a", Text = "Rest" }, new CyoaChoice { Id = "b", Text = "Continue" }]
+        });
         await state.SavePlayerAsync(player);
 
         SetupNextNode(narrator, "Take the left path", new CyoaChoiceNode

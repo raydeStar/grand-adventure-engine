@@ -393,6 +393,16 @@ public partial class CommandParser
             action.Type = ActionType.CyoaEnd;
             return action;
         }
+        if (CyoaSaveListRegex().IsMatch(input))
+        {
+            action.Type = ActionType.CyoaSaveList;
+            return action;
+        }
+        if (CyoaLoadRegex().IsMatch(input))
+        {
+            action.Type = ActionType.CyoaLoad;
+            return action;
+        }
 
         // Help
         if (HelpRegex().IsMatch(input))
@@ -570,4 +580,10 @@ public partial class CommandParser
 
     [GeneratedRegex(@"^(?:cyoa|book)\s+(?:end|stop|quit|finish)$", RegexOptions.IgnoreCase)]
     private static partial Regex CyoaEndRegex();
+
+    [GeneratedRegex(@"^(?:!save|(?:cyoa|book)\s+saves?)$", RegexOptions.IgnoreCase)]
+    private static partial Regex CyoaSaveListRegex();
+
+    [GeneratedRegex(@"^(?:!load|(?:cyoa|book)\s+load)\s*\d*$", RegexOptions.IgnoreCase)]
+    private static partial Regex CyoaLoadRegex();
 }

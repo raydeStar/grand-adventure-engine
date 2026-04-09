@@ -55,5 +55,7 @@ public enum ActionType
     AdventureEnd,
     CyoaStart,
     CyoaEnd,
+    CyoaSaveList,
+    CyoaLoad,
     Unknown
 }

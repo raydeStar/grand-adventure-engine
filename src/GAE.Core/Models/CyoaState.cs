@@ -16,8 +16,8 @@ public class CyoaState
     /// <summary>ID of the current story node in the choice tree.</summary>
     public string CurrentNode { get; set; } = string.Empty;
 
-    /// <summary>Node IDs that the player can rewind to.</summary>
-    public List<string> SavePoints { get; set; } = [];
+    /// <summary>Snapshots the player can rewind to on death or voluntary load. Capped at 10.</summary>
+    public List<CyoaSaveSnapshot> SavePoints { get; set; } = [];
 
     /// <summary>Ordered history of choices the player has made.</summary>
     public List<CyoaChoiceRecord> ChoiceHistory { get; set; } = [];
