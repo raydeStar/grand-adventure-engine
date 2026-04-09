@@ -1451,9 +1451,39 @@ public class NarratorService : INarratorService
         if (TryBuildMaintenanceFreeFormNarration(player, roomName, actionPhrase, witnessReaction, out var maintenanceNarration))
             return maintenanceNarration;
 
+        // Check if this looks like dialogue/social interaction
+        var isSocial = actionPhrase.Contains('"') || actionPhrase.Contains('\'')
+            || actionPhrase.StartsWith("say ", StringComparison.OrdinalIgnoreCase)
+            || actionPhrase.StartsWith("ask ", StringComparison.OrdinalIgnoreCase)
+            || actionPhrase.StartsWith("talk ", StringComparison.OrdinalIgnoreCase)
+            || actionPhrase.StartsWith("tell ", StringComparison.OrdinalIgnoreCase)
+            || actionPhrase.StartsWith("greet ", StringComparison.OrdinalIgnoreCase)
+            || actionPhrase.StartsWith("smile ", StringComparison.OrdinalIgnoreCase)
+            || actionPhrase.StartsWith("laugh", StringComparison.OrdinalIgnoreCase)
+            || actionPhrase.StartsWith("wave ", StringComparison.OrdinalIgnoreCase)
+            || actionPhrase.StartsWith("buy ", StringComparison.OrdinalIgnoreCase);
+
+        if (isSocial)
+        {
+            // Social fallback: don't parrot the input, just describe the attempt
+            var npc = room.Npcs.FirstOrDefault();
+            if (npc is not null)
+            {
+                var pick = Math.Abs((player.Name + npc.Name).GetHashCode()) % 4;
+                return pick switch
+                {
+                    0 => $"{npc.Name} glances your way, considering you for a moment. The conversation doesn't quite land — maybe they're distracted, or maybe you need a different approach. Try using **talk to {npc.Name.ToLowerInvariant()}** to get their full attention.",
+                    1 => $"{npc.Name} acknowledges you with a nod but seems preoccupied. Perhaps a direct **talk to {npc.Name.ToLowerInvariant()}** would draw them into proper conversation.",
+                    2 => $"You catch {npc.Name}'s eye, but the moment passes without quite connecting. Try **talk to {npc.Name.ToLowerInvariant()}** to start a proper conversation.",
+                    _ => $"{npc.Name} seems like they might have something to say, but you haven't quite gotten their attention yet. Try **talk to {npc.Name.ToLowerInvariant()}** to engage them directly."
+                };
+            }
+            return "Your words hang in the air, but nobody here seems to be listening. Try **talk to** someone specific.";
+        }
+
         return success
-            ? $"{player.Name} follows through on the impulse to {actionPhrase}, letting the effort play out against {roomName}. Nothing larger changes hands, but the moment resolves cleanly enough to belong here. {witnessReaction}"
-            : $"{player.Name} starts to {actionPhrase}, but the attempt asks more of {roomName} than the moment is willing to yield. {witnessReaction} The room settles back into its own hard logic without any lasting change.";
+            ? $"You give it a shot. {witnessReaction} The moment passes without any dramatic consequences."
+            : $"You try, but it doesn't quite work out. {witnessReaction} Maybe a different approach.";
     }
 
     private static bool TryBuildMaintenanceFreeFormNarration(PlayerCharacter player, string roomName, string actionPhrase, string witnessReaction, out string narration)
