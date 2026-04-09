@@ -95,4 +95,16 @@ public interface INarratorService
     /// Returns null when the AI is unavailable.
     /// </summary>
     Task<string?> NarrateRealmTransitionAsync(string playerName, string sourceWorldName, string destinationWorldName, string? portalHint, CancellationToken ct = default);
+
+    /// <summary>
+    /// Provides in-character narrator guidance about quests, exploration, and the main story.
+    /// Acts as a helpful narrator voice giving atmospheric hints without spoiling puzzles.
+    /// </summary>
+    Task<string> ProvideGuidanceAsync(PlayerCharacter player, Room room, string? question, CancellationToken ct = default);
+
+    /// <summary>
+    /// Generates the hero's grand entrance intro after character creation.
+    /// The narrator introduces himself, sets the story, and the world reacts to the hero's arrival.
+    /// </summary>
+    Task<string> GenerateHeroIntroAsync(PlayerCharacter player, Room room, CancellationToken ct = default);
 }

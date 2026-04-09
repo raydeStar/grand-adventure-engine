@@ -44,10 +44,12 @@ public enum ActionType
     QuestInfo,
     AcceptQuest,
     AbandonQuest,
+    TurnInQuest,
     TravelWorld,
     Lorebook,
     LoreInfo,
     Narrator,
     SetNarrator,
+    AskNarrator,
     Unknown
 }

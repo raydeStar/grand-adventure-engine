@@ -65,6 +65,10 @@ const API = {
     return this.postJson(`${this.base}/characters`, data);
   },
 
+  async getGameConfig() {
+    return this.getJson(`${this.base}/config`);
+  },
+
   async getAdminSummary() {
     return this.getJson(`${this.base}/admin/summary`);
   },
@@ -125,6 +129,18 @@ const API = {
     });
     if (!res.ok) throw this.createHttpError(res, await this.readError(res));
     return res.json();
+  },
+
+  async updateRoom(roomId, data) {
+    return this.putJson(`${this.base}/admin/rooms/${encodeURIComponent(roomId)}`, data);
+  },
+
+  async createRoom(data) {
+    return this.postJson(`${this.base}/admin/rooms`, data);
+  },
+
+  async updatePlayer(playerId, data) {
+    return this.putJson(`${this.base}/admin/players/${encodeURIComponent(playerId)}`, data);
   },
 
   async getHealth() {

@@ -29,9 +29,9 @@ public class NarratorServiceTests
         // Act
         var result = await narrator.NarrateActionAsync(context);
 
-        // Assert: should get contextual fallback narration, not throw
+        // Assert: should get contextual fallback narration (mechanical summary), not throw
         Assert.NotNull(result);
-        Assert.Contains("Test", result, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("strike", result, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("clears his throat", result, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -81,7 +81,8 @@ public class NarratorServiceTests
         Assert.False(response.Success);
         Assert.DoesNotContain("nothing dramatic happens", response.Narration, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("narrator", response.Narration, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("hard logic", response.Narration, StringComparison.OrdinalIgnoreCase);
+        // Free-form fallback should give a brief in-world failure without parroting input
+        Assert.Contains("try", response.Narration, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -214,8 +215,8 @@ public class NarratorServiceTests
             MechanicalResult = new ActionResult { Success = false, MechanicalSummary = "There is no exit to the west." }
         });
 
-        // Should use the general fallback (failure path, second person), not the arrival path
-        Assert.Contains("You", narration);
+        // Should use the mechanical summary directly as fallback, not the arrival path
+        Assert.Contains("no exit", narration, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("arrives", narration, StringComparison.OrdinalIgnoreCase);
     }
 

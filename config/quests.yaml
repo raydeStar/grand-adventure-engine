@@ -212,15 +212,13 @@ quests:
         next_stage_id: "bring_red_home"
       - id: "bring_red_home"
         name: "Bring Red XIII Back"
-        description: "Escort Red XIII safely back to the city gate."
-        narrator_hint: "Red XIII yields only when the danger becomes undeniable. The retreat should feel tense, disciplined, and one step ahead of something hungry in the trees."
+        description: "Return to the city gate — Red XIII follows at your pace, Mist or no Mist."
+        narrator_hint: "Red XIII yields only when the danger becomes undeniable. The retreat should feel tense, disciplined, and one step ahead of something hungry in the trees. When the player reaches the gate, Red XIII is safe."
         objectives:
           - id: "escort_red"
-            type: Escort
-            target_id: "ranger_thorne"
-            target_name: "Red XIII"
-            location_constraint: "town_gate"
-            description: "Escort Red XIII back to the gate"
+            type: Discover
+            target_id: "town_gate"
+            description: "Return to the gate with Red XIII"
     rewards:
       xp: 35
       gold: 20

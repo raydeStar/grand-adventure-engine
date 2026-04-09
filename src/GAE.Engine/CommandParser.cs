@@ -122,6 +122,12 @@ public partial class CommandParser
             action.Target = attackMatch.Groups["target"].Value.Trim();
             return action;
         }
+        // Bare "attack" / "fight" without a target — auto-target in engine
+        if (BareAttackRegex().IsMatch(input))
+        {
+            action.Type = ActionType.Attack;
+            return action;
+        }
 
         // Talk
         var talkMatch = TalkRegex().Match(input);
@@ -160,6 +166,15 @@ public partial class CommandParser
         {
             action.Type = ActionType.AcceptQuest;
             action.Target = acceptMatch.Groups["quest"].Value.Trim();
+            return action;
+        }
+
+        // Turn in quest — "turn in <name>", "complete quest <name>", "finish quest <name>"
+        var turnInMatch = TurnInQuestRegex().Match(input);
+        if (turnInMatch.Success)
+        {
+            action.Type = ActionType.TurnInQuest;
+            action.Target = turnInMatch.Groups["quest"].Value.Trim();
             return action;
         }
 
@@ -338,6 +353,21 @@ public partial class CommandParser
             return action;
         }
 
+        // Ask narrator — "hint", "guidance", "ask narrator <question>"
+        var askNarratorMatch = AskNarratorRegex().Match(input);
+        if (askNarratorMatch.Success)
+        {
+            action.Type = ActionType.AskNarrator;
+            if (askNarratorMatch.Groups["question"].Success)
+                action.Target = askNarratorMatch.Groups["question"].Value.Trim();
+            return action;
+        }
+        if (BareHintRegex().IsMatch(input))
+        {
+            action.Type = ActionType.AskNarrator;
+            return action;
+        }
+
         // Help
         if (HelpRegex().IsMatch(input))
         {
@@ -403,6 +433,9 @@ public partial class CommandParser
 
     [GeneratedRegex(@"^(?:flee|run|escape|run\s+away|retreat|bail)$", RegexOptions.IgnoreCase)]
     private static partial Regex FleeRegex();
+
+    [GeneratedRegex(@"^(?:attack|hit|strike|fight|slash)$", RegexOptions.IgnoreCase)]
+    private static partial Regex BareAttackRegex();
 
     [GeneratedRegex(@"^(?:attack|hit|strike|fight|slash)\s+(?<target>.+)$", RegexOptions.IgnoreCase)]
     private static partial Regex AttackRegex();
@@ -473,6 +506,9 @@ public partial class CommandParser
     [GeneratedRegex(@"^(?:accept\s+(?:quest\s+)?|take\s+quest\s+)(?<quest>.+)$", RegexOptions.IgnoreCase)]
     private static partial Regex AcceptQuestRegex();
 
+    [GeneratedRegex(@"^(?:turn\s+in\s+(?:quest\s+)?|complete\s+(?:quest\s+)?|finish\s+(?:quest\s+)?|hand\s+in\s+(?:quest\s+)?)(?<quest>.+)$", RegexOptions.IgnoreCase)]
+    private static partial Regex TurnInQuestRegex();
+
     [GeneratedRegex(@"^(?:abandon\s+(?:quest\s+)?|drop\s+quest\s+|cancel\s+(?:quest\s+)?)(?<quest>.+)$", RegexOptions.IgnoreCase)]
     private static partial Regex AbandonQuestRegex();
 
@@ -490,4 +526,10 @@ public partial class CommandParser
 
     [GeneratedRegex(@"^(?:(?:set\s+)?narrator|(?:set\s+)?voice|(?:change\s+)?narrator)\s+(?<name>.+)$", RegexOptions.IgnoreCase)]
     private static partial Regex SetNarratorRegex();
+
+    [GeneratedRegex(@"^(?:ask\s+(?:the\s+)?narrator|narrator\s+(?:ask|hint|help|guidance)|ask\s+(?:for\s+)?(?:a\s+)?(?:hint|guidance|help|advice))\s*(?<question>.+)?$", RegexOptions.IgnoreCase)]
+    private static partial Regex AskNarratorRegex();
+
+    [GeneratedRegex(@"^(?:hint|hints|guidance|what\s+(?:should|do)\s+I\s+do|where\s+(?:should|do)\s+I\s+go|what(?:'s| is)\s+next)$", RegexOptions.IgnoreCase)]
+    private static partial Regex BareHintRegex();
 }

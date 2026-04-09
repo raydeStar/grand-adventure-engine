@@ -52,6 +52,7 @@
 
   async function init() {
     UI.restoreTheme();
+    UI.loadGameConfig(); // fetch stat baseline config (non-blocking)
     bindEvents();
     state.mode = UI.setMode(state.mode, null);
     UI.showPortal(true);
@@ -793,7 +794,7 @@
     submit.textContent = 'Creating...';
 
     try {
-      const player = await API.createCharacter({
+      const result = await API.createCharacter({
         playerId: nullableText(UI.$('char-player-id').value),
         name: UI.$('char-name').value.trim(),
         race: UI.$('char-race').value,
@@ -801,6 +802,9 @@
         statMethod: UI.$('char-stats').value,
         backstory: nullableText(UI.$('char-backstory').value)
       });
+
+      // API now returns { player, heroIntro }
+      const player = result.player || result;
 
       UI.$('create-form').reset();
       UI.showCreateForm(false);
@@ -1791,7 +1795,7 @@
     state.refreshTimer = window.setInterval(() => {
       if (!state.session) return;
       void refreshAll().catch((error) => handleError(error, { portal: true }));
-    }, 15000);
+    }, 120000); // Poll every 2 minutes instead of 15s to reduce LM Studio stuttering
   }
 
   function stopRefreshLoop() {

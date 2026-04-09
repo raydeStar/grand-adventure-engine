@@ -287,11 +287,11 @@ public class FullPlaythroughTests : IClassFixture<GaeWebApplicationFactory>
         var goretusk = depths!.Npcs.FirstOrDefault(n => n.Id == "boss_goretusk");
         Assert.NotNull(goretusk);
         Assert.True(goretusk!.IsHostile);
-        Assert.Equal(55, goretusk.Hp);
-        Assert.Equal(55, goretusk.MaxHp);
-        Assert.Equal(12, goretusk.Defense);
+        Assert.Equal(95, goretusk.Hp);
+        Assert.Equal(95, goretusk.MaxHp);
+        Assert.Equal(13, goretusk.Defense);
         Assert.Equal(5, goretusk.AttackBonus);
-        Assert.Equal(6, goretusk.Level);
+        Assert.Equal(8, goretusk.Level);
     }
 
     [Fact]

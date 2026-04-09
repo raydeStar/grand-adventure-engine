@@ -11,6 +11,9 @@ public class CharacterConcept
     public List<string> PersonalItems { get; set; } = [];
     public StatAllocationMethod StatMethod { get; set; } = StatAllocationMethod.StandardArray;
     public Dictionary<string, int>? ManualStats { get; set; }
+
+    /// <summary>AI-suggested starting gold. Null = use rules default.</summary>
+    public int? StartingGold { get; set; }
 }
 
 public enum StatAllocationMethod

@@ -70,6 +70,8 @@ public class EfCoreStateManager : IStateManager
     public async Task<bool> RemovePlayerAsync(string playerId, CancellationToken ct = default)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        // Clean up per-player room instances first (orphaned rooms cause stale state on re-create)
+        await db.PlayerRooms.Where(pr => pr.PlayerId == playerId).ExecuteDeleteAsync(ct);
         var rows = await db.Players.Where(p => p.Id == playerId).ExecuteDeleteAsync(ct);
         return rows > 0;
     }

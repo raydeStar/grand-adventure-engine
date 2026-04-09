@@ -339,7 +339,29 @@ public class DashboardController : ControllerBase
 
         var concept = BuildCharacterConcept(request, playerId);
         var player = await _engine.CreateCharacterFromConceptAsync(concept, ct);
-        return Ok(player);
+
+        // Generate the hero intro (narrator introduction + crowd reaction) as the first story entry
+        string? heroIntro = null;
+        try
+        {
+            heroIntro = await _engine.GenerateHeroIntroAsync(player.Id, ct);
+        }
+        catch
+        {
+            // Intro generation is best-effort — character creation succeeds regardless
+        }
+
+        return Ok(new { player, heroIntro });
+    }
+
+    /// <summary>Returns display-relevant game config (stat baseline, etc.) for the web client.</summary>
+    [HttpGet("config")]
+    public IActionResult GetGameConfig()
+    {
+        return Ok(new
+        {
+            statModifierBaseline = _rules.StatModifierBaseline
+        });
     }
 
     [Authorize(Policy = DashboardPolicies.AdminAccess)]
@@ -411,6 +433,31 @@ public class DashboardController : ControllerBase
     }
 
     [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpPut("admin/players/{playerId}")]
+    public async Task<IActionResult> UpdatePlayer(string playerId, [FromBody] PlayerCharacter player, CancellationToken ct)
+    {
+        var existing = await _stateManager.GetPlayerAsync(playerId, ct);
+        if (existing is null)
+            return NotFound(new { error = $"Player '{playerId}' was not found." });
+
+        player.Id = playerId; // Ensure ID matches route
+        player.LastActiveAt = DateTimeOffset.UtcNow;
+        await _stateManager.SavePlayerAsync(player, ct);
+
+        await BroadcastAdminMutationAsync(
+            summary: $"Updated player {player.Name} ({playerId}).",
+            playerId: playerId,
+            data: new Dictionary<string, object?>
+            {
+                ["player"] = player,
+                ["mutation"] = "update-player"
+            },
+            ct: ct);
+
+        return Ok(new { summary = $"Updated player {player.Name} ({playerId}).", player });
+    }
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
     [HttpDelete("admin/rooms/{roomId}")]
     public async Task<IActionResult> DeleteRoom(string roomId, CancellationToken ct)
     {
@@ -432,6 +479,58 @@ public class DashboardController : ControllerBase
             ct: ct);
 
         return Ok(new { summary = $"Deleted room {room.Name} ({roomId})." });
+    }
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpPut("admin/rooms/{roomId}")]
+    public async Task<IActionResult> UpdateRoom(string roomId, [FromBody] Room room, CancellationToken ct)
+    {
+        var existing = await _stateManager.GetRoomAsync(roomId, ct);
+        if (existing is null)
+            return NotFound(new { error = $"Room '{roomId}' was not found." });
+
+        room.Id = roomId; // Ensure ID matches route
+        await _stateManager.SaveRoomAsync(room, ct);
+
+        await BroadcastAdminMutationAsync(
+            summary: $"Updated room {room.Name} ({roomId}).",
+            playerId: null,
+            data: new Dictionary<string, object?>
+            {
+                ["roomId"] = roomId,
+                ["roomName"] = room.Name,
+                ["mutation"] = "update-room"
+            },
+            ct: ct);
+
+        return Ok(new { summary = $"Updated room {room.Name} ({roomId}).", room });
+    }
+
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpPost("admin/rooms")]
+    public async Task<IActionResult> CreateRoom([FromBody] Room room, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(room.Id))
+            return BadRequest(new { error = "Room ID is required." });
+
+        var existing = await _stateManager.GetRoomAsync(room.Id, ct);
+        if (existing is not null)
+            return Conflict(new { error = $"Room '{room.Id}' already exists." });
+
+        await _stateManager.SaveRoomAsync(room, ct);
+
+        await BroadcastAdminMutationAsync(
+            summary: $"Created room {room.Name} ({room.Id}).",
+            playerId: null,
+            data: new Dictionary<string, object?>
+            {
+                ["roomId"] = room.Id,
+                ["roomName"] = room.Name,
+                ["mutation"] = "create-room"
+            },
+            ct: ct);
+
+        return Ok(new { summary = $"Created room {room.Name} ({room.Id}).", room });
     }
 
     [Authorize(Policy = DashboardPolicies.AdminAccess)]
@@ -604,12 +703,12 @@ public class DashboardController : ControllerBase
 
         int hpBase = _rules.Stats.GetValueOrDefault("hp")?.Base ?? 20;
         int mpBase = _rules.Stats.GetValueOrDefault("mp")?.Base ?? 10;
-        int conMod = PlayerCharacter.GetStatModifier(player.Con);
-        int intMod = PlayerCharacter.GetStatModifier(player.Int);
+        int conMod = PlayerCharacter.GetStatModifier(player.Con, _rules.EffectiveBaseline);
+        int intMod = PlayerCharacter.GetStatModifier(player.Int, _rules.EffectiveBaseline);
         int bonusLevels = Math.Max(0, player.Level - 1);
 
-        int baseHp = hpBase + conMod;
-        int baseMp = mpBase + intMod;
+        int baseHp = hpBase + conMod * 2;
+        int baseMp = mpBase + intMod * 2;
         player.MaxHp = Math.Max(1, (int)(baseHp * (1.0 + _rules.Leveling.HpScalePerLevel * bonusLevels)));
         player.MaxMp = Math.Max(0, (int)(baseMp * (1.0 + _rules.Leveling.MpScalePerLevel * bonusLevels)));
     }
@@ -787,6 +886,13 @@ public class DashboardController : ControllerBase
         player.Gold = Math.Max(0, player.Gold);
         player.Xp = Math.Max(0, player.Xp);
         player.Level = Math.Max(1, player.Level);
+
+        // If XP was changed but level wasn't explicitly set, check for level-up
+        if ((request.XpDelta != 0 || request.SetXp.HasValue) && !request.SetLevel.HasValue && request.LevelDelta == 0)
+        {
+            _engine.CheckAndApplyLevelUp(player);
+        }
+
         player.LastActiveAt = DateTimeOffset.UtcNow;
 
         await _stateManager.SavePlayerAsync(player, ct);

@@ -140,11 +140,13 @@ public class GameEngine : IGameEngine
             ActionType.QuestInfo => ProcessQuestInfo(player, action),
             ActionType.AcceptQuest => await ProcessAcceptQuestAsync(player, action, ct),
             ActionType.AbandonQuest => await ProcessAbandonQuest(player, action, ct),
+            ActionType.TurnInQuest => await ProcessTurnInQuestAsync(player, action, ct),
             ActionType.TravelWorld => await ProcessTravelWorldAsync(player, action, ct),
             ActionType.Lorebook => ProcessLorebook(player, action),
             ActionType.LoreInfo => ProcessLoreInfo(player, action),
             ActionType.Narrator => ProcessNarratorList(player, action),
             ActionType.SetNarrator => ProcessSetNarrator(player, action),
+            ActionType.AskNarrator => await ProcessAskNarratorAsync(player, action, ct),
             _ => await ProcessFreeFormActionAsync(player, action, ct)
         };
 
@@ -169,10 +171,12 @@ public class GameEngine : IGameEngine
             && action.Type != ActionType.QuestInfo
             && action.Type != ActionType.AcceptQuest
             && action.Type != ActionType.AbandonQuest
+            && action.Type != ActionType.TurnInQuest
             && action.Type != ActionType.Lorebook
             && action.Type != ActionType.LoreInfo
             && action.Type != ActionType.Narrator
             && action.Type != ActionType.SetNarrator
+            && action.Type != ActionType.AskNarrator
             && action.Type != ActionType.Unknown;
 
         if (shouldNarrate)
@@ -181,13 +185,15 @@ public class GameEngine : IGameEngine
             {
                 var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
                 var recentStory = await _stateManager.GetRecentStoryForRoomAsync(player.CurrentRoomId, player.ActiveWorldId, 5, ct);
+                var actualRoom = room ?? new Room { Id = player.CurrentRoomId, Name = "Unknown" };
                 var context = new NarratorContext
                 {
                     Player = player,
-                    CurrentRoom = room ?? new Room { Id = player.CurrentRoomId, Name = "Unknown" },
+                    CurrentRoom = actualRoom,
                     Action = action,
                     MechanicalResult = result,
-                    RecentStory = [.. recentStory]
+                    RecentStory = [.. recentStory],
+                    PlayerKnownLoreHints = BuildPlayerLoreHints(player, actualRoom)
                 };
                 result.Narration = await _narrator.NarrateActionAsync(context, ct);
             }
@@ -243,7 +249,7 @@ public class GameEngine : IGameEngine
             Race = concept.Race,
             Class = concept.Class,
             Backstory = concept.Backstory,
-            Gold = _rules.CharacterCreation.StartingGold,
+            Gold = concept.StartingGold ?? _rules.CharacterCreation.StartingGold,
             CurrentRoomId = "spawn"
         };
 
@@ -326,6 +332,51 @@ public class GameEngine : IGameEngine
         await _stateManager.SavePlayerAsync(player, ct);
         _logger.LogInformation("Created character {Name} ({Race} {Class}) for {Id}", player.Name, player.Race, player.Class, player.Id);
         return player;
+    }
+
+    /// <inheritdoc />
+    public async Task<string> GenerateHeroIntroAsync(string playerId, CancellationToken ct = default)
+    {
+        var player = await _stateManager.GetPlayerAsync(playerId, ct);
+        if (player is null)
+        {
+            _logger.LogWarning("GenerateHeroIntroAsync: player {PlayerId} not found", playerId);
+            return string.Empty;
+        }
+
+        var room = await _stateManager.GetPlayerRoomAsync(playerId, player.CurrentRoomId, ct);
+        if (room is null)
+        {
+            _logger.LogWarning("GenerateHeroIntroAsync: room {RoomId} not found for {PlayerId}", player.CurrentRoomId, playerId);
+            return string.Empty;
+        }
+
+        string intro;
+        try
+        {
+            intro = await _narrator.GenerateHeroIntroAsync(player, room, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Hero intro generation failed for {PlayerId}", playerId);
+            intro = string.Empty;
+        }
+
+        if (!string.IsNullOrWhiteSpace(intro))
+        {
+            await _stateManager.AddStoryEntryAsync(new StoryEntry
+            {
+                ActionId = "hero-intro",
+                RawInput = "character-creation",
+                PlayerId = playerId,
+                WorldId = player.ActiveWorldId,
+                RoomId = player.CurrentRoomId,
+                MechanicalSummary = $"{player.Name} the {player.Race} {player.Class} enters the world.",
+                Narration = intro
+            }, ct);
+        }
+
+        return intro;
     }
 
     /// <summary>
@@ -801,18 +852,23 @@ public class GameEngine : IGameEngine
 
         var target = FindNamedEntity(room.Npcs, npc => npc.Name, action.Target);
 
+        // Auto-target: if no target specified, pick the first hostile NPC (or any NPC with HP)
+        if (target is null && string.IsNullOrWhiteSpace(action.Target))
+            target = room.Npcs.FirstOrDefault(n => n.IsHostile && n.Hp.HasValue && n.Hp.Value > 0)
+                  ?? room.Npcs.FirstOrDefault(n => n.Hp.HasValue && n.Hp.Value > 0);
+
         if (target is null)
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"Attack target '{action.Target}' was not found in the current room." };
 
         // Determine attack stat — caster classes use the higher of melee stat or magic stat
         var weapon = player.Equipment.Weapon;
         string attackStat = weapon?.DamageStat ?? _rules.Combat.MeleeStat;
-        int attackMod = player.GetModifier(attackStat);
+        int attackMod = player.GetModifier(attackStat, _rules.EffectiveBaseline);
 
         // If the player's class is a caster and using default melee stat, let them use magic stat if it's better
         if (weapon?.DamageStat is null && IsCasterClass(player.Class))
         {
-            int magicMod = player.GetModifier(_rules.Combat.MagicStat);
+            int magicMod = player.GetModifier(_rules.Combat.MagicStat, _rules.EffectiveBaseline);
             if (magicMod > attackMod)
             {
                 attackStat = _rules.Combat.MagicStat;
@@ -882,7 +938,7 @@ public class GameEngine : IGameEngine
 
         // Hit (GlancingHit, Hit, or CriticalHit) — roll damage
         string damageDice = weapon?.DamageDice ?? "1d4";
-        int damageMod = player.GetModifier(attackStat) + dmgBonus;
+        int damageMod = player.GetModifier(attackStat, _rules.EffectiveBaseline) + dmgBonus;
         var damageRoll = _dice.RollDamage(damageDice, damageMod);
 
         int totalDamage = outcome switch
@@ -969,6 +1025,7 @@ public class GameEngine : IGameEngine
             if (surviveUpdate is not null)
                 result.MechanicalSummary += $"\n📜 {surviveUpdate}";
             await _stateManager.SavePlayerAsync(player, ct);
+            await _stateManager.SaveRoomAsync(room, ct);
         }
 
         return result;
@@ -1033,6 +1090,27 @@ public class GameEngine : IGameEngine
             (narratorQuestSummary, questReward) = await _questTracker.ProcessNarratorQuestUpdatesAsync(player, freeForm.QuestUpdates, target, ct);
         }
 
+        // Auto-turn-in: if this NPC has ReadyToTurnIn quests and the LLM didn't handle it, complete them automatically
+        if (questReward is null && _questTracker is not null && _questEngine is not null)
+        {
+            var turnInable = _questEngine.GetTurnInableQuests(player, target);
+            foreach (var turnIn in turnInable)
+            {
+                var autoReward = await _questEngine.TurnInQuestAsync(player, turnIn.QuestId, target, ct);
+                if (autoReward is not null)
+                {
+                    var quest = _registry?.Quests.GetById(turnIn.QuestId);
+                    narratorQuestSummary = (narratorQuestSummary ?? "") + $"Completed quest: {quest?.Name ?? turnIn.QuestId}";
+                    questReward = autoReward;
+                    player.Xp += autoReward.Xp;
+                    player.Gold += autoReward.Gold;
+                    var lvlUp = CheckAndApplyLevelUp(player);
+                    if (lvlUp is not null)
+                        narratorQuestSummary += $"\n{lvlUp}";
+                }
+            }
+        }
+
         // Lore discovery: talking to this NPC
         string? loreDiscoveryNotice = null;
         if (_loreTracker is not null)
@@ -1063,7 +1141,9 @@ public class GameEngine : IGameEngine
             Success = true,
             MechanicalSummary = mechanicalSummary,
             Narration = freeForm.Narration,
-            InteractionUpdate = freeForm.InteractionUpdate
+            InteractionUpdate = freeForm.InteractionUpdate,
+            XpGained = questReward?.Xp ?? 0,
+            GoldChange = questReward?.Gold ?? 0
         };
 
         await PersistInteractionStoryEntry(player, action, result, ct);
@@ -1458,12 +1538,12 @@ public class GameEngine : IGameEngine
     private ActionResult ProcessShortRest(PlayerCharacter player, GameAction action)
     {
         var hpRoll = _dice.Roll("1d8", "Short rest HP recovery");
-        int hpRecovery = Math.Max(1, hpRoll.Total + PlayerCharacter.GetStatModifier(player.Con));
+        int hpRecovery = Math.Max(1, hpRoll.Total + PlayerCharacter.GetStatModifier(player.Con, _rules.EffectiveBaseline));
         int oldHp = player.Hp;
         player.Hp = Math.Min(player.MaxHp, player.Hp + hpRecovery);
 
         var mpRoll = _dice.Roll("1d4", "Short rest MP recovery");
-        int mpRecovery = Math.Max(1, mpRoll.Total + PlayerCharacter.GetStatModifier(player.Int));
+        int mpRecovery = Math.Max(1, mpRoll.Total + PlayerCharacter.GetStatModifier(player.Int, _rules.EffectiveBaseline));
         int oldMp = player.Mp;
         player.Mp = Math.Min(player.MaxMp, player.Mp + mpRecovery);
 
@@ -1523,7 +1603,7 @@ public class GameEngine : IGameEngine
         };
     }
 
-    private static ActionResult ProcessStats(PlayerCharacter player, GameAction action)
+    private ActionResult ProcessStats(PlayerCharacter player, GameAction action)
     {
         return new ActionResult
         {
@@ -1532,7 +1612,7 @@ public class GameEngine : IGameEngine
             MechanicalSummary = $"""
                 **{player.Name}** -- Level {player.Level} {player.Race} {player.Class}
                 HP: {player.Hp}/{player.MaxHp} | MP: {player.Mp}/{player.MaxMp} | Gold: {player.Gold} | XP: {player.Xp}
-                {player.FormatStatsDetailed(" | ")} | Defense: {player.Defense}
+                {player.FormatStatsDetailed(" | ", _rules.StatModifierBaseline)} | Defense: {player.Defense}
                 """
         };
     }
@@ -1680,7 +1760,7 @@ public class GameEngine : IGameEngine
                 }
 
                 // Roll spell attack (INT-based)
-                int intMod = player.GetModifier("int");
+                int intMod = player.GetModifier("int", _rules.EffectiveBaseline);
                 int profBonus = 2 + (player.Level / 4);
                 var attackRoll = _dice.RollAttack(intMod + profBonus);
                 int targetDefense = target.Defense ?? 10;
@@ -1733,7 +1813,7 @@ public class GameEngine : IGameEngine
             }
             case SpellCategory.Healing:
             {
-                int intMod = player.GetModifier("int");
+                int intMod = player.GetModifier("int", _rules.EffectiveBaseline);
                 var healRoll = _dice.RollDamage(spell.DamageDice, intMod);
                 dice.Add(healRoll);
                 int healed = Math.Max(1, healRoll.Total);
@@ -1967,8 +2047,8 @@ public class GameEngine : IGameEngine
             result.MechanicalSummary += $"\n📜 {narratorQuestSummary}";
         if (questReward is not null)
         {
-            if (questReward.Xp > 0) result.MechanicalSummary += $"\n⭐ +{questReward.Xp} XP";
-            if (questReward.Gold > 0) result.MechanicalSummary += $"\n💰 +{questReward.Gold} gold";
+            if (questReward.Xp > 0) { result.MechanicalSummary += $"\n⭐ +{questReward.Xp} XP"; result.XpGained += questReward.Xp; }
+            if (questReward.Gold > 0) { result.MechanicalSummary += $"\n💰 +{questReward.Gold} gold"; result.GoldChange += questReward.Gold; }
         }
 
         // Persist mutations
@@ -2080,7 +2160,7 @@ public class GameEngine : IGameEngine
     private static InventoryItem CloneInventoryItem(InventoryItem item, int quantity)
         => new()
         {
-            Id = Guid.NewGuid().ToString("N"),
+            Id = item.Id,  // Preserve original ID for quest tracking (Deliver objectives match by item ID)
             Name = item.Name,
             Description = item.Description,
             Type = item.Type,
@@ -2440,7 +2520,8 @@ public class GameEngine : IGameEngine
         ActionType.Inventory, ActionType.Stats, ActionType.Spellbook, ActionType.Help,
         ActionType.Journal, ActionType.CompletedQuests, ActionType.QuestInfo, ActionType.Map,
         ActionType.Lorebook, ActionType.LoreInfo,
-        ActionType.Narrator, ActionType.SetNarrator
+        ActionType.Narrator, ActionType.SetNarrator,
+        ActionType.AcceptQuest, ActionType.TurnInQuest, ActionType.AbandonQuest
     };
 
     private async Task<ActionResult?> ProcessConversationTurnAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
@@ -2483,8 +2564,14 @@ public class GameEngine : IGameEngine
         // Load world-scoped NPC state for this conversation
         await OverlayWorldNpcStateAsync(npc, player.ActiveWorldId, player.Id, ct);
 
+        // "leave" / "exit" typed mid-conversation should end the conversation, not move
+        // The parser maps "leave" to ActionType.Move with direction "auto", so check before move handling
+        if (action.Type == ActionType.Move && action.Direction == "auto" && IsExitPhrase(action.RawInput))
+        {
+            // Fall through to the IsExitPhrase handler below
+        }
         // Movement mid-conversation: exit cleanly (no disposition penalty for walking away)
-        if (action.Type == ActionType.Move)
+        else if (action.Type == ActionType.Move)
         {
             player.Interaction.Reset();
             await PersistWorldNpcStateAsync(npc, player.ActiveWorldId, player.Id, ct);
@@ -2534,6 +2621,24 @@ public class GameEngine : IGameEngine
                 Narration = freeForm.Narration,
                 InteractionUpdate = new InteractionUpdate { Mode = InteractionMode.Explore, NpcDisposition = npc.Disposition }
             };
+
+            // Process any last-moment quest updates from the farewell narration
+            if (freeForm.QuestUpdates is not null && _questTracker is not null)
+            {
+                var (qs, qr) = await _questTracker.ProcessNarratorQuestUpdatesAsync(player, freeForm.QuestUpdates, npc, ct);
+                if (qs is not null)
+                    result.MechanicalSummary += $"\n📜 {qs}";
+                if (qr is not null)
+                {
+                    player.Xp += qr.Xp;
+                    player.Gold += qr.Gold;
+                    if (qr.Xp > 0 || qr.Gold > 0)
+                        result.MechanicalSummary += $"\n**Rewards:** +{qr.Xp} XP | +{qr.Gold} gold";
+                    var lvlUp = CheckAndApplyLevelUp(player);
+                    if (lvlUp is not null) result.MechanicalSummary += $"\n{lvlUp}";
+                }
+                await _stateManager.SavePlayerAsync(player, ct);
+            }
 
             await PersistInteractionStoryEntry(player, action, result, ct);
             return result;
@@ -2603,6 +2708,25 @@ public class GameEngine : IGameEngine
                 }
             };
 
+            // Process quest updates from narrator response (accept, decline, turn-in)
+            if (freeForm.QuestUpdates is not null && _questTracker is not null)
+            {
+                var (questSummary, questReward) = await _questTracker.ProcessNarratorQuestUpdatesAsync(player, freeForm.QuestUpdates, npc, ct);
+                if (questSummary is not null)
+                    result.MechanicalSummary += $"\n📜 {questSummary}";
+                if (questReward is not null)
+                {
+                    player.Xp += questReward.Xp;
+                    player.Gold += questReward.Gold;
+                    if (questReward.Xp > 0) { result.MechanicalSummary += $"\n⭐ +{questReward.Xp} XP"; result.XpGained += questReward.Xp; }
+                    if (questReward.Gold > 0) { result.MechanicalSummary += $"\n💰 +{questReward.Gold} gold"; result.GoldChange += questReward.Gold; }
+                    var lvlUp = CheckAndApplyLevelUp(player);
+                    if (lvlUp is not null)
+                        result.MechanicalSummary += $"\n{lvlUp}";
+                }
+                await _stateManager.SavePlayerAsync(player, ct);
+            }
+
             ApplyFreeFormStatChanges(player, freeForm, result);
             await PersistInteractionStoryEntry(player, action, result, ct);
             return result;
@@ -2662,7 +2786,14 @@ public class GameEngine : IGameEngine
             RunEnemyAttacks(player, enemies, room, useMech, useDice, useSC, defenseBonus: 0);
 
             string useCombatStatus = player.Hp <= 0 ? "defeat" : "ongoing";
-            if (player.Hp <= 0) { player.Interaction.Reset(); if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, player.ActiveWorldId, ct); }
+            if (player.Hp <= 0)
+            {
+                player.Interaction.Reset();
+                if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, player.ActiveWorldId, ct);
+                var killer = enemies.FirstOrDefault(e => e.Hp.HasValue && e.Hp.Value > 0)?.Name ?? "the enemy";
+                var (deathMsg, deathChanges) = await HandlePlayerDeathAsync(player, room, killer, ct);
+                useMech.Add(""); useMech.Add(deathMsg); useSC.AddRange(deathChanges);
+            }
 
             // HP bar after item use
             if (useCombatStatus == "ongoing")
@@ -2685,7 +2816,14 @@ public class GameEngine : IGameEngine
             var defSC = new List<StateChange>();
             RunEnemyAttacks(player, enemies, room, defMech, defDice, defSC, defenseBonus: 4);
             string defStatus = player.Hp <= 0 ? "defeat" : "ongoing";
-            if (player.Hp <= 0) { player.Interaction.Reset(); if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, player.ActiveWorldId, ct); }
+            if (player.Hp <= 0)
+            {
+                player.Interaction.Reset();
+                if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, player.ActiveWorldId, ct);
+                var killer = enemies.FirstOrDefault(e => e.Hp.HasValue && e.Hp.Value > 0)?.Name ?? "the enemy";
+                var (deathMsg, deathChanges) = await HandlePlayerDeathAsync(player, room, killer, ct);
+                defMech.Add(""); defMech.Add(deathMsg); defSC.AddRange(deathChanges);
+            }
             if (defStatus == "ongoing") AppendHpBars(defMech, player, enemies, room);
             await _stateManager.SavePlayerAsync(player, ct);
             await _stateManager.SaveRoomAsync(room, ct);
@@ -2712,7 +2850,14 @@ public class GameEngine : IGameEngine
                     RunEnemyAttacks(player, aliveEnemies, room, castMech, castDice, castSC, defenseBonus: 0);
 
                     string castCombatStatus = player.Hp <= 0 ? "defeat" : "ongoing";
-                    if (player.Hp <= 0) { player.Interaction.Reset(); if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, player.ActiveWorldId, ct); }
+                    if (player.Hp <= 0)
+                    {
+                        player.Interaction.Reset();
+                        if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, player.ActiveWorldId, ct);
+                        var killer = aliveEnemies.FirstOrDefault()?.Name ?? "the enemy";
+                        var (deathMsg, deathChanges) = await HandlePlayerDeathAsync(player, room, killer, ct);
+                        castMech.Add(""); castMech.Add(deathMsg); castSC.AddRange(deathChanges);
+                    }
                     if (castCombatStatus == "ongoing") AppendHpBars(castMech, player, aliveEnemies, room);
 
                     await _stateManager.SavePlayerAsync(player, ct);
@@ -2743,8 +2888,10 @@ public class GameEngine : IGameEngine
             hasAdvantage = true;
         }
 
-        // ─── Multi-exchange combat (3 exchanges per turn) ───
-        const int ExchangesPerTurn = 3;
+        // ─── Multi-exchange combat ───
+        // Boss arenas use fewer exchanges per turn so bosses don't one-round the player.
+        bool isBossArena = room.EnvironmentTags.Contains("boss_arena");
+        int ExchangesPerTurn = isBossArena ? 1 : 3;
         var allDice = new List<DiceRoll>();
         var allSC = new List<StateChange>();
         var mech = new List<string>();
@@ -2754,7 +2901,7 @@ public class GameEngine : IGameEngine
 
         var weapon = player.Equipment.Weapon;
         string attackStat = weapon?.DamageStat ?? _rules.Combat.MeleeStat;
-        int baseAttackMod = player.GetModifier(attackStat);
+        int baseAttackMod = player.GetModifier(attackStat, _rules.EffectiveBaseline);
         int proficiencyBonus = _rules.Combat.ProficiencyBaseBonus + (player.Level / _rules.Combat.ProficiencyScaleLevel);
 
         // Round header
@@ -2808,7 +2955,7 @@ public class GameEngine : IGameEngine
             else
             {
                 string damageDice = weapon?.DamageDice ?? "1d4";
-                int damageMod = player.GetModifier(attackStat) + attackDmgBonus;
+                int damageMod = player.GetModifier(attackStat, _rules.EffectiveBaseline) + attackDmgBonus;
                 var damageRoll = _dice.RollDamage(damageDice, damageMod);
                 int totalDamage = outcome switch
                 {
@@ -2843,6 +2990,14 @@ public class GameEngine : IGameEngine
                     }
                     room.Npcs.Remove(target);
                     combat?.TurnOrder.RemoveAll(t => t.Id == target.Id);
+
+                    // Quest tracking: enemy killed in combat
+                    if (_questTracker is not null)
+                    {
+                        var questUpdate = await _questTracker.OnEnemyKilledAsync(player, target.Id, target.Name, ct);
+                        if (questUpdate is not null)
+                            mech.Add($"📜 {questUpdate}");
+                    }
 
                     // Check if all enemies dead
                     if (!enemies.Any(e => e.Hp.HasValue && e.Hp.Value > 0 && room.Npcs.Contains(e)))
@@ -2907,6 +3062,18 @@ public class GameEngine : IGameEngine
             if (rewards.Count > 0) mech.Add($"\n**Rewards:** {string.Join(" | ", rewards)}");
             var lvlUp = CheckAndApplyLevelUp(player);
             if (lvlUp is not null) mech.Add(lvlUp);
+
+            // Safety-net quest tracking for all killed enemies in case in-loop tracking was missed
+            if (_questTracker is not null)
+            {
+                var killedEnemies = enemies.Where(e => (e.Hp.HasValue && e.Hp.Value <= 0) || !room.Npcs.Contains(e)).ToList();
+                foreach (var killed in killedEnemies)
+                {
+                    var questUpdate = await _questTracker.OnEnemyKilledAsync(player, killed.Id, killed.Name, ct);
+                    if (questUpdate is not null)
+                        mech.Add($"📜 {questUpdate}");
+                }
+            }
         }
         else
         {
@@ -2919,6 +3086,14 @@ public class GameEngine : IGameEngine
             }
             AppendHpBars(mech, player, enemies, room);
             mech.Add("> attack | power attack | defend | aimed strike | use <potion> | flee");
+
+            // Quest tracking: player survived another combat round
+            if (_questTracker is not null)
+            {
+                var surviveUpdate = await _questTracker.OnCombatRoundSurvivedAsync(player, room.Id, ct);
+                if (surviveUpdate is not null)
+                    mech.Add($"📜 {surviveUpdate}");
+            }
 
             if (combat is not null)
             {
@@ -2959,9 +3134,22 @@ public class GameEngine : IGameEngine
         player.Hp = player.MaxHp;
         player.Mp = player.MaxMp;
 
+        // Determine the spawn room from the player's current world
+        var spawnRoomId = "spawn";
+        if (_worldRepository is not null)
+        {
+            var world = await _worldRepository.GetWorldAsync(player.ActiveWorldId, ct);
+            if (world is not null && !string.IsNullOrWhiteSpace(world.SpawnRoomId))
+                spawnRoomId = world.SpawnRoomId;
+        }
+
         // Teleport to spawn
-        player.CurrentRoomId = "spawn";
+        player.CurrentRoomId = spawnRoomId;
         player.Interaction.Reset();
+
+        // Look up the spawn room's display name
+        var spawnRoom = await _stateManager.GetRoomAsync(spawnRoomId, ct);
+        var spawnRoomName = spawnRoom?.Name ?? "safety";
 
         // Memory flag on the enemy
         var killer = room.Npcs.FirstOrDefault(n => n.Name == defeatedBy);
@@ -2971,11 +3159,11 @@ public class GameEngine : IGameEngine
         {
             new() { EntityType = "Player", EntityId = player.Id, Property = "Hp", OldValue = oldHp.ToString(), NewValue = player.Hp.ToString() },
             new() { EntityType = "Player", EntityId = player.Id, Property = "Mp", OldValue = oldMp.ToString(), NewValue = player.Mp.ToString() },
-            new() { EntityType = "Player", EntityId = player.Id, Property = "CurrentRoomId", OldValue = oldRoom, NewValue = "spawn" }
+            new() { EntityType = "Player", EntityId = player.Id, Property = "CurrentRoomId", OldValue = oldRoom, NewValue = spawnRoomId }
         };
 
         var summary = $"You have been defeated by {defeatedBy}! Everything goes dark...\n" +
-            $"You awaken in The Rusted Flagon, battered but alive. A kindly stranger must have dragged you to safety.\n" +
+            $"You awaken in {spawnRoomName}, battered but alive. A kindly stranger must have dragged you to safety.\n" +
             $"\u2764\uFE0F {player.Hp}/{player.MaxHp}  \u2728 {player.Mp}/{player.MaxMp}  \U0001F4B0 {player.Gold}g\n" +
             $"Your gear and experience are intact — but that foe still lurks out there...";
 
@@ -3010,7 +3198,7 @@ public class GameEngine : IGameEngine
         };
 
         // Player initiative
-        int playerDexMod = player.GetModifier("dex");
+        int playerDexMod = player.GetModifier("dex", _rules.EffectiveBaseline);
         var playerInit = _dice.RollInitiative(playerDexMod);
         combat.TurnOrder.Add(new CombatParticipant
         {
@@ -3196,11 +3384,11 @@ public class GameEngine : IGameEngine
 
             // Pick the better stat if an alt is available (e.g. intimidate: STR or CHA)
             // GetModifier returns +0 for unknown stats —  equivalent to stat value 10 (average)
-            int statMod = player.GetModifier(config.Stat);
+            int statMod = player.GetModifier(config.Stat, _rules.EffectiveBaseline);
             string statUsed = config.Stat;
             if (config.AltStat is not null)
             {
-                int altMod = player.GetModifier(config.AltStat);
+                int altMod = player.GetModifier(config.AltStat, _rules.EffectiveBaseline);
                 if (altMod > statMod)
                 {
                     statMod = altMod;
@@ -3633,7 +3821,7 @@ public class GameEngine : IGameEngine
         {
             ActionId = action.Id,
             Success = true,
-            MechanicalSummary = $"📜 Quest accepted: **{quest.Name}**\n{quest.Description}",
+            MechanicalSummary = $"📜 Quest accepted: **{quest.Name}**\n{quest.Description}\n💡 Type `journal` to review your active quests.",
             StateChanges = [new StateChange { EntityType = "Player", EntityId = player.Id, Property = "QuestLog", NewValue = $"accepted {quest.Name}" }]
         };
     }
@@ -3661,6 +3849,75 @@ public class GameEngine : IGameEngine
             Success = true,
             MechanicalSummary = $"📜 Quest abandoned: **{quest?.Name ?? progress.QuestId}**",
             StateChanges = [new StateChange { EntityType = "Player", EntityId = player.Id, Property = "QuestLog", NewValue = $"abandoned {quest?.Name ?? progress.QuestId}" }]
+        };
+    }
+
+    private async Task<ActionResult> ProcessTurnInQuestAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
+    {
+        if (_questEngine is null || string.IsNullOrWhiteSpace(action.Target))
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "Usage: turn in <quest name>" };
+
+        // Find the quest by name or ID in the player's ready-to-turn-in quests
+        var progress = player.QuestLog.FirstOrDefault(q =>
+            q.Status == QuestStatus.ReadyToTurnIn &&
+            (q.QuestId.Equals(action.Target, StringComparison.OrdinalIgnoreCase) ||
+             (_registry?.Quests.GetById(q.QuestId)?.Name.Contains(action.Target, StringComparison.OrdinalIgnoreCase) == true)));
+
+        if (progress is null)
+        {
+            // Check if they have the quest but it's not ready
+            var activeMatch = player.QuestLog.FirstOrDefault(q =>
+                q.Status == QuestStatus.Active &&
+                (q.QuestId.Equals(action.Target, StringComparison.OrdinalIgnoreCase) ||
+                 (_registry?.Quests.GetById(q.QuestId)?.Name.Contains(action.Target, StringComparison.OrdinalIgnoreCase) == true)));
+            if (activeMatch is not null)
+            {
+                var activeName = _registry?.Quests.GetById(activeMatch.QuestId)?.Name ?? activeMatch.QuestId;
+                return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"Quest **{activeName}** is not ready to turn in yet. Complete all objectives first." };
+            }
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"No quest matching '{action.Target}' is ready to turn in." };
+        }
+
+        var quest = _registry?.Quests.GetById(progress.QuestId);
+        if (quest is null)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "Quest definition not found." };
+
+        // Check if the turn-in NPC is in the current room
+        var expectedTurnInNpcId = quest.TurnInNpcId ?? quest.GiverId;
+        var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
+        var turnInNpc = room?.Npcs.FirstOrDefault(n => n.Id.Equals(expectedTurnInNpcId, StringComparison.OrdinalIgnoreCase));
+
+        if (turnInNpc is null)
+        {
+            var npcName = expectedTurnInNpcId;
+            // Try to get a friendly name from the quest definition
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"You need to speak to **{npcName}** to turn in **{quest.Name}**. They're not in this room." };
+        }
+
+        var reward = await _questEngine.TurnInQuestAsync(player, quest.Id, turnInNpc, ct);
+        if (reward is null)
+            return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"Could not turn in quest **{quest.Name}**." };
+
+        // Check for level-up after XP reward
+        var levelUpMsg = CheckAndApplyLevelUp(player);
+
+        await _stateManager.SavePlayerAsync(player, ct);
+
+        var rewardParts = new List<string>();
+        if (reward.Xp > 0) rewardParts.Add($"+{reward.Xp} XP");
+        if (reward.Gold > 0) rewardParts.Add($"+{reward.Gold} gold");
+        if (reward.Items?.Count > 0) rewardParts.Add(string.Join(", ", reward.Items.Select(i => $"{i.ItemId} x{i.Quantity}")));
+        var rewardText = rewardParts.Count > 0 ? $"\nRewards: {string.Join(" | ", rewardParts)}" : "";
+        if (levelUpMsg is not null) rewardText += $"\n{levelUpMsg}";
+
+        return new ActionResult
+        {
+            ActionId = action.Id,
+            Success = true,
+            MechanicalSummary = $"📜 Quest completed: **{quest.Name}**!{rewardText}",
+            XpGained = reward.Xp,
+            GoldChange = reward.Gold,
+            StateChanges = [new StateChange { EntityType = "Player", EntityId = player.Id, Property = "QuestLog", NewValue = $"completed {quest.Name}" }]
         };
     }
 
@@ -3780,6 +4037,50 @@ public class GameEngine : IGameEngine
         };
     }
 
+    /// <summary>
+    /// Build a list of narrator hints from lore the player has discovered that is relevant to the current room.
+    /// </summary>
+    private List<string> BuildPlayerLoreHints(PlayerCharacter player, Room room)
+    {
+        if (_registry is null || player.DiscoveredLore.Count == 0) return [];
+
+        var hints = new List<string>();
+        foreach (var loreId in player.DiscoveredLore)
+        {
+            var entry = _registry.LoreEntries.GetById(loreId);
+            if (entry is null || string.IsNullOrWhiteSpace(entry.NarratorHint)) continue;
+
+            // Include if linked to this room, or has tag overlap with room tags
+            var linked = entry.LinkedEntityIds.Any(id => id.Equals(room.Id, StringComparison.OrdinalIgnoreCase));
+            var tagOverlap = entry.Tags.Count > 0 && room.EnvironmentTags.Count > 0 &&
+                             entry.Tags.Intersect(room.EnvironmentTags, StringComparer.OrdinalIgnoreCase).Any();
+
+            // Also include region/city lore and faction lore (broadly relevant)
+            var broadScope = entry.LoreScope is "region" or "city" or "planet" or "faction";
+
+            if (linked || tagOverlap || broadScope)
+                hints.Add(entry.NarratorHint);
+        }
+
+        return hints.Take(5).ToList();
+    }
+
+    private async Task<ActionResult> ProcessAskNarratorAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
+    {
+        var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
+        room ??= new Room { Id = player.CurrentRoomId, Name = "Unknown" };
+
+        var guidance = await _narrator.ProvideGuidanceAsync(player, room, action.Target, ct);
+
+        return new ActionResult
+        {
+            ActionId = action.Id,
+            Success = true,
+            MechanicalSummary = "\U0001f52e **The Narrator speaks:**",
+            Narration = guidance
+        };
+    }
+
     private static ActionResult ProcessHelp(GameAction action)
     {
         return new ActionResult
@@ -3818,6 +4119,7 @@ public class GameEngine : IGameEngine
                 `lore <topic>` -- Read details about a specific lore entry
                 `narrator` -- View available narrator personalities
                 `narrator <name>` -- Change your narrator's personality
+                `hint` / `ask narrator <question>` -- Get guidance from the narrator
                 `travel to world <world-id>` -- Transfer to another world
                 `enter portal` -- Use an active portal in the current room
                 `help` -- Show this help message
@@ -3882,6 +4184,36 @@ public class GameEngine : IGameEngine
     private async Task<ActionResult> ProcessUseAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
     {
         var item = FindNamedEntity(player.Inventory, i => i.Name, action.Target);
+
+        // Auto-take from room if the item is on the ground and consumable
+        if (item is null)
+        {
+            var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
+            if (room is not null)
+            {
+                var roomItem = FindNamedEntity(room.Items, i => i.Name, action.Target);
+                if (roomItem is not null)
+                {
+                    // Transfer from room to inventory
+                    var clone = CloneInventoryItem(roomItem, 1);
+                    var existing = player.Inventory.FirstOrDefault(i => i.Name.Equals(clone.Name, StringComparison.OrdinalIgnoreCase));
+                    if (existing is not null)
+                        existing.Quantity += 1;
+                    else
+                        player.Inventory.Add(clone);
+
+                    if (roomItem.Quantity <= 1)
+                        room.Items.Remove(roomItem);
+                    else
+                        roomItem.Quantity--;
+
+                    await _stateManager.SaveRoomAsync(room, ct);
+                    item = existing ?? clone;
+                    _logger.LogInformation("Auto-picked up '{ItemName}' from room for use.", item.Name);
+                }
+            }
+        }
+
         if (item is null)
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"You don't have any '{action.Target}' to use." };
 
@@ -4159,21 +4491,81 @@ public class GameEngine : IGameEngine
             return null;
         }
 
+        // Load world-scoped NPC state for quest context
+        await OverlayWorldNpcStateAsync(shopkeeper, player.ActiveWorldId, player.Id, ct);
+
         var freeForm = await _narrator.ProcessConversationTurnAsync(player, room, shopkeeper, player.Interaction, action.RawInput, ct);
         ApplyInteractionUpdate(player, room, shopkeeper, freeForm);
+
+        // Process quest updates from shopkeeper conversation (accept, decline, turn-in)
+        string? questSummary = null;
+        QuestReward? shopQuestReward = null;
+        if (freeForm.QuestUpdates is not null && _questTracker is not null)
+        {
+            var (qs, qr) = await _questTracker.ProcessNarratorQuestUpdatesAsync(player, freeForm.QuestUpdates, shopkeeper, ct);
+            if (qs is not null)
+                questSummary = $"\n📜 {qs}";
+            shopQuestReward = qr;
+            if (qr is not null)
+            {
+                player.Xp += qr.Xp;
+                player.Gold += qr.Gold;
+                if (qr.Xp > 0 || qr.Gold > 0)
+                    questSummary = (questSummary ?? "") + $"\n**Rewards:** +{qr.Xp} XP | +{qr.Gold} gold";
+                var lvlUp = CheckAndApplyLevelUp(player);
+                if (lvlUp is not null)
+                    questSummary = (questSummary ?? "") + $"\n{lvlUp}";
+            }
+        }
+
+        // Auto-turn-in for shopkeeper NPCs with ReadyToTurnIn quests
+        int totalQuestXp = 0;
+        int totalQuestGold = 0;
+        if (shopQuestReward is not null)
+        {
+            totalQuestXp = shopQuestReward.Xp;
+            totalQuestGold = shopQuestReward.Gold;
+        }
+        if (shopQuestReward is null && _questEngine is not null)
+        {
+            var turnInable = _questEngine.GetTurnInableQuests(player, shopkeeper);
+            foreach (var turnIn in turnInable)
+            {
+                var autoReward = await _questEngine.TurnInQuestAsync(player, turnIn.QuestId, shopkeeper, ct);
+                if (autoReward is not null)
+                {
+                    var quest = _registry?.Quests.GetById(turnIn.QuestId);
+                    questSummary = (questSummary ?? "") + $"\n📜 Completed quest: {quest?.Name ?? turnIn.QuestId}";
+                    player.Xp += autoReward.Xp;
+                    player.Gold += autoReward.Gold;
+                    totalQuestXp += autoReward.Xp;
+                    totalQuestGold += autoReward.Gold;
+                    if (autoReward.Xp > 0) questSummary += $"\n⭐ +{autoReward.Xp} XP";
+                    if (autoReward.Gold > 0) questSummary += $"\n💰 +{autoReward.Gold} gold";
+                    var lvlUp = CheckAndApplyLevelUp(player);
+                    if (lvlUp is not null)
+                        questSummary += $"\n{lvlUp}";
+                }
+            }
+        }
 
         await PersistWorldNpcStateAsync(shopkeeper, player.ActiveWorldId, player.Id, ct);
         await _stateManager.SavePlayerAsync(player, ct);
         await _stateManager.SaveRoomAsync(room, ct);
+
+        var mechSummary = $"[Trading with {shopkeeper.Name}]";
+        if (questSummary is not null) mechSummary += questSummary;
 
         var convoResult = new ActionResult
         {
             ActionId = action.Id,
             RawInput = action.RawInput,
             Success = freeForm.Success,
-            MechanicalSummary = $"[Trading with {shopkeeper.Name}]",
+            MechanicalSummary = mechSummary,
             Narration = freeForm.Narration,
-            InteractionUpdate = freeForm.InteractionUpdate ?? new InteractionUpdate { Mode = InteractionMode.Trading }
+            InteractionUpdate = freeForm.InteractionUpdate ?? new InteractionUpdate { Mode = InteractionMode.Trading },
+            XpGained = totalQuestXp,
+            GoldChange = totalQuestGold
         };
 
         await PersistInteractionStoryEntry(player, action, convoResult, ct);
@@ -4457,15 +4849,16 @@ public class GameEngine : IGameEngine
 
         int hpBase = _rules.Stats.GetValueOrDefault("hp")?.Base ?? 20;
         int mpBase = _rules.Stats.GetValueOrDefault("mp")?.Base ?? 10;
-        int conMod = PlayerCharacter.GetStatModifier(player.Con);
-        int intMod = PlayerCharacter.GetStatModifier(player.Int);
+        int conMod = PlayerCharacter.GetStatModifier(player.Con, _rules.EffectiveBaseline);
+        int intMod = PlayerCharacter.GetStatModifier(player.Int, _rules.EffectiveBaseline);
         double hpScale = _rules.Leveling.HpScalePerLevel;
         double mpScale = _rules.Leveling.MpScalePerLevel;
         int bonusLevels = Math.Max(0, player.Level - 1);
 
-        // Base + stat modifier, then scale up by percentage per bonus level
-        int baseHp = hpBase + conMod;
-        int baseMp = mpBase + intMod;
+        // Base + stat modifier * 2 for meaningful stat impact, then scale up per level
+        // CON 8 (-1) = 18 HP, CON 10 (0) = 20 HP, CON 15 (+2) = 24 HP, CON 18 (+4) = 28 HP
+        int baseHp = hpBase + conMod * 2;
+        int baseMp = mpBase + intMod * 2;
         player.MaxHp = Math.Max(1, (int)(baseHp * (1.0 + hpScale * bonusLevels)));
         player.MaxMp = Math.Max(0, (int)(baseMp * (1.0 + mpScale * bonusLevels)));
 
@@ -4486,7 +4879,7 @@ public class GameEngine : IGameEngine
     /// Returns a description of level-ups that occurred, or null if none.
     /// Heals the player to full on level-up.
     /// </summary>
-    private string? CheckAndApplyLevelUp(PlayerCharacter player)
+    public string? CheckAndApplyLevelUp(PlayerCharacter player)
     {
         int maxLevel = _rules.Leveling.MaxLevel;
         if (player.Level >= maxLevel) return null;

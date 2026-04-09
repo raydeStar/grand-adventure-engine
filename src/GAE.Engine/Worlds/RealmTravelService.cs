@@ -551,14 +551,14 @@ public class RealmTravelService : IRealmTravelService
 
         int hpBase = rules.Stats.GetValueOrDefault("hp")?.Base ?? 20;
         int mpBase = rules.Stats.GetValueOrDefault("mp")?.Base ?? 10;
-        int conMod = PlayerCharacter.GetStatModifier(player.Con);
-        int intMod = PlayerCharacter.GetStatModifier(player.Int);
+        int conMod = PlayerCharacter.GetStatModifier(player.Con, rules.EffectiveBaseline);
+        int intMod = PlayerCharacter.GetStatModifier(player.Int, rules.EffectiveBaseline);
         double hpScale = rules.Leveling.HpScalePerLevel;
         double mpScale = rules.Leveling.MpScalePerLevel;
         int bonusLevels = Math.Max(0, player.Level - 1);
 
-        int baseHp = hpBase + conMod;
-        int baseMp = mpBase + intMod;
+        int baseHp = hpBase + conMod * 2;
+        int baseMp = mpBase + intMod * 2;
         player.MaxHp = Math.Max(1, (int)(baseHp * (1.0 + hpScale * bonusLevels)));
         player.MaxMp = Math.Max(0, (int)(baseMp * (1.0 + mpScale * bonusLevels)));
         player.Hp = Math.Clamp(player.Hp, 0, player.MaxHp);

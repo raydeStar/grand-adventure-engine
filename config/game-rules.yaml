@@ -1,18 +1,27 @@
 # THE GRAND RULEBOOK
 # "Rules are the skeleton upon which the flesh of adventure hangs." — Sir Thaddeus
 
+# The stat value that equals a +0 modifier. Modifier = (stat - baseline) / 2.
+# Remove or set to null to hide modifiers from player display entirely.
+stat_modifier_baseline: 10
+
 character_creation:
   stat_method: "4d6_drop_lowest"
   standard_array: [15, 14, 13, 12, 10, 8]
   flat_value: 10
   starting_hp_formula: "base + con_mod"
   starting_mp_formula: "base + int_mod"
-  starting_gold: 30
+  starting_gold: 100
   starting_level: 1
   starting_items:
     - "Potion"
     - "Potion"
+    - "Potion"
     - "Torch"
+    - "Torch"
+    - "Ration"
+    - "Ration"
+    - "Ration"
 
 stats:
   hp:

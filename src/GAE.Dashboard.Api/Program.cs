@@ -156,6 +156,7 @@ if (!string.IsNullOrEmpty(discordToken) && discordToken != "YOUR_DISCORD_BOT_TOK
         sp.GetRequiredService<INarratorService>(),
         sp.GetRequiredService<IWorldRepository>(),
         sp.GetRequiredService<IContentRegistryService>(),
+        sp.GetRequiredService<GameRulesConfig>(),
         sp.GetRequiredService<ILogger<DiscordBotService>>(),
         discordToken,
         dataDir));

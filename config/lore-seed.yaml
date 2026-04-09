@@ -45,8 +45,7 @@ rooms:
       east: "town_square"
       south: "back_alley"
       down: "tavern_cellar"
-      north: "qa-lab"
-    environment_tags: ["indoor", "safe", "lit", "tavern"]
+    environment_tags: ["indoor", "safe", "lit", "tavern", "busy", "hub"]
     npcs:
       - id: "innkeeper_mara"
         name: "Tifa Lockhart"
@@ -74,6 +73,7 @@ rooms:
         type: "Misc"
         is_consumable: true
         value: 1
+        effect: "Restores 1d4+1 HP"
       - id: "worn_playing_cards"
         name: "Triple Triad Deck"
         description: "A dog-eared deck of Triple Triad cards. Several are missing, and the rest are sticky with spilled ale. The Ifrit card has a mustache drawn on it."
@@ -241,7 +241,7 @@ rooms:
     description: "A cramped shop stuffed floor to ceiling with everything an adventurer could need. Potions, ethers, phoenix downs, questionable materia, and a taxidermied Cactuar that might be winking at you. O'aka himself grins from behind the counter, rubbing his hands together. 'Welcome, welcome! O'aka the Twenty-Third, merchant extraordinaire, at your service!'"
     exits:
       north: "town_square"
-    environment_tags: ["indoor", "safe", "lit", "shop"]
+    environment_tags: ["indoor", "safe", "lit", "shop", "trade", "cluttered"]
     npcs:
       - id: "shopkeeper_pip"
         name: "O'aka XXIII"
@@ -338,6 +338,10 @@ rooms:
         faction: "merchants_guild"
         knowledge_scopes: ["black_market", "rumors", "pharos", "occuria_cult", "weapons", "dimensions"]
         quests_offered: ["gilgamesh_challenge", "tonberry_grudge"]
+        level: 6
+        hp: 45
+        ac: 14
+        damage_dice: "2d6+3"
         is_shopkeeper: true
         shop_inventory:
           - id: "shadow_dagger"
@@ -421,7 +425,7 @@ rooms:
     exits:
       west: "town_square"
       east: "forest_edge"
-    environment_tags: ["outdoor", "lit", "fortified", "gate"]
+    environment_tags: ["outdoor", "lit", "fortified", "gate", "desert", "border"]
     npcs:
       - id: "gate_guard_lena"
         name: "Fran"
@@ -451,6 +455,7 @@ rooms:
     description: "A serene temple built around a massive natural crystal formation that juts from the sandstone floor. Soft prismatic light refracts through the crystal, casting rainbows across the marble walls. Incense drifts in lazy spirals. The air itself feels cleansing. A White Mage in flowing robes tends to the crystal with quiet reverence, occasionally pausing to listen to something only he can hear."
     exits:
       northwest: "town_square"
+      west: "city_hall"
       down: "void_rift"
     environment_tags: ["indoor", "safe", "lit", "holy", "chapel", "crystal"]
     npcs:
@@ -525,9 +530,10 @@ rooms:
 
   - id: "market_stalls"
     name: "Moogle Market"
-    description: "A cluster of colorful stalls and flying moogles in an open clearing northeast of the bazaar. The moogles run a brisk trade in fresh food, gossip, and unsolicited advice. Their leader, Matoya, is ancient even by moogle standards — she sits atop a stack of crates, peering at customers through spectacles thicker than bottle-caps. The smell of fresh kupo nuts mingles with dried herbs and grilled behemoth skewers."
+    description: "A cluster of colorful stalls and flying moogles in an open clearing northeast of the bazaar. The moogles run a brisk trade in fresh food, gossip, and unsolicited advice. Their leader, Matoya, is ancient even by moogle standards — she sits atop a stack of crates, peering at customers through spectacles thicker than bottle-caps. The smell of fresh kupo nuts mingles with dried herbs and grilled behemoth skewers. A winding alley leads south toward the Moogle Post."
     exits:
       southwest: "town_square"
+      south: "town_well"
     environment_tags: ["outdoor", "safe", "lit", "market", "busy", "moogle"]
     npcs:
       - id: "merchant_bess"
@@ -579,9 +585,10 @@ rooms:
 
   - id: "town_well"
     name: "Moogle Post"
-    description: "A quiet corner southwest of the bazaar, centered around an ancient well topped with a cheerful moogle statue. The well is old — far older than the city. Its stones are covered in moss and faded runes that nobody can read anymore. Moogles have claimed it as their unofficial mail depot. Letters and packages in tiny bags are stacked around the base. A familiar-looking cat sits atop the moogle statue, watching the world with unsettling intelligence."
+    description: "A quiet corner southwest of the bazaar, centered around an ancient well topped with a cheerful moogle statue. The well is old — far older than the city. Its stones are covered in moss and faded runes that nobody can read anymore. Moogles have claimed it as their unofficial mail depot. Letters and packages in tiny bags are stacked around the base. A familiar-looking cat sits atop the moogle statue, watching the world with unsettling intelligence. A narrow path winds north to the Moogle Market."
     exits:
       northeast: "town_square"
+      north: "market_stalls"
     environment_tags: ["outdoor", "safe", "dim", "mysterious", "well", "moogle"]
     npcs:
       - id: "stray_cat_whiskers"
@@ -839,12 +846,13 @@ rooms:
         faction: "occuria_cult"
         knowledge_scopes: ["pharos", "ancient_evil", "occuria_cult", "espers"]
         is_hostile: true
-        level: 6
-        hp: 55
-        max_hp: 55
+        level: 8
+        hp: 95
+        max_hp: 95
+        ac: 14
         attack_bonus: 5
-        damage_dice: "1d8+2"
-        defense: 12
+        damage_dice: "2d6+3"
+        defense: 13
         loot:
           - id: "goretusk_tusk"
             name: "Esper Shard"
@@ -869,9 +877,10 @@ rooms:
 
   - id: "city_hall"
     name: "Dalmascan City Hall"
-    description: "A grand sandstone building with pillars carved to resemble the old Dalmascan kings. Imperial banners hang reluctantly beside the Dalmascan crest — a compromise that satisfies no one. Inside, marble floors echo with the footsteps of bureaucrats, petitioners, and the occasional resistance sympathizer. At the far end of the main chamber, behind a desk buried in dispatches and intelligence reports, sits a man whose calm exterior belies the desperate fire in his eyes. Marquis Ondore — the last political voice of free Dalmasca — gestures for you to approach."
+    description: "A grand sandstone building with pillars carved to resemble the old Dalmascan kings. Imperial banners hang reluctantly beside the Dalmascan crest — a compromise that satisfies no one. Inside, marble floors echo with the footsteps of bureaucrats, petitioners, and the occasional resistance sympathizer. At the far end of the main chamber, behind a desk buried in dispatches and intelligence reports, sits a man whose calm exterior belies the desperate fire in his eyes. Marquis Ondore — the last political voice of free Dalmasca — gestures for you to approach. A side corridor leads east toward the Crystal Sanctum."
     exits:
       southeast: "town_square"
+      east: "church"
     environment_tags: ["indoor", "safe", "lit", "political", "official"]
     npcs:
       - id: "marquis_ondore"
@@ -968,12 +977,12 @@ rooms:
         personality: "An ancient Esper bound to guard the Water Crystal since before Dalmasca existed. Leviathan is not mindless — it is proud, territorial, and contemptuous of mortals who dare enter its sanctum. It speaks in a voice like crashing waves, demanding to know why you have disturbed its eternal vigil. Only those who prove their strength in combat may claim the Crystal. Leviathan fights with tidal waves, crushing water pressure, and the sheer overwhelming force of the deep ocean. It will not negotiate. It will not yield. It will test you, and if you are found wanting, the sea will claim you."
         faction: "neutral"
         is_hostile: true
-        level: 4
-        hp: 40
-        max_hp: 40
-        attack_bonus: 5
-        damage_dice: "2d6+2"
-        defense: 14
+        level: 3
+        hp: 25
+        max_hp: 25
+        attack_bonus: 3
+        damage_dice: "1d6+1"
+        defense: 12
         loot:
           - id: "leviathan_scale"
             name: "Leviathan's Scale"
@@ -1064,11 +1073,11 @@ rooms:
         faction: "neutral"
         is_hostile: true
         level: 4
-        hp: 42
-        max_hp: 42
-        attack_bonus: 6
-        damage_dice: "2d6+3"
-        defense: 13
+        hp: 35
+        max_hp: 35
+        attack_bonus: 3
+        damage_dice: "1d6+2"
+        defense: 12
         loot:
           - id: "ifrit_horn"
             name: "Ifrit's Horn"
@@ -1155,11 +1164,11 @@ rooms:
         faction: "neutral"
         is_hostile: true
         level: 4
-        hp: 45
-        max_hp: 45
-        attack_bonus: 5
-        damage_dice: "2d6+3"
-        defense: 15
+        hp: 38
+        max_hp: 38
+        attack_bonus: 3
+        damage_dice: "1d6+2"
+        defense: 13
         loot:
           - id: "titan_geode"
             name: "Titan's Geode"
@@ -1246,11 +1255,11 @@ rooms:
         faction: "neutral"
         is_hostile: true
         level: 4
-        hp: 38
-        max_hp: 38
-        attack_bonus: 6
-        damage_dice: "2d6+2"
-        defense: 14
+        hp: 40
+        max_hp: 40
+        attack_bonus: 4
+        damage_dice: "1d6+2"
+        defense: 12
         loot:
           - id: "garuda_plume"
             name: "Garuda's Plume"
@@ -1334,12 +1343,12 @@ rooms:
         personality: "The final boss. A being who was once a tree in the Great Forest of Moore, into which countless evil souls were sealed — until the accumulated darkness achieved sentience. Exdeath sought the power of the Void to erase all existence, believing nothingness to be the ultimate form of perfection. He is theatrical, philosophical, and utterly convinced of his righteousness. He monologues about the beauty of oblivion with genuine passion. His power is immense — he wields the Void itself as a weapon, opening dimensional rifts, erasing matter, and warping reality. His ultimate attack, Grand Cross, inflicts every status ailment simultaneously. Defeating Exdeath is not just winning a fight — it is rejecting nothingness and affirming that existence, messy and painful as it is, matters."
         faction: "neutral"
         is_hostile: true
-        level: 8
-        hp: 80
-        max_hp: 80
-        attack_bonus: 8
-        damage_dice: "3d8+4"
-        defense: 16
+        level: 6
+        hp: 55
+        max_hp: 55
+        attack_bonus: 4
+        damage_dice: "1d8+2"
+        defense: 14
         loot:
           - id: "exdeath_crystal"
             name: "Crystal of the Void"

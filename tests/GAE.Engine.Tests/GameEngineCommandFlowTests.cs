@@ -870,5 +870,11 @@ public class GameEngineCommandFlowTests
 
         public Task<string?> NarrateRealmTransitionAsync(string characterName, string fromWorld, string toWorld, string? translationNotes = null, CancellationToken ct = default)
             => Task.FromResult<string?>(null);
+
+        public Task<string> ProvideGuidanceAsync(PlayerCharacter player, Room room, string? question, CancellationToken ct = default)
+            => Task.FromResult("The narrator offers no guidance at this time.");
+
+        public Task<string> GenerateHeroIntroAsync(PlayerCharacter player, Room room, CancellationToken ct = default)
+            => Task.FromResult("Well, well. Another hero stumbles into the story.");
     }
 }
