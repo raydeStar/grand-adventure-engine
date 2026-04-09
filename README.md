@@ -61,9 +61,17 @@ This is a self-hosted project — you run it on your own machine or server. Here
 
 ### Setup
 
+**Full step-by-step instructions:** [Self-Hosting Setup Guide](docs/setup-guide.md)
+
+Quick start:
+
 ```bash
 # Build the project
 dotnet build GrandAdventureEngine.slnx
+
+# Copy and edit the example environment config
+cp .env.example .env
+# Edit .env with your Discord token and any password changes
 
 # Start the dashboard
 powershell -ExecutionPolicy Bypass -File .\scripts\reset-docker-stack.ps1
@@ -108,6 +116,7 @@ npm run test:e2e
 
 ### More Docs
 
+- [Self-Hosting Setup Guide](docs/setup-guide.md) — Full installation and configuration walkthrough
 - [Operator Guide](docs/dashboard-ops.md) — Dashboard admin workflows, environment variables, manual operations
 
 </details>
