@@ -43,5 +43,6 @@ public enum GameEventType
     NpcDied,
     PlayerDeleted,
     StoryAdvanced,
+    QuestUpdated,
     SystemMessage
 }

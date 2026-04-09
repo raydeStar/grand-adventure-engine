@@ -56,6 +56,9 @@ public class PlayerCharacter
     // Quest log
     public List<QuestProgress> QuestLog { get; set; } = [];
 
+    /// <summary>Messages queued for delivery on the player's next action (e.g. party quest updates while offline).</summary>
+    public List<string> PendingNotifications { get; set; } = [];
+
     // Lore & narrator
     /// <summary>IDs of lore entries this player has discovered.</summary>
     public List<string> DiscoveredLore { get; set; } = [];

@@ -19,6 +19,9 @@ public class ActionResult
     public InteractionUpdate? InteractionUpdate { get; set; }
     public bool IsVictory { get; set; }
     public DateTimeOffset Timestamp { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Queued notifications drained from the player at action start (e.g. party quest updates).</summary>
+    public List<string> Notifications { get; set; } = [];
 }
 
 public class StateChange

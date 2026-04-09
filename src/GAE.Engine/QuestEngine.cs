@@ -15,12 +15,14 @@ public class QuestEngine
     private readonly IContentRegistryService _registry;
     private readonly ILogger<QuestEngine> _logger;
     private readonly IStateManager? _stateManager;
+    private readonly IGameEventBroadcaster? _broadcaster;
 
-    public QuestEngine(IContentRegistryService registry, ILogger<QuestEngine> logger, IStateManager? stateManager = null)
+    public QuestEngine(IContentRegistryService registry, ILogger<QuestEngine> logger, IStateManager? stateManager = null, IGameEventBroadcaster? broadcaster = null)
     {
         _registry = registry;
         _logger = logger;
         _stateManager = stateManager;
+        _broadcaster = broadcaster;
     }
 
     /// <summary>Checks whether a player can accept a specific quest.</summary>
@@ -209,7 +211,7 @@ public class QuestEngine
 
         party.Status = QuestStatus.Failed;
         party.CompletedAt = DateTimeOffset.UtcNow;
-        await SyncPartyQuestToParticipantsAsync(party, ct);
+        await SyncPartyQuestToParticipantsAsync(party, ct, player.Id);
         await _stateManager.SavePartyQuestAsync(party, ct);
 
         var players = await _stateManager.GetAllPlayersAsync(ct);
@@ -290,7 +292,7 @@ public class QuestEngine
         if (IsStageComplete(stage, party.Objectives))
             TryAdvanceStage(party, quest);
 
-        await SyncPartyQuestToParticipantsAsync(party, ct);
+        await SyncPartyQuestToParticipantsAsync(party, ct, player.Id);
         await _stateManager.SavePartyQuestAsync(party, ct);
         return true;
     }
@@ -343,7 +345,7 @@ public class QuestEngine
         if (IsStageComplete(stage, party.Objectives))
             TryAdvanceStage(party, quest);
 
-        await SyncPartyQuestToParticipantsAsync(party, ct);
+        await SyncPartyQuestToParticipantsAsync(party, ct, player.Id);
         await _stateManager.SavePartyQuestAsync(party, ct);
         return true;
     }
@@ -418,6 +420,31 @@ public class QuestEngine
             participantProgress.CurrentStageId = party.CurrentStageId;
             participantProgress.Objectives = CloneObjectives(party.Objectives);
             ApplyRewards(participant, quest.Rewards);
+
+            // Notify other party members about the turn-in
+            if (participantId != player.Id)
+            {
+                string message = $"📜 Party quest \"{quest.Name}\" has been completed! Rewards: +{quest.Rewards.Xp} XP, +{quest.Rewards.Gold} gold.";
+                participant.PendingNotifications.Add(message);
+
+                if (_broadcaster is not null)
+                {
+                    var gameEvent = new GameEvent
+                    {
+                        Type = GameEventType.QuestUpdated,
+                        PlayerId = participantId,
+                        Summary = message,
+                        Data = new Dictionary<string, object?>
+                        {
+                            ["questId"] = party.QuestId,
+                            ["groupId"] = party.GroupId,
+                            ["status"] = "Completed"
+                        }
+                    };
+                    await _broadcaster.BroadcastEventAsync(gameEvent, ct);
+                }
+            }
+
             await _stateManager.SavePlayerAsync(participant, ct);
         }
 
@@ -754,9 +781,12 @@ public class QuestEngine
         };
     }
 
-    private async Task SyncPartyQuestToParticipantsAsync(PartyQuestProgress party, CancellationToken ct)
+    private async Task SyncPartyQuestToParticipantsAsync(PartyQuestProgress party, CancellationToken ct, string? actingPlayerId = null)
     {
         var players = await _stateManager!.GetAllPlayersAsync(ct);
+        var quest = _registry.Quests.GetById(party.QuestId);
+        string questName = quest?.Name ?? party.QuestId;
+
         foreach (var participantId in party.ParticipantPlayerIds)
         {
             var participant = players.FirstOrDefault(p => p.Id == participantId);
@@ -771,8 +801,47 @@ public class QuestEngine
             local.CurrentStageId = party.CurrentStageId;
             local.CompletedAt = party.CompletedAt;
             local.Objectives = CloneObjectives(party.Objectives);
+
+            // Notify other party members (not the acting player)
+            if (actingPlayerId is not null && participantId != actingPlayerId)
+            {
+                string message = BuildPartyQuestNotification(party, questName);
+                participant.PendingNotifications.Add(message);
+
+                if (_broadcaster is not null)
+                {
+                    var gameEvent = new GameEvent
+                    {
+                        Type = GameEventType.QuestUpdated,
+                        PlayerId = participantId,
+                        Summary = message,
+                        Data = new Dictionary<string, object?>
+                        {
+                            ["questId"] = party.QuestId,
+                            ["groupId"] = party.GroupId,
+                            ["status"] = party.Status.ToString()
+                        }
+                    };
+                    await _broadcaster.BroadcastEventAsync(gameEvent, ct);
+                }
+            }
+
             await _stateManager.SavePlayerAsync(participant, ct);
         }
+    }
+
+    private static string BuildPartyQuestNotification(PartyQuestProgress party, string questName)
+    {
+        if (party.Status == QuestStatus.ReadyToTurnIn)
+            return $"📜 Party quest \"{questName}\" is ready to turn in!";
+        if (party.Status == QuestStatus.Failed)
+            return $"📜 Party quest \"{questName}\" has failed.";
+        if (party.Status == QuestStatus.Completed)
+            return $"📜 Party quest \"{questName}\" has been completed!";
+
+        var completedCount = party.Objectives.Count(o => o.IsComplete);
+        var totalCount = party.Objectives.Count;
+        return $"📜 Party quest \"{questName}\" progress updated ({completedCount}/{totalCount} objectives).";
     }
 
     private async Task ApplyNpcQuestRewardsAsync(PlayerCharacter player, string questId, QuestReward rewards, Npc? turnInNpc, CancellationToken ct)

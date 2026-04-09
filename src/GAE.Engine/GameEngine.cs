@@ -65,6 +65,25 @@ public class GameEngine : IGameEngine
         if (player is null)
             return new ActionResult { ActionId = action.Id, RawInput = action.RawInput, Success = false, MechanicalSummary = "Player not found." };
 
+        // Drain pending notifications (e.g. party quest updates from other players)
+        List<string>? drainedNotifications = null;
+        if (player.PendingNotifications.Count > 0)
+        {
+            drainedNotifications = [.. player.PendingNotifications];
+            player.PendingNotifications.Clear();
+        }
+
+        var result = await ProcessActionCoreAsync(player, action, ct);
+
+        // Attach drained notifications to the result
+        if (drainedNotifications is not null)
+            result.Notifications.AddRange(drainedNotifications);
+
+        return result;
+    }
+
+    private async Task<ActionResult> ProcessActionCoreAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
+    {
         // Ensure MaxHP/MaxMP are correct for this player's level and stats
         // (fixes existing characters created before level scaling was added)
         RecalculateMaxHpMp(player);
@@ -136,11 +155,11 @@ public class GameEngine : IGameEngine
         // NLP fallback: when regex parsing fails, ask the narrator to interpret natural language
         if (action.Type == ActionType.Unknown)
         {
-            _logger.LogInformation("Unrecognized command for {PlayerId}: {RawInput}. Attempting intent translation before free-form handling.", playerId, action.RawInput);
+            _logger.LogInformation("Unrecognized command for {PlayerId}: {RawInput}. Attempting intent translation before free-form handling.", player.Id, action.RawInput);
             var translated = await _narrator.ParseIntentAsync(action.RawInput, ct);
             if (translated is not null)
             {
-                var reparsed = _parser.Parse(playerId, translated);
+                var reparsed = _parser.Parse(player.Id, translated);
                 if (reparsed.Type != ActionType.Unknown)
                 {
                     _logger.LogInformation("Intent translation mapped \"{RawInput}\" to canonical command \"{Translated}\".", action.RawInput, translated);
@@ -256,7 +275,7 @@ public class GameEngine : IGameEngine
             {
                 ActionId = action.Id,
                 RawInput = action.RawInput,
-                PlayerId = playerId,
+                PlayerId = player.Id,
                 WorldId = player.ActiveWorldId,
                 RoomId = player.CurrentRoomId,
                 MechanicalSummary = result.MechanicalSummary,
