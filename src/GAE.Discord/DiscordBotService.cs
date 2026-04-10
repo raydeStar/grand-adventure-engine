@@ -661,6 +661,35 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
         // Update activity timestamp
         player.LastActiveAt = DateTimeOffset.UtcNow;
 
+        // !dm <message> — talk directly to Sir Thaddeus (the narrator) out-of-character
+        if (content.StartsWith("!dm ", StringComparison.OrdinalIgnoreCase))
+        {
+            var dmMessage = content[4..].Trim();
+            if (!string.IsNullOrEmpty(dmMessage))
+            {
+                await thread.TriggerTypingAsync();
+                var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId);
+                room ??= new Room { Id = player.CurrentRoomId, Name = "Unknown" };
+                try
+                {
+                    await _narratorLock.WaitAsync();
+                    try
+                    {
+                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                        var response = await _narrator.ProvideGuidanceAsync(player, room, dmMessage, cts.Token);
+                        await thread.SendMessageAsync($"\U0001F3AD **Sir Thaddeus:** {response}");
+                    }
+                    finally { _narratorLock.Release(); }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "!dm narrator chat failed");
+                    await thread.SendMessageAsync("\U0001F3AD **Sir Thaddeus:** *adjusts monocle* Forgive me — my thoughts wandered for a moment. Do try again.");
+                }
+            }
+            return;
+        }
+
         // No prefix required — thread is gated to owner only, so everything is a game command.
         // Strip leading ! if present (for habit/compatibility) but don't require it.
         var command = content.StartsWith('!') ? content[1..].Trim() : content;

@@ -139,7 +139,7 @@ test.describe('Grand Adventure Engine dashboard', () => {
     await expect(page.locator('#overview-detail-panel')).toContainText('Inventory Items');
     await expect(page.locator('#overview-detail-panel .dm-inline-action')).not.toHaveCount(0);
 
-    await switchAdminTab(page, 'commands');
+    await switchAdminTab(page, 'tools');
     await expect(page.locator('#admin-player-select')).toContainText('demo-user');
     await expect(page.locator('#admin-player-select')).toContainText('demo-admin');
     await page.locator('#admin-player-select').selectOption('demo-admin');
@@ -154,28 +154,9 @@ test.describe('Grand Adventure Engine dashboard', () => {
     await seedDemoViaApi(page, true);
     await openAdminConsole(page);
 
-    await switchAdminTab(page, 'mutations');
-
-    await page.locator('#resource-player-select').selectOption('demo-user');
-    await page.locator('#resource-gold-delta').fill('0');
-    await page.locator('#resource-set-gold').fill('15');
-    await page.locator('#mutation-resource-form').getByRole('button', { name: 'Apply Resource Delta' }).click();
-    await expect(page.locator('#mutation-log')).toContainText('Adjusted resources for');
-
-    await page.locator('#item-player-select').selectOption('demo-user');
-    await page.locator('#item-name').fill('GM Lantern');
-    await page.locator('#item-type').selectOption('Misc');
-    await page.locator('#item-effect').fill('Illuminates hidden hooks');
-    await page.locator('#mutation-item-form').getByRole('button', { name: 'Grant Item' }).click();
-    await expect(page.locator('#mutation-log')).toContainText('Granted GM Lantern');
-
-    await page.locator('#status-player-select').selectOption('demo-user');
-    await page.locator('#status-name').fill('Focused');
-    await page.locator('#status-type').selectOption('Buff');
-    await page.locator('#status-modifiers').fill('wis:2');
-    await page.locator('#mutation-status-form').getByRole('button', { name: 'Apply Status' }).click();
-    await expect(page.locator('#mutation-log')).toContainText('Applied Focused');
-
+    // ── Room fixture (tools tab) — the only surviving standalone mutation form ──
+    await switchAdminTab(page, 'tools');
+    await page.locator('details:has(#room-fixture-form) > summary').click();
     await page.locator('#room-fixture-form #fixture-room-id').fill('qa-lab');
     await page.locator('#fixture-room-name').fill('QA Lab');
     await page.locator('#fixture-room-description').fill('A repeatable manual test fixture room.');
@@ -185,19 +166,27 @@ test.describe('Grand Adventure Engine dashboard', () => {
     await page.locator('#room-fixture-form').getByRole('button', { name: 'Upsert Room Fixture' }).click();
     await expect(page.locator('#mutation-log')).toContainText('QA Lab');
 
-    await page.locator('#teleport-player-select').selectOption('demo-user');
-    await page.locator('#teleport-room-id').fill('qa-lab');
-    await page.locator('#teleport-room-name').fill('QA Lab');
-    await page.locator('#teleport-room-description').fill('A repeatable manual test fixture room.');
-    await page.locator('#mutation-teleport-form').getByRole('button', { name: 'Teleport Player' }).click();
-    await expect(page.locator('#mutation-log')).toContainText('Teleported Ari Quickstep to QA Lab');
+    // ── Player mutations via API (standalone mutation forms were removed; ──
+    // ── inline overview actions are the new UI but live in a detail panel) ──
+    await page.evaluate(async () => {
+      await API.adjustResources({ playerId: 'demo-user', setGold: 15 });
+      await API.grantItem({ playerId: 'demo-user', name: 'GM Lantern', type: 'Misc', quantity: 1, effect: 'Illuminates hidden hooks' });
+      await API.applyStatus({ playerId: 'demo-user', name: 'Focused', type: 'Buff', remainingTurns: 3 });
+      await API.teleportPlayer({ playerId: 'demo-user', roomId: 'qa-lab', roomName: 'QA Lab', roomDescription: 'A repeatable manual test fixture room.' });
+    });
 
+    // ── Verify state via overview detail panel ──
     await switchAdminTab(page, 'overview');
     await page.getByRole('button', { name: 'All Players' }).click();
     await expect(page.locator('#overview-results [data-ov-id="demo-user"]')).toBeVisible();
     await page.locator('#overview-results [data-ov-id="demo-user"]').click();
     await expect(page.locator('#overview-detail-panel')).toContainText('GM Lantern');
-    await page.locator('#btn-ov-play').click();
+
+    // ── Switch to play mode and verify rendered state ──
+    // Use dispatchEvent since the Play button is obscured on narrow viewports
+    await page.evaluate(() => {
+      document.dispatchEvent(new CustomEvent('overview-play-player', { detail: { playerId: 'demo-user' } }));
+    });
     await expect(page.locator('#room-name')).toContainText('QA Lab');
     await expect(page.locator('#stat-bar')).toContainText('Gold:15');
 

@@ -1115,6 +1115,25 @@ public class NarratorService : INarratorService
             - Faction: {{npc.Faction}}
             - Current Disposition: {{interaction.NpcDisposition ?? npc.Disposition}}
 
+            NARRATOR ASIDES:
+            You may include brief narrator observations as italicized asides to give the player insight
+            into things their character would notice. Format: *He seems to be hiding something.*
+            or *Her hand drifts to the dagger at her hip.* These are subtle body-language cues or
+            atmospheric details — NOT the narrator breaking character. Use sparingly (at most one per
+            response). They should feel like the reader noticing something the NPC didn't intend to reveal.
+
+            RUMORS AND GOSSIP:
+            NPCs are part of a living world. When conversation allows, they should NATURALLY weave in:
+            - Rumors they've heard around town or from travelers
+            - Gossip about other NPCs, factions, or recent events
+            - Warnings about dangerous areas or creatures nearby
+            - Hints about the MAIN STORY or major questlines — these take PRIORITY over random gossip
+            Don't force rumors into every response — but when the player asks "what's going on?" or
+            "heard anything interesting?" or when conversation hits a natural pause, the NPC should share
+            what they know. Rumors should feel organic: "Did you hear about...?" or "Word on the street is..."
+            Tie rumors to the NPC's knowledge and faction when possible. A guard hears different rumors
+            than a merchant. Prioritize quest-related information over flavor gossip.
+
             CRITICAL RESPONSE RULES:
             1. The NPC MUST speak with actual dialogue in quotes. Every response MUST include at least one line of NPC dialogue.
             2. The NPC MUST respond to what the player actually said — address their question or statement directly.
@@ -1164,11 +1183,15 @@ public class NarratorService : INarratorService
         var questContext = BuildConversationQuestContext(npc, player);
         var worldContext = await GetCurrentWorldContextBlockAsync(ct);
 
+        var turnHint = interaction.PlayerTurnCount <= 0
+            ? $"Turn 1 — OPENING GREETING. {npc.Name} should speak FIRST with dialogue, welcoming or acknowledging the player. This is their first impression — make it memorable and warm."
+            : $"Turn {interaction.CurrentTurnNumber} — ongoing conversation. Continue naturally from the conversation history. Do NOT re-introduce the NPC or repeat the greeting.";
+
         var userPrompt = $$"""
             Player: {{player.Name}} (Lv.{{player.Level}} {{player.Race}} {{player.Class}})
             {{player.FormatStatsCompact()}}
             Location: {{room.Name}} — {{room.Description}}
-            Turn {{interaction.CurrentTurnNumber}} of conversation with {{npc.Name}}.
+            {{turnHint}}
             Player says/does: "{{rawInput}}"
             {{worldContext}}
             {{npcKnowledge}}

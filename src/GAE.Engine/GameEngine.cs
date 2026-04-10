@@ -1205,6 +1205,13 @@ public class GameEngine : IGameEngine
         // Apply interaction update from AI
         ApplyInteractionUpdate(player, room, target, freeForm);
 
+        // Record NPC greeting in context so subsequent turns have dialogue history
+        if (!string.IsNullOrWhiteSpace(freeForm.Narration))
+        {
+            var brief = freeForm.Narration.Length > 150 ? freeForm.Narration[..150] + "..." : freeForm.Narration;
+            player.Interaction.AppendContext($"{target.Name}: {brief}");
+        }
+
         // Persist world-scoped NPC state
         await PersistWorldNpcStateAsync(target, player.ActiveWorldId, player.Id, ct);
 
@@ -2812,6 +2819,7 @@ public class GameEngine : IGameEngine
         // Normal conversation turn —  everything the player says goes to the AI as dialogue
         {
             player.Interaction.AdvancePlayerTurn();
+            player.Interaction.AppendContext($"Player: {action.RawInput}");
 
             // Check for social skill intent and roll if detected
             var socialCheck = TryRollSocialCheck(player, npc, action.RawInput);
@@ -2825,6 +2833,13 @@ public class GameEngine : IGameEngine
 
             var freeForm = await _narrator.ProcessConversationTurnAsync(player, room, npc, player.Interaction, promptInput, ct);
             ApplyInteractionUpdate(player, room, npc, freeForm);
+
+            // Record NPC response in context for conversation continuity
+            if (!string.IsNullOrWhiteSpace(freeForm.Narration))
+            {
+                var brief = freeForm.Narration.Length > 150 ? freeForm.Narration[..150] + "..." : freeForm.Narration;
+                player.Interaction.AppendContext($"{npc.Name}: {brief}");
+            }
 
             if (freeForm.InteractionUpdate?.Mode == InteractionMode.Explore)
                 player.Interaction.Reset();
