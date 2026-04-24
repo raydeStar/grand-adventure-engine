@@ -263,6 +263,148 @@ public class NarratorServiceTests
     }
 
     [Fact]
+    public void TryParseFreeFormResponse_WithGarbledJsonKeys_ExtractsNarrationOnly()
+    {
+        // Real failure case: LLM garbles "inventoryChanges" key to "lyinventoryChanges"
+        // making the JSON syntactically invalid. The narration is still extractable.
+        var garbledJson = """
+            {
+              "narration": "\"Well, if you're looking for trouble, you don't have to look far,\" Tifa says, wiping down a stray spill with a quick, practiced motion.",
+              "success": true,
+              "statChanges": {},
+             lyinventoryChanges": [],
+              "entityChanges": [],
+              "combatInitiated": false,
+              "interactionUpdate": { "mode": "conversation", "npcDisposition": "neutral" }
+            }
+            """;
+
+        var result = NarratorService.TryParseFreeFormResponse(garbledJson, out var response);
+
+        Assert.True(result);
+        Assert.Contains("Tifa says", response.Narration);
+        Assert.Contains("trouble", response.Narration);
+        Assert.True(response.Success);
+    }
+
+    [Fact]
+    public void TryParseFreeFormResponse_WithTruncatedJson_ExtractsNarrationOnly()
+    {
+        // Simulates a response truncated by context window — JSON cuts off mid-field
+        var truncatedJson = """
+            {
+              "narration": "The guard eyes you warily, hand on his sword hilt.",
+              "success": true,
+              "statChanges": {},
+              "inventoryChanges": [],
+              "interactionUpda
+            """;
+
+        var result = NarratorService.TryParseFreeFormResponse(truncatedJson, out var response);
+
+        Assert.True(result);
+        Assert.Contains("guard eyes you warily", response.Narration);
+    }
+
+    [Fact]
+    public void TryParseFreeFormResponse_WithPlainNarration_SalvagesReply()
+    {
+        var plainNarration = """
+            Tifa stops polishing a glass and leans forward, her crimson eyes narrowing slightly.
+
+            "You want to know about the Merchants Guild?" she asks, voice low as if sharing a secret. "They're not what they seem."
+            "They control half the trade in this quarter, and they always want a cut."
+            """;
+
+        var result = NarratorService.TryParseFreeFormResponse(plainNarration, out var response);
+
+        Assert.True(result);
+        Assert.Contains("Merchants Guild", response.Narration);
+        Assert.Contains("They control half the trade", response.Narration);
+    }
+
+    [Fact]
+    public void TryParseFreeFormResponse_WithPlainNarrationAndSchemaTail_TrimsArtifacts()
+    {
+        var plainNarrationWithTail = """
+            Tifa Lockhart: "That poster?" she says, turning around to glance at the faded print. "That was another life."
+
+            She raises her glass slightly. "Sometimes the old fights come knocking anyway."
+
+            SUCCESS: True
+
+            STAT CHANGES: {}
+
+            INTERACTION UPDATE:
+            { "mode": "conversation" }
+            """;
+
+        var result = NarratorService.TryParseFreeFormResponse(plainNarrationWithTail, out var response);
+
+        Assert.True(result);
+        Assert.Contains("That was another life", response.Narration);
+        Assert.DoesNotContain("SUCCESS:", response.Narration);
+        Assert.DoesNotContain("INTERACTION UPDATE", response.Narration);
+    }
+
+    [Fact]
+    public void TryParseFreeFormResponse_WithPromptTailAfterNarration_TrimsPromptArtifacts()
+    {
+        var narrationWithPromptTail = """
+            Tifa slides a glass across the bar. "You come here looking for trouble or company?" she asks with a crooked smile.
+
+            You're playing a text-based RPG where choices change outcomes and tone determines atmosphere.
+
+            Each turn you provide:
+            - Action: the player's move or choice
+            """;
+
+        var result = NarratorService.TryParseFreeFormResponse(narrationWithPromptTail, out var response);
+
+        Assert.True(result);
+        Assert.Contains("looking for trouble or company", response.Narration);
+        Assert.DoesNotContain("You're playing a text-based RPG", response.Narration);
+        Assert.DoesNotContain("Each turn you provide", response.Narration);
+    }
+
+    [Fact]
+    public void TryParseFreeFormResponse_WithGameplayScaffoldingTail_TrimsIt()
+    {
+        var narrationWithGameplayTail = """
+            Tifa raises her glass. "To Ivalice," she says with a grin that doesn't quite hide her caution.
+
+            Health: 90/100
+            Stamina: 75/80
+            The player can ask more questions or change topics.
+            """;
+
+        var result = NarratorService.TryParseFreeFormResponse(narrationWithGameplayTail, out var response);
+
+        Assert.True(result);
+        Assert.Contains("To Ivalice", response.Narration);
+        Assert.DoesNotContain("Health:", response.Narration);
+        Assert.DoesNotContain("Stamina:", response.Narration);
+        Assert.DoesNotContain("The player can", response.Narration);
+    }
+
+    [Fact]
+    public void TryParseFreeFormResponse_WithPromptEcho_DoesNotTreatItAsNarration()
+    {
+        var promptEcho = """
+            You are now voicing Tifa Lockhart in direct conversation with the player.
+
+            CRITICAL RESPONSE RULES:
+            1. The narration MUST contain 2-4 full sentences of quoted NPC speech.
+            Player says/does: "Tell me about the guild."
+            Respond with ONLY valid JSON.
+            """;
+
+        var result = NarratorService.TryParseFreeFormResponse(promptEcho, out _);
+
+        Assert.False(result);
+    }
+
+    [Fact]
     public async Task ProcessConversationTurnAsync_WhenLlmReturnsDialogueQuotes_ParsesSuccessfully()
     {
         // Simulate the exact broken pattern: after outer JSON deserialization by

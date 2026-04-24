@@ -856,21 +856,19 @@ public class NarratorService : INarratorService
             - Successes should make the player feel AWESOME. They did something cool. The narrator might be
               wry about it, but the world clearly reacted — heads turn, NPCs are impressed (or terrified),
               something shifted because the player acted. Make them want to do it again.
-            - NPCs are FRIENDLY AND WELCOMING by default. This is critical — they are happy to see an
-              adventurer. They WANT to talk. A barmaid smiles and pours a drink because she likes having
-              interesting people around. A guard nods with respect because adventurers keep the town safe.
-              NPCs should treat the player like a welcome guest, not an inconvenience.
-            - NEVER make NPCs dismissive, annoyed, indifferent, or hostile unless the PLAYER did something
-              to earn it. "Practiced indifference" is BANNED. "Unimpressed" is BANNED. NPCs are curious,
-              engaged, and glad to have company. Even gruff NPCs are WARMLY gruff — they complain because
-              they care, not because they're annoyed at the player's existence.
-            - PERSONALITY IS FLAVOR, NOT HOSTILITY. An NPC described as "blunt" or "gruff" or "feisty" or
-              "stern" is still FRIENDLY — they just express friendliness differently. "Blunt" means direct
-              with a grin, not rude. "Feisty" means spirited and fun, not hostile. "Stoic" means reserved
-              but warm underneath. Personality traits describe HOW they're friendly, not WHETHER they're friendly.
-            - NPCs react with PERSONALITY but always from a place of WARMTH. A gruff barmaid rolls her eyes
-              fondly — and pours the drink with a wink. A guard nods with recognition — another hero, good,
-              they need more of those. NPCs treat the player like someone worth their time.
+            - NPCs HAVE AGENDA AND PERSONALITY BUT ARE ALWAYS APPROACHABLE. Not everyone is jumping for joy to see an adventurer,
+              but they NEVER refuse to speak. Let them be busy, grumpy, or suspicious based on their description,
+              but they ALWAYS engage with the hero. A busy barmaid might complain about the mess while pouring a drink. 
+              A shady merchant might be rude but still haggles. They NEVER look down on the player or ignore them.
+            - EMBRACE PLAYFUL FRICTION. Roleplay thrives on friction, but it must be interactive. If an NPC is "blunt",
+              they are blunt in their conversation, not dismissive. If "stoic", they speak with few words but still
+              answer. They can be genuinely gruff, but they still want to interact. NEVER use "refuses to speak with you".
+            - SHOW, DON'T TELL (IMMERSION). Never simply state what an NPC is feeling (e.g. "He is sad about 
+              the war"). Show it through their actions, how they hold themselves, and what they interact with 
+              in the room. If they are busy, they act busy while talking.
+            - REACT STRICTLY TO THE PLAYER'S CLASS/GEAR. A heavily armed warrior gets sized up. A mage draws 
+              wary looks or curiosity. A rogue gets kept a close eye on. Actively use the player's race, class, 
+              and current CHA score to flavor how the world responds to them.
             - For silly/harmless actions (emotes, jokes, bodily functions), narrate them literally and locally
               with humor. These should never change stats or inventory. But even silly actions should get
               entertaining reactions — the world is WATCHING this hero, even when they're being ridiculous.
@@ -1037,39 +1035,22 @@ public class NarratorService : INarratorService
             NARRATOR PERSONALITY (for stage directions and framing text around dialogue):
             {{narratorVoice}}
 
-            NPC VOICE:
-            - Write the NPC's actual dialogue in quotes. Give them verbal tics, catchphrases, or speech patterns.
-            - Include physical reactions and body language — smiles, grins, leaning in, gesturing enthusiastically.
-            - The NPC is FRIENDLY AND HAPPY TO SEE THE PLAYER. This is not negotiable. NPCs are glad an
-              adventurer walked in. They WANT to talk. They are curious, interested, and engaged.
-            - NEVER make NPCs dismissive, annoyed, curt, or indifferent unless the PLAYER specifically did
-              something hostile to them. "Practiced indifference" is BANNED. "Unimpressed" is BANNED.
-              "Barely acknowledges" is BANNED. NPCs ACKNOWLEDGE the player with WARMTH.
-            - Even gruff/tough NPCs are WARMLY gruff — they grumble FONDLY, not dismissively. A tough
-              barmaid teases you with a grin, not a scowl. A grizzled guard sizes you up with RESPECT,
-              not contempt. They've been hoping someone interesting would show up.
-            - Default to WARM, CHATTY, AND ENGAGED. The NPC wants to be part of this conversation.
-            - NPCs should REACT to the player's class, race, and gear. A warrior gets sized up by fighters.
-              A mage gets curiosity from scholars. A rogue gets knowing winks from shady types. Make the player
-              feel like their character choices matter in how the world sees them.
-            - When the player asks about quests, rumors, or what's going on — NPCs should be EAGER to share.
-              They've been waiting for someone like this adventurer to show up. Quest hooks should feel like
-              the NPC is entrusting the player with something important, not assigning homework.
-            - PERSONALITY IS FLAVOR, NOT HOSTILITY. An NPC described as "blunt" or "gruff" or "feisty" or
-              "stern" is still FRIENDLY — they just express friendliness in a colorful way. "Blunt" means
-              they say what they mean with a grin, not that they're rude. "Feisty" means energetic and
-              spirited, not hostile. "Stoic" means reserved in expression but still WARM underneath.
-              Personality traits describe HOW they're friendly, not WHETHER they're friendly.
-            - Humor is welcome. NPCs can be sarcastic, oblivious, self-important, or accidentally funny.
-            - CHA modifies the warmth of the interaction:
+            NPC VOICE & ROLEPLAY RULES:
+            - PUNCHY & REAL: Characters do not give 3-paragraph exposition dumps. Keep dialogue natural, punchy, and conversational. They can interrupt, pause, or trail off.
+            - SHOW, DON'T TELL (IMMERSION): Do not explicitly state an NPC's internal feelings like "She is sad about the war." Instead, describe them glancing at a faded poster, their grip tightening on a rag, and changing the subject.
+            - ENVIRONMENTAL INTERACTION: Root the scene in the room. Have the NPC interact with props, weather, or other people (e.g., tossing a coin, covering a drink from the dust, leaning on a rusted counter).
+            - ALWAYS APPROACHABLE (FUN): NPCs NEVER refuse to speak with the player and NEVER look down on them. Even if hostile, rude, or grumpy, they are approachable and willing to engage. Let the NPC have conflict and friction, but their gruffness shouldn't stop conversation—they complain, tease, or act tough while still talking to the hero. 
+            - AVOID FORMULAS: Do not always use the structure: "Quote," action. "Quote." Vary the delivery. Begin with an action, end with one, or let the dialogue stand raw if the emotion is heavy.
+            - SUBTEXT (INTERESTING): NPCs shouldn't just dump lore for free. If asked about a secret or rumor, they might hesitate, barter, or demand to know why the player cares. Make the player EARN the big lore drops.
+            - REACT TO THE PLAYER: A warrior gets sized up by fighters. A mage gets curiosity from scholars. A rogue draws knowing winks from shady types. Make the player feel their character choices impact the social dynamic.
+            - HUMOR & FLAVOR: Lean heavily into the NPC's distinct quirks, prejudices, or humor. Sarcasm, obliviousness, and deadpan wit are heavily encouraged to break up standard fantasy tropes.
+            - CHA OVERRIDES INITIAL DISPOSITION:
               - CHA 18+: NPCs are NOTICEABLY warmer, share secrets, give discounts, and bend rules.
               - CHA 14-17: NPCs are friendly and cooperative.
-              - CHA 10-13: NPCs are pleasant and chatty — normal, good-natured interactions.
-              - CHA 7-9: NPCs are a touch less patient but still willing to engage.
-              - CHA 6 or below: NPCs are less impressed — but still recognize the player as someone who
-                wandered in with a sword on their back, so there's a baseline of "you might be useful."
-              Important: CHA should modify WARMTH, not willingness to speak. Even with CHA 8, NPCs
-              should still be talkative — they're just less charmed by you.
+              - CHA 10-13: NPCs act according to their baseline personality.
+              - CHA 7-9: NPCs are a touch less patient and more skeptical.
+              - CHA 6 or below: NPCs are unimpressed or dismissive — but still recognize the player as a dangerous adventurer.
+              Important: CHA should modify WARMTH and RECEPTIVENESS, not necessarily their willingness to speak.
 
             SOCIAL SKILL CHECKS:
             When the player's input includes a [Social check: ...] line, the ENGINE has already rolled dice.
@@ -1114,6 +1095,7 @@ public class NarratorService : INarratorService
             - Personality: {{(string.IsNullOrWhiteSpace(npc.Personality) ? "A typical denizen of this world." : npc.Personality)}}
             - Faction: {{npc.Faction}}
             - Current Disposition: {{interaction.NpcDisposition ?? npc.Disposition}}
+            The personality above contains FACTS about this NPC — names they know, events they lived through, skills they have. When the player asks about these topics, the NPC should draw from these details and share them naturally in dialogue.
 
             NARRATOR ASIDES:
             You may include brief narrator observations as italicized asides to give the player insight
@@ -1135,9 +1117,13 @@ public class NarratorService : INarratorService
             than a merchant. Prioritize quest-related information over flavor gossip.
 
             CRITICAL RESPONSE RULES:
-            1. The NPC MUST speak with actual dialogue in quotes. Every response MUST include at least one line of NPC dialogue.
-            2. The NPC MUST respond to what the player actually said — address their question or statement directly.
-            3. Keep atmospheric description brief (1-2 sentences max). Prioritize NPC dialogue and reactions.
+            1. KEEP DIALOGUE SNAPPY & REAL: Do NOT give 3-paragraph speeches. Natural conversations have back-and-forth. The NPC should speak 1-3 sentences at most before waiting for the player to respond.
+            2. SUBSTANCE OVER DEFLECTION: The NPC MUST directly answer or react to the player's CURRENT input with real content. Provide names, details, opinions, stories, or warnings. BAD: "It's complicated..." then trailing off. GOOD: sharing a specific memory, naming a person, describing what actually happened.
+            3. PERSONALITY IS KEY: NPCs editorialize, exaggerate, crack jokes, or get annoyed. A gruff guard and a chatty merchant describe the same event completely differently.
+            4. INTEGRATE ACTIONS WITH SPEECH: Blend body language naturally with the dialogue. Don't always put dialogue in one block and action in another. Let the NPC do something *while* speaking. Let the environment influence them.
+            5. USE REAL NAMES: If other NPCs are present in the room, use their ACTUAL names from the prompt — never invent or substitute different character names.
+            6. STAY IN CONVERSATION MODE: Do NOT narrate the player's actions, inner thoughts, UI, stats, quest updates, disposition readouts, or labels like "NPC:", "Narrator:", "SUCCESS:", or "Quest Updates:". Do NOT move the scene forward beyond this immediate exchange. Reply as the NPC in this moment only.
+            7. DO NOT INVENT UNSUPPORTED PROPER NOUNS: Prefer names, factions, quests, and locations already present in the room/world/NPC context. If you do not have a real name, describe them generically instead of inventing a new named person.
 
             QUEST INTERACTIONS:
             This NPC may offer quests, accept quest turn-ins, or discuss quest progress.
@@ -1185,14 +1171,27 @@ public class NarratorService : INarratorService
 
         var turnHint = interaction.PlayerTurnCount <= 0
             ? $"Turn 1 — OPENING GREETING. {npc.Name} should speak FIRST with dialogue, welcoming or acknowledging the player. This is their first impression — make it memorable and warm."
-            : $"Turn {interaction.CurrentTurnNumber} — ongoing conversation. Continue naturally from the conversation history. Do NOT re-introduce the NPC or repeat the greeting.";
+            : $"Turn {interaction.CurrentTurnNumber} — ongoing conversation. Do NOT re-introduce the NPC or repeat the greeting.";
+
+        // Build a brief list of OTHER NPCs present in the room so the LLM knows who else is there
+        var otherNpcs = room.Npcs
+            .Where(n => !string.Equals(n.Name, npc.Name, StringComparison.OrdinalIgnoreCase))
+            .Select(n => $"- {n.Name}: {(string.IsNullOrWhiteSpace(n.Personality) ? "A denizen of this area." : n.Personality.Split('.')[0] + ".")}")
+            .ToList();
+        var roomNpcContext = otherNpcs.Count > 0
+            ? $"Other NPCs present in {room.Name}:\n{string.Join("\n", otherNpcs)}"
+            : "";
 
         var userPrompt = $$"""
             Player: {{player.Name}} (Lv.{{player.Level}} {{player.Race}} {{player.Class}})
             {{player.FormatStatsCompact()}}
             Location: {{room.Name}} — {{room.Description}}
+            {{roomNpcContext}}
             {{turnHint}}
             Player says/does: "{{rawInput}}"
+            PRIORITY: {{npc.Name}} MUST respond with 2-4 sentences of quoted dialogue containing real substance. If the player asked a factual question, ANSWER it with specific details. If the topic is emotional or personal, share a CONCRETE memory or name — don't trail off into body language. If the question is reflective, give a SPECIFIC anecdote, not a single wistful sentence. Body language is limited to one brief aside.
+            OUTPUT RULE: Stay in this single exchange only. Do NOT narrate what the player does next, do NOT add system labels or quest/status text, and do NOT switch into a narrator/game-master voice.
+            CONTEXT RULE: Prefer real names and places already mentioned in the provided context. If you lack a supported proper noun, describe the person or place instead of inventing one.
             {{worldContext}}
             {{npcKnowledge}}
             {{questContext}}
@@ -1202,7 +1201,7 @@ public class NarratorService : INarratorService
         try
         {
             rawCompletion = await CompletionOrThrowAsync(systemPrompt, userPrompt, ct, operation: "conversation",
-                playerId: player.Id, roomId: room.Id);
+                maxTokens: 768, playerId: player.Id, roomId: room.Id);
             if (TryParseFreeFormResponse(rawCompletion, out var response))
                 return response;
 
@@ -1215,8 +1214,8 @@ public class NarratorService : INarratorService
                 rawInput, rawCompletion?[..Math.Min(rawCompletion?.Length ?? 0, 200)] ?? "(null)");
         }
 
-        // Deterministic fallback — personality-driven NPC greeting
-        var fallbackNarration = GenerateConversationFallback(npc, player.Name);
+        // Deterministic fallback — personality-driven NPC response
+        var fallbackNarration = GenerateConversationFallback(npc, player.Name, interaction.PlayerTurnCount > 0);
         return new FreeFormResponse
         {
             Success = true,
@@ -1231,13 +1230,27 @@ public class NarratorService : INarratorService
     }
 
     /// <summary>
-    /// Generates a personality-driven deterministic fallback greeting when the LLM fails to produce a conversation response.
-    /// Scans the NPC's Personality field for keywords and selects a themed template.
+    /// Generates a personality-driven deterministic fallback when the LLM fails to produce a conversation response.
+    /// When <paramref name="isOngoing"/> is true, returns a mid-conversation filler instead of a greeting.
     /// </summary>
-    private static string GenerateConversationFallback(Npc npc, string playerName)
+    private static string GenerateConversationFallback(Npc npc, string playerName, bool isOngoing = false)
     {
-        var p = npc.Personality.ToLowerInvariant();
         var name = npc.Name;
+
+        // Mid-conversation: use generic continuations that don't look like greetings
+        if (isOngoing)
+        {
+            var pick2 = Math.Abs(name.GetHashCode());
+            return (pick2 % 4) switch
+            {
+                0 => $"{name} pauses for a moment, considering your words carefully before responding. \"Hmm, that's an interesting point. Let me think about that.\"",
+                1 => $"{name} nods slowly, their expression thoughtful. \"I hear what you're saying. Go on.\"",
+                2 => $"*{name} shifts their weight and glances at you.* \"There's more to this than meets the eye, isn't there?\"",
+                _ => $"{name} takes a breath before answering. \"You're not wrong. But there's another side to this story.\"",
+            };
+        }
+
+        var p = npc.Personality.ToLowerInvariant();
 
         // Use a simple hash of the NPC name to pick among multiple templates per category
         var pick = Math.Abs(name.GetHashCode());
@@ -1476,7 +1489,181 @@ public class NarratorService : INarratorService
                 return true;
         }
 
+        // Last resort: if full JSON parsing failed (garbled keys, truncation, etc.)
+        // try to rescue just the narration text so callers get real AI output
+        // instead of a canned fallback.
+        if (TryExtractNarrationOnly(sanitized, out response))
+            return true;
+
+            // Some RP-focused models ignore the JSON wrapper and return plain narration.
+            // Salvage those replies as long as they look like actual in-world output and
+            // not an echoed copy of the prompt instructions.
+            if (TryExtractPlainNarration(sanitized, out response))
+                return true;
+
         return false;
+    }
+
+    /// <summary>
+    /// Extracts just the narration field from malformed JSON using the same boundary-detection
+    /// logic as <see cref="RepairLmJsonQuotes"/>. Returns a minimal <see cref="FreeFormResponse"/>
+    /// with the narration so callers avoid canned fallback text.
+    /// </summary>
+    internal static bool TryExtractNarrationOnly(string sanitized, out FreeFormResponse response)
+    {
+        response = null!;
+
+        // Normalize common key variants before searching
+        var normalized = NormalizeFreeFormJsonKeys(sanitized);
+
+        int keyIdx = normalized.IndexOf("\"narration\"", StringComparison.Ordinal);
+        if (keyIdx < 0) return false;
+
+        int colonIdx = normalized.IndexOf(':', keyIdx + "\"narration\"".Length);
+        if (colonIdx < 0) return false;
+
+        // Find the opening quote of the narration value
+        int openQuote = -1;
+        for (int i = colonIdx + 1; i < normalized.Length; i++)
+        {
+            if (normalized[i] == '"') { openQuote = i; break; }
+            if (!char.IsWhiteSpace(normalized[i])) return false;
+        }
+        if (openQuote < 0) return false;
+
+        int closeQuote = FindNarrationCloseQuote(normalized, openQuote);
+        if (closeQuote <= openQuote) return false;
+
+        var rawNarration = normalized[(openQuote + 1)..closeQuote];
+        // Unescape JSON string escapes
+        var narration = rawNarration
+            .Replace("\\\"", "\"")
+            .Replace("\\n", "\n")
+            .Replace("\\\\", "\\")
+            .Trim();
+
+        if (string.IsNullOrWhiteSpace(narration)) return false;
+
+        response = new FreeFormResponse
+        {
+            Success = true,
+            Narration = narration,
+            StatChanges = new(),
+            InventoryChanges = [],
+            EntityChanges = [],
+        };
+        return true;
+    }
+
+    /// <summary>
+    /// Salvages a plain-text in-world reply when the model ignores the JSON contract entirely.
+    /// Rejects prompt echos and other meta-instruction text.
+    /// </summary>
+    internal static bool TryExtractPlainNarration(string sanitized, out FreeFormResponse response)
+    {
+        response = null!;
+
+        if (string.IsNullOrWhiteSpace(sanitized)) return false;
+
+        var trimmed = sanitized.Trim();
+        if (trimmed.Length < 25) return false;
+        if (trimmed[0] is '{' or '[') return false;
+        if (IsLikelyPromptEcho(trimmed)) return false;
+
+        var cleaned = TrimPlainNarrationArtifacts(trimmed);
+        if (string.IsNullOrWhiteSpace(cleaned)) return false;
+        if (IsLikelyPromptEcho(cleaned)) return false;
+        if (!LooksLikeInWorldNarration(cleaned)) return false;
+
+        response = new FreeFormResponse
+        {
+            Success = true,
+            Narration = cleaned,
+            StatChanges = new(),
+            InventoryChanges = [],
+            EntityChanges = [],
+        };
+        return true;
+    }
+
+    private static bool LooksLikeInWorldNarration(string text)
+    {
+        return text.Contains('"')
+            || text.Contains(" says", StringComparison.OrdinalIgnoreCase)
+            || text.Contains(" asks", StringComparison.OrdinalIgnoreCase)
+            || text.Contains(" replies", StringComparison.OrdinalIgnoreCase)
+            || text.Contains(" mutters", StringComparison.OrdinalIgnoreCase)
+            || text.Contains('*');
+    }
+
+    private static bool IsLikelyPromptEcho(string text)
+    {
+        if (text.StartsWith("You are now voicing ", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        string[] markers =
+        [
+            "RULES:",
+            "NPC Background:",
+            "CRITICAL RESPONSE RULES:",
+            "QUEST INTERACTIONS:",
+            "Conversation history:",
+            "Player says/does:",
+            "Respond with ONLY valid JSON"
+        ];
+
+        var markerCount = markers.Count(marker => text.Contains(marker, StringComparison.OrdinalIgnoreCase));
+        return markerCount >= 2;
+    }
+
+    private static string TrimPlainNarrationArtifacts(string text)
+    {
+        string[] hardCutMarkers =
+        [
+            "\nYou're playing a text-based RPG",
+            "\nEach turn you provide:",
+            "\nThe player can",
+            "\nThe player ",
+            "\nIf they ask",
+            "\nIf the player asks",
+            "\nNPC DIALOGUE:",
+            "\nNPC disposition update:",
+            "\nNPC:",
+            "\nHealth:",
+            "\nStamina:",
+            "\nSuccess:",
+            "\nSUCCESS:",
+            "\nStat Changes:",
+            "\nSTAT CHANGES:",
+            "\nInventory Changes:",
+            "\nINVENTORY CHANGES:",
+            "\nEntity Changes:",
+            "\nENTITY CHANGES:",
+            "\nCombat Initiated:",
+            "\nCOMBAT INITIATED:",
+            "\nRoom Changes:",
+            "\nROOM CHANGES:",
+            "\nInteraction Update:",
+            "\nINTERACTION UPDATE:",
+            "\nQuest Updates:",
+            "\nQUEST UPDATES:",
+            "\nNarration:",
+            "\nTifa Lockhart is speaking to"
+        ];
+
+        var cutIndex = text.Length;
+        foreach (var marker in hardCutMarkers)
+        {
+            var idx = text.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+            if (idx >= 0 && idx < cutIndex)
+                cutIndex = idx;
+        }
+
+        var cleaned = text[..cutIndex]
+            .Replace("\\\"", "\"")
+            .Trim(' ', '\r', '\n', '\t', ',', ';');
+
+        return cleaned;
     }
 
     /// <summary>Extract the first JSON object from a raw LLM response, stripping code fences.</summary>

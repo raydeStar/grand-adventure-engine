@@ -455,6 +455,30 @@
         <div class="admin-tab-content" data-admin-panel="tools">
           <div class="admin-tab-body">
 
+            <!-- ── Broadcast Message ── -->
+            <div class="panel">
+              <h3>Broadcast Message</h3>
+              <p class="panel-hint">Send a message to a player's Discord thread, or broadcast to all.</p>
+              <div class="world-action-form">
+                <div class="mutation-row">
+                  <div class="form-group">
+                    <label for="msg-player-select">Recipient</label>
+                    <select id="msg-player-select">
+                      <option value="">All Players (Broadcast)</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label for="msg-text">Message</label>
+                    <textarea id="msg-text" rows="2" placeholder="Type the message to send..." required></textarea>
+                  </div>
+                </div>
+                <div class="world-action-buttons">
+                  <button class="btn btn-primary" id="btn-send-msg" type="button">Send</button>
+                </div>
+                <div id="send-message-result" class="world-action-result"></div>
+              </div>
+            </div>
+
             <!-- ── Command Harness ── -->
             <div class="panel">
               <h3>Command Harness</h3>
@@ -550,26 +574,7 @@
                   </div>
                 </div>
 
-                <div class="panel">
-                  <h3>Broadcast Message</h3>
-                  <p class="panel-hint">Send a message to a player's Discord thread, or broadcast to all.</p>
-                  <div class="world-action-form">
-                    <div class="form-group">
-                      <label for="msg-player-select">Recipient</label>
-                      <select id="msg-player-select">
-                        <option value="">All Players (Broadcast)</option>
-                      </select>
-                    </div>
-                    <div class="form-group">
-                      <label for="msg-text">Message</label>
-                      <textarea id="msg-text" rows="2" placeholder="Type the message to send..." required></textarea>
-                    </div>
-                    <div class="world-action-buttons">
-                      <button class="btn btn-primary" id="btn-send-msg" type="button">Send</button>
-                    </div>
-                    <div id="send-message-result" class="world-action-result"></div>
-                  </div>
-                </div>
+
               </div>
             </details>
 

@@ -2096,7 +2096,8 @@ textarea { resize: vertical; min-height: 80px; }
   min-height: 520px;
 }
 
-.dm-console-main { display: flex; flex-direction: column; gap: 0.5rem; }
+.dm-console-main { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; overflow: hidden; }
+.dm-detail-panel { min-width: 0; }
 
 .dm-search-bar {
   display: flex;
