@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -116,6 +116,27 @@
                 <form id="create-form" class="create-form-inline hidden">
                   <div class="form-row">
                     <div class="form-group">
+                      <label for="char-destination-mode">Adventure</label>
+                      <select id="char-destination-mode">
+                        <option value="world">World Adventure</option>
+                        <option value="blind">Blind Adventure</option>
+                      </select>
+                    </div>
+                    <div class="form-group" id="char-world-group">
+                      <label for="char-world">World</label>
+                      <select id="char-world"></select>
+                    </div>
+                    <div class="form-group hidden" id="char-blind-group">
+                      <label for="char-blind-storyline">Blind Template</label>
+                      <select id="char-blind-storyline"></select>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label>Starting Point</label>
+                    <div id="char-destination-preview" class="inline-message info"></div>
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group">
                       <label for="char-name">Name</label>
                       <input type="text" id="char-name" placeholder="Character name" required maxlength="50" />
                     </div>
@@ -182,12 +203,12 @@
             </div>
 
             <div id="stat-bar" class="stat-bar">
-              <span class="stat-label">HP</span> <span class="stat-hp stat-empty">░░░░░░░░░░</span> <span class="stat-hp">0/0</span>
-              <span class="stat-sep"> │ </span>
-              <span class="stat-label">MP</span> <span class="stat-mp stat-empty">░░░░░░░░░░</span> <span class="stat-mp">0/0</span>
-              <span class="stat-sep"> │ </span>
-              <span class="stat-label">XP</span> <span class="stat-xp stat-empty">░░░░░░░░░░</span> <span class="stat-xp">0/100</span>
-              <span class="stat-sep"> │ </span>
+              <span class="stat-label">HP</span> <span class="stat-hp stat-empty">â–‘â–‘â–‘â–‘â–‘â–‘â–‘â–‘â–‘â–‘</span> <span class="stat-hp">0/0</span>
+              <span class="stat-sep"> â”‚ </span>
+              <span class="stat-label">MP</span> <span class="stat-mp stat-empty">â–‘â–‘â–‘â–‘â–‘â–‘â–‘â–‘â–‘â–‘</span> <span class="stat-mp">0/0</span>
+              <span class="stat-sep"> â”‚ </span>
+              <span class="stat-label">XP</span> <span class="stat-xp stat-empty">â–‘â–‘â–‘â–‘â–‘â–‘â–‘â–‘â–‘â–‘</span> <span class="stat-xp">0/100</span>
+              <span class="stat-sep"> â”‚ </span>
               <span class="stat-gold">Gold:0</span>
             </div>
 
@@ -225,7 +246,7 @@
           <button class="btn btn-secondary btn-sm" id="btn-seed-demo-admin" type="button">Seed Demo</button>
         </nav>
 
-        <!-- ═══ DM CONSOLE TAB ═══ -->
+        <!-- â•â•â• DM CONSOLE TAB â•â•â• -->
         <div class="admin-tab-content active" data-admin-panel="overview">
           <div class="admin-tab-body">
             <div id="summary-cards" class="summary-cards"></div>
@@ -286,7 +307,7 @@
           </div>
         </div>
 
-        <!-- ═══ WORLDS TAB ═══ -->
+        <!-- â•â•â• WORLDS TAB â•â•â• -->
         <div class="admin-tab-content" data-admin-panel="worlds">
           <div class="admin-tab-body">
 
@@ -427,7 +448,7 @@
           </div>
         </div>
 
-        <!-- ═══ LLM TAB ═══ -->
+        <!-- â•â•â• LLM TAB â•â•â• -->
         <div class="admin-tab-content" data-admin-panel="llm">
           <div class="admin-tab-body">
             <div class="panel">
@@ -451,11 +472,11 @@
           </div>
         </div>
 
-        <!-- ═══ TOOLS TAB ═══ -->
+        <!-- â•â•â• TOOLS TAB â•â•â• -->
         <div class="admin-tab-content" data-admin-panel="tools">
           <div class="admin-tab-body">
 
-            <!-- ── Broadcast Message ── -->
+            <!-- â”€â”€ Broadcast Message â”€â”€ -->
             <div class="panel">
               <h3>Broadcast Message</h3>
               <p class="panel-hint">Send a message to a player's Discord thread, or broadcast to all.</p>
@@ -479,7 +500,7 @@
               </div>
             </div>
 
-            <!-- ── Command Harness ── -->
+            <!-- â”€â”€ Command Harness â”€â”€ -->
             <div class="panel">
               <h3>Command Harness</h3>
               <p class="panel-hint">Run any command as any character. For single-player actions, use the DM Console detail panel instead.</p>
@@ -491,7 +512,7 @@
               <div id="admin-command-log" class="activity-log"></div>
             </div>
 
-            <!-- ── Room Fixture ── -->
+            <!-- â”€â”€ Room Fixture â”€â”€ -->
             <details class="admin-tools-section">
               <summary class="admin-tools-header">Create Room Fixture</summary>
               <form id="room-fixture-form" class="mutation-form" style="margin-top:0.5rem">
@@ -542,7 +563,7 @@
               </form>
             </details>
 
-            <!-- ── Bulk Operations ── -->
+            <!-- â”€â”€ Bulk Operations â”€â”€ -->
             <details class="admin-tools-section">
               <summary class="admin-tools-header">Bulk Operations</summary>
               <div class="world-action-grid" style="margin-top:0.5rem">
@@ -582,7 +603,7 @@
           </div>
         </div>
 
-        <!-- ═══ CONTENT REGISTRY TAB ═══ -->
+        <!-- â•â•â• CONTENT REGISTRY TAB â•â•â• -->
         <div class="admin-tab-content" data-admin-panel="registry">
           <div class="admin-tab-body">
             <div class="registry-browse-layout">
@@ -615,7 +636,7 @@
                 <div id="quest-gen-dialog" class="quest-gen-dialog hidden">
                   <h4>AI Quest Generator</h4>
                   <label>Brief (what should this quest be about?):</label>
-                  <textarea id="quest-gen-brief" rows="3" placeholder="e.g. An NPC in Rabanastre needs help recovering a stolen artifact from the sewers..."></textarea>
+                  <textarea id="quest-gen-brief" rows="3" placeholder="e.g. An NPC in Stonewake needs help recovering a stolen artifact from the sewers..."></textarea>
                   <label>World:</label>
                   <select id="quest-gen-world"><option value="">Default World</option></select>
                   <label>Lore context (select entries to include):</label>
@@ -664,7 +685,7 @@
           </div>
         </div>
 
-        <!-- ═══ EVENTS TAB ═══ -->
+        <!-- â•â•â• EVENTS TAB â•â•â• -->
         <div class="admin-tab-content" data-admin-panel="events">
           <div class="admin-tab-body">
             <div class="panel">
@@ -691,7 +712,7 @@
           </div>
         </div>
 
-        <!-- ═══ AI LOGS TAB ═══ -->
+        <!-- â•â•â• AI LOGS TAB â•â•â• -->
         <div class="admin-tab-content" data-admin-panel="logs">
           <div class="admin-tab-body">
             <div class="panel">

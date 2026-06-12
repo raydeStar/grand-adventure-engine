@@ -38,6 +38,7 @@ const PLAYER_SELECT_IDS = [
 
 const UI = {
   _roomContext: null,
+  _creationOptions: null,
 
   $(id) {
     return document.getElementById(id);
@@ -55,6 +56,8 @@ const UI = {
     const form = this.$('create-form');
     form.classList.toggle('hidden', !show);
     if (show) {
+      this.updateCreationDestinationMode(this.$('char-destination-mode')?.value || 'world');
+      this.refreshCreationDestinationPreview();
       this.$('char-name').focus();
     }
   },
@@ -62,6 +65,73 @@ const UI = {
   showPlayerSelect(show) {
     const panel = this.$('player-select-panel');
     if (panel) panel.classList.toggle('hidden', !show);
+  },
+
+  populateCreationOptions(options) {
+    this._creationOptions = options || { worlds: [], blindStorylines: [], defaultWorldId: 'default-world' };
+
+    const worlds = this._creationOptions.worlds || [];
+    const blindStorylines = this._creationOptions.blindStorylines || [];
+    const defaultWorldId = this._creationOptions.defaultWorldId || 'default-world';
+
+    const worldSelect = this.$('char-world');
+    if (worldSelect) {
+      const previousWorldId = worldSelect.value;
+      worldSelect.innerHTML = worlds.length
+        ? worlds.map((world) => `<option value="${this.esc(world.id)}">${this.esc(world.name)}</option>`).join('')
+        : '<option value="">No worlds available</option>';
+
+      const preferredWorldId = worlds.some((world) => world.id === previousWorldId)
+        ? previousWorldId
+        : worlds.some((world) => world.id === defaultWorldId)
+          ? defaultWorldId
+          : (worlds[0]?.id || '');
+      worldSelect.value = preferredWorldId;
+    }
+
+    const blindSelect = this.$('char-blind-storyline');
+    if (blindSelect) {
+      const previousStorylineId = blindSelect.value;
+      blindSelect.innerHTML = blindStorylines.length
+        ? blindStorylines.map((storyline) => `<option value="${this.esc(storyline.id)}">${this.esc(storyline.name)}</option>`).join('')
+        : '<option value="">No Blind templates available</option>';
+
+      if (blindStorylines.length > 0) {
+        blindSelect.value = blindStorylines.some((storyline) => storyline.id === previousStorylineId)
+          ? previousStorylineId
+          : blindStorylines[0].id;
+      }
+    }
+
+    this.updateCreationDestinationMode(this.$('char-destination-mode')?.value || 'world');
+    this.refreshCreationDestinationPreview();
+  },
+
+  updateCreationDestinationMode(mode) {
+    this.$('char-world-group')?.classList.toggle('hidden', mode !== 'world');
+    this.$('char-blind-group')?.classList.toggle('hidden', mode !== 'blind');
+    this.refreshCreationDestinationPreview();
+  },
+
+  refreshCreationDestinationPreview() {
+    const preview = this.$('char-destination-preview');
+    if (!preview) return;
+
+    const mode = this.$('char-destination-mode')?.value || 'world';
+    if (mode === 'blind') {
+      const storylineId = this.$('char-blind-storyline')?.value || '';
+      const storyline = (this._creationOptions?.blindStorylines || []).find((item) => item.id === storylineId);
+      preview.textContent = storyline
+        ? `${storyline.setting}. Tone: ${storyline.tone}. Theme: ${storyline.theme}.`
+        : 'Choose a Blind Adventure template to begin with an authored scenario.';
+      return;
+    }
+
+    const worldId = this.$('char-world')?.value || '';
+    const world = (this._creationOptions?.worlds || []).find((item) => item.id === worldId);
+    preview.textContent = world
+      ? (world.characterCreationIntro || world.description || `Begin in ${world.name}.`)
+      : 'Choose a world to decide where this character enters the story.';
   },
 
   setResumeMessage(message, tone = 'info') {

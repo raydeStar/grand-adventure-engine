@@ -81,7 +81,16 @@ public class ContentRegistryService : IContentRegistryService
 
     public void LogRegistrySummary()
     {
-        _logger.LogInformation("Content registries loaded: {Spells} spells, {Classes} classes, {Races} races, {Items} items, {Monsters} monsters, {Quests} quests, {LoreEntries} lore entries, {NarratorPresets} narrator presets",
-            Spells.Count, Classes.Count, Races.Count, Items.Count, Monsters.Count, Quests.Count, LoreEntries.Count, NarratorPresets.Count);
+        _logger.LogInformation(
+            "Content registries loaded: {Spells} spells, {Classes} classes, {Races} races, {Items} items, {Monsters} monsters, {Quests} quests, {LoreEntries} lore entries, {NarratorPresets} narrator presets, {Storylines} storylines",
+            Spells.Count,
+            Classes.Count,
+            Races.Count,
+            Items.Count,
+            Monsters.Count,
+            Quests.Count,
+            LoreEntries.Count,
+            NarratorPresets.Count,
+            Storylines.Count);
     }
 }

@@ -295,6 +295,17 @@ public class GameEngine : IGameEngine
             .Select(kv => kv.Key)
             .ToList();
 
+        var requestedWorldId = string.IsNullOrWhiteSpace(concept.WorldId)
+            ? WorldDefaults.DefaultWorldId
+            : concept.WorldId.Trim();
+        var startingWorld = _worldRepository is not null
+            ? await _worldRepository.GetWorldAsync(requestedWorldId, ct)
+            : null;
+        var startingWorldId = startingWorld?.Id ?? WorldDefaults.DefaultWorldId;
+        var startingRoomId = !string.IsNullOrWhiteSpace(startingWorld?.SpawnRoomId)
+            ? startingWorld.SpawnRoomId
+            : WorldDefaults.DefaultSpawnRoomId;
+
         var statValues = concept.StatMethod switch
         {
             StatAllocationMethod.Roll4d6DropLowest => _dice.RollStatArray(),
@@ -315,7 +326,10 @@ public class GameEngine : IGameEngine
             Class = concept.Class,
             Backstory = concept.Backstory,
             Gold = concept.StartingGold ?? _rules.CharacterCreation.StartingGold,
-            CurrentRoomId = "spawn"
+            ActiveWorldId = startingWorldId,
+            HomeWorldId = startingWorldId,
+            CurrentRoomId = startingRoomId,
+            NarratorPresetId = startingWorld?.DefaultNarratorPresetId
         };
 
         // Populate stats from rules-defined attributes
@@ -401,6 +415,19 @@ public class GameEngine : IGameEngine
         }
 
         await _stateManager.SavePlayerAsync(player, ct);
+        if (_worldRepository is not null)
+        {
+            await _worldRepository.SavePlayerWorldStateAsync(new PlayerWorldState
+            {
+                PlayerId = player.Id,
+                WorldId = player.ActiveWorldId,
+                CurrentRoomId = player.CurrentRoomId,
+                HasVisited = true,
+                FirstVisitedAt = DateTimeOffset.UtcNow,
+                LastVisitedAt = DateTimeOffset.UtcNow
+            }, ct);
+        }
+
         _logger.LogInformation("Created character {Name} ({Race} {Class}) for {Id}", player.Name, player.Race, player.Class, player.Id);
         return player;
     }
@@ -779,6 +806,20 @@ public class GameEngine : IGameEngine
         var targetRoom = await _stateManager.GetPlayerRoomAsync(player.Id, simpleTargetId, ct);
         if (targetRoom is null)
         {
+            if (player.BlindAdventure is not null && _blindAdventureService is not null)
+            {
+                try
+                {
+                    targetRoom = await _blindAdventureService.GenerateNextRoomAsync(player, room, direction, ct);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Blind Adventure room generation failed for {RoomId}", simpleTargetId);
+                }
+            }
+
+            if (targetRoom is not null)
+                goto move_room_ready;
             // Generate new room via narrator — pass a clean source room with simple ID
             var sourceForGen = new Room
             {
@@ -816,6 +857,7 @@ public class GameEngine : IGameEngine
             }
         }
 
+move_room_ready:
         // Fix any composite keys that leaked into this room's exits
         RepairExitIds(targetRoom);
 
@@ -856,6 +898,9 @@ public class GameEngine : IGameEngine
             moveSummary += $"\n{loreDiscoveryNotice}";
         if (questUpdate is not null)
             moveSummary += $"\n📜 {questUpdate}";
+
+        if (player.BlindAdventure is not null && BlindAdventureService.ShouldConclude(player))
+            moveSummary += "\nAdventure conclusion is ready. Use `adventure end` to conclude the tale.";
 
         return new ActionResult
         {

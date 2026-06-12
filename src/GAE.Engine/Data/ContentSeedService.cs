@@ -50,6 +50,10 @@ public class ContentSeedService
             _logger.LogInformation("Content registry DB is empty — seeding from YAML files");
             await SeedFromYamlAsync(db, configDir, ct);
         }
+        else
+        {
+            await SeedMissingStorylinesAsync(db, configDir, ct);
+        }
 
         // Load all content from DB into in-memory registries
         await LoadRegistriesAsync(db, registryService, ct);
@@ -308,12 +312,47 @@ public class ContentSeedService
             }
         }
 
+        await AppendStorylineEntitiesAsync(entities, configDir, ct);
+
         if (entities.Count > 0)
         {
             db.ContentRegistry.AddRange(entities);
             await db.SaveChangesAsync(ct);
             _logger.LogInformation("Seeded {Count} total content entries into DB", entities.Count);
         }
+    }
+
+    private async Task SeedMissingStorylinesAsync(GaeDbContext db, string configDir, CancellationToken ct)
+    {
+        var hasStorylines = await db.ContentRegistry.AnyAsync(e => e.ContentType == "storyline", ct);
+        if (hasStorylines)
+            return;
+
+        var storylineEntities = new List<ContentRegistryEntity>();
+        await AppendStorylineEntitiesAsync(storylineEntities, configDir, ct);
+        if (storylineEntities.Count == 0)
+            return;
+
+        db.ContentRegistry.AddRange(storylineEntities);
+        await db.SaveChangesAsync(ct);
+        _logger.LogInformation("Backfilled {Count} Blind Adventure storylines into DB", storylineEntities.Count);
+    }
+
+    private async Task AppendStorylineEntitiesAsync(
+        List<ContentRegistryEntity> entities,
+        string configDir,
+        CancellationToken ct)
+    {
+        var storylinesDir = Path.Combine(configDir, "blind-storylines");
+        if (!Directory.Exists(storylinesDir))
+            return;
+
+        var storylines = await StorylineContextLoader.LoadFromDirectoryAsync(storylinesDir, ct);
+        foreach (var storyline in storylines.Where(s => !string.IsNullOrWhiteSpace(s.Id)))
+            entities.Add(ToEntity("storyline", storyline));
+
+        if (storylines.Count > 0)
+            _logger.LogInformation("Prepared {Count} Blind Adventure storylines for DB seeding", storylines.Count);
     }
 
     private async Task LoadRegistriesAsync(GaeDbContext db, ContentRegistryService registryService, CancellationToken ct)
@@ -356,6 +395,10 @@ public class ContentSeedService
                 case "narrator_preset":
                     var preset = JsonSerializer.Deserialize<NarratorPreset>(entity.Data, JsonOpts);
                     if (preset is not null) registryService.NarratorPresets.Register(preset);
+                    break;
+                case "storyline":
+                    var storyline = JsonSerializer.Deserialize<StorylineContext>(entity.Data, JsonOpts);
+                    if (storyline is not null) registryService.Storylines.Register(storyline);
                     break;
                 default:
                     _logger.LogWarning("Unknown content type in DB: {ContentType}", entity.ContentType);

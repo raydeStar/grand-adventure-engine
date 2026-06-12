@@ -194,7 +194,11 @@ public class EfCoreStateManager : IStateManager
             var room = existing.ToDomain();
 
             // Sync shopkeeper data from template (same logic as InMemoryStateManager)
-            var template = await db.Rooms.AsNoTracking().FirstOrDefaultAsync(r => r.Id == roomId, ct);
+            var templateCandidates = await db.Rooms.AsNoTracking()
+                .Where(r => r.Id == roomId)
+                .ToListAsync(ct);
+            var template = templateCandidates.FirstOrDefault(r => IsTaggedForWorld(r.WorldIds, worldId))
+                ?? templateCandidates.FirstOrDefault();
             if (template is not null)
                 SyncShopkeeperData(room, template.ToDomain());
 
@@ -202,7 +206,11 @@ public class EfCoreStateManager : IStateManager
         }
 
         // Clone from template
-        var tmplEntity = await db.Rooms.AsNoTracking().FirstOrDefaultAsync(r => r.Id == roomId, ct);
+        var templateEntities = await db.Rooms.AsNoTracking()
+            .Where(r => r.Id == roomId)
+            .ToListAsync(ct);
+        var tmplEntity = templateEntities.FirstOrDefault(r => IsTaggedForWorld(r.WorldIds, worldId))
+            ?? templateEntities.FirstOrDefault();
         if (tmplEntity is null) return null;
 
         var templateRoom = tmplEntity.ToDomain();

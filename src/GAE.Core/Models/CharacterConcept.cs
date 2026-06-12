@@ -7,6 +7,7 @@ public class CharacterConcept
     public string Gender { get; set; } = string.Empty;
     public string Race { get; set; } = string.Empty;
     public string Class { get; set; } = string.Empty;
+    public string? WorldId { get; set; }
     public string Backstory { get; set; } = string.Empty;
     public List<string> PersonalItems { get; set; } = [];
     public StatAllocationMethod StatMethod { get; set; } = StatAllocationMethod.StandardArray;

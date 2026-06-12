@@ -333,6 +333,15 @@ public class DashboardController : ControllerBase
         if (validationError is not null)
             return BadRequest(new { error = validationError });
 
+        if (!string.IsNullOrWhiteSpace(request.WorldId))
+        {
+            var requestedWorld = await _worldRepository.GetWorldAsync(request.WorldId.Trim(), ct);
+            if (requestedWorld is null)
+                return BadRequest(new { error = $"World '{request.WorldId}' was not found." });
+            if (!requestedWorld.IsActive)
+                return BadRequest(new { error = $"World '{request.WorldId}' is not active." });
+        }
+
         var playerId = string.IsNullOrWhiteSpace(request.PlayerId)
             ? Guid.NewGuid().ToString("N")
             : request.PlayerId.Trim();
@@ -343,6 +352,9 @@ public class DashboardController : ControllerBase
 
         var concept = BuildCharacterConcept(request, playerId);
         var player = await _engine.CreateCharacterFromConceptAsync(concept, ct);
+
+        if (request.SkipHeroIntro)
+            return Ok(new { player, heroIntro = (string?)null });
 
         // Generate the hero intro (narrator introduction + crowd reaction) as the first story entry
         string? heroIntro = null;
@@ -356,6 +368,44 @@ public class DashboardController : ControllerBase
         }
 
         return Ok(new { player, heroIntro });
+    }
+
+    [HttpGet("creation-options")]
+    public async Task<IActionResult> GetCreationOptions(CancellationToken ct)
+    {
+        var worlds = await _worldRepository.GetAllWorldsAsync(ct);
+        var activeWorlds = worlds
+            .Where(world => world.IsActive)
+            .OrderBy(world => string.Equals(world.Id, WorldDefaults.DefaultWorldId, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+            .ThenBy(world => world.Name)
+            .Select(world => new
+            {
+                world.Id,
+                world.Name,
+                world.Description,
+                world.SpawnRoomId,
+                world.CharacterCreationIntro
+            });
+
+        var blindStorylines = _registry.Storylines.GetAll()
+            .OrderBy(storyline => storyline.Name)
+            .Select(storyline => new
+            {
+                storyline.Id,
+                storyline.Name,
+                storyline.Description,
+                storyline.Setting,
+                storyline.Tone,
+                storyline.Theme,
+                storyline.MaxRooms
+            });
+
+        return Ok(new
+        {
+            defaultWorldId = WorldDefaults.DefaultWorldId,
+            worlds = activeWorlds,
+            blindStorylines
+        });
     }
 
     /// <summary>Returns display-relevant game config (stat baseline, etc.) for the web client.</summary>
@@ -1447,6 +1497,7 @@ public class DashboardController : ControllerBase
             Name = request.Name.Trim(),
             Race = request.Race.Trim(),
             Class = request.Class.Trim(),
+            WorldId = string.IsNullOrWhiteSpace(request.WorldId) ? null : request.WorldId.Trim(),
             Backstory = request.Backstory?.Trim() ?? string.Empty,
             StatMethod = Enum.TryParse<StatAllocationMethod>(request.StatMethod, true, out var method)
                 ? method
@@ -2876,6 +2927,8 @@ public class CreateCharacterRequest
     public string Name { get; set; } = string.Empty;
     public string Race { get; set; } = string.Empty;
     public string Class { get; set; } = string.Empty;
+    public string? WorldId { get; set; }
+    public bool SkipHeroIntro { get; set; }
     public string? Backstory { get; set; }
     public string StatMethod { get; set; } = "StandardArray";
 }

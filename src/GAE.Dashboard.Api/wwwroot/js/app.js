@@ -22,6 +22,7 @@
     interactionTarget: '',
     llmActive: '',
     llmModels: [],
+    creationOptions: { defaultWorldId: 'default-world', worlds: [], blindStorylines: [] },
     worlds: [],
     selectedWorldId: localStorage.getItem('gae.admin.world') || '',
     selectedWorld: null,
@@ -114,6 +115,9 @@
       UI.showCreateForm(true);
     });
     bind('btn-cancel-create', 'click', () => UI.showCreateForm(false));
+    bindOptional('char-destination-mode', 'change', (e) => UI.updateCreationDestinationMode(e.target.value));
+    bindOptional('char-world', 'change', () => UI.refreshCreationDestinationPreview());
+    bindOptional('char-blind-storyline', 'change', () => UI.refreshCreationDestinationPreview());
     bind('btn-open-portal', 'click', () => {
       UI.showPortal(true);
       UI.showDashboard(false);
@@ -545,8 +549,15 @@
     if (!hint) return;
 
     UI.$('auth-username').value = hint.username;
-    UI.$('auth-password').value = hint.password;
-    UI.$('auth-form').requestSubmit();
+    if (hint.password) {
+      UI.$('auth-password').value = hint.password;
+      UI.$('auth-form').requestSubmit();
+      return;
+    }
+
+    UI.$('auth-password').value = '';
+    UI.$('auth-password').focus();
+    UI.setAuthMessage('Enter the dashboard password for this account.', 'info');
   }
 
   function ensureAuthenticated() {
@@ -622,6 +633,7 @@
       refreshSummary(),
       refreshHealth(),
       refreshLlmModels(),
+      refreshCreationOptions(),
       refreshWorlds()
     ]);
 
@@ -682,6 +694,18 @@
     } catch (error) {
       UI.$('llm-active-model').textContent = 'Error loading model info';
       UI.$('llm-models-list').innerHTML = '<div class="empty-state">Could not reach LM Studio.</div>';
+    }
+  }
+
+  async function refreshCreationOptions() {
+    if (!state.session) return;
+
+    try {
+      state.creationOptions = await API.getCreationOptions();
+      UI.populateCreationOptions(state.creationOptions);
+    } catch {
+      state.creationOptions = { defaultWorldId: 'default-world', worlds: [], blindStorylines: [] };
+      UI.populateCreationOptions(state.creationOptions);
     }
   }
 
@@ -803,13 +827,34 @@
     const submit = UI.$('create-submit');
     submit.disabled = true;
     submit.textContent = 'Creating...';
+    UI.setResumeMessage('');
 
     try {
+      const destinationMode = UI.$('char-destination-mode').value || 'world';
+      const selectedWorldId = destinationMode === 'world'
+        ? nullableText(UI.$('char-world').value)
+        : null;
+      const selectedBlindStorylineId = destinationMode === 'blind'
+        ? nullableText(UI.$('char-blind-storyline').value)
+        : null;
+
+      if (destinationMode === 'world' && !selectedWorldId) {
+        UI.setResumeMessage('Choose a world before creating this character.', 'error');
+        return;
+      }
+
+      if (destinationMode === 'blind' && !selectedBlindStorylineId) {
+        UI.setResumeMessage('Choose a Blind Adventure template before creating this character.', 'error');
+        return;
+      }
+
       const result = await API.createCharacter({
         playerId: nullableText(UI.$('char-player-id').value),
         name: UI.$('char-name').value.trim(),
         race: UI.$('char-race').value,
         class: UI.$('char-class').value,
+        worldId: selectedWorldId,
+        skipHeroIntro: destinationMode === 'blind',
         statMethod: UI.$('char-stats').value,
         backstory: nullableText(UI.$('char-backstory').value)
       });
@@ -819,8 +864,19 @@
 
       UI.$('create-form').reset();
       UI.showCreateForm(false);
+      UI.setResumeMessage('');
       await refreshAll();
       await activatePlayer(player.id, 'user');
+
+      if (destinationMode === 'blind' && selectedBlindStorylineId) {
+        const launchResult = await API.sendCommand(player.id, `adventure start ${selectedBlindStorylineId}`);
+        if (launchResult.actionId) state.recentActionIds.add(launchResult.actionId);
+        UI.appendStoryEntry(launchResult, launchResult.success ? 'success' : 'failure');
+        await afterCommand(player.id, launchResult);
+        if (!launchResult.success) {
+          UI.setPortalMessage(launchResult.mechanicalSummary || 'Blind Adventure failed to start.', 'error');
+        }
+      }
     } catch (error) {
       UI.setResumeMessage(error.message || 'Failed to create character.', 'error');
     } finally {
