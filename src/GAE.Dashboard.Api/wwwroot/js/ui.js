@@ -345,6 +345,9 @@ const UI = {
     this.renderRoom(null);
     this.renderStatBar(null);
     html('story-log', '');
+    this._lastStoryCount = 0;
+    this._lastStorySignature = '';
+    this._renderedActionIds.clear();
     this.setUserCommandState(false, isAuthenticated);
     this.showPlayerSelect(true);
   },
@@ -450,6 +453,7 @@ const UI = {
   },
 
   _lastStoryCount: 0,
+  _lastStorySignature: '',
   _renderedActionIds: new Set(),
 
   renderStoryLog(entries) {
@@ -457,12 +461,17 @@ const UI = {
     if (!entries.length) {
       log.innerHTML = '<div class="empty-state">No story recorded yet.</div>';
       this._lastStoryCount = 0;
+      this._lastStorySignature = '';
       this._renderedActionIds.clear();
       return;
     }
 
+    const nextStorySignature = this._getStorySignature(entries);
+
     // Skip rebuild when entry count has not changed (prevents re-animation and flash)
-    if (this._lastStoryCount === entries.length && log.querySelector('.story-entry')) {
+    if (this._lastStoryCount === entries.length
+      && this._lastStorySignature === nextStorySignature
+      && log.querySelector('.story-entry')) {
       return;
     }
 
@@ -477,7 +486,7 @@ const UI = {
 
     // If the log already has entries that match the server data, skip the full rebuild
     // to avoid the flash. Only rebuild if we have nothing rendered yet.
-    if (existingIds.size > 0) {
+    if (existingIds.size > 0 && this._lastStorySignature === nextStorySignature) {
       // Reconcile: add any entries from the server that we don't already have
       const reversed = [...entries].reverse();
       for (const entry of reversed) {
@@ -490,6 +499,8 @@ const UI = {
       }
       return;
     }
+
+    this._lastStorySignature = nextStorySignature;
 
     log.innerHTML = '';
     this._renderedActionIds.clear();
@@ -516,6 +527,25 @@ const UI = {
 
     // Keep _lastStoryCount in sync so renderStoryLog won't full-rebuild
     this._lastStoryCount++;
+    this._lastStorySignature = '';
+  },
+
+  _getStorySignature(entries) {
+    return (entries || []).map((entry) => {
+      const id = entry.actionId || entry.id;
+      if (id) return `id:${id}`;
+
+      const timestamp = entry.timestamp || entry.createdAt || entry.occurredAt || '';
+      const command = entry.command || entry.rawInput || entry.input || '';
+      const narration = entry.narration || '';
+      const mechanical = entry.mechanicalSummary || '';
+      return [
+        timestamp,
+        command,
+        narration.slice(0, 80),
+        mechanical.slice(0, 80)
+      ].join(':');
+    }).join('|');
   },
 
   _appendStoryNode(entry, tone, animate) {

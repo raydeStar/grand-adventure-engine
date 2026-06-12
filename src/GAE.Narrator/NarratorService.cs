@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using GAE.Core.Interfaces;
 using GAE.Core.Models;
 using GAE.Core.Registry;
@@ -1689,6 +1690,17 @@ public class NarratorService : INarratorService
             return string.Empty;
 
         var sanitized = rawCompletion.Trim();
+        sanitized = Regex.Replace(
+            sanitized,
+            @"<think\b[^>]*>.*?</think>",
+            string.Empty,
+            RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        sanitized = Regex.Replace(
+            sanitized,
+            @"^\s*<think\b[^>]*>.*$",
+            string.Empty,
+            RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
         if (sanitized.StartsWith("```", StringComparison.Ordinal))
         {
             var firstNewline = sanitized.IndexOf('\n');
@@ -2086,7 +2098,10 @@ public class NarratorService : INarratorService
         {
             try
             {
-                var completionContent = await SendCompletionRequestAsync(systemPrompt, userPrompt, ct, operation, logPayload, maxTokens);
+                var completionContent = SanitizeLmCompletion(
+                    await SendCompletionRequestAsync(systemPrompt, userPrompt, ct, operation, logPayload, maxTokens));
+                if (string.IsNullOrWhiteSpace(completionContent))
+                    throw new InvalidOperationException($"{_provider} {operation} response contained no usable narration after sanitization.");
 
                 // Log the full exchange for training-data collection
                 sw.Stop();

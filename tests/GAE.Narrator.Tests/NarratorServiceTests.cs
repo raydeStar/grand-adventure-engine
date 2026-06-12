@@ -290,6 +290,65 @@ public class NarratorServiceTests
     }
 
     [Fact]
+    public async Task NarrateActionAsync_StripsOpenAiCompatibleThinkBlocks()
+    {
+        var handler = new CapturingOpenAiCompatibleHandler("""
+            data: {"choices":[{"delta":{"content":"<think>private scratchpad that should never reach the story log</think>"}}]}
+
+            data: {"choices":[{"delta":{"content":"Thorin checks the anvil, and the soot gives up one honest clue."}}]}
+
+            data: [DONE]
+
+            """);
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:8000/") };
+        var narrator = new NarratorService(
+            httpClient,
+            NullLogger<NarratorService>.Instance,
+            model: "diffusiongemma",
+            think: false);
+
+        var narration = await narrator.NarrateActionAsync(new NarratorContext
+        {
+            Player = new PlayerCharacter { Id = "p1", Name = "Thorin", Race = "Dwarf", Class = "Fighter" },
+            CurrentRoom = new Room { Id = "forge", Name = "Forge", Description = "A smoky forge." },
+            Action = new GameAction { PlayerId = "p1", RawInput = "inspect the anvil", Type = ActionType.Use },
+            MechanicalResult = new ActionResult { Success = true, MechanicalSummary = "You inspect the anvil." }
+        });
+
+        Assert.DoesNotContain("<think>", narration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("scratchpad", narration, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("honest clue", narration, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task NarrateActionAsync_UsesFallbackForDanglingThinkBlock()
+    {
+        var handler = new CapturingOpenAiCompatibleHandler("""
+            data: {"choices":[{"delta":{"content":"<think>private scratchpad without a closing tag"}}]}
+
+            data: [DONE]
+
+            """);
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:8000/") };
+        var narrator = new NarratorService(
+            httpClient,
+            NullLogger<NarratorService>.Instance,
+            model: "diffusiongemma",
+            think: false);
+
+        var narration = await narrator.NarrateActionAsync(new NarratorContext
+        {
+            Player = new PlayerCharacter { Id = "p1", Name = "Thorin", Race = "Dwarf", Class = "Fighter" },
+            CurrentRoom = new Room { Id = "forge", Name = "Forge", Description = "A smoky forge." },
+            Action = new GameAction { PlayerId = "p1", RawInput = "inspect the anvil", Type = ActionType.Use },
+            MechanicalResult = new ActionResult { Success = true, MechanicalSummary = "You inspect the anvil." }
+        });
+
+        Assert.DoesNotContain("<think>", narration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("scratchpad", narration, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task NarrateActionAsync_ForMissingLookTarget_AvoidsTemplateFailureText()
     {
         var handler = new FakeHttpMessageHandler(new HttpRequestException("HTTP should not be called for deterministic look narration."));
@@ -702,6 +761,18 @@ public class NarratorServiceTests
 
     private class CapturingOpenAiCompatibleHandler : HttpMessageHandler
     {
+        private readonly string _responseBody;
+
+        public CapturingOpenAiCompatibleHandler(string? responseBody = null)
+        {
+            _responseBody = responseBody ?? """
+                data: {"choices":[{"delta":{"content":"Thorin studies the anvil; it answers with soot, silence, and one useful dent."}}]}
+
+                data: [DONE]
+
+                """;
+        }
+
         public string? RequestPath { get; private set; }
         public string? RequestBody { get; private set; }
         public string? AuthorizationScheme { get; private set; }
@@ -718,12 +789,7 @@ public class NarratorServiceTests
 
             var response = new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new StringContent("""
-                    data: {"choices":[{"delta":{"content":"Thorin studies the anvil; it answers with soot, silence, and one useful dent."}}]}
-
-                    data: [DONE]
-
-                    """)
+                Content = new StringContent(_responseBody)
             };
             response.Content.Headers.ContentType = new MediaTypeHeaderValue("text/event-stream");
             return response;

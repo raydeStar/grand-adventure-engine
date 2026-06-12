@@ -28,6 +28,18 @@ test.describe('Grand Adventure Engine dashboard', () => {
     return result;
   }
 
+  async function submitCreateCharacter(page) {
+    const responsePromise = page.waitForResponse((response) => {
+      if (!response.url().includes('/api/dashboard/characters')) return false;
+      return response.request().method() === 'POST';
+    });
+
+    await page.locator('#create-form').getByRole('button', { name: 'Create' }).click();
+    const createResponse = await responsePromise;
+    expect(createResponse.ok()).toBeTruthy();
+    return await createResponse.json();
+  }
+
   // Clean up test-created players after each test
   test.afterEach(async ({ request }) => {
     try {
@@ -55,10 +67,10 @@ test.describe('Grand Adventure Engine dashboard', () => {
     await page.locator('#char-race').selectOption('Human');
     await page.locator('#char-class').selectOption('Warrior');
     await page.locator('#char-backstory').fill('Provisioned by the browser E2E harness.');
-    await page.locator('#create-form').getByRole('button', { name: 'Create' }).click();
+    await submitCreateCharacter(page);
 
     await expect(page.locator('#dashboard')).toBeVisible();
-    await expect(page.locator('#header-player')).toContainText('Playwright Hero');
+    await expect(page.locator('#header-player')).toContainText('Playwright Hero', { timeout: 30_000 });
     await expect(page.locator('#command-input')).toBeEnabled();
     // Room name is theme-dependent; just verify the player spawned in a real room.
     await expect(page.locator('#room-name')).not.toBeEmpty();
@@ -71,6 +83,7 @@ test.describe('Grand Adventure Engine dashboard', () => {
     await expect(page.locator('#story-log')).not.toContainText('Exits:');
     await expect(page.locator('#story-log')).not.toContainText('You see:');
     await expect(page.locator('#story-log')).not.toContainText('Items:');
+    await expect(page.locator('#story-log')).not.toContainText('<think');
     await expect(page.locator('#room-desc')).not.toBeEmpty();
 
     await page.locator('#command-input').fill('stats');
@@ -79,6 +92,43 @@ test.describe('Grand Adventure Engine dashboard', () => {
     await expect(page.locator('#command-input')).toBeEnabled({ timeout: 30_000 });
 
     await expect(page.getByRole('button', { name: 'Open Admin Console' })).toHaveCount(0);
+  });
+
+  test('story log replaces same-length batches when the active story changes', async ({ page }, testInfo) => {
+    const firstName = `First Switch ${testInfo.project.name}`;
+    const secondName = `Second Switch ${testInfo.project.name}`;
+
+    await login(page, 'admin');
+    await page.evaluate((name) => {
+      UI.showDashboard(true);
+      UI.showPortal(false);
+      UI.$('story-log').innerHTML = '';
+      UI._lastStoryCount = 0;
+      UI._lastStorySignature = '';
+      UI._renderedActionIds.clear();
+      UI.renderStoryLog([{
+        id: 'story-first',
+        rawInput: 'character-creation',
+        narration: `${name} the Human Warrior enters the world.`
+      }]);
+    }, firstName);
+
+    await expect(page.locator('#story-log .story-entry')).toHaveCount(1);
+    await expect(page.locator('#story-log')).toContainText(firstName);
+    await expect(page.locator('#story-log')).not.toContainText('<think');
+
+    await page.evaluate((name) => {
+      UI.renderStoryLog([{
+        id: 'story-second',
+        rawInput: 'character-creation',
+        narration: `${name} the Human Warrior enters the world.`
+      }]);
+    }, secondName);
+
+    await expect(page.locator('#story-log .story-entry')).toHaveCount(1);
+    await expect(page.locator('#story-log')).toContainText(secondName);
+    await expect(page.locator('#story-log')).not.toContainText(firstName);
+    await expect(page.locator('#story-log')).not.toContainText('<think');
   });
 
   test('user can accept, review, and abandon a seeded quest through the dashboard', async ({ page }, testInfo) => {
@@ -91,7 +141,7 @@ test.describe('Grand Adventure Engine dashboard', () => {
     await page.locator('#char-race').selectOption('Human');
     await page.locator('#char-class').selectOption('Warrior');
     await page.locator('#char-backstory').fill('Quest E2E coverage via Playwright.');
-    await page.locator('#create-form').getByRole('button', { name: 'Create' }).click();
+    await submitCreateCharacter(page);
 
     await expect(page.locator('#dashboard')).toBeVisible();
     await expect(page.locator('#room-name')).not.toBeEmpty();
