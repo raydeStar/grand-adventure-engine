@@ -2137,6 +2137,7 @@ public class NarratorService : INarratorService
 
         if (_think == false)
         {
+            request.EnableThinking = false;
             request.ReasoningEffort = "none";
             request.Reasoning = new LmStudioReasoning { Effort = "none" };
         }
@@ -3128,6 +3129,8 @@ public class NarratorService : INarratorService
         public bool Stream { get; set; }
         [JsonPropertyName("reasoning_effort")]
         public string? ReasoningEffort { get; set; }
+        [JsonPropertyName("enable_thinking")]
+        public bool? EnableThinking { get; set; }
         public LmStudioReasoning? Reasoning { get; set; }
     }
 

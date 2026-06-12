@@ -1,5 +1,6 @@
 ﻿using System.Net;
 using System.Text.Json;
+using System.Net.Http.Headers;
 using GAE.Core.Interfaces;
 using GAE.Core.Models;
 using GAE.Narrator;
@@ -252,6 +253,40 @@ public class NarratorServiceTests
         Assert.True(root.GetProperty("stream").GetBoolean());
         Assert.Equal(16_384, root.GetProperty("options").GetProperty("num_ctx").GetInt32());
         Assert.Equal(512, root.GetProperty("options").GetProperty("num_predict").GetInt32());
+    }
+
+    [Fact]
+    public async Task NarrateActionAsync_WithOpenAiCompatibleProvider_SendsBearerAndThinkingOptions()
+    {
+        var handler = new CapturingOpenAiCompatibleHandler();
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:8000/") };
+        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "sk-unsloth-test");
+        var narrator = new NarratorService(
+            httpClient,
+            NullLogger<NarratorService>.Instance,
+            model: "diffusiongemma",
+            think: false);
+
+        var narration = await narrator.NarrateActionAsync(new NarratorContext
+        {
+            Player = new PlayerCharacter { Id = "p1", Name = "Thorin", Race = "Dwarf", Class = "Fighter" },
+            CurrentRoom = new Room { Id = "forge", Name = "Forge", Description = "A smoky forge." },
+            Action = new GameAction { PlayerId = "p1", RawInput = "inspect the anvil", Type = ActionType.Use },
+            MechanicalResult = new ActionResult { Success = true, MechanicalSummary = "You inspect the anvil." }
+        });
+
+        Assert.Contains("anvil", narration, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("/v1/chat/completions", handler.RequestPath);
+        Assert.Equal("Bearer", handler.AuthorizationScheme);
+        Assert.Equal("sk-unsloth-test", handler.AuthorizationParameter);
+        Assert.False(string.IsNullOrWhiteSpace(handler.RequestBody));
+
+        using var json = JsonDocument.Parse(handler.RequestBody!);
+        var root = json.RootElement;
+        Assert.Equal("diffusiongemma", root.GetProperty("model").GetString());
+        Assert.False(root.GetProperty("enable_thinking").GetBoolean());
+        Assert.Equal("none", root.GetProperty("reasoning_effort").GetString());
+        Assert.Equal("none", root.GetProperty("reasoning").GetProperty("effort").GetString());
     }
 
     [Fact]
@@ -662,6 +697,36 @@ public class NarratorServiceTests
                     {"message":{"role":"assistant","content":"Thorin studies the anvil; it answers with soot, silence, and one useful dent."},"done":true}
                     """)
             };
+        }
+    }
+
+    private class CapturingOpenAiCompatibleHandler : HttpMessageHandler
+    {
+        public string? RequestPath { get; private set; }
+        public string? RequestBody { get; private set; }
+        public string? AuthorizationScheme { get; private set; }
+        public string? AuthorizationParameter { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            RequestPath = request.RequestUri?.AbsolutePath;
+            RequestBody = request.Content is null
+                ? null
+                : await request.Content.ReadAsStringAsync(cancellationToken);
+            AuthorizationScheme = request.Headers.Authorization?.Scheme;
+            AuthorizationParameter = request.Headers.Authorization?.Parameter;
+
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""
+                    data: {"choices":[{"delta":{"content":"Thorin studies the anvil; it answers with soot, silence, and one useful dent."}}]}
+
+                    data: [DONE]
+
+                    """)
+            };
+            response.Content.Headers.ContentType = new MediaTypeHeaderValue("text/event-stream");
+            return response;
         }
     }
 

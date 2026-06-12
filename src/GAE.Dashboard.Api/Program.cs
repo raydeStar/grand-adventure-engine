@@ -16,6 +16,7 @@ using GAE.Narrator;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
+using System.Net.Http.Headers;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
@@ -120,6 +121,7 @@ builder.Services.AddSingleton<IGameEngine, GameEngine>();
 var lmStudioEndpoint = builder.Configuration["LmStudio:Endpoint"] ?? "http://localhost:1234";
 var lmStudioModel = builder.Configuration["LmStudio:Model"] ?? "default";
 var lmProvider = builder.Configuration["LmStudio:Provider"] ?? "OpenAICompatible";
+var lmApiKey = builder.Configuration["LmStudio:ApiKey"];
 var lmRetryCount = int.TryParse(builder.Configuration["LmStudio:RetryCount"], out var rc) ? rc : 1;
 var lmRetryDelayMs = int.TryParse(builder.Configuration["LmStudio:RetryDelayMs"], out var rd) ? rd : 2000;
 var lmContextLength = int.TryParse(builder.Configuration["LmStudio:ContextLength"], out var cl) ? cl : (int?)null;
@@ -128,6 +130,7 @@ builder.Services.AddHttpClient("LmStudio", client =>
 {
     client.BaseAddress = new Uri(lmStudioEndpoint + "/");
     client.Timeout = TimeSpan.FromSeconds(120);
+    ApplyNarratorApiKey(client, lmApiKey);
 });
 builder.Services.AddSingleton<WorldKnowledgeBuilder>();
 builder.Services.AddSingleton<INarratorService>(sp =>
@@ -254,6 +257,7 @@ foreach (var warning in authService.GetStartupWarnings())
 try
 {
     using var probeClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+    ApplyNarratorApiKey(probeClient, lmApiKey);
     var lmResponse = await probeClient.GetAsync(lmStudioEndpoint + GetNarratorModelsPath(lmProvider));
     if (!lmResponse.IsSuccessStatusCode)
         app.Logger.LogWarning("LM Studio not responding at {Endpoint} — narration will use fallback text", lmStudioEndpoint);
@@ -367,6 +371,7 @@ app.MapGet("/health/narrator", async (HttpClient httpClient) =>
 
     try
     {
+        ApplyNarratorApiKey(httpClient, lmApiKey);
         var response = await httpClient.GetAsync(lmStudioEndpoint + GetNarratorModelsPath(lmProvider));
         narratorHealthCache = response.IsSuccessStatusCode
             ? Results.Ok(new { status = "healthy", service = lmProvider })
@@ -389,6 +394,14 @@ static string GetNarratorModelsPath(string provider)
     => string.Equals(provider, "Ollama", StringComparison.OrdinalIgnoreCase)
         ? "/api/tags"
         : "/v1/models";
+
+static void ApplyNarratorApiKey(HttpClient client, string? apiKey)
+{
+    if (string.IsNullOrWhiteSpace(apiKey))
+        return;
+
+    client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey.Trim());
+}
 
 static async Task<int> SeedWorldFromLore(LoreSeed? lore, IStateManager stateManager)
 {

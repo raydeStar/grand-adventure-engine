@@ -12,6 +12,7 @@ services:
       LmStudio__Provider: "${LM_STUDIO_PROVIDER:-OpenAICompatible}"
       LmStudio__Endpoint: "${LM_STUDIO_ENDPOINT:-http://host.docker.internal:1234}"
       LmStudio__Model: "${LM_STUDIO_MODEL:-default}"
+      LmStudio__ApiKey: "${LM_STUDIO_API_KEY:-}"
       LmStudio__ContextLength: "${LM_STUDIO_CONTEXT_LENGTH:-}"
       LmStudio__Think: "${LM_STUDIO_THINK:-}"
       DashboardAuth__User__Username: "${GAE_DASHBOARD_USER_USERNAME:-user}"
