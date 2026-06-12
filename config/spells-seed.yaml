@@ -1,11 +1,11 @@
-# ══════════════════════════════════════════════════════════════════
-# FINAL FANTASY-THEMED SPELL REGISTRY
-# "Fire, Fira, Firaga — destruction comes in threes." — Vivi
-# ══════════════════════════════════════════════════════════════════
+﻿# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ORIGINAL FANTASY SPELL REGISTRY
+# "Fire, Fira, Firaga â€” destruction comes in threes." â€” Vivi
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 spells:
 
-  # ── EVOCATION (damage dealing) ──────────────────────────────
+  # â”€â”€ EVOCATION (damage dealing) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   - id: magic_missile
     name: Aero
@@ -22,7 +22,7 @@ spells:
 
   - id: firebolt
     name: Fire
-    description: "A mote of elemental fire streaks toward the target. The most basic — and beloved — Black Magic spell."
+    description: "A mote of elemental fire streaks toward the target. The most basic â€” and beloved â€” Black Magic spell."
     school: evocation
     mana_cost: 1
     damage_dice: "1d10"
@@ -35,7 +35,7 @@ spells:
 
   - id: fireball
     name: Firaga
-    description: "A massive explosion of flame engulfs the area. The pinnacle of fire magic — everything burns."
+    description: "A massive explosion of flame engulfs the area. The pinnacle of fire magic â€” everything burns."
     school: evocation
     mana_cost: 8
     damage_dice: "3d6"
@@ -85,11 +85,11 @@ spells:
     power_level: 3
     tags: [radiant, melee, single-target]
 
-  # ── RESTORATION (healing) ────────────────────────────────────
+  # â”€â”€ RESTORATION (healing) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   - id: cure_wounds
     name: Cure
-    description: "A warm glow of restorative magic mends wounds and eases pain. The White Mage's signature spell."
+    description: "A warm glow of restorative magic mends wounds and eases pain. The Dawn Cleric's signature spell."
     school: restoration
     mana_cost: 3
     heal_dice: "1d8+2"
@@ -123,7 +123,7 @@ spells:
     power_level: 3
     tags: [healing, cleanse, single-target]
 
-  # ── ABJURATION (protection) ─────────────────────────────────
+  # â”€â”€ ABJURATION (protection) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   - id: shield
     name: Protect
@@ -164,7 +164,7 @@ spells:
     power_level: 2
     tags: [buff, party]
 
-  # ── ILLUSION ────────────────────────────────────────────────
+  # â”€â”€ ILLUSION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   - id: minor_illusion
     name: Vanish
@@ -190,11 +190,11 @@ spells:
     power_level: 4
     tags: [stealth, single-target]
 
-  # ── CONJURATION ─────────────────────────────────────────────
+  # â”€â”€ CONJURATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   - id: poison_spray
     name: Bio
-    description: "A cloud of toxic green Mist sprays toward the target, eating at their flesh."
+    description: "A cloud of toxic green Aether sprays toward the target, eating at their flesh."
     school: conjuration
     mana_cost: 1
     damage_dice: "1d12"
@@ -205,7 +205,7 @@ spells:
     power_level: 1
     tags: [poison, single-target, cantrip]
 
-  # ── DIVINATION ──────────────────────────────────────────────
+  # â”€â”€ DIVINATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   - id: detect_magic
     name: Libra
@@ -218,7 +218,7 @@ spells:
     power_level: 1
     tags: [utility, detection]
 
-  # ── NECROMANCY ──────────────────────────────────────────────
+  # â”€â”€ NECROMANCY â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   - id: chill_touch
     name: Blizzard
@@ -247,11 +247,11 @@ spells:
     power_level: 4
     tags: [necrotic, drain, single-target]
 
-  # ── TRANSMUTATION ───────────────────────────────────────────
+  # â”€â”€ TRANSMUTATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   - id: haste
     name: Haste
-    description: "Time warps around the target, doubling their speed. A classic support spell — and the reason Summoners are always welcome in a party."
+    description: "Time warps around the target, doubling their speed. A classic support spell â€” and the reason Eidolon Binders are always welcome in a party."
     school: transmutation
     mana_cost: 6
     status_effect: "hasted"
@@ -262,7 +262,7 @@ spells:
     power_level: 5
     tags: [buff, single-target]
 
-  # ── RANGER SPELLS ───────────────────────────────────────────
+  # â”€â”€ RANGER SPELLS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   - id: hunters_mark
     name: "Scan"

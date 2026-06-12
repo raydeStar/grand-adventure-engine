@@ -1,14 +1,14 @@
-# ══════════════════════════════════════════════════════════════════
-# FINAL FANTASY-THEMED MONSTER REGISTRY
-# "Every great hero needs a great monster to slay." — Red XIII
-# ══════════════════════════════════════════════════════════════════
+﻿# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ORIGINAL FANTASY MONSTER REGISTRY
+# "Every great hero needs a great monster to slay." - Sir Thaddeus
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 monsters:
-  # ── Tier 1: Easy (Levels 1-3) ─────────────────────────────────────
+  # â”€â”€ Tier 1: Easy (Levels 1-3) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   - id: "giant_rat"
     name: "Dire Rat"
-    description: "A bloated rodent mutated by Mist energy. Glowing blue teeth and matted fur."
+    description: "A bloated rodent mutated by Aether energy. Glowing blue teeth and matted fur."
     personality: "Territorial and aggressive when cornered."
     min_level: 1
     max_level: 3
@@ -38,7 +38,7 @@ monsters:
 
   - id: "skeleton_warrior"
     name: "Skeleton"
-    description: "Animated bones held together by dark Mist energy. Wields a rusty blade."
+    description: "Animated bones held together by dark Aether energy. Wields a rusty blade."
     personality: "Mindless and relentless. Follows the will of whoever raised it."
     min_level: 1
     max_level: 4
@@ -68,7 +68,7 @@ monsters:
 
   - id: "zombie_shambler"
     name: "Zombie"
-    description: "A shambling corpse animated by concentrated Mist. Slow but tireless."
+    description: "A shambling corpse animated by concentrated Aether. Slow but tireless."
     personality: "Mindless hunger. Drawn to the warmth of the living."
     min_level: 1
     max_level: 3
@@ -82,8 +82,8 @@ monsters:
     gold_max: 12
 
   - id: "kobold_sneak"
-    name: "Cactuar"
-    description: "A tiny, spiny green creature that runs at impossible speed. Its '1000 Needles' attack is no joke."
+    name: "Needlejack"
+    description: "A tiny, spiny green creature that runs at impossible speed. Its 'Needle Storm' attack is no joke."
     personality: "Skittish and unpredictable. Attacks with needle barrages and flees."
     min_level: 1
     max_level: 3
@@ -96,10 +96,10 @@ monsters:
     gold_min: 4
     gold_max: 18
 
-  # ── Tier 1 Bosses ──
+  # â”€â”€ Tier 1 Bosses â”€â”€
 
   - id: "ratking_gnash"
-    name: "King Bomb"
+    name: "Cinder Bulb"
     description: "A massive, swollen bomb creature that grows larger as it absorbs fire damage. When it detonates, everything burns."
     personality: "Rage incarnate. Grows hotter and more unstable as the fight continues."
     min_level: 1
@@ -132,7 +132,7 @@ monsters:
 
   - id: "bone_collector"
     name: "Lich"
-    description: "An undead mage wreathed in dark robes, clutching a staff that leaks Mist. Assembles skeletal servants from fallen enemies."
+    description: "An undead mage wreathed in dark robes, clutching a staff that leaks Aether. Assembles skeletal servants from fallen enemies."
     personality: "Calculating and malevolent. Hoards power obsessively."
     min_level: 1
     max_level: 4
@@ -146,10 +146,10 @@ monsters:
     gold_min: 30
     gold_max: 80
 
-  # ── Tier 2: Medium (Levels 3-6) ───────────────────────────────────
+  # â”€â”€ Tier 2: Medium (Levels 3-6) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   - id: "dire_wolf"
-    name: "Fenrir Pup"
+    name: "Frostwold Pup"
     description: "A spectral wolf wreathed in frost. Smaller than the true Fenrir but equally vicious."
     personality: "Pack hunter. Circles prey with patient cunning."
     min_level: 3
@@ -165,7 +165,7 @@ monsters:
 
   - id: "bandit_captain"
     name: "Imperial Soldier"
-    description: "A trained Imperial trooper in magitek-enhanced armor. Disciplined, dangerous, and well-equipped."
+    description: "A trained Imperial trooper in arcanotech-enhanced armor. Disciplined, dangerous, and well-equipped."
     personality: "Professional killer. Follows orders without hesitation."
     min_level: 3
     max_level: 6
@@ -180,7 +180,7 @@ monsters:
 
   - id: "animated_armor"
     name: "Iron Giant"
-    description: "A massive animated suit of ancient armor, powered by concentrated Mist. Each footstep shakes the ground."
+    description: "A massive animated suit of ancient armor, powered by concentrated Aether. Each footstep shakes the ground."
     personality: "Obeys its last command. Cannot be reasoned with."
     min_level: 3
     max_level: 6
@@ -189,7 +189,7 @@ monsters:
     base_defense: 16
     damage_dice: "1d8"
     rarity: "uncommon"
-    tags: ["construct", "magitek"]
+    tags: ["construct", "arcanotech"]
     gold_min: 15
     gold_max: 40
 
@@ -225,7 +225,7 @@ monsters:
 
   - id: "cursed_spirit"
     name: "Wraith"
-    description: "A translucent spirit trapped between the mortal realm and the Farplane."
+    description: "A translucent spirit trapped between the mortal realm and the Spirit Veil."
     personality: "Anguished and lashing out. Seeks to drag the living through with it."
     min_level: 3
     max_level: 6
@@ -238,10 +238,10 @@ monsters:
     gold_min: 12
     gold_max: 40
 
-  # ── Tier 2 Bosses ──
+  # â”€â”€ Tier 2 Bosses â”€â”€
 
   - id: "warden_of_the_deep"
-    name: "Marilith"
+    name: "Ashcoil"
     description: "A six-armed serpentine Fiend wielding a blade in each hand. One of the Four Fiends of the Elements."
     personality: "Graceful and merciless. Treats combat as a dance to the death."
     min_level: 3
@@ -257,9 +257,9 @@ monsters:
     gold_max: 120
 
   - id: "ironhide_the_cursed"
-    name: "Judge Magister Ghis"
-    description: "An Imperial Judge Magister in ornate magitek-enhanced armor. Once noble, now corrupted by the Nethicite he wields."
-    personality: "Tormented by duty and corruption. Fights with the discipline of an Imperial officer but the desperation of a man losing himself."
+    name: "Veyr High Judge Ghisren"
+    description: "An Imperial Judge Magister in ornate arcanotech-enhanced armor. Once noble, now corrupted by the Aetherglass he wields."
+    personality: "Tormented by duty and corruption. Fights with the discipline of an Imperial officer but the deidolonation of a man losing himself."
     min_level: 3
     max_level: 6
     is_boss: true
@@ -273,7 +273,7 @@ monsters:
     gold_max: 140
 
   - id: "whispering_shade"
-    name: "Malboro"
+    name: "Vinemaw"
     description: "A monstrous plant creature with dozens of waving tentacles and a gaping maw. Its 'Bad Breath' attack inflicts every status ailment imaginable."
     personality: "Mindless hunger wrapped in toxic flesh. Everything near it suffers."
     min_level: 3
@@ -288,10 +288,10 @@ monsters:
     gold_min: 55
     gold_max: 130
 
-  # ── Tier 3: Hard (Levels 6-9) ─────────────────────────────────────
+  # â”€â”€ Tier 3: Hard (Levels 6-9) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   - id: "troll"
-    name: "Behemoth"
+    name: "Gorehorn"
     description: "A massive horned beast of legendary ferocity. Purple-furred and muscular, it regenerates from wounds at terrifying speed."
     personality: "Territorial apex predator. Charges first, thinks never."
     min_level: 6
@@ -306,7 +306,7 @@ monsters:
     gold_max: 100
 
   - id: "wraith"
-    name: "Ahriman"
+    name: "Gloom Eye"
     description: "A floating eyeball-fiend that hypnotizes prey with its gaze before devouring them."
     personality: "Cold and calculating. Studies prey before attacking."
     min_level: 6
@@ -336,7 +336,7 @@ monsters:
     gold_max: 130
 
   - id: "stone_golem"
-    name: "Adamantoise"
+    name: "Stoneback Ancient"
     description: "A colossal turtle-like creature with an impenetrable shell. Agonizingly slow but essentially indestructible."
     personality: "Ancient and patient. Has survived eons by being harder to kill than anything else."
     min_level: 6
@@ -351,7 +351,7 @@ monsters:
     gold_max: 120
 
   - id: "basilisk"
-    name: "Cockatrice"
+    name: "Basilisk Rooster"
     description: "A rooster-headed reptile whose gaze petrifies the unwary. Bizarrely ugly."
     personality: "Territorial and aggressive. Turns everything to stone and nests in the remains."
     min_level: 6
@@ -366,8 +366,8 @@ monsters:
     gold_max: 140
 
   - id: "shadow_fiend"
-    name: "Tonberry King"
-    description: "The king of all Tonberries. Walks slowly. Carries a massive knife. Has a grudge list longer than the Pharos is tall."
+    name: "Knife Wight King"
+    description: "The king of all Knife Wights. Walks slowly. Carries a massive knife. Has a grudge list longer than the Blackspire is tall."
     personality: "Patient and implacable. Everyone is on the list."
     min_level: 6
     max_level: 9
@@ -376,15 +376,15 @@ monsters:
     base_defense: 14
     damage_dice: "2d8+1"
     rarity: "uncommon"
-    tags: ["tonberry", "boss-tier"]
+    tags: ["knife-wight", "boss-tier"]
     gold_min: 45
     gold_max: 150
 
-  # ── Tier 3 Bosses ──
+  # â”€â”€ Tier 3 Bosses â”€â”€
 
   - id: "varkoth_the_undying"
-    name: "Gilgamesh (Enraged)"
-    description: "Gilgamesh, provoked beyond all dramatic tolerance, has drawn all eight of his swords. This is not a performance."
+    name: "Silas the Grand (Enraged)"
+    description: "Silas the Grand, provoked beyond all dramatic tolerance, has drawn all eight of his swords. This is not a performance."
     personality: "Theatrically furious. Genuinely dangerous when he stops posing."
     min_level: 6
     max_level: 9
@@ -399,8 +399,8 @@ monsters:
     gold_max: 300
 
   - id: "siege_golem_malachar"
-    name: "Omega Weapon"
-    description: "An ancient magitek war machine of unknown origin. Impervious to most magic and armed with devastating energy cannons."
+    name: "Omega Engine"
+    description: "An ancient arcanotech war machine of unknown origin. Impervious to most magic and armed with devastating energy cannons."
     personality: "Machine intelligence. Targets the greatest threat first."
     min_level: 6
     max_level: 9
@@ -410,15 +410,15 @@ monsters:
     base_defense: 18
     damage_dice: "2d8+2"
     rarity: "epic"
-    tags: ["construct", "magitek", "boss"]
+    tags: ["construct", "arcanotech", "boss"]
     gold_min: 80
     gold_max: 250
 
-  # ── Tier 4: Deadly (Levels 9-12) ──────────────────────────────────
+  # â”€â”€ Tier 4: Deadly (Levels 9-12) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   - id: "elder_dragon"
-    name: "Bahamut"
-    description: "The King of Dragons. A divine being of immense power whose Mega Flare can level cities."
+    name: "Aurelwyrm"
+    description: "The King of Dragons. A divine being of immense power whose Starflare can level cities."
     personality: "Ancient, proud, and utterly beyond mortal concerns. Tests those who dare approach."
     min_level: 9
     max_level: 12
@@ -428,12 +428,12 @@ monsters:
     base_defense: 20
     damage_dice: "3d8+5"
     rarity: "legendary"
-    tags: ["dragon", "esper", "boss"]
+    tags: ["dragon", "eidolon", "boss"]
     gold_min: 200
     gold_max: 800
 
   - id: "archdemon_vaelthor"
-    name: "Kefka Palazzo"
+    name: "Malivar the Laughing"
     description: "A mad god-mage who has transcended mortal form. Reality warps in his presence. His laugh echoes from everywhere at once."
     personality: "Insane in the most dangerous way. Destruction is comedy. Life is a joke."
     min_level: 10
@@ -448,9 +448,9 @@ monsters:
     gold_min: 300
     gold_max: 1000
 
-  - id: "void_titan"
-    name: "Ultima Weapon"
-    description: "The ultimate bio-weapon created by the Occuria. A fusion of Mist, malice, and raw destructive power given terrible form."
+  - id: "void_colossus"
+    name: "Worldbreaker Engine"
+    description: "The ultimate bio-weapon created by the Veiled Architects. A fusion of Aether, malice, and raw destructive power given terrible form."
     personality: "No personality. Pure destruction. Attacks everything."
     min_level: 10
     max_level: 12

@@ -16,12 +16,12 @@ namespace GAE.Engine.Data.Migrations
                 type: "text",
                 nullable: true);
 
-            // Set the Ivalice intro for the default world
+            // Set the Elarion intro for the default world
             migrationBuilder.Sql("""
                 UPDATE worlds SET character_creation_intro =
-                'The Mist parts, and a voice emerges — dry, amused, and older than the sandstone walls of Rabanastre.
+                'The Aether parts, and a voice emerges — dry, amused, and older than the sandstone walls of Stonewake.
 
-                *"Ah. Another soul stumbles through my door. I am the Narrator — the voice behind the curtain, the pen that writes your story as you live it. And what a story you''ve arrived for: the elemental Crystals that shield this world are fading, the Void presses against reality like dark water against glass, and Dalmasca needs heroes more than it needs another tavern regular."*
+                *"Ah. Another soul stumbles through my door. I am the Narrator — the voice behind the curtain, the pen that writes your story as you live it. And what a story you''ve arrived for: the elemental Crystals that shield this world are fading, the Void presses against reality like dark water against glass, and Valeward needs heroes more than it needs another tavern regular."*
 
                 *"But before we get to the saving-the-world part — who exactly am I narrating? Tell me about yourself."*
 

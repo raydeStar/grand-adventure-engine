@@ -1,4 +1,4 @@
-using GAE.Core.Models;
+﻿using GAE.Core.Models;
 using GAE.Engine.Registry;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -68,7 +68,7 @@ public class QuestTrackerTests
         {
             Id = "town_gate",
             Name = "Town Gate",
-            Npcs = [new Npc { Id = "ranger_thorne", Name = "Red XIII", Hp = 20, MaxHp = 20 }]
+            Npcs = [new Npc { Id = "ranger_thorne", Name = "Thorne", Hp = 20, MaxHp = 20 }]
         };
 
         var summary = await _tracker.OnRoomEnteredAsync(player, destination);
@@ -177,9 +177,9 @@ public class QuestTrackerTests
                             Id = "escort_ranger",
                             Type = ObjectiveType.Escort,
                             TargetId = "ranger_thorne",
-                            TargetName = "Red XIII",
+                            TargetName = "Thorne",
                             LocationConstraint = "town_gate",
-                            Description = "Escort Red XIII back to the gate"
+                            Description = "Escort Thorne back to the gate"
                         }
                     ]
                 }
