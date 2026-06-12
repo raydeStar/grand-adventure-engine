@@ -29,7 +29,7 @@ tests/              — Unit tests (GAE.Engine.Tests), integration tests, narrat
 config/             — game-rules.yaml (stat definitions, combat formulas, loot tables)
 ```
 
-**State is in-memory + journaled to disk.** No database. State lives in `InMemoryStateManager` + `JournaledStateManager`.
+**State is persisted in PostgreSQL via EF Core.** File-based journal/replay services remain only for migration and legacy import paths.
 Rooms are generated on-demand by the narrator when a player moves to an undiscovered location.
 
 ---
