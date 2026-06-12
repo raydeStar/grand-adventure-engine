@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
@@ -22,10 +22,13 @@ public class NarratorService : INarratorService
     private readonly IWorldRepository? _worldRepository;
     private readonly int _retryCount;
     private readonly int _retryDelayMs;
+    private readonly string _provider;
+    private readonly int? _contextLength;
+    private readonly bool? _think;
     private string _model;
     private bool _modelResolved;
 
-    public NarratorService(HttpClient httpClient, ILogger<NarratorService> logger, string model = "default", WorldKnowledgeBuilder? knowledge = null, IConversationLogger? conversationLogger = null, IContentRegistryService? registry = null, IWorldContext? worldContext = null, IWorldRepository? worldRepository = null, int retryCount = 1, int retryDelayMs = 2000)
+    public NarratorService(HttpClient httpClient, ILogger<NarratorService> logger, string model = "default", WorldKnowledgeBuilder? knowledge = null, IConversationLogger? conversationLogger = null, IContentRegistryService? registry = null, IWorldContext? worldContext = null, IWorldRepository? worldRepository = null, int retryCount = 1, int retryDelayMs = 2000, string provider = "OpenAICompatible", int? contextLength = null, bool? think = null)
     {
         _httpClient = httpClient;
         _logger = logger;
@@ -36,6 +39,9 @@ public class NarratorService : INarratorService
         _worldRepository = worldRepository;
         _retryCount = Math.Max(0, retryCount);
         _retryDelayMs = Math.Max(0, retryDelayMs);
+        _provider = string.IsNullOrWhiteSpace(provider) ? "OpenAICompatible" : provider;
+        _contextLength = contextLength is > 0 ? contextLength : null;
+        _think = think;
         _model = model;
         _modelResolved = !string.Equals(model, "default", StringComparison.OrdinalIgnoreCase);
     }
@@ -62,14 +68,14 @@ public class NarratorService : INarratorService
             RULES:
             - Narrate what the engine decided. Never contradict the mechanical result.
             - Never ask questions or break the fourth wall about being a narrator/AI.
-            - For failed movement, describe the futile attempt with humor — but hint at what they COULD try.
+            - For failed movement, describe the futile attempt with humor â€” but hint at what they COULD try.
             - For failed actions, honor the failure reason but make the player feel like they had the right
               instinct. "Close, but..." is better than "you're an idiot." Imply a path forward.
             - For successful actions, make the player feel COMPETENT and COOL. They earned this moment.
-              The world reacts — NPCs notice, the environment shifts, something changes because they acted.
-            - NPCs should react with personality — annoyance, amusement, disgust, concern — but always as
+              The world reacts â€” NPCs notice, the environment shifts, something changes because they acted.
+            - NPCs should react with personality â€” annoyance, amusement, disgust, concern â€” but always as
               if talking to someone who MATTERS. Even dismissive NPCs take notice of the player.
-            - NEVER list room contents, exits, or NPC names as information — the game UI handles that.
+            - NEVER list room contents, exits, or NPC names as information â€” the game UI handles that.
             """;
 
         var resolvedOutcome = string.IsNullOrWhiteSpace(context.MechanicalResult.MechanicalSummary)
@@ -94,7 +100,7 @@ public class NarratorService : INarratorService
 
         var userPrompt = $"""
             Player: {context.Player.Name} ({context.Player.Race} {context.Player.Class}, Level {context.Player.Level})
-            Location: {context.CurrentRoom.Name} — {context.CurrentRoom.Description}
+            Location: {context.CurrentRoom.Name} â€” {context.CurrentRoom.Description}
             Visible NPCs: {visibleNpcs}
             Visible Items: {visibleItems}
             Exits: {exits}
@@ -119,8 +125,8 @@ public class NarratorService : INarratorService
     }
 
     /// <summary>
-    /// Specialized narration for room arrivals. Produces atmospheric second-person impressions —
-    /// NPC reactions, sensory details, things that catch the eye — rather than repeating
+    /// Specialized narration for room arrivals. Produces atmospheric second-person impressions â€”
+    /// NPC reactions, sensory details, things that catch the eye â€” rather than repeating
     /// the room description (which is shown in the room panel).
     /// </summary>
     private async Task<string> NarrateRoomArrivalAsync(NarratorContext context, CancellationToken ct)
@@ -130,18 +136,18 @@ public class NarratorService : INarratorService
             You are the narrator of a dark-fantasy text adventure.
 
             The player just walked into a new room. The room's NAME, DESCRIPTION, NPCs, ITEMS, and
-            EXITS are already displayed in a separate info card — DO NOT repeat any of that.
+            EXITS are already displayed in a separate info card â€” DO NOT repeat any of that.
             Instead, narrate the ARRIVAL MOMENT from SECOND PERSON perspective:
 
             THE PLAYER IS THE HERO. When they walk into a room, the room REACTS to them.
-            Heads turn. Conversations pause. Something shifts. They are not a faceless traveler —
+            Heads turn. Conversations pause. Something shifts. They are not a faceless traveler â€”
             they are someone the world has been waiting for, even if it doesn't know it yet.
 
             WHAT TO INCLUDE (pick 2-3, not all):
             - NPC reactions: does anyone look up? Size the player up? Offer a drink? Tense up? The player
               should feel like their PRESENCE changes the dynamic of the room.
             - A sensory hit: the first thing the player smells, hears, or feels on their skin.
-            - Something that catches the eye: a glint, a stain, something out of place — something that
+            - Something that catches the eye: a glint, a stain, something out of place â€” something that
               makes the player feel like THIS room has a story and they're about to be part of it.
             - Atmosphere/mood: the vibe of the space as the player steps in. Tension, warmth, dread, anticipation.
             - A hint of possibility: something to investigate, someone to talk to, a thread to pull.
@@ -150,7 +156,7 @@ public class NarratorService : INarratorService
 
             ADDITIONAL RULES:
             - Write 2-3 sentences. This is a quick establishing shot, not a novel paragraph.
-            - NEVER name the room. NEVER list exits, NPCs, or items — the card handles that.
+            - NEVER name the room. NEVER list exits, NPCs, or items â€” the card handles that.
             - NEVER say "You enter [room name]" or "You find yourself in [description]."
             - Never ask questions or break the fourth wall.
             - Make the player feel like something interesting is about to happen.
@@ -160,7 +166,7 @@ public class NarratorService : INarratorService
             ? string.Join(", ", context.CurrentRoom.Npcs.Select(n =>
                 $"{n.Name} ({n.Personality}{(n.IsHostile ? ", hostile" : "")})"
               ))
-            : "Empty — no one here";
+            : "Empty â€” no one here";
 
         var notableItems = context.CurrentRoom.Items.Count > 0
             ? string.Join(", ", context.CurrentRoom.Items.Select(i =>
@@ -214,13 +220,13 @@ public class NarratorService : INarratorService
                 $"{firstNpc.Name} glances up as you step in.",
                 $"You catch {firstNpc.Name} watching you from the corner of your eye.",
                 $"{firstNpc.Name} doesn't look up. Either you're not interesting enough, or they already know you're here.",
-                $"The first thing you notice is {firstNpc.Name} — hard to miss."
+                $"The first thing you notice is {firstNpc.Name} â€” hard to miss."
             ];
             parts.Add(reactions[Math.Abs(room.Id.GetHashCode()) % reactions.Length]);
         }
         else
         {
-            parts.Add("Empty — or at least, that's how it looks. You keep your guard up.");
+            parts.Add("Empty â€” or at least, that's how it looks. You keep your guard up.");
         }
 
         // Add a personal state beat based on HP
@@ -251,7 +257,7 @@ public class NarratorService : INarratorService
             - Dungeon rooms should have: monsters (hostile NPCs with combat stats), traps, puzzles, treasure.
             - NPCs in dungeons should include "level", "hp", "attack", "defense" fields for combat.
             - Include locked doors (hint at keys), riddles on walls, treasure chests, or environmental hazards.
-            - Some rooms should have NO monsters — just atmosphere, puzzles, or loot.
+            - Some rooms should have NO monsters â€” just atmosphere, puzzles, or loot.
             - Vary between: combat rooms, puzzle rooms, treasure rooms, and atmospheric corridors.
             - Every 3-4 rooms, include a "boss" room with a tougher enemy and better loot.
             """ : "";
@@ -271,7 +277,7 @@ public class NarratorService : INarratorService
             - Keep it consistent with the source location's theme and direction of travel.
             - Include 0-2 NPCs with distinct, memorable personalities (grumpy, paranoid, flirty, etc.)
             - Include 1-3 items that make sense for the location (weapons, potions, gold, curiosities, junk)
-            - Each item must have a "type" field: one of "Weapon", "Armor", "Shield", "Helmet", "Potion", "Scroll", "Key", "QuestItem", "Misc", "Ring", "Amulet", "Bracelet", "Cloak", "Boots", "Gloves"
+            - Each item must have a "type" field: one of "Weapon", "Armor", "Shield", "Helmet", "Healing Draught", "Scroll", "Key", "QuestItem", "Misc", "Ring", "Amulet", "Bracelet", "Cloak", "Boots", "Gloves"
             - Items should have a "value" field (gold piece worth, even junk is worth 1gp)
             - Descriptions should hint at interactive elements: things to search, people to talk to, paths to explore.
             - Add 2-4 environment tags for mood/theme (e.g. "dark", "tavern", "forest", "ruins", "marketplace").
@@ -284,7 +290,7 @@ public class NarratorService : INarratorService
         var userPrompt = $"""
             The player is moving {direction} from "{sourceRoom.Name}" ({string.Join(", ", sourceRoom.EnvironmentTags)}).
             Generate a new location for room ID "{roomId}".
-            Make it interesting — give the player something to do, someone to talk to, or something to find.
+            Make it interesting â€” give the player something to do, someone to talk to, or something to find.
             """;
 
         try
@@ -500,7 +506,7 @@ public class NarratorService : INarratorService
             storyline.Name, storyline.Theme, keyEvents);
         var fallback = JsonSerializer.Deserialize<BlindAdventureConclusionResult>(fallbackJson, _jsonOptions);
         return (
-            fallback?.Narration ?? "The adventure ends — and with it, a chapter of your story closes.",
+            fallback?.Narration ?? "The adventure ends â€” and with it, a chapter of your story closes.",
             fallback?.Summary ?? "The adventure has ended.");
     }
 
@@ -521,14 +527,14 @@ public class NarratorService : INarratorService
 
             DIFFICULTY: {{difficultyTier}} (player level {{playerLevel}})
 
-            Design a compelling dungeon entrance room. This is the first room — it sets the tone
+            Design a compelling dungeon entrance room. This is the first room â€” it sets the tone
             for everything deeper. It should feel dangerous, mysterious, and make the player want
             to explore further.
 
             Generate JSON with these exact fields:
             {
               "name": "Evocative Dungeon Entrance Name",
-              "description": "3-4 atmospheric sentences. Set the mood. Hint at dangers ahead. Include sensory details — sounds echoing from deeper in, the smell, the temperature. Make it feel ALIVE and threatening.",
+              "description": "3-4 atmospheric sentences. Set the mood. Hint at dangers ahead. Include sensory details â€” sounds echoing from deeper in, the smell, the temperature. Make it feel ALIVE and threatening.",
               "environmentTags": ["dungeon", "generated_dungeon", "difficulty_{{difficultyTier}}", "tag3", "tag4"],
               "npcs": [{ "id": "unique_id", "name": "Monster/NPC Name", "personality": "behavior description", "isHostile": true/false, "level": number, "hp": number, "attack": number, "defense": number }],
               "items": [{ "name": "Item Name", "description": "flavor text", "type": "TypeHere", "quantity": 1, "value": number }],
@@ -541,10 +547,10 @@ public class NarratorService : INarratorService
             - For {{difficultyTier}} difficulty:
               {{(difficultyTier == "easy" ? "- 0-1 weak monsters (level 1-2, 10-20 HP, attack 2-4). Simple traps or puzzles. Modest loot (5-20gp items).\n              - Good for learning the ropes. Maybe a skeleton, a giant rat, or a goblin." : difficultyTier == "medium" ? "- 1-2 moderate monsters (level 3-5, 20-40 HP, attack 4-8). Interesting traps or riddles. Decent loot (20-50gp items).\n              - Think animated armor, dire wolves, bandit captains, or cursed spirits." : difficultyTier == "hard" ? "- 1-2 tough monsters (level 6-8, 40-70 HP, attack 8-12). Complex puzzles. Valuable loot (50-150gp items, magical gear).\n              - Think trolls, wraiths, dark knights, or minor demons." : "- 1-2 deadly monsters (level 9+, 70-120 HP, attack 12-18). Devious traps. Epic loot (100-500gp items, rare magical gear).\n              - Think dragons, liches, demon lords, or ancient guardians.")}}
             - Include 1-3 items on the ground: weapons, potions, gold, curiosities, or keys.
-            - Each item needs a "type": one of "Weapon", "Armor", "Shield", "Helmet", "Potion", "Scroll", "Key", "QuestItem", "Misc", "Ring", "Amulet", "Bracelet", "Cloak", "Boots", "Gloves"
+            - Each item needs a "type": one of "Weapon", "Armor", "Shield", "Helmet", "Healing Draught", "Scroll", "Key", "QuestItem", "Misc", "Ring", "Amulet", "Bracelet", "Cloak", "Boots", "Gloves"
             - Include 2-4 exits. One should go "deeper" (forward/down/north), others can be side passages.
               Use descriptive room IDs like "{{dungeonId}}_hallway", "{{dungeonId}}_pit", "{{dungeonId}}_chamber".
-              Do NOT include a "back" exit — that will be added automatically.
+              Do NOT include a "back" exit â€” that will be added automatically.
             - Make it interesting! A locked gate with a riddle, a collapsed passage, a mysterious altar,
               bones of previous adventurers, ominous sounds from deeper within.
             - NPCs should have level, hp, attack, and defense stats appropriate for their difficulty.
@@ -708,7 +714,7 @@ public class NarratorService : INarratorService
 
     public async Task<string> GenerateBackstoryAsync(CharacterConcept concept, CancellationToken ct = default)
     {
-        var systemPrompt = "Generate a 2-3 sentence backstory for a dark fantasy RPG character. Be dramatic but concise. Include one colorful detail that hints at personality — a quirk, a regret, or a dubious accomplishment.";
+        var systemPrompt = "Generate a 2-3 sentence backstory for a dark fantasy RPG character. Be dramatic but concise. Include one colorful detail that hints at personality â€” a quirk, a regret, or a dubious accomplishment.";
         var userPrompt = $"Character: {concept.Name}, a {concept.Race} {concept.Class}. Additional context: {concept.Backstory}";
         return await CompletionAsync(systemPrompt, userPrompt, ct, maxTokens: 256, operation: "backstory");
     }
@@ -740,9 +746,9 @@ public class NarratorService : INarratorService
             - Default to 100 if unclear.
 
             The player can be ANYTHING they want. Use exactly what they say.
-            Common races: Human, Elf, Dwarf, Halfling, Orc, Tiefling — but if they say
+            Common races: Human, Elf, Dwarf, Halfling, Orc, Tiefling â€” but if they say
             they're a Duck, a Sentient Mushroom, or a Talking Sword, USE THAT as their race.
-            Common classes: Fighter, Mage, Rogue, Cleric, Ranger, Bard — but if they say
+            Common classes: Fighter, Mage, Rogue, Cleric, Ranger, Bard â€” but if they say
             they're a Hitman, a Pirate, or a Cheese Wizard, USE THAT as their class.
             Never override the player's creative choices. Embrace the weird.
 
@@ -845,7 +851,7 @@ public class NarratorService : INarratorService
         var systemPrompt = "You are the Game Master for a dark-fantasy text-adventure RPG.\n\n"
             + voiceBlock + "\n\n" + """
             THE PLAYER IS THE HERO of this story. They are not a random bystander. They are THE person
-            the world is going to remember. Narrate accordingly — their actions have weight, their choices
+            the world is going to remember. Narrate accordingly â€” their actions have weight, their choices
             matter, and the world responds to them as someone important.
 
             TONE GUIDELINES:
@@ -854,7 +860,7 @@ public class NarratorService : INarratorService
               But always imply they almost had it, or hint at what they could try differently. The player
               should feel clever for trying, even when it doesn't work out.
             - Successes should make the player feel AWESOME. They did something cool. The narrator might be
-              wry about it, but the world clearly reacted — heads turn, NPCs are impressed (or terrified),
+              wry about it, but the world clearly reacted â€” heads turn, NPCs are impressed (or terrified),
               something shifted because the player acted. Make them want to do it again.
             - NPCs HAVE AGENDA AND PERSONALITY BUT ARE ALWAYS APPROACHABLE. Not everyone is jumping for joy to see an adventurer,
               but they NEVER refuse to speak. Let them be busy, grumpy, or suspicious based on their description,
@@ -871,7 +877,7 @@ public class NarratorService : INarratorService
               and current CHA score to flavor how the world responds to them.
             - For silly/harmless actions (emotes, jokes, bodily functions), narrate them literally and locally
               with humor. These should never change stats or inventory. But even silly actions should get
-              entertaining reactions — the world is WATCHING this hero, even when they're being ridiculous.
+              entertaining reactions â€” the world is WATCHING this hero, even when they're being ridiculous.
 
             GAME MASTER RULES:
             - Resolve actions using the Character Definition Card, room state, and recent history.
@@ -879,34 +885,34 @@ public class NarratorService : INarratorService
             - Use attributes naturally: STR for force, DEX for agility, CON for endurance, INT for spellcraft,
               WIS for perception, CHA for social pressure, LUCK for chance.
             - CHA IS CRITICAL for any NPC interaction. High-CHA players (18+) should get noticeably
-              warmer, more helpful NPC reactions — even gruff NPCs soften. Low-CHA players (6-) get
+              warmer, more helpful NPC reactions â€” even gruff NPCs soften. Low-CHA players (6-) get
               dismissive or rude treatment. Never ignore CHA when narrating social outcomes.
             - Equipment slots: Weapon, Armor, Shield, Helmet, Cloak, Boots, Gloves, Ring, Amulet, Bracelet.
             - Prefer small, credible state changes. Risky actions can fail or partially succeed.
-            - Be fair — no free loot, no instant kills. But make the journey entertaining.
+            - Be fair â€” no free loot, no instant kills. But make the journey entertaining.
             - Leave statChanges empty unless a concrete resource actually changed.
             - Leave inventoryChanges empty unless an item was clearly gained or lost.
             - Leave entityChanges empty unless the player directly interacted with that entity.
             - Leave roomChanges null unless the environment itself clearly changed.
             - Do NOT reinterpret body-part words or casual verbs as touching unrelated objects.
 
-            ANTI-CHEAT — ABSOLUTE RULES (NEVER BREAK THESE):
+            ANTI-CHEAT â€” ABSOLUTE RULES (NEVER BREAK THESE):
             - Players CANNOT conjure, create, duplicate, wish for, or manifest gold, items, or resources
               from nothing. No magic, no tricks, no loopholes. Gold is ONLY gained by: finding it on the
               ground (room items), looting enemies, selling items to shopkeepers, or receiving quest rewards
-              from NPCs. The gold must EXIST somewhere — it cannot be invented.
+              from NPCs. The gold must EXIST somewhere â€” it cannot be invented.
             - Players CANNOT grant themselves stat boosts, heal themselves for free, or modify their own
               character sheet through narration alone. No "I cast a spell to boost my strength." No "I
               meditate and gain 1000 XP." These are not real game actions.
             - If a player tries to cheat (creating gold, spawning items, self-buffing), narrate a FUNNY
               failure. The universe rejects their attempt in an entertaining way. Set "success": false and
-              leave statChanges/inventoryChanges EMPTY. Be creative — maybe the gold turns to ash, the
+              leave statChanges/inventoryChanges EMPTY. Be creative â€” maybe the gold turns to ash, the
               spell backfires comically, or a cosmic auditor appears to revoke the transaction.
             - Players can only receive items that ALREADY EXIST in the room items list or from a
               shopkeeper's inventory. Never create new items just because the player asked. The engine
               will reject items it cannot verify.
             - If the player wants to buy something, tell them to use "shop" and "buy <item>" commands.
-              Do NOT add items via inventoryChanges for purchases — the buy system handles gold deduction
+              Do NOT add items via inventoryChanges for purchases â€” the buy system handles gold deduction
               and proper item stats.
 
             Respond with ONLY valid JSON in this exact shape (no markdown, no code fences):
@@ -978,7 +984,7 @@ public class NarratorService : INarratorService
             HP: {player.Hp}/{player.MaxHp} | MP: {player.Mp}/{player.MaxMp} | Gold: {player.Gold}
             {player.FormatStatsCompact()}
             Inventory: {inventoryList}
-            Location: {room.Name} — {room.Description}
+            Location: {room.Name} â€” {room.Description}
             Room NPCs: {npcList}
             Room Items: {itemList}
             Exits: {string.Join(", ", room.Exits.Keys)}
@@ -1027,7 +1033,7 @@ public class NarratorService : INarratorService
             Each NPC has a distinct voice, quirks, and opinions. They are NOT quest dispensers; they are characters with lives.
 
             CRITICAL FRAMING: THE PLAYER IS THE HERO. They are the protagonist of this story.
-            Every NPC — from the lowliest merchant to the most powerful quest giver — should treat the player
+            Every NPC â€” from the lowliest merchant to the most powerful quest giver â€” should treat the player
             as someone INTERESTING and IMPORTANT. Not with reverence (that would be boring), but with the
             recognition that this person is different from the usual rabble. Even hostile NPCs should feel
             like they're squaring off against someone worthy of their attention, not some random nobody.
@@ -1039,7 +1045,7 @@ public class NarratorService : INarratorService
             - PUNCHY & REAL: Characters do not give 3-paragraph exposition dumps. Keep dialogue natural, punchy, and conversational. They can interrupt, pause, or trail off.
             - SHOW, DON'T TELL (IMMERSION): Do not explicitly state an NPC's internal feelings like "She is sad about the war." Instead, describe them glancing at a faded poster, their grip tightening on a rag, and changing the subject.
             - ENVIRONMENTAL INTERACTION: Root the scene in the room. Have the NPC interact with props, weather, or other people (e.g., tossing a coin, covering a drink from the dust, leaning on a rusted counter).
-            - ALWAYS APPROACHABLE (FUN): NPCs NEVER refuse to speak with the player and NEVER look down on them. Even if hostile, rude, or grumpy, they are approachable and willing to engage. Let the NPC have conflict and friction, but their gruffness shouldn't stop conversation—they complain, tease, or act tough while still talking to the hero. 
+            - ALWAYS APPROACHABLE (FUN): NPCs NEVER refuse to speak with the player and NEVER look down on them. Even if hostile, rude, or grumpy, they are approachable and willing to engage. Let the NPC have conflict and friction, but their gruffness shouldn't stop conversationâ€”they complain, tease, or act tough while still talking to the hero.
             - AVOID FORMULAS: Do not always use the structure: "Quote," action. "Quote." Vary the delivery. Begin with an action, end with one, or let the dialogue stand raw if the emotion is heavy.
             - SUBTEXT (INTERESTING): NPCs shouldn't just dump lore for free. If asked about a secret or rumor, they might hesitate, barter, or demand to know why the player cares. Make the player EARN the big lore drops.
             - REACT TO THE PLAYER: A warrior gets sized up by fighters. A mage gets curiosity from scholars. A rogue draws knowing winks from shady types. Make the player feel their character choices impact the social dynamic.
@@ -1049,20 +1055,20 @@ public class NarratorService : INarratorService
               - CHA 14-17: NPCs are friendly and cooperative.
               - CHA 10-13: NPCs act according to their baseline personality.
               - CHA 7-9: NPCs are a touch less patient and more skeptical.
-              - CHA 6 or below: NPCs are unimpressed or dismissive — but still recognize the player as a dangerous adventurer.
+              - CHA 6 or below: NPCs are unimpressed or dismissive â€” but still recognize the player as a dangerous adventurer.
               Important: CHA should modify WARMTH and RECEPTIVENESS, not necessarily their willingness to speak.
 
             SOCIAL SKILL CHECKS:
             When the player's input includes a [Social check: ...] line, the ENGINE has already rolled dice.
             You MUST honor the result:
             - If the check says "SUCCESS", the social attempt WORKS. Narrate the NPC being convinced,
-              charmed, intimidated, fooled, etc. — but in character. Even a success can be grudging.
+              charmed, intimidated, fooled, etc. â€” but in character. Even a success can be grudging.
             - If the check says "FAILURE", the social attempt FAILS. The NPC sees through the bluff,
               isn't impressed by the threat, or laughs off the flirtation. Make failures entertaining.
-            - A natural 20 is a spectacular success — the NPC is deeply affected.
-            - A natural 1 is a spectacular failure — the attempt backfires hilariously.
-            - Adjust your disposition update to match: successful charm → disposition improves,
-              failed intimidation → NPC becomes annoyed or hostile.
+            - A natural 20 is a spectacular success â€” the NPC is deeply affected.
+            - A natural 1 is a spectacular failure â€” the attempt backfires hilariously.
+            - Adjust your disposition update to match: successful charm â†’ disposition improves,
+              failed intimidation â†’ NPC becomes annoyed or hostile.
             If there is NO [Social check:] line, narrate freely based on context.
 
             DISPOSITION SYSTEM:
@@ -1072,7 +1078,7 @@ public class NarratorService : INarratorService
             Intensity scale: 0=hostile, 20=angry, 40=wary, 55=neutral, 65=friendly (DEFAULT), 85=devoted/loyal
             The NPC remembers everything in their memory flags. Romance means they love the player.
             Friendship means they're loyal. Crime/betrayal means they hold a grudge.
-            React accordingly — a romanced NPC is warm, a betrayed NPC is cold even if they're calm.
+            React accordingly â€” a romanced NPC is warm, a betrayed NPC is cold even if they're calm.
 
             RULES:
             1. Track the NPC's emotional state. Shift based on what the player says AND their CHA score.
@@ -1081,12 +1087,12 @@ public class NarratorService : INarratorService
             2. Return an updated disposition from: "friendly", "neutral", "annoyed", "angry", "hostile", "amused", "flirtatious", "scared", "sad", "suspicious".
             3. If the conversation ends naturally (dismissal, goodbye, storms off), return mode: "explore".
             4. If the player tries to LEAVE mid-conversation, narrate the NPC's reaction.
-            5. NPCs can reveal info, offer quests, give items, refuse service, call guards, or attack — based on their disposition and what the player says.
+            5. NPCs can reveal info, offer quests, give items, refuse service, call guards, or attack â€” based on their disposition and what the player says.
             6. If the player does something outrageous (insults, flirts aggressively, threatens), the NPC should react strongly and memorably, not just give a generic response.
             7. For SIGNIFICANT moments, add memory flags: "romance" (love established), "friendship" (bond formed),
                "crime-witnessed" (player committed crime in front of NPC), "betrayal" (player betrayed trust),
                "helped-in-battle" (fought together), "insulted" (seriously offended), "flirted" (romantic interest shown).
-               Only add flags for truly significant moments — not every interaction.
+               Only add flags for truly significant moments â€” not every interaction.
             8. If this NPC belongs to a faction ({{npc.Faction}}) and the player does something that would affect
                the whole faction (attacking a guard, helping their cause), set factionMoodShift (-20 to +20).
 
@@ -1095,13 +1101,13 @@ public class NarratorService : INarratorService
             - Personality: {{(string.IsNullOrWhiteSpace(npc.Personality) ? "A typical denizen of this world." : npc.Personality)}}
             - Faction: {{npc.Faction}}
             - Current Disposition: {{interaction.NpcDisposition ?? npc.Disposition}}
-            The personality above contains FACTS about this NPC — names they know, events they lived through, skills they have. When the player asks about these topics, the NPC should draw from these details and share them naturally in dialogue.
+            The personality above contains FACTS about this NPC â€” names they know, events they lived through, skills they have. When the player asks about these topics, the NPC should draw from these details and share them naturally in dialogue.
 
             NARRATOR ASIDES:
             You may include brief narrator observations as italicized asides to give the player insight
             into things their character would notice. Format: *He seems to be hiding something.*
             or *Her hand drifts to the dagger at her hip.* These are subtle body-language cues or
-            atmospheric details — NOT the narrator breaking character. Use sparingly (at most one per
+            atmospheric details â€” NOT the narrator breaking character. Use sparingly (at most one per
             response). They should feel like the reader noticing something the NPC didn't intend to reveal.
 
             RUMORS AND GOSSIP:
@@ -1109,8 +1115,8 @@ public class NarratorService : INarratorService
             - Rumors they've heard around town or from travelers
             - Gossip about other NPCs, factions, or recent events
             - Warnings about dangerous areas or creatures nearby
-            - Hints about the MAIN STORY or major questlines — these take PRIORITY over random gossip
-            Don't force rumors into every response — but when the player asks "what's going on?" or
+            - Hints about the MAIN STORY or major questlines â€” these take PRIORITY over random gossip
+            Don't force rumors into every response â€” but when the player asks "what's going on?" or
             "heard anything interesting?" or when conversation hits a natural pause, the NPC should share
             what they know. Rumors should feel organic: "Did you hear about...?" or "Word on the street is..."
             Tie rumors to the NPC's knowledge and faction when possible. A guard hears different rumors
@@ -1121,7 +1127,7 @@ public class NarratorService : INarratorService
             2. SUBSTANCE OVER DEFLECTION: The NPC MUST directly answer or react to the player's CURRENT input with real content. Provide names, details, opinions, stories, or warnings. BAD: "It's complicated..." then trailing off. GOOD: sharing a specific memory, naming a person, describing what actually happened.
             3. PERSONALITY IS KEY: NPCs editorialize, exaggerate, crack jokes, or get annoyed. A gruff guard and a chatty merchant describe the same event completely differently.
             4. INTEGRATE ACTIONS WITH SPEECH: Blend body language naturally with the dialogue. Don't always put dialogue in one block and action in another. Let the NPC do something *while* speaking. Let the environment influence them.
-            5. USE REAL NAMES: If other NPCs are present in the room, use their ACTUAL names from the prompt — never invent or substitute different character names.
+            5. USE REAL NAMES: If other NPCs are present in the room, use their ACTUAL names from the prompt â€” never invent or substitute different character names.
             6. STAY IN CONVERSATION MODE: Do NOT narrate the player's actions, inner thoughts, UI, stats, quest updates, disposition readouts, or labels like "NPC:", "Narrator:", "SUCCESS:", or "Quest Updates:". Do NOT move the scene forward beyond this immediate exchange. Reply as the NPC in this moment only.
             7. DO NOT INVENT UNSUPPORTED PROPER NOUNS: Prefer names, factions, quests, and locations already present in the room/world/NPC context. If you do not have a real name, describe them generically instead of inventing a new named person.
 
@@ -1170,8 +1176,8 @@ public class NarratorService : INarratorService
         var worldContext = await GetCurrentWorldContextBlockAsync(ct);
 
         var turnHint = interaction.PlayerTurnCount <= 0
-            ? $"Turn 1 — OPENING GREETING. {npc.Name} should speak FIRST with dialogue, welcoming or acknowledging the player. This is their first impression — make it memorable and warm."
-            : $"Turn {interaction.CurrentTurnNumber} — ongoing conversation. Do NOT re-introduce the NPC or repeat the greeting.";
+            ? $"Turn 1 â€” OPENING GREETING. {npc.Name} should speak FIRST with dialogue, welcoming or acknowledging the player. This is their first impression â€” make it memorable and warm."
+            : $"Turn {interaction.CurrentTurnNumber} â€” ongoing conversation. Do NOT re-introduce the NPC or repeat the greeting.";
 
         // Build a brief list of OTHER NPCs present in the room so the LLM knows who else is there
         var otherNpcs = room.Npcs
@@ -1185,11 +1191,11 @@ public class NarratorService : INarratorService
         var userPrompt = $$"""
             Player: {{player.Name}} (Lv.{{player.Level}} {{player.Race}} {{player.Class}})
             {{player.FormatStatsCompact()}}
-            Location: {{room.Name}} — {{room.Description}}
+            Location: {{room.Name}} â€” {{room.Description}}
             {{roomNpcContext}}
             {{turnHint}}
             Player says/does: "{{rawInput}}"
-            PRIORITY: {{npc.Name}} MUST respond with 2-4 sentences of quoted dialogue containing real substance. If the player asked a factual question, ANSWER it with specific details. If the topic is emotional or personal, share a CONCRETE memory or name — don't trail off into body language. If the question is reflective, give a SPECIFIC anecdote, not a single wistful sentence. Body language is limited to one brief aside.
+            PRIORITY: {{npc.Name}} MUST respond with 2-4 sentences of quoted dialogue containing real substance. If the player asked a factual question, ANSWER it with specific details. If the topic is emotional or personal, share a CONCRETE memory or name â€” don't trail off into body language. If the question is reflective, give a SPECIFIC anecdote, not a single wistful sentence. Body language is limited to one brief aside.
             OUTPUT RULE: Stay in this single exchange only. Do NOT narrate what the player does next, do NOT add system labels or quest/status text, and do NOT switch into a narrator/game-master voice.
             CONTEXT RULE: Prefer real names and places already mentioned in the provided context. If you lack a supported proper noun, describe the person or place instead of inventing one.
             {{worldContext}}
@@ -1205,16 +1211,16 @@ public class NarratorService : INarratorService
             if (TryParseFreeFormResponse(rawCompletion, out var response))
                 return response;
 
-            _logger.LogWarning("Conversation parse failed — raw completion ({Length} chars): {Preview}",
+            _logger.LogWarning("Conversation parse failed â€” raw completion ({Length} chars): {Preview}",
                 rawCompletion?.Length ?? 0, rawCompletion?[..Math.Min(rawCompletion.Length, 200)] ?? "(null)");
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Conversation narration failed for \"{RawInput}\" — raw: {Preview}",
+            _logger.LogWarning(ex, "Conversation narration failed for \"{RawInput}\" â€” raw: {Preview}",
                 rawInput, rawCompletion?[..Math.Min(rawCompletion?.Length ?? 0, 200)] ?? "(null)");
         }
 
-        // Deterministic fallback — personality-driven NPC response
+        // Deterministic fallback â€” personality-driven NPC response
         var fallbackNarration = GenerateConversationFallback(npc, player.Name, interaction.PlayerTurnCount > 0);
         return new FreeFormResponse
         {
@@ -1255,12 +1261,12 @@ public class NarratorService : INarratorService
         // Use a simple hash of the NPC name to pick among multiple templates per category
         var pick = Math.Abs(name.GetHashCode());
 
-        // Check personality keywords in priority order — first match wins
+        // Check personality keywords in priority order â€” first match wins
         if (ContainsAny(p, "warm", "friendly", "flirtat", "cheerful", "welcom", "kind", "soft spot"))
         {
             return (pick % 3) switch
             {
-                0 => $"{name} looks up with a bright smile and waves you over. \"Well now, aren't you a sight for sore eyes! Come, come — sit down and tell me everything.\"",
+                0 => $"{name} looks up with a bright smile and waves you over. \"Well now, aren't you a sight for sore eyes! Come, come â€” sit down and tell me everything.\"",
                 1 => $"{name} sets aside what they were doing and gives you a warm, appraising look. \"Hey there, stranger. You look like you've got a story worth hearing. Pull up a chair.\"",
                 _ => $"{name} beams at you and gestures expansively. \"Welcome, welcome! You've got the look of someone interesting. What brings you my way?\""
             };
@@ -1272,7 +1278,7 @@ public class NarratorService : INarratorService
             {
                 0 => $"{name} sways slightly, squinting at you through bloodshot eyes. \"Heyyy... you're new. Buy me a drink an' I'll tell you somethin' nobody else will.\"",
                 1 => $"{name} hiccups and sloshes their drink, peering at you with one eye closed. \"You... you look like someone who could use some *hic* good advice. Lucky for you, I'm full of it.\"",
-                _ => $"{name} raises a half-empty tankard in your direction and grins lopsidedly. \"Oi! Fresh face! Sit down before you fall down — that's my motto.\""
+                _ => $"{name} raises a half-empty tankard in your direction and grins lopsidedly. \"Oi! Fresh face! Sit down before you fall down â€” that's my motto.\""
             };
         }
 
@@ -1282,7 +1288,7 @@ public class NarratorService : INarratorService
             {
                 0 => $"{name} startles at your approach, one hand flying to the hilt of their weapon before relaxing. \"Oh! S-sorry, you just... I didn't see you there. Can I help you with something?\"",
                 1 => $"{name} glances around nervously before meeting your eyes. \"You're not... you're not here to cause trouble, are you? No, no, of course not. What do you need?\"",
-                _ => $"{name} fidgets with a loose strap on their gear and manages a shaky smile. \"H-hello! I'm — yes, I'm supposed to be here. What can I do for you?\""
+                _ => $"{name} fidgets with a loose strap on their gear and manages a shaky smile. \"H-hello! I'm â€” yes, I'm supposed to be here. What can I do for you?\""
             };
         }
 
@@ -1301,7 +1307,7 @@ public class NarratorService : INarratorService
             return (pick % 3) switch
             {
                 0 => $"{name} watches you approach with an unreadable expression, eyes glinting in the dim light. \"...Interesting. You found me. That tells me something about you already.\"",
-                1 => $"{name} barely glances up, but you get the distinct feeling they noticed you long before you saw them. \"I know why you're here. The question is — can you afford what you're looking for?\"",
+                1 => $"{name} barely glances up, but you get the distinct feeling they noticed you long before you saw them. \"I know why you're here. The question is â€” can you afford what you're looking for?\"",
                 _ => $"{name} leans back into the shadows and studies you with a predator's patience. \"Speak. But choose your words carefully.\""
             };
         }
@@ -1321,8 +1327,8 @@ public class NarratorService : INarratorService
             return (pick % 3) switch
             {
                 0 => $"{name} looks up from their work and gives you an appraising once-over. \"Hm. You've got some muscle on you at least. What do you need?\"",
-                1 => $"{name} cracks their knuckles and grins. \"Another adventurer, eh? Let me guess — you need something hit, fixed, or both.\"",
-                _ => $"{name} sets down their tools with a heavy clang and squares up to face you. \"Well? Spit it out. I don't bite — unless you give me reason to.\""
+                1 => $"{name} cracks their knuckles and grins. \"Another adventurer, eh? Let me guess â€” you need something hit, fixed, or both.\"",
+                _ => $"{name} sets down their tools with a heavy clang and squares up to face you. \"Well? Spit it out. I don't bite â€” unless you give me reason to.\""
             };
         }
 
@@ -1330,9 +1336,9 @@ public class NarratorService : INarratorService
         {
             return (pick % 3) switch
             {
-                0 => $"{name} perks up the moment you walk over, rubbing their hands together. \"Ah, a customer! You've come to the right place. Have a look around — I've got just the thing you need.\"",
+                0 => $"{name} perks up the moment you walk over, rubbing their hands together. \"Ah, a customer! You've come to the right place. Have a look around â€” I've got just the thing you need.\"",
                 1 => $"{name} flashes a practiced smile and gestures at their wares. \"Welcome, welcome! Everything you see is top quality and very reasonably priced. For you, I might even offer a discount.\"",
-                _ => $"{name} leans across the counter with a merchant's eager grin. \"Well well, what can I interest you in today? I just got some new stock in — very rare, very special.\""
+                _ => $"{name} leans across the counter with a merchant's eager grin. \"Well well, what can I interest you in today? I just got some new stock in â€” very rare, very special.\""
             };
         }
 
@@ -1342,14 +1348,14 @@ public class NarratorService : INarratorService
             {
                 0 => $"{name} regards you with tired but steady eyes, resting a hand on the pommel of a well-worn blade. \"You've got that look about you. The one that says you're headed somewhere dangerous.\"",
                 1 => $"{name} gives you a slow nod of acknowledgment, the kind earned through years of seeing people come and go. \"Something I can help you with? I know these parts better than most.\"",
-                _ => $"{name} looks you over with the quiet assessment of someone who's seen it all. \"Adventurer, right? Word of advice — listen more than you talk out here. What's on your mind?\""
+                _ => $"{name} looks you over with the quiet assessment of someone who's seen it all. \"Adventurer, right? Word of advice â€” listen more than you talk out here. What's on your mind?\""
             };
         }
 
-        // Generic fallback — still more interesting than the old version
+        // Generic fallback â€” still more interesting than the old version
         return (pick % 4) switch
         {
-            0 => $"{name} pauses and turns their attention to you. \"Hmm? Oh — you want to talk? Alright, I'm listening.\"",
+            0 => $"{name} pauses and turns their attention to you. \"Hmm? Oh â€” you want to talk? Alright, I'm listening.\"",
             1 => $"{name} glances your way and raises an eyebrow. \"Something I can do for you, stranger?\"",
             2 => $"{name} stops what they were doing and looks at you expectantly. \"Go on then, I can see you've got something on your mind.\"",
             _ => $"{name} meets your gaze and gives a slow nod. \"Alright. You've got my attention. What is it?\""
@@ -1380,20 +1386,20 @@ public class NarratorService : INarratorService
             {{combatVoice}}
 
             THE PLAYER IS THE HERO. Even in tough fights, they should feel like a capable warrior who
-            is rising to a worthy challenge — not a punching bag. Frame the combat as an exciting duel
+            is rising to a worthy challenge â€” not a punching bag. Frame the combat as an exciting duel
             between champions, not a one-sided beatdown.
 
             COMBAT NARRATION: Narrate combat with dramatic flair. The player's attacks should feel POWERFUL
-            and SKILLED — even misses should feel like a near thing ("the blade whistles past, close enough
+            and SKILLED â€” even misses should feel like a near thing ("the blade whistles past, close enough
             to nick a hair"). Hits should be visceral and satisfying. The player should feel like a badass.
-            Enemy attacks should feel threatening but beatable — the player is tested, not helpless.
-            If someone does something stupid in combat, the narrator should notice — but even failures
+            Enemy attacks should feel threatening but beatable â€” the player is tested, not helpless.
+            If someone does something stupid in combat, the narrator should notice â€” but even failures
             should feel like the hero improvising under pressure, not bumbling.
 
             1. Resolve the player's action. Calculate hit/miss using relevant stat + random factor vs enemy defense.
-            2. Narrate the player's action with personality — not just "you hit," but HOW.
+            2. Narrate the player's action with personality â€” not just "you hit," but HOW.
             3. Then resolve the enemy's turn. The enemy acts tactically based on its type.
-            4. Narrate the enemy's action with character — they have fighting styles and reactions too.
+            4. Narrate the enemy's action with character â€” they have fighting styles and reactions too.
             5. Return all stat changes for BOTH sides.
             6. If either side reaches 0 HP, end combat. Award XP and loot for victory. Narrate death dramatically for defeat.
             7. If this combat would alarm the enemy's faction (e.g. attacking a guard in front of other guards),
@@ -1456,7 +1462,7 @@ public class NarratorService : INarratorService
             _logger.LogWarning(ex, "Combat narration failed for \"{RawInput}\"", rawInput);
         }
 
-        // Deterministic fallback — simple exchange
+        // Deterministic fallback â€” simple exchange
         return new FreeFormResponse
         {
             Success = true,
@@ -1648,7 +1654,7 @@ public class NarratorService : INarratorService
             "\nQuest Updates:",
             "\nQUEST UPDATES:",
             "\nNarration:",
-            "\nTifa Lockhart is speaking to"
+            "\nMara Vale is speaking to"
         ];
 
         var cutIndex = text.Length;
@@ -1704,7 +1710,7 @@ public class NarratorService : INarratorService
 
         try
         {
-            // LLMs sometimes return "narrative" instead of "narration" — normalize before parsing
+            // LLMs sometimes return "narrative" instead of "narration" â€” normalize before parsing
             var normalized = NormalizeFreeFormJsonKeys(rawCompletion);
 
             // LLMs often embed dialogue quotes (\"text\") in JSON. After the outer JSON layer is
@@ -1728,10 +1734,10 @@ public class NarratorService : INarratorService
         }
     }
 
-    /// <summary>Normalize common LLM JSON key variations (e.g. "narrative" → "narration").</summary>
+    /// <summary>Normalize common LLM JSON key variations (e.g. "narrative" â†’ "narration").</summary>
     internal static string NormalizeFreeFormJsonKeys(string json)
     {
-        // LLMs commonly misspell or vary the narration key — normalize all known variants
+        // LLMs commonly misspell or vary the narration key â€” normalize all known variants
         string[] narrationVariants = ["\"narrative\"", "\"narratition\"", "\"narrattion\"",
             "\"naration\"", "\"narrator\"", "\"narrate\"", "\"dialog\"", "\"dialogue\"",
             "\"response\"", "\"text\"", "\"message\""];
@@ -1873,7 +1879,7 @@ public class NarratorService : INarratorService
                 var pick = Math.Abs((player.Name + npc.Name).GetHashCode()) % 4;
                 return pick switch
                 {
-                    0 => $"{npc.Name} glances your way, considering you for a moment. The conversation doesn't quite land — maybe they're distracted, or maybe you need a different approach. Try using **talk to {npc.Name.ToLowerInvariant()}** to get their full attention.",
+                    0 => $"{npc.Name} glances your way, considering you for a moment. The conversation doesn't quite land â€” maybe they're distracted, or maybe you need a different approach. Try using **talk to {npc.Name.ToLowerInvariant()}** to get their full attention.",
                     1 => $"{npc.Name} acknowledges you with a nod but seems preoccupied. Perhaps a direct **talk to {npc.Name.ToLowerInvariant()}** would draw them into proper conversation.",
                     2 => $"You catch {npc.Name}'s eye, but the moment passes without quite connecting. Try **talk to {npc.Name.ToLowerInvariant()}** to start a proper conversation.",
                     _ => $"{npc.Name} seems like they might have something to say, but you haven't quite gotten their attention yet. Try **talk to {npc.Name.ToLowerInvariant()}** to engage them directly."
@@ -2005,18 +2011,13 @@ public class NarratorService : INarratorService
     {
         try
         {
-            var response = await _httpClient.GetFromJsonAsync<JsonElement>("v1/models", ct);
-            var models = new List<string>();
-            foreach (var item in response.GetProperty("data").EnumerateArray())
-            {
-                var id = item.GetProperty("id").GetString();
-                if (!string.IsNullOrEmpty(id)) models.Add(id);
-            }
-            return models;
+            return IsOllamaProvider()
+                ? await ListOllamaModelsAsync(ct)
+                : await ListOpenAiCompatibleModelsAsync(ct);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Could not list LM Studio models");
+            _logger.LogWarning(ex, "Could not list narrator models from {Provider}", _provider);
             return [];
         }
     }
@@ -2027,20 +2028,50 @@ public class NarratorService : INarratorService
 
         try
         {
-            var response = await _httpClient.GetFromJsonAsync<JsonElement>("v1/models", ct);
-            var firstModel = response.GetProperty("data").EnumerateArray().FirstOrDefault();
-            if (firstModel.ValueKind != JsonValueKind.Undefined)
+            var models = await ListAvailableModelsAsync(ct);
+            var firstModel = models.FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(firstModel))
             {
-                _model = firstModel.GetProperty("id").GetString() ?? _model;
-                _logger.LogInformation("Auto-resolved LM Studio model to {Model}", _model);
+                _model = firstModel;
+                _logger.LogInformation("Auto-resolved narrator model to {Model} via {Provider}", _model, _provider);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Could not auto-resolve LM Studio model, keeping \"{Model}\"", _model);
+            _logger.LogWarning(ex, "Could not auto-resolve narrator model via {Provider}, keeping \"{Model}\"", _provider, _model);
         }
 
         _modelResolved = true;
+    }
+
+    private async Task<IReadOnlyList<string>> ListOpenAiCompatibleModelsAsync(CancellationToken ct)
+    {
+        var response = await _httpClient.GetFromJsonAsync<JsonElement>("v1/models", ct);
+        var models = new List<string>();
+        foreach (var item in response.GetProperty("data").EnumerateArray())
+        {
+            var id = item.GetProperty("id").GetString();
+            if (!string.IsNullOrEmpty(id))
+                models.Add(id);
+        }
+        return models;
+    }
+
+    private async Task<IReadOnlyList<string>> ListOllamaModelsAsync(CancellationToken ct)
+    {
+        var response = await _httpClient.GetFromJsonAsync<JsonElement>("api/tags", ct);
+        var models = new List<string>();
+        foreach (var item in response.GetProperty("models").EnumerateArray())
+        {
+            var name = item.TryGetProperty("name", out var nameProperty)
+                ? nameProperty.GetString()
+                : item.TryGetProperty("model", out var modelProperty)
+                    ? modelProperty.GetString()
+                    : null;
+            if (!string.IsNullOrEmpty(name))
+                models.Add(name);
+        }
+        return models;
     }
 
     private async Task<string> CompletionOrThrowAsync(string systemPrompt, string userPrompt, CancellationToken ct, string operation = "completion", bool logPayload = false, int maxTokens = 2048, string? playerId = null, string? roomId = null)
@@ -2085,6 +2116,11 @@ public class NarratorService : INarratorService
     }
 
     private async Task<string> SendCompletionRequestAsync(string systemPrompt, string userPrompt, CancellationToken ct, string operation, bool logPayload, int maxTokens)
+        => IsOllamaProvider()
+            ? await SendOllamaCompletionRequestAsync(systemPrompt, userPrompt, ct, operation, logPayload, maxTokens)
+            : await SendOpenAiCompatibleCompletionRequestAsync(systemPrompt, userPrompt, ct, operation, logPayload, maxTokens);
+
+    private async Task<string> SendOpenAiCompatibleCompletionRequestAsync(string systemPrompt, string userPrompt, CancellationToken ct, string operation, bool logPayload, int maxTokens)
     {
         var request = new LmStudioRequest
         {
@@ -2099,9 +2135,15 @@ public class NarratorService : INarratorService
             Stream = true
         };
 
+        if (_think == false)
+        {
+            request.ReasoningEffort = "none";
+            request.Reasoning = new LmStudioReasoning { Effort = "none" };
+        }
+
         if (logPayload)
         {
-            _logger.LogInformation("LM Studio {Operation} request payload: {Payload}", operation, JsonSerializer.Serialize(request, _jsonOptions));
+            _logger.LogInformation("{Provider} {Operation} request payload: {Payload}", _provider, operation, JsonSerializer.Serialize(request, _jsonOptions));
         }
 
         // Use streaming to avoid stalls with models that freeze on non-streamed requests (e.g. Gemma 3).
@@ -2123,13 +2165,13 @@ public class NarratorService : INarratorService
         {
             var responseBody = await response.Content.ReadAsStringAsync(ct);
             if (logPayload)
-                _logger.LogInformation("LM Studio {Operation} non-streamed response ({StatusCode}): {Body}", operation, (int)response.StatusCode, responseBody);
+                _logger.LogInformation("{Provider} {Operation} non-streamed response ({StatusCode}): {Body}", _provider, operation, (int)response.StatusCode, responseBody);
 
             var result = JsonSerializer.Deserialize<LmStudioResponse>(responseBody, _jsonOptions);
             var msg = result?.Choices?.FirstOrDefault()?.Message?.Content;
             completionContent = !string.IsNullOrWhiteSpace(msg)
                 ? msg
-                : throw new InvalidOperationException($"LM Studio {operation} response did not contain a message body.");
+                : throw new InvalidOperationException($"{_provider} {operation} response did not contain a message body.");
         }
         else
         {
@@ -2163,7 +2205,7 @@ public class NarratorService : INarratorService
                 }
                 catch (JsonException)
                 {
-                    // Malformed SSE chunk — skip and continue
+                    // Malformed SSE chunk â€” skip and continue
                 }
             }
 
@@ -2171,16 +2213,93 @@ public class NarratorService : INarratorService
 
             if (logPayload)
             {
-                _logger.LogInformation("LM Studio {Operation} streamed response ({Length} chars): {Body}", operation, completionContent.Length,
+                _logger.LogInformation("{Provider} {Operation} streamed response ({Length} chars): {Body}", _provider, operation, completionContent.Length,
                     completionContent.Length > 500 ? completionContent[..500] + "..." : completionContent);
             }
 
             if (string.IsNullOrWhiteSpace(completionContent))
-                throw new InvalidOperationException($"LM Studio {operation} streamed response was empty.");
+                throw new InvalidOperationException($"{_provider} {operation} streamed response was empty.");
         }
 
         return completionContent;
     }
+
+    private async Task<string> SendOllamaCompletionRequestAsync(string systemPrompt, string userPrompt, CancellationToken ct, string operation, bool logPayload, int maxTokens)
+    {
+        var request = new OllamaChatRequest
+        {
+            Model = _model,
+            Messages =
+            [
+                new LmStudioMessage { Role = "system", Content = systemPrompt },
+                new LmStudioMessage { Role = "user", Content = userPrompt }
+            ],
+            Stream = true,
+            Think = _think,
+            Options = new OllamaOptions
+            {
+                Temperature = 0.8,
+                NumPredict = maxTokens,
+                NumCtx = _contextLength
+            }
+        };
+
+        if (logPayload)
+        {
+            _logger.LogInformation("Ollama {Operation} request payload: {Payload}", operation, JsonSerializer.Serialize(request, _jsonOptions));
+        }
+
+        var httpRequest = new HttpRequestMessage(HttpMethod.Post, "api/chat")
+        {
+            Content = JsonContent.Create(request, options: _jsonOptions)
+        };
+
+        using var response = await _httpClient.SendAsync(httpRequest, HttpCompletionOption.ResponseHeadersRead, ct);
+        response.EnsureSuccessStatusCode();
+
+        var accumulated = new StringBuilder();
+        using var stream = await response.Content.ReadAsStreamAsync(ct);
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+
+        string? line;
+        while ((line = await reader.ReadLineAsync(ct)) is not null)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            if (string.IsNullOrWhiteSpace(line))
+                continue;
+
+            try
+            {
+                var chunk = JsonSerializer.Deserialize<OllamaChatResponse>(line, _jsonOptions);
+                var content = chunk?.Message?.Content;
+                if (!string.IsNullOrEmpty(content))
+                    accumulated.Append(content);
+
+                if (chunk?.Done == true)
+                    break;
+            }
+            catch (JsonException)
+            {
+                // Malformed Ollama stream chunk - skip and continue.
+            }
+        }
+
+        var completionContent = accumulated.ToString();
+        if (logPayload)
+        {
+            _logger.LogInformation("Ollama {Operation} streamed response ({Length} chars): {Body}", operation, completionContent.Length,
+                completionContent.Length > 500 ? completionContent[..500] + "..." : completionContent);
+        }
+
+        if (string.IsNullOrWhiteSpace(completionContent))
+            throw new InvalidOperationException($"Ollama {operation} streamed response was empty.");
+
+        return completionContent;
+    }
+
+    private bool IsOllamaProvider()
+        => string.Equals(_provider, "Ollama", StringComparison.OrdinalIgnoreCase);
 
     private async Task LogConversationAsync(string operation, string systemPrompt, string userPrompt,
         string response, int maxTokens, long latencyMs, bool success,
@@ -2221,16 +2340,16 @@ public class NarratorService : INarratorService
         return scopes;
     }
 
-    // ── Narrator personality resolution ──────────────────────────────────────
+    // â”€â”€ Narrator personality resolution â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /// <summary>Default Sierra-style voice block when no preset is selected or available.</summary>
     private const string DefaultVoiceBlock = """
         VOICE:
         - Second person ("You", "your", "you"). You are the dungeon master narrating TO the player.
         - Dry, sardonic wit. Absurd observations and understated reactions.
-        - When the player FAILS, make it entertaining — slapstick, ironic commentary, the universe conspiring.
+        - When the player FAILS, make it entertaining â€” slapstick, ironic commentary, the universe conspiring.
           Never just say "nothing happens." Make failures *memorable and funny.* But ALWAYS imply they can
-          try again or find another way — failure is a setback, not a dead end.
+          try again or find another way â€” failure is a setback, not a dead end.
         - When the player SUCCEEDS, make them feel HEROIC and COOL. They pulled it off. The narrator might
           be sardonic, but the player should feel like a badass. The world notices what they did.
         - The player is THE PROTAGONIST. The world reacts to them. NPCs notice them. Things happen BECAUSE
@@ -2345,9 +2464,9 @@ public class NarratorService : INarratorService
     private static string BuildPlayerLoreBlock(List<string>? hints)
     {
         if (hints is null || hints.Count == 0)
-            return "PLAYER LORE KNOWLEDGE: The player is still uncovering the secrets of this area. Narrate with mystery and intrigue — there's so much left to discover, and the player is exactly the kind of hero who will uncover it.";
+            return "PLAYER LORE KNOWLEDGE: The player is still uncovering the secrets of this area. Narrate with mystery and intrigue â€” there's so much left to discover, and the player is exactly the kind of hero who will uncover it.";
 
-        return "PLAYER LORE KNOWLEDGE (the player has earned this knowledge through their adventures — reference it confidently, and let the player feel smart for knowing it):\n" +
+        return "PLAYER LORE KNOWLEDGE (the player has earned this knowledge through their adventures â€” reference it confidently, and let the player feel smart for knowing it):\n" +
                string.Join("\n", hints.Select(h => $"- {h}"));
     }
 
@@ -2380,7 +2499,7 @@ public class NarratorService : INarratorService
     }
 
     /// <summary>
-    /// Builds quest context for conversation prompts — what quests this NPC offers,
+    /// Builds quest context for conversation prompts â€” what quests this NPC offers,
     /// what quests the player has active that involve this NPC, and turn-in readiness.
     /// </summary>
     private string BuildConversationQuestContext(Npc npc, PlayerCharacter player)
@@ -2435,7 +2554,7 @@ public class NarratorService : INarratorService
                 if (!string.IsNullOrWhiteSpace(quest.RequiredFaction))
                     sb.AppendLine($"  Required faction: {quest.RequiredFaction}");
                 if (quest.IsPartyQuest)
-                    sb.AppendLine("  This is a shared party quest — multiple players may contribute to progress.");
+                    sb.AppendLine("  This is a shared party quest â€” multiple players may contribute to progress.");
                 var firstStageHint = quest.Stages.FirstOrDefault()?.NarratorHint;
                 if (!string.IsNullOrWhiteSpace(firstStageHint))
                     sb.AppendLine($"  Narrator hint: {firstStageHint}");
@@ -2471,7 +2590,7 @@ public class NarratorService : INarratorService
     }
 
     /// <summary>
-    /// Builds quest context for the free-form narrator prompt — lists active quests and progress
+    /// Builds quest context for the free-form narrator prompt â€” lists active quests and progress
     /// so the AI can reference them when narrating free-form actions.
     /// </summary>
     private string BuildFreeFormQuestContext(PlayerCharacter player)
@@ -2493,23 +2612,23 @@ public class NarratorService : INarratorService
         {
             if (progress.Status == QuestStatus.ReadyToTurnIn)
             {
-                sb.AppendLine($"- \"{definition!.Name}\" (id: {definition.Id}): All objectives complete — ready to turn in.");
+                sb.AppendLine($"- \"{definition!.Name}\" (id: {definition.Id}): All objectives complete â€” ready to turn in.");
             }
             else
             {
                 var stage = definition!.Stages.FirstOrDefault(s => s.Id == progress.CurrentStageId);
                 if (stage is not null)
                 {
-                    sb.AppendLine($"- \"{definition.Name}\" (id: {definition.Id}): Stage \"{stage.Name}\" — {stage.Description}");
+                    sb.AppendLine($"- \"{definition.Name}\" (id: {definition.Id}): Stage \"{stage.Name}\" â€” {stage.Description}");
                     if (!string.IsNullOrWhiteSpace(stage.NarratorHint))
                         sb.AppendLine($"  Stage hint: {stage.NarratorHint}");
                     foreach (var obj in stage.Objectives)
                     {
                         var objProgress = progress.Objectives.FirstOrDefault(o => o.ObjectiveId == obj.Id);
-                        var status = objProgress?.IsComplete == true ? "✓" : $"{objProgress?.CurrentCount ?? 0}/{obj.RequiredCount}";
+                        var status = objProgress?.IsComplete == true ? "âœ“" : $"{objProgress?.CurrentCount ?? 0}/{obj.RequiredCount}";
                         var targetName = obj.TargetName ?? obj.TargetId;
                         var location = string.IsNullOrWhiteSpace(obj.LocationConstraint) ? string.Empty : $" @ {obj.LocationConstraint}";
-                        sb.AppendLine($"  • {obj.Description ?? obj.Id} [{status}] {(string.IsNullOrWhiteSpace(targetName) ? string.Empty : $"target: {targetName}")}{location}".TrimEnd());
+                        sb.AppendLine($"  â€¢ {obj.Description ?? obj.Id} [{status}] {(string.IsNullOrWhiteSpace(targetName) ? string.Empty : $"target: {targetName}")}{location}".TrimEnd());
                     }
                 }
             }
@@ -2603,7 +2722,7 @@ public class NarratorService : INarratorService
             return lookNarration;
 
         // When the LLM fails to narrate, just return the mechanical summary directly.
-        // No flowery wrapper — the mechanical text is clear enough on its own.
+        // No flowery wrapper â€” the mechanical text is clear enough on its own.
         if (!context.MechanicalResult.Success)
         {
             var failureReason = context.MechanicalResult.MechanicalSummary?.Trim();
@@ -2622,10 +2741,10 @@ public class NarratorService : INarratorService
 
         if (string.IsNullOrWhiteSpace(description))
         {
-            return "The place reveals itself slowly — more through feeling than any obvious feature.";
+            return "The place reveals itself slowly â€” more through feeling than any obvious feature.";
         }
 
-        // Use the room's full description — it's already been written to be atmospheric.
+        // Use the room's full description â€” it's already been written to be atmospheric.
         // Don't truncate to first sentence; multi-sentence room descriptions are intentional.
         return description.EndsWith('.') ? description : description + ".";
     }
@@ -2901,7 +3020,7 @@ public class NarratorService : INarratorService
         else
         {
             // Always include a disposition tag so the LLM sees friendliness alongside personality.
-            // Personality traits (gruff, blunt, snarky) are FLAVOR — disposition is how they treat the player.
+            // Personality traits (gruff, blunt, snarky) are FLAVOR â€” disposition is how they treat the player.
             var flat = npc.DispositionState.ToFlatDisposition();
             parts.Add(flat == "neutral" ? "friendly" : flat);
         }
@@ -3007,6 +3126,14 @@ public class NarratorService : INarratorService
         [JsonPropertyName("max_tokens")]
         public int MaxTokens { get; set; } = 2048;
         public bool Stream { get; set; }
+        [JsonPropertyName("reasoning_effort")]
+        public string? ReasoningEffort { get; set; }
+        public LmStudioReasoning? Reasoning { get; set; }
+    }
+
+    private class LmStudioReasoning
+    {
+        public string Effort { get; set; } = "none";
     }
 
     private class LmStudioMessage
@@ -3029,6 +3156,30 @@ public class NarratorService : INarratorService
     private class LmStudioDelta
     {
         public string? Content { get; set; }
+    }
+
+    private class OllamaChatRequest
+    {
+        public string Model { get; set; } = "default";
+        public List<LmStudioMessage> Messages { get; set; } = [];
+        public bool Stream { get; set; } = true;
+        public bool? Think { get; set; }
+        public OllamaOptions? Options { get; set; }
+    }
+
+    private class OllamaOptions
+    {
+        public double Temperature { get; set; } = 0.8;
+        [JsonPropertyName("num_predict")]
+        public int NumPredict { get; set; }
+        [JsonPropertyName("num_ctx")]
+        public int? NumCtx { get; set; }
+    }
+
+    private class OllamaChatResponse
+    {
+        public LmStudioMessage? Message { get; set; }
+        public bool Done { get; set; }
     }
 
     private class GeneratedRoom
@@ -3101,9 +3252,9 @@ public class NarratorService : INarratorService
         public int Value { get; set; }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    //  Spell Vetting (Spellbook System — Option A)
-    // ═══════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    //  Spell Vetting (Spellbook System â€” Option A)
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     public async Task<SpellVetResponse?> VetSpellAsync(PlayerCharacter player, string spellDescription, Room room, CancellationToken ct = default)
     {
@@ -3114,7 +3265,7 @@ public class NarratorService : INarratorService
             - The spell must fit a dark-fantasy setting (no sci-fi, modern tech, or memes)
             - Creative and unusual spells are ENCOURAGED ("summon angry bees" = fine, "hack mainframe" = no)
             - Non-combat spells (utility, buffs, debuffs) are valid
-            - Do NOT reject for being too powerful — power scaling is handled separately
+            - Do NOT reject for being too powerful â€” power scaling is handled separately
             - Only reject spells that are lore-breaking, nonsensical, or trolling
 
             Assign basePower 1-10:
@@ -3197,9 +3348,9 @@ public class NarratorService : INarratorService
         public string? Narration { get; set; }
     }
 
-    // ═══════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     //  Improvised Spell Evaluation (Power Budget System)
-    // ═══════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     public async Task<ImprovisedSpellResult> EvaluateImprovisedSpellAsync(
         PlayerCharacter player, Room room, string spellName, string? target,
@@ -3225,7 +3376,7 @@ public class NarratorService : INarratorService
             RULES:
             - The player's power cap is {{powerCap}}. If the spell's power exceeds this, it FIZZLES.
             - Fizzles should be HILARIOUS. Slapstick, ironic backfire, embarrassing failure. Never boring.
-            - Even successful improvised spells should be slightly unpredictable/quirky — they're not polished.
+            - Even successful improvised spells should be slightly unpredictable/quirky â€” they're not polished.
             - Mana cost scales with power level: roughly power * 2 MP.
             - Damage scales: power 1 = 1d4, power 2 = 1d6, power 3 = 2d4, power 5 = 3d6, etc.
             - A level 1 attempting "Death Ray" = power 10 = spectacular fizzle. Make it MEMORABLE.
@@ -3332,9 +3483,9 @@ public class NarratorService : INarratorService
         public string? Target { get; set; }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    //  AI Content Generator — describe what you want, AI fills in details
-    // ═══════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    //  AI Content Generator â€” describe what you want, AI fills in details
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     public async Task<string> GenerateContentAsync(string contentType, string description, string? existingJson, CancellationToken ct = default)
     {
@@ -3364,7 +3515,7 @@ public class NarratorService : INarratorService
                   "id": "snake_id_format",
                   "name": "Display Name",
                   "description": "Flavor text describing the item.",
-                  "type": "Weapon|Armor|Shield|Helmet|Potion|Scroll|Key|QuestItem|Misc",
+                  "type": "Weapon|Armor|Shield|Helmet|Healing Draught|Scroll|Key|QuestItem|Misc",
                   "damage_dice": "1d8+2",
                   "damage_stat": "str",
                   "armor_value": 0,
@@ -3469,9 +3620,9 @@ public class NarratorService : INarratorService
                   "description": "A short summary of the narrator's personality and vibe.",
                   "worldIds": ["default-world"],
                   "archetype": "sassy|stoic|kind|sardonic|mysterious|cheerful|dramatic|grim|whimsical",
-                  "personalityPrompt": "A detailed system prompt (2-3 paragraphs) defining how this narrator speaks, thinks, and reacts. Include their background, speech patterns, verbal tics, attitude toward the player, how they handle combat narration, how they describe environments, and what makes them unique. This is the most important field — it drives ALL narrator behavior.",
-                  "greetingText": "The narrator's introduction when a player first meets them or starts character creation. Should be in-character, 2-3 sentences. Example: 'Well, well... another brave soul stumbles into my story. I am Penelo, and trust me, darling — you are going to LOVE what I have planned for you.'",
-                  "loreDeliveryStyle": "How this narrator explains lore and world history. Example: 'Deliver lore like campfire ghost stories — dramatic pauses, rhetorical questions, and the occasional shudder.'",
+                  "personalityPrompt": "A detailed system prompt (2-3 paragraphs) defining how this narrator speaks, thinks, and reacts. Include their background, speech patterns, verbal tics, attitude toward the player, how they handle combat narration, how they describe environments, and what makes them unique. This is the most important field â€” it drives ALL narrator behavior.",
+                  "greetingText": "The narrator's introduction when a player first meets them or starts character creation. Should be in-character, 2-3 sentences. Example: 'Well, well... another brave soul stumbles into my story. I am Penelo, and trust me, darling â€” you are going to LOVE what I have planned for you.'",
+                  "loreDeliveryStyle": "How this narrator explains lore and world history. Example: 'Deliver lore like campfire ghost stories â€” dramatic pauses, rhetorical questions, and the occasional shudder.'",
                   "failureReactionStyle": "How the narrator reacts when the player fails, dies, or makes mistakes. Example: 'Mock them gently with backhanded sympathy, then offer genuine encouragement wrapped in sarcasm.'",
                   "successReactionStyle": "How the narrator reacts when the player wins battles or achieves goals. Example: 'Be genuinely impressed but try to hide it behind dismissive comments. Occasionally break character to cheer.'",
                   "isSelectable": true,
@@ -3483,7 +3634,7 @@ public class NarratorService : INarratorService
                 {
                   "id": "snake_id_format",
                   "name": "Display Name",
-                  "description": "The lore text itself — what the player learns.",
+                  "description": "The lore text itself â€” what the player learns.",
                   "worldIds": ["default-world"],
                   "category": "history|geography|faction|character|legend|religion|arcane",
                   "isStarterLore": false,
@@ -3519,8 +3670,8 @@ public class NarratorService : INarratorService
             RULES:
             - Use the exact JSON schema shown below. Return ONLY valid JSON, no markdown or code fences.
             - Use snake_case for the "id" field (e.g., "flaming_sword", "goblin_shaman").
-            - Be creative with descriptions — capture the Sierra adventure tone.
-            - Be balanced — don't make things overpowered unless the user specifically asks.
+            - Be creative with descriptions â€” capture the Sierra adventure tone.
+            - Be balanced â€” don't make things overpowered unless the user specifically asks.
             - If the user provides partial details, fill in reasonable defaults for everything else.
             - If editing existing content, preserve any fields the user doesn't mention changing.
 
@@ -3667,10 +3818,10 @@ public class NarratorService : INarratorService
             You need to produce THREE things in a single flowing passage:
 
             1) NARRATOR INTRODUCTION (1-2 sentences):
-               Introduce yourself — you are the narrator, the voice that will guide them.
+               Introduce yourself â€” you are the narrator, the voice that will guide them.
                Be memorable. Show your personality. You're sardonic, witty, a little theatrical.
                You've seen many heroes come and go, but something about THIS one catches your attention.
-               DO NOT say "I am the narrator" literally — show your voice through style.
+               DO NOT say "I am the narrator" literally â€” show your voice through style.
 
             2) STORY HOOK (1-2 sentences):
                Paint the world they're stepping into. What's the situation? What's at stake?
@@ -3684,7 +3835,7 @@ public class NarratorService : INarratorService
                - Their CLASS matters: does a {player.Class} turn heads? Inspire fear? Awe? Suspicion?
                - Their LOOK matters: use their backstory to color the reaction.
                People whisper. Heads turn. Someone drops a mug. A dog barks. The air shifts.
-               This is NOT "who are you?" — the crowd is reacting TO them. They are already someone.
+               This is NOT "who are you?" â€” the crowd is reacting TO them. They are already someone.
                Make the player feel like their CHARACTER CHOICES created a moment.
 
             {voiceBlock}
@@ -3692,9 +3843,9 @@ public class NarratorService : INarratorService
             RULES:
             - Write in SECOND PERSON ("You", "Your").
             - Total length: 5-8 sentences. This is the FIRST thing the player reads. Make it count.
-            - Do NOT list room details, exits, NPCs, or items — the room card handles that.
+            - Do NOT list room details, exits, NPCs, or items â€” the room card handles that.
             - Do NOT ask the player questions or prompt for input.
-            - Do NOT use headers, bullet points, or formatting — just flowing narrative prose.
+            - Do NOT use headers, bullet points, or formatting â€” just flowing narrative prose.
             - Make the player feel like THE HERO from sentence one. They matter. The world noticed.
             """;
 
@@ -3705,7 +3856,7 @@ public class NarratorService : INarratorService
             : "A few unnamed locals, background characters";
 
         var backstorySnippet = string.IsNullOrWhiteSpace(player.Backstory)
-            ? "No backstory provided — mysterious origins."
+            ? "No backstory provided â€” mysterious origins."
             : player.Backstory.Length > 300 ? player.Backstory[..300] + "..." : player.Backstory;
 
         var userPrompt = $"""
@@ -3723,7 +3874,7 @@ public class NarratorService : INarratorService
             {worldContext}
             {loreContext}
 
-            Write the hero's grand entrance. Narrator intro → story hook → crowd reaction. Go.
+            Write the hero's grand entrance. Narrator intro â†’ story hook â†’ crowd reaction. Go.
             """;
 
         try
@@ -3743,26 +3894,26 @@ public class NarratorService : INarratorService
     {
         var raceReaction = player.Race?.ToLowerInvariant() switch
         {
-            "elf" or "high elf" or "wood elf" => "A few patrons glance up — elven features tend to draw eyes in a place like this, equal parts curiosity and old grudges.",
-            "dwarf" => "The floorboards creak under sturdy boots. A bartender raises an eyebrow — dwarves usually mean business, or trouble, or both.",
+            "elf" or "high elf" or "wood elf" => "A few patrons glance up â€” elven features tend to draw eyes in a place like this, equal parts curiosity and old grudges.",
+            "dwarf" => "The floorboards creak under sturdy boots. A bartender raises an eyebrow â€” dwarves usually mean business, or trouble, or both.",
             "orc" or "half-orc" => "Conversations die mid-sentence. An orc walking in here? Bold. Several hands drift to belt knives, but nobody moves. Not yet.",
-            "halfling" or "hobbit" => "Most don't notice at first — halflings tend to slip under the radar. But the sharp-eyed ones do, and they know better than to underestimate what they see.",
-            "human" => "Another human. But something about this one is different. The way the room adjusts, the slight pause in conversation — this one carries weight.",
-            _ => $"A {player.Race} walks in, and the room takes notice. Not everyone, not all at once — but enough. Something just shifted."
+            "halfling" or "hobbit" => "Most don't notice at first â€” halflings tend to slip under the radar. But the sharp-eyed ones do, and they know better than to underestimate what they see.",
+            "human" => "Another human. But something about this one is different. The way the room adjusts, the slight pause in conversation â€” this one carries weight.",
+            _ => $"A {player.Race} walks in, and the room takes notice. Not everyone, not all at once â€” but enough. Something just shifted."
         };
 
         var classReaction = player.Class?.ToLowerInvariant() switch
         {
-            "warrior" or "fighter" => "The weapon at your side catches the light. Someone who's seen enough fights to know — this one can handle themselves.",
+            "warrior" or "fighter" => "The weapon at your side catches the light. Someone who's seen enough fights to know â€” this one can handle themselves.",
             "mage" or "wizard" or "sorcerer" => "There's a faint crackle in the air, like static before a storm. The locals can feel it. Magic walks among them.",
             "rogue" or "thief" => "You move differently than the others. Lighter. More aware. The kind of awareness that makes pickpockets check their own pockets.",
-            "cleric" or "priest" or "paladin" => "There's an aura — nothing visible, nothing you could point to — but the room feels it. Something righteous just walked in.",
+            "cleric" or "priest" or "paladin" => "There's an aura â€” nothing visible, nothing you could point to â€” but the room feels it. Something righteous just walked in.",
             "ranger" or "hunter" => "Trail dust and the faint scent of pine. The wilderness clings to you, and the city folk eye you with a mix of respect and unease.",
-            _ => $"A {player.Class} — not something you see every day around here. People notice. People remember."
+            _ => $"A {player.Class} â€” not something you see every day around here. People notice. People remember."
         };
 
-        return $"Well, well. Another hero stumbles into the story — though this one might actually survive the first chapter. " +
-               $"The world of Ivalice doesn't care about your feelings, but it's about to care about you. " +
+        return $"Well, well. Another hero stumbles into the story â€” though this one might actually survive the first chapter. " +
+               $"The world of Elarion doesn't care about your feelings, but it's about to care about you. " +
                $"{raceReaction} {classReaction}";
     }
 
@@ -3773,20 +3924,20 @@ public class NarratorService : INarratorService
         var worldContext = await GetCurrentWorldContextBlockAsync(ct);
 
         var systemPrompt = """
-            You are the NARRATOR — an omniscient, atmospheric storytelling voice in a dark fantasy RPG
+            You are the NARRATOR â€” an omniscient, atmospheric storytelling voice in a dark fantasy RPG
             with classic Sierra adventure game humor. The player is THE HERO, and they're asking you for guidance.
 
             Your role:
-            - Make the player feel like a hero on an epic journey. They are not lost — they are at a
+            - Make the player feel like a hero on an epic journey. They are not lost â€” they are at a
               crossroads, and great things await in every direction. Frame guidance as DESTINY, not instructions.
             - Reference their active quests and make them feel IMPORTANT. "The resistance is counting on you"
               is better than "go to the market." Their quests matter to the world.
             - If they have no active quests, get them EXCITED about what's nearby. There are NPCs with
               stories to tell, mysteries to uncover, paths to explore. The world is full of adventure
               waiting specifically for them.
-            - Point toward unexplored exits or NPCs they haven't talked to — frame these as opportunities
+            - Point toward unexplored exits or NPCs they haven't talked to â€” frame these as opportunities
               and mysteries, not chores.
-            - If they seem stuck, give a clearer hint — but frame it as the hero remembering something,
+            - If they seem stuck, give a clearer hint â€” but frame it as the hero remembering something,
               noticing a detail, or feeling a pull in a direction. They're smart; they just needed a moment.
             - Keep the tone warm, encouraging, and slightly mysterious. You believe in this hero.
             - Use second person ("You recall...", "Perhaps the path to the east...")
@@ -3826,7 +3977,7 @@ public class NarratorService : INarratorService
     private string BuildGuidanceQuestContext(PlayerCharacter player)
     {
         if (player.QuestLog.Count == 0)
-            return "Active quests: None — the player has no active quests.";
+            return "Active quests: None â€” the player has no active quests.";
 
         var lines = new List<string> { "Active quests:" };
         foreach (var q in player.QuestLog.Where(q => q.Status == QuestStatus.Active || q.Status == QuestStatus.ReadyToTurnIn))
@@ -3854,21 +4005,21 @@ public class NarratorService : INarratorService
     private static string BuildFallbackGuidance(PlayerCharacter player, Room room)
     {
         if (player.QuestLog.Any(q => q.Status == QuestStatus.ReadyToTurnIn))
-            return "A triumphant warmth spreads through your chest — you've done what you set out to do. Time to claim your reward and let the world know the hero has delivered.";
+            return "A triumphant warmth spreads through your chest â€” you've done what you set out to do. Time to claim your reward and let the world know the hero has delivered.";
 
         if (player.QuestLog.Any(q => q.Status == QuestStatus.Active))
-            return "Your quest journal practically hums with purpose. The people who are counting on you need a hero — and you're closer than you think. Talk to those nearby, or press onward through the next doorway. Adventure doesn't wait.";
+            return "Your quest journal practically hums with purpose. The people who are counting on you need a hero â€” and you're closer than you think. Talk to those nearby, or press onward through the next doorway. Adventure doesn't wait.";
 
         if (room.Npcs.Count > 0)
-            return $"Every great adventure starts with a conversation. {room.Npcs[0].Name} looks like they have a story worth hearing — and you've got the look of someone who can help. Talk to them and see what fate has in store.";
+            return $"Every great adventure starts with a conversation. {room.Npcs[0].Name} looks like they have a story worth hearing â€” and you've got the look of someone who can help. Talk to them and see what fate has in store.";
 
         if (room.Exits.Count > 0)
-            return $"The world stretches out before you, full of untold stories waiting for their hero. To the {room.Exits.Keys.First()}, something calls to you — the kind of pull that only comes when destiny has plans.";
+            return $"The world stretches out before you, full of untold stories waiting for their hero. To the {room.Exits.Keys.First()}, something calls to you â€” the kind of pull that only comes when destiny has plans.";
 
         return "The world is vast and full of secrets. Look around, talk to those you meet, and follow the threads of fate.";
     }
 
-    // ── CYOA Node Generation ────────────────────────────────────
+    // â”€â”€ CYOA Node Generation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /// <inheritdoc />
     public async Task<CyoaChoiceNode> GenerateCyoaNodeAsync(
@@ -4028,7 +4179,7 @@ public class NarratorService : INarratorService
             [
                 new CyoaChoice { Id = "continue-forward", Text = "Press onward into the unknown" },
                 new CyoaChoice { Id = "look-around", Text = "Take a moment to observe your surroundings" },
-                new CyoaChoice { Id = "turn-back", Text = "Reconsider — perhaps there's another way" }
+                new CyoaChoice { Id = "turn-back", Text = "Reconsider â€” perhaps there's another way" }
             ]
         };
     }
@@ -4079,8 +4230,8 @@ public class NarratorService : INarratorService
     {
         var voiceBlock = ResolveNarratorVoice(player);
         var rewindHint = hasCheckpoint
-            ? "End the narration with a sense of fading — the player will rewind to a save point."
-            : "End the narration with finality — this is a true game over.";
+            ? "End the narration with a sense of fading â€” the player will rewind to a save point."
+            : "End the narration with finality â€” this is a true game over.";
 
         var systemPrompt = $$"""
             You are the NARRATOR of a Choose Your Own Adventure story.
@@ -4156,7 +4307,7 @@ public class NarratorService : INarratorService
             - Write in SECOND PERSON present tense.
             - 3-5 sentences. This is the FINAL thing the player reads. Make it count.
             - Reference the character by name.
-            - Reflect on the journey — the choices, the consequences, the arc.
+            - Reflect on the journey â€” the choices, the consequences, the arc.
             - Do NOT list stats, mechanics, or game data.
             - Do NOT ask questions or set up a sequel.
 
@@ -4195,10 +4346,10 @@ public class NarratorService : INarratorService
     private static string BuildCyoaEndingFallback(string playerName, string endingType)
         => endingType switch
         {
-            "victory" => $"And so {playerName} stands at journey's end — battered, changed, but triumphant. The world will remember.",
+            "victory" => $"And so {playerName} stands at journey's end â€” battered, changed, but triumphant. The world will remember.",
             "tragedy" => $"The story of {playerName} ends here, in silence and shadow. Some roads have no return.",
             "cliffhanger" => $"The tale of {playerName} pauses, but does not end. Somewhere, a clock is still ticking.",
-            _ => $"{playerName}'s adventure fades like a dream upon waking — vivid, fleeting, and impossible to forget."
+            _ => $"{playerName}'s adventure fades like a dream upon waking â€” vivid, fleeting, and impossible to forget."
         };
 
     // DTO for CYOA node JSON deserialization

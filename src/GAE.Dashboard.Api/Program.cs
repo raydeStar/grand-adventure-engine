@@ -6,6 +6,7 @@ using GAE.Dashboard.Api.Services;
 using GAE.Discord;
 using GAE.Core.Registry;
 using GAE.Engine;
+using GAE.Engine.BlindAdventure;
 using GAE.Engine.Configuration;
 using GAE.Engine.Data;
 using GAE.Engine.Registry;
@@ -110,14 +111,19 @@ builder.Services.AddSingleton<IContentRegistryService>(sp => sp.GetRequiredServi
 builder.Services.AddSingleton<QuestEngine>();
 builder.Services.AddSingleton<QuestTracker>();
 builder.Services.AddSingleton<LoreTracker>();
+builder.Services.AddSingleton<IBlindAdventureRoomGenerator, BlindAdventureRoomGenerator>();
+builder.Services.AddSingleton<BlindAdventureService>();
 // RealmTravelService registration deferred below INarratorService (depends on it)
 builder.Services.AddSingleton<IGameEngine, GameEngine>();
 
 // Narrator — LM Studio HTTP client
 var lmStudioEndpoint = builder.Configuration["LmStudio:Endpoint"] ?? "http://localhost:1234";
 var lmStudioModel = builder.Configuration["LmStudio:Model"] ?? "default";
+var lmProvider = builder.Configuration["LmStudio:Provider"] ?? "OpenAICompatible";
 var lmRetryCount = int.TryParse(builder.Configuration["LmStudio:RetryCount"], out var rc) ? rc : 1;
 var lmRetryDelayMs = int.TryParse(builder.Configuration["LmStudio:RetryDelayMs"], out var rd) ? rd : 2000;
+var lmContextLength = int.TryParse(builder.Configuration["LmStudio:ContextLength"], out var cl) ? cl : (int?)null;
+var lmThink = bool.TryParse(builder.Configuration["LmStudio:Think"], out var think) ? think : (bool?)null;
 builder.Services.AddHttpClient("LmStudio", client =>
 {
     client.BaseAddress = new Uri(lmStudioEndpoint + "/");
@@ -133,7 +139,7 @@ builder.Services.AddSingleton<INarratorService>(sp =>
     var registry = sp.GetRequiredService<IContentRegistryService>();
     var worldContext = sp.GetService<IWorldContext>();
     var worldRepository = sp.GetService<IWorldRepository>();
-    return new NarratorService(httpClient, logger, lmStudioModel, knowledge, conversationLogger, registry, worldContext, worldRepository, lmRetryCount, lmRetryDelayMs);
+    return new NarratorService(httpClient, logger, lmStudioModel, knowledge, conversationLogger, registry, worldContext, worldRepository, lmRetryCount, lmRetryDelayMs, lmProvider, lmContextLength, lmThink);
 });
 
 builder.Services.AddSingleton<IRealmTravelService>(sp =>
@@ -248,7 +254,7 @@ foreach (var warning in authService.GetStartupWarnings())
 try
 {
     using var probeClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
-    var lmResponse = await probeClient.GetAsync(lmStudioEndpoint + "/v1/models");
+    var lmResponse = await probeClient.GetAsync(lmStudioEndpoint + GetNarratorModelsPath(lmProvider));
     if (!lmResponse.IsSuccessStatusCode)
         app.Logger.LogWarning("LM Studio not responding at {Endpoint} — narration will use fallback text", lmStudioEndpoint);
 }
@@ -361,14 +367,14 @@ app.MapGet("/health/narrator", async (HttpClient httpClient) =>
 
     try
     {
-        var response = await httpClient.GetAsync(lmStudioEndpoint + "/v1/models");
+        var response = await httpClient.GetAsync(lmStudioEndpoint + GetNarratorModelsPath(lmProvider));
         narratorHealthCache = response.IsSuccessStatusCode
-            ? Results.Ok(new { status = "healthy", service = "lm-studio" })
-            : Results.Json(new { status = "degraded", service = "lm-studio", note = "Narration will use fallback text" }, statusCode: 503);
+            ? Results.Ok(new { status = "healthy", service = lmProvider })
+            : Results.Json(new { status = "degraded", service = lmProvider, note = "Narration will use fallback text" }, statusCode: 503);
     }
     catch (Exception ex)
     {
-        narratorHealthCache = Results.Json(new { status = "degraded", service = "lm-studio", error = ex.Message, note = "Narration will use fallback text" }, statusCode: 503);
+        narratorHealthCache = Results.Json(new { status = "degraded", service = lmProvider, error = ex.Message, note = "Narration will use fallback text" }, statusCode: 503);
     }
 
     narratorHealthCacheExpiry = DateTimeOffset.UtcNow.AddSeconds(60);
@@ -378,6 +384,11 @@ app.MapGet("/health/narrator", async (HttpClient httpClient) =>
 app.Run();
 
 // ── World seeding helper ──────────────────────────────────────────────
+
+static string GetNarratorModelsPath(string provider)
+    => string.Equals(provider, "Ollama", StringComparison.OrdinalIgnoreCase)
+        ? "/api/tags"
+        : "/v1/models";
 
 static async Task<int> SeedWorldFromLore(LoreSeed? lore, IStateManager stateManager)
 {

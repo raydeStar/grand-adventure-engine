@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Text.Json;
 using GAE.Core.Interfaces;
 using GAE.Core.Models;
@@ -197,7 +197,7 @@ public class NarratorServiceTests
     [Fact]
     public async Task NarrateActionAsync_ForFailedMove_StillUsesGeneralNarration()
     {
-        // Failed moves (no exit) should NOT go through arrival — they use the general humor prompt
+        // Failed moves (no exit) should NOT go through arrival â€” they use the general humor prompt
         var handler = new FakeHttpMessageHandler(new HttpRequestException("Connection refused"));
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") };
         var narrator = new NarratorService(httpClient, NullLogger<NarratorService>.Instance);
@@ -218,6 +218,40 @@ public class NarratorServiceTests
         // Should use the mechanical summary directly as fallback, not the arrival path
         Assert.Contains("no exit", narration, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("arrives", narration, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task NarrateActionAsync_WithOllamaProvider_SendsContextAndThinkingOptions()
+    {
+        var handler = new CapturingOllamaHandler();
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:11434/") };
+        var narrator = new NarratorService(
+            httpClient,
+            NullLogger<NarratorService>.Instance,
+            model: "diffusiongemma-test",
+            provider: "Ollama",
+            contextLength: 16_384,
+            think: false);
+
+        var narration = await narrator.NarrateActionAsync(new NarratorContext
+        {
+            Player = new PlayerCharacter { Id = "p1", Name = "Thorin", Race = "Dwarf", Class = "Fighter" },
+            CurrentRoom = new Room { Id = "forge", Name = "Forge", Description = "A smoky forge." },
+            Action = new GameAction { PlayerId = "p1", RawInput = "inspect the anvil", Type = ActionType.Use },
+            MechanicalResult = new ActionResult { Success = true, MechanicalSummary = "You inspect the anvil." }
+        });
+
+        Assert.Contains("anvil", narration, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("/api/chat", handler.RequestPath);
+        Assert.False(string.IsNullOrWhiteSpace(handler.RequestBody));
+
+        using var json = JsonDocument.Parse(handler.RequestBody!);
+        var root = json.RootElement;
+        Assert.Equal("diffusiongemma-test", root.GetProperty("model").GetString());
+        Assert.False(root.GetProperty("think").GetBoolean());
+        Assert.True(root.GetProperty("stream").GetBoolean());
+        Assert.Equal(16_384, root.GetProperty("options").GetProperty("num_ctx").GetInt32());
+        Assert.Equal(512, root.GetProperty("options").GetProperty("num_predict").GetInt32());
     }
 
     [Fact]
@@ -249,7 +283,7 @@ public class NarratorServiceTests
     public void TryParseFreeFormResponse_WithBrokenDialogueQuotes_RepairsAndParses()
     {
         // Simulates the exact broken JSON that arrives after CompletionOrThrowAsync
-        // deserializes the outer LM Studio response — dialogue quotes are bare/unescaped,
+        // deserializes the outer LM Studio response â€” dialogue quotes are bare/unescaped,
         // and the LLM returns "narrative" instead of "narration".
         var brokenJson = """{"narrative": ""Rumors?" Mara says, leaning closer. "Don't you start with that nonsense, kid," she mutters.", "success": true, "statChanges": {}, "inventoryChanges": [], "entityChanges": [], "combatInitiated": false, "interactionUpdate": {"mode": "conversation", "npcDisposition": "annoyed"}}""";
 
@@ -269,7 +303,7 @@ public class NarratorServiceTests
         // making the JSON syntactically invalid. The narration is still extractable.
         var garbledJson = """
             {
-              "narration": "\"Well, if you're looking for trouble, you don't have to look far,\" Tifa says, wiping down a stray spill with a quick, practiced motion.",
+              "narration": "\"Well, if you're looking for trouble, you don't have to look far,\" Mara says, wiping down a stray spill with a quick, practiced motion.",
               "success": true,
               "statChanges": {},
              lyinventoryChanges": [],
@@ -282,7 +316,7 @@ public class NarratorServiceTests
         var result = NarratorService.TryParseFreeFormResponse(garbledJson, out var response);
 
         Assert.True(result);
-        Assert.Contains("Tifa says", response.Narration);
+        Assert.Contains("Mara says", response.Narration);
         Assert.Contains("trouble", response.Narration);
         Assert.True(response.Success);
     }
@@ -290,7 +324,7 @@ public class NarratorServiceTests
     [Fact]
     public void TryParseFreeFormResponse_WithTruncatedJson_ExtractsNarrationOnly()
     {
-        // Simulates a response truncated by context window — JSON cuts off mid-field
+        // Simulates a response truncated by context window â€” JSON cuts off mid-field
         var truncatedJson = """
             {
               "narration": "The guard eyes you warily, hand on his sword hilt.",
@@ -310,7 +344,7 @@ public class NarratorServiceTests
     public void TryParseFreeFormResponse_WithPlainNarration_SalvagesReply()
     {
         var plainNarration = """
-            Tifa stops polishing a glass and leans forward, her crimson eyes narrowing slightly.
+            Mara stops polishing a glass and leans forward, her crimson eyes narrowing slightly.
 
             "You want to know about the Merchants Guild?" she asks, voice low as if sharing a secret. "They're not what they seem."
             "They control half the trade in this quarter, and they always want a cut."
@@ -327,7 +361,7 @@ public class NarratorServiceTests
     public void TryParseFreeFormResponse_WithPlainNarrationAndSchemaTail_TrimsArtifacts()
     {
         var plainNarrationWithTail = """
-            Tifa Lockhart: "That poster?" she says, turning around to glance at the faded print. "That was another life."
+            Mara Vale: "That poster?" she says, turning around to glance at the faded print. "That was another life."
 
             She raises her glass slightly. "Sometimes the old fights come knocking anyway."
 
@@ -351,7 +385,7 @@ public class NarratorServiceTests
     public void TryParseFreeFormResponse_WithPromptTailAfterNarration_TrimsPromptArtifacts()
     {
         var narrationWithPromptTail = """
-            Tifa slides a glass across the bar. "You come here looking for trouble or company?" she asks with a crooked smile.
+            Mara slides a glass across the bar. "You come here looking for trouble or company?" she asks with a crooked smile.
 
             You're playing a text-based RPG where choices change outcomes and tone determines atmosphere.
 
@@ -371,7 +405,7 @@ public class NarratorServiceTests
     public void TryParseFreeFormResponse_WithGameplayScaffoldingTail_TrimsIt()
     {
         var narrationWithGameplayTail = """
-            Tifa raises her glass. "To Ivalice," she says with a grin that doesn't quite hide her caution.
+            Mara raises her glass. "To Elarion," she says with a grin that doesn't quite hide her caution.
 
             Health: 90/100
             Stamina: 75/80
@@ -381,7 +415,7 @@ public class NarratorServiceTests
         var result = NarratorService.TryParseFreeFormResponse(narrationWithGameplayTail, out var response);
 
         Assert.True(result);
-        Assert.Contains("To Ivalice", response.Narration);
+        Assert.Contains("To Elarion", response.Narration);
         Assert.DoesNotContain("Health:", response.Narration);
         Assert.DoesNotContain("Stamina:", response.Narration);
         Assert.DoesNotContain("The player can", response.Narration);
@@ -391,7 +425,7 @@ public class NarratorServiceTests
     public void TryParseFreeFormResponse_WithPromptEcho_DoesNotTreatItAsNarration()
     {
         var promptEcho = """
-            You are now voicing Tifa Lockhart in direct conversation with the player.
+            You are now voicing Mara Vale in direct conversation with the player.
 
             CRITICAL RESPONSE RULES:
             1. The narration MUST contain 2-4 full sentences of quoted NPC speech.
@@ -415,7 +449,7 @@ public class NarratorServiceTests
         //
         // The broken inner JSON (what TryParseFreeFormResponse receives):
         var brokenInner = """{"narrative": ""Rumors?" Mara says, leaning closer. "Don't you start with that nonsense, kid," she mutters.", "success": true, "statChanges": {}, "inventoryChanges": [], "entityChanges": [], "combatInitiated": false, "interactionUpdate": {"mode": "conversation", "npcDisposition": "annoyed"}}""";
-        // Wrap it in a proper LM Studio response — JsonSerializer.Serialize escapes quotes
+        // Wrap it in a proper LM Studio response â€” JsonSerializer.Serialize escapes quotes
         // so that after outer deserialization we get the broken inner JSON back.
         var outerJson = "{\"choices\":[{\"message\":{\"content\":" + JsonSerializer.Serialize(brokenInner) + "}}]}";
         var handler = new ResponseHttpMessageHandler(outerJson);
@@ -438,7 +472,7 @@ public class NarratorServiceTests
     [Fact]
     public async Task ProcessConversationTurnAsync_WhenLlmReturnsNarrativeKey_NormalizesToNarration()
     {
-        // LLM returns "narrative" instead of "narration" — should still parse
+        // LLM returns "narrative" instead of "narration" â€” should still parse
         var handler = new ResponseHttpMessageHandler("""
             {
               "choices": [
@@ -484,7 +518,7 @@ public class NarratorServiceTests
         Assert.NotEmpty(response.Narration);
     }
 
-    // ── Retry logic tests ─────────────────────────────────────────
+    // â”€â”€ Retry logic tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task CompletionRetry_TransientFailureThenSuccess_ReturnsNarration()
@@ -510,7 +544,7 @@ public class NarratorServiceTests
     [Fact]
     public async Task CompletionRetry_AllRetriesExhausted_FallsBackGracefully()
     {
-        // 3 total attempts (retryCount=2), all fail → CompletionAsync catches and returns fallback
+        // 3 total attempts (retryCount=2), all fail â†’ CompletionAsync catches and returns fallback
         var handler = new FakeHttpMessageHandler(new HttpRequestException("Connection refused"));
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") };
         var narrator = new NarratorService(httpClient, NullLogger<NarratorService>.Instance, retryCount: 2, retryDelayMs: 0);
@@ -535,7 +569,7 @@ public class NarratorServiceTests
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") };
         var narrator = new NarratorService(httpClient, NullLogger<NarratorService>.Instance, retryCount: 0, retryDelayMs: 0);
 
-        // With retryCount=0, only 1 attempt — it fails, falls through to CompletionAsync fallback
+        // With retryCount=0, only 1 attempt â€” it fails, falls through to CompletionAsync fallback
         var response = await narrator.ProcessFreeFormAsync(
             new PlayerCharacter { Name = "Test", Race = "Human", Class = "Warrior" },
             new Room { Id = "lab", Name = "QA Lab", Description = "A test room." },
@@ -551,8 +585,8 @@ public class NarratorServiceTests
     {
         // With a pre-cancelled token, the first HTTP call throws OperationCanceledException.
         // The retry filter (ex is not OperationCanceledException || !ct.IsCancellationRequested)
-        // should NOT catch it — it should propagate through CompletionOrThrowAsync.
-        // CompletionAsync catches it and returns fallback (which is fine — fast exit).
+        // should NOT catch it â€” it should propagate through CompletionOrThrowAsync.
+        // CompletionAsync catches it and returns fallback (which is fine â€” fast exit).
         var handler = new TransientFailureHandler(failCount: 99, successBody: "{}");
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") };
         var narrator = new NarratorService(httpClient, NullLogger<NarratorService>.Instance, retryCount: 5, retryDelayMs: 50_000);
@@ -567,13 +601,13 @@ public class NarratorServiceTests
             [],
             ct: cts.Token);
 
-        // Should get fallback quickly — cancelled token prevents retry delay from completing,
+        // Should get fallback quickly â€” cancelled token prevents retry delay from completing,
         // so only the first attempt fires before cancellation kicks in
         Assert.NotNull(response);
         Assert.Equal(1, handler.CallCount);
     }
 
-    // ── Test helpers ──────────────────────────────────────────────
+    // â”€â”€ Test helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private class FakeHttpMessageHandler : HttpMessageHandler
     {
@@ -610,6 +644,27 @@ public class NarratorServiceTests
         }
     }
 
+    private class CapturingOllamaHandler : HttpMessageHandler
+    {
+        public string? RequestPath { get; private set; }
+        public string? RequestBody { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            RequestPath = request.RequestUri?.AbsolutePath;
+            RequestBody = request.Content is null
+                ? null
+                : await request.Content.ReadAsStringAsync(cancellationToken);
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""
+                    {"message":{"role":"assistant","content":"Thorin studies the anvil; it answers with soot, silence, and one useful dent."},"done":true}
+                    """)
+            };
+        }
+    }
+
     private class TransientFailureHandler : HttpMessageHandler
     {
         private readonly int _failCount;
@@ -626,7 +681,7 @@ public class NarratorServiceTests
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            // Skip model-resolution requests (GET /v1/models) — always succeed
+            // Skip model-resolution requests (GET /v1/models) â€” always succeed
             if (request.Method == HttpMethod.Get)
             {
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
