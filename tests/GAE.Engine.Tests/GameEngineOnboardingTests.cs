@@ -1,7 +1,9 @@
 using GAE.Core.Interfaces;
 using GAE.Core.Models;
+using GAE.Core.Registry;
 using GAE.Engine.BlindAdventure;
 using GAE.Engine.Configuration;
+using GAE.Engine.Registry;
 using GAE.Engine.State;
 using GAE.Engine.Worlds;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -11,6 +13,60 @@ namespace GAE.Engine.Tests;
 
 public class GameEngineOnboardingTests
 {
+    [Fact]
+    public async Task CreateCharacterFromConcept_MapsGenericStarterPotionsToHealingConsumables()
+    {
+        var stateManager = new InMemoryStateManager();
+        await stateManager.SaveRoomAsync(new Room
+        {
+            Id = "spawn",
+            Name = "The Crossroads Inn",
+            Description = "A practical place to begin."
+        });
+
+        var registry = new ContentRegistryService(NullLogger<ContentRegistryService>.Instance);
+        registry.Items.Register(new ItemTemplate
+        {
+            Id = "minor_healing_potion",
+            Name = "Healing Draught",
+            Description = "A small vial of red liquid that heals minor wounds.",
+            IsConsumable = true,
+            Effect = "heal:1d4+2",
+            Value = 10,
+            RequiredLevel = 1,
+            Tags = ["dungeon_loot", "potion", "healing"]
+        });
+
+        var narrator = new Mock<INarratorService>(MockBehavior.Strict);
+        var dice = new Mock<IProbabilityEngine>(MockBehavior.Strict);
+
+        var rules = new GameRulesConfig();
+        rules.CharacterCreation.StartingItems.AddRange(["Potion", "Potion", "Potion"]);
+
+        var engine = new GameEngine(
+            stateManager,
+            dice.Object,
+            narrator.Object,
+            new CommandParser(NullLogger<CommandParser>.Instance),
+            rules,
+            NullLogger<GameEngine>.Instance,
+            registry: registry);
+
+        var player = await engine.CreateCharacterFromConceptAsync(new CharacterConcept
+        {
+            PlayerDiscordId = "starter-potions",
+            Name = "Briar",
+            Race = "Human",
+            Class = "Warrior",
+            Backstory = "A practical soul with practical bottles."
+        });
+
+        var potion = Assert.Single(player.Inventory, item => item.Name == "Healing Draught");
+        Assert.True(potion.IsConsumable);
+        Assert.Equal("heal:1d4+2", potion.Effect);
+        Assert.Equal(3, potion.Quantity);
+    }
+
     [Fact]
     public async Task CreateCharacterFromConcept_UsesRequestedWorldSpawnAndPersistsWorldState()
     {

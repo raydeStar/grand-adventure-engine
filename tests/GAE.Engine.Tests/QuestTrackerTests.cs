@@ -79,6 +79,19 @@ public class QuestTrackerTests
     }
 
     [Fact]
+    public async Task OnEnemyKilledAsync_MatchesDistinctBossNameTokenWhenIdsDrift()
+    {
+        var player = CreatePlayer();
+        _engine.AcceptQuest(player, "ifrit_quest");
+
+        var summary = await _tracker.OnEnemyKilledAsync(player, "cindermaw_guardian", "Ifrit, the Infernal Lord");
+
+        Assert.NotNull(summary);
+        Assert.Contains("Objective complete", summary, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(QuestStatus.ReadyToTurnIn, player.QuestLog[0].Status);
+    }
+
+    [Fact]
     public async Task ProcessNarratorQuestUpdatesAsync_FailsQuestWhenRecommended()
     {
         var player = CreatePlayer();
@@ -199,6 +212,31 @@ public class QuestTrackerTests
                     Id = "failure_stage",
                     Name = "Guard the Treaty",
                     Objectives = [new QuestObjective { Id = "keep_safe", Type = ObjectiveType.Custom, CustomCondition = "Do not ruin the treaty." }]
+                }
+            ]
+        });
+
+        registry.Quests.Register(new QuestDefinition
+        {
+            Id = "ifrit_quest",
+            Name = "Trial of Fire",
+            GiverId = "marquis_ondore",
+            Stages =
+            [
+                new QuestStage
+                {
+                    Id = "defeat_ifrit",
+                    Name = "Defeat Ifrit",
+                    Objectives =
+                    [
+                        new QuestObjective
+                        {
+                            Id = "kill_ifrit",
+                            Type = ObjectiveType.Kill,
+                            TargetId = "ifrit_guardian",
+                            Description = "Defeat Ifrit, the Infernal Lord"
+                        }
+                    ]
                 }
             ]
         });

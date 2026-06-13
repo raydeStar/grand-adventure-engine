@@ -271,10 +271,12 @@ public class QuestTracker
                 // Match by ID or by name (case-insensitive)
                 var matches = (!string.IsNullOrWhiteSpace(obj.TargetId)
                         && (obj.TargetId.Equals(targetId, StringComparison.OrdinalIgnoreCase)
-                            || (targetName is not null && obj.TargetId.Equals(targetName, StringComparison.OrdinalIgnoreCase))))
+                            || (targetName is not null && obj.TargetId.Equals(targetName, StringComparison.OrdinalIgnoreCase))
+                            || QuestTargetLooselyMatches(obj.TargetId, targetId, targetName)))
                     || (!string.IsNullOrWhiteSpace(obj.TargetName)
                         && targetName is not null
-                        && obj.TargetName.Equals(targetName, StringComparison.OrdinalIgnoreCase));
+                        && (obj.TargetName.Equals(targetName, StringComparison.OrdinalIgnoreCase)
+                            || QuestTargetLooselyMatches(obj.TargetName, targetId, targetName)));
 
                 if (!matches) continue;
 
@@ -292,5 +294,32 @@ public class QuestTracker
         }
 
         return updates.Count > 0 ? string.Join("; ", updates) : null;
+    }
+
+    private static bool QuestTargetLooselyMatches(string expectedTarget, string actualId, string? actualName)
+    {
+        var expectedTokens = GetQuestTargetTokens(expectedTarget);
+        if (expectedTokens.Count == 0)
+            return false;
+
+        var actualTokens = GetQuestTargetTokens($"{actualId} {actualName}");
+        return actualTokens.Count > 0 && expectedTokens.Overlaps(actualTokens);
+    }
+
+    private static HashSet<string> GetQuestTargetTokens(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return [];
+
+        var normalized = new string(value
+            .ToLowerInvariant()
+            .Select(character => char.IsLetterOrDigit(character) ? character : ' ')
+            .ToArray());
+
+        return normalized
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Where(token => token.Length >= 3)
+            .Where(token => token is not "the" and not "and" and not "guardian" and not "lord" and not "lady" and not "master" and not "void")
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 }

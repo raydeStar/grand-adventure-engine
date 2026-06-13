@@ -468,6 +468,29 @@ public class GameEngineCommandFlowTests
     }
 
     [Fact]
+    public async Task UsePotion_ParsesCompactHealEffect()
+    {
+        var stateManager = await CreateStateAsync();
+        var player = await stateManager.GetPlayerAsync(PlayerId);
+        player!.Hp = 5;
+        player.Inventory.Add(new InventoryItem { Name = "Healing Draught", IsConsumable = true, Effect = "heal:6", Quantity = 1 });
+        await stateManager.SavePlayerAsync(player);
+
+        var narrator = new PerpetualFallbackNarrator();
+        var engine = CreateEngineWithDice(stateManager, narrator);
+
+        var action = engine.ParseCommand(PlayerId, "use healing draught");
+        var result = await engine.ProcessActionAsync(PlayerId, action);
+
+        Assert.True(result.Success);
+        Assert.Contains("Restored 6 HP", result.MechanicalSummary);
+
+        player = await stateManager.GetPlayerAsync(PlayerId);
+        Assert.Equal(11, player!.Hp);
+        Assert.Empty(player.Inventory);
+    }
+
+    [Fact]
     public async Task UseManaPotion_RestoresMp()
     {
         var stateManager = await CreateStateAsync();

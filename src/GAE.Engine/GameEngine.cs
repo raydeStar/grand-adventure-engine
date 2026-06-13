@@ -605,9 +605,23 @@ public class GameEngine : IGameEngine
 
         if (_registry is not null)
         {
-            var template = _registry.Items.GetAll().FirstOrDefault(candidate =>
+            var templates = _registry.Items.GetAll().ToList();
+            var template = templates.FirstOrDefault(candidate =>
                 candidate.Id.Equals(itemLookup, StringComparison.OrdinalIgnoreCase)
                 || candidate.Name.Equals(itemLookup, StringComparison.OrdinalIgnoreCase));
+
+            if (template is null && itemLookup.Equals("Potion", StringComparison.OrdinalIgnoreCase))
+            {
+                template = templates
+                    .Where(candidate => candidate.IsConsumable)
+                    .Where(candidate =>
+                        candidate.Type == ItemType.Potion
+                        || candidate.Tags.Contains("potion", StringComparer.OrdinalIgnoreCase)
+                        || candidate.Tags.Contains("healing", StringComparer.OrdinalIgnoreCase))
+                    .OrderBy(candidate => candidate.RequiredLevel)
+                    .ThenBy(candidate => candidate.Value)
+                    .FirstOrDefault();
+            }
 
             if (template is not null)
                 return template.ToInventoryItem();
@@ -902,6 +916,8 @@ move_room_ready:
         if (player.BlindAdventure is not null && BlindAdventureService.ShouldConclude(player))
             moveSummary += "\nAdventure conclusion is ready. Use `adventure end` to conclude the tale.";
 
+        await _stateManager.SavePlayerAsync(player, ct);
+
         return new ActionResult
         {
             ActionId = action.Id,
@@ -1195,6 +1211,7 @@ move_room_ready:
             if (questUpdate is not null)
                 result.MechanicalSummary += $"\n📜 {questUpdate}";
 
+            await _stateManager.SavePlayerAsync(player, ct);
             await _stateManager.SaveRoomAsync(room, ct);
         }
         else if (target.Hp.HasValue && target.Hp.Value > 0)
@@ -5157,6 +5174,8 @@ move_room_ready:
     private static readonly System.Text.RegularExpressions.Regex EffectHpRegex = new(@"[Rr]estores?\s+((?:\d+d\d+(?:[+\-]\d+)?|\d+))\s*(?:HP|hit\s*points?|health)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
     private static readonly System.Text.RegularExpressions.Regex EffectMpRegex = new(@"[Rr]estores?\s+((?:\d+d\d+(?:[+\-]\d+)?|\d+))\s*(?:MP|mana|magic)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
     private static readonly System.Text.RegularExpressions.Regex EffectDamageRegex = new(@"[Dd]eals?\s+((?:\d+d\d+(?:[+\-]\d+)?|\d+))\s*(?:damage|HP\s*damage)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    private static readonly System.Text.RegularExpressions.Regex EffectHealTokenRegex = new(@"(?:^|[;\s])heal:((?:\d+d\d+(?:[+\-]\d+)?|\d+))", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    private static readonly System.Text.RegularExpressions.Regex EffectManaTokenRegex = new(@"(?:^|[;\s])mana:((?:\d+d\d+(?:[+\-]\d+)?|\d+))", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
     /// <summary>
     /// Handles the "use" command mechanically for consumable items.
@@ -5272,9 +5291,17 @@ move_room_ready:
         if (hpMatch.Success)
             hp = ResolveEffectValue(hpMatch.Groups[1].Value);
 
+        var healTokenMatch = EffectHealTokenRegex.Match(effect);
+        if (healTokenMatch.Success)
+            hp = ResolveEffectValue(healTokenMatch.Groups[1].Value);
+
         var mpMatch = EffectMpRegex.Match(effect);
         if (mpMatch.Success)
             mp = ResolveEffectValue(mpMatch.Groups[1].Value);
+
+        var manaTokenMatch = EffectManaTokenRegex.Match(effect);
+        if (manaTokenMatch.Success)
+            mp = ResolveEffectValue(manaTokenMatch.Groups[1].Value);
 
         var dmgMatch = EffectDamageRegex.Match(effect);
         if (dmgMatch.Success)

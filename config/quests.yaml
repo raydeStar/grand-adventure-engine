@@ -726,7 +726,7 @@ quests:
     description: "All four Crystals are gathered, and their combined light has revealed the truth: a rift to the Void â€” the dimension of nothingness â€” has opened beneath the Crystal Sanctum. Nullthorn, the ancient Warlock of the Void, draws power from the rift to unmake reality itself. Someone must enter the Void and end him, or everything â€” every memory, every dream, every life â€” will be erased."
     giver_id: "marquis_odran"
     turn_in_npc_id: "marquis_odran"
-    min_level: 5
+    min_level: 4
     prerequisites: ["crystal_crusade_fire", "crystal_crusade_earth", "crystal_crusade_wind"]
     is_one_time: true
     tags: ["main", "story", "crystal", "void", "final"]
