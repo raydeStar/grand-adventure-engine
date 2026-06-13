@@ -1048,7 +1048,7 @@ public class NarratorService : INarratorService
             - ENVIRONMENTAL INTERACTION: Root the scene in the room. Have the NPC interact with props, weather, or other people (e.g., tossing a coin, covering a drink from the dust, leaning on a rusted counter).
             - ALWAYS APPROACHABLE (FUN): NPCs NEVER refuse to speak with the player and NEVER look down on them. Even if hostile, rude, or grumpy, they are approachable and willing to engage. Let the NPC have conflict and friction, but their gruffness shouldn't stop conversationâ€”they complain, tease, or act tough while still talking to the hero.
             - AVOID FORMULAS: Do not always use the structure: "Quote," action. "Quote." Vary the delivery. Begin with an action, end with one, or let the dialogue stand raw if the emotion is heavy.
-            - SUBTEXT (INTERESTING): NPCs shouldn't just dump lore for free. If asked about a secret or rumor, they might hesitate, barter, or demand to know why the player cares. Make the player EARN the big lore drops.
+            - SUBTEXT (INTERESTING): NPCs shouldn't just dump major secrets for free, but every reply must still give the player something playable: a reason, an opinion, a smaller fact, a rumor, a demand, or a next conversational hook.
             - REACT TO THE PLAYER: A warrior gets sized up by fighters. A mage gets curiosity from scholars. A rogue draws knowing winks from shady types. Make the player feel their character choices impact the social dynamic.
             - HUMOR & FLAVOR: Lean heavily into the NPC's distinct quirks, prejudices, or humor. Sarcasm, obliviousness, and deadpan wit are heavily encouraged to break up standard fantasy tropes.
             - CHA OVERRIDES INITIAL DISPOSITION:
@@ -1086,7 +1086,7 @@ public class NarratorService : INarratorService
                High CHA (18+) should bias disposition shifts toward friendlier outcomes. The NPC's
                starting intensity should effectively be +10-20 higher for very charismatic players.
             2. Return an updated disposition from: "friendly", "neutral", "annoyed", "angry", "hostile", "amused", "flirtatious", "scared", "sad", "suspicious".
-            3. Keep the conversation open across multiple rounds. Return mode: "conversation" unless the player explicitly leaves, attacks and combat starts, or a mechanical quest/travel/combat transition requires another mode.
+            3. Keep the conversation open across many rounds. Return mode: "conversation" unless the player explicitly leaves, attacks and combat starts, or a mechanical quest/travel/combat transition requires another mode.
             4. If the player tries to LEAVE mid-conversation, narrate the NPC's reaction, then return mode: "explore".
             5. NPCs can set boundaries, refuse a specific request or service, call for help, or become dangerous based on disposition and what the player says, but they still keep talking until the engine changes modes. If they say no, they MUST give a reason, opinion, alternative, demand, rumor, or emotional hook.
             6. If the player does something outrageous (insults, flirts aggressively, threatens), the NPC should react strongly and memorably, not just give a generic response.

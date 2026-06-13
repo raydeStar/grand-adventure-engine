@@ -1271,6 +1271,14 @@ move_room_ready:
 
         // Get AI narration for the greeting
         var freeForm = await _narrator.ProcessConversationTurnAsync(player, room, target, player.Interaction, action.RawInput, ct);
+        if (mode == InteractionMode.Conversation
+            && !freeForm.CombatInitiated
+            && (freeForm.InteractionUpdate is null || freeForm.InteractionUpdate.Mode == InteractionMode.Explore))
+        {
+            freeForm.InteractionUpdate ??= new InteractionUpdate();
+            freeForm.InteractionUpdate.Mode = InteractionMode.Conversation;
+            freeForm.InteractionUpdate.NpcDisposition ??= target.Disposition;
+        }
 
         // Apply interaction update from AI
         ApplyInteractionUpdate(player, room, target, freeForm);
@@ -3000,6 +3008,16 @@ move_room_ready:
             }
 
             var freeForm = await _narrator.ProcessConversationTurnAsync(player, room, npc, player.Interaction, promptInput, ct);
+
+            // Ordinary conversation turns stay open; only explicit exit handling above may close them.
+            if (!freeForm.CombatInitiated
+                && (freeForm.InteractionUpdate is null || freeForm.InteractionUpdate.Mode == InteractionMode.Explore))
+            {
+                freeForm.InteractionUpdate ??= new InteractionUpdate();
+                freeForm.InteractionUpdate.Mode = InteractionMode.Conversation;
+                freeForm.InteractionUpdate.NpcDisposition ??= npc.Disposition;
+            }
+
             ApplyInteractionUpdate(player, room, npc, freeForm);
 
             // Record NPC response in context for conversation continuity
@@ -3280,9 +3298,8 @@ move_room_ready:
         }
 
         // ─── Multi-exchange combat ───
-        // Boss arenas use fewer exchanges per turn so bosses don't one-round the player.
-        bool isBossArena = room.EnvironmentTags.Contains("boss_arena");
-        int ExchangesPerTurn = isBossArena ? 1 : 3;
+        // Each command resolves one exchange so players can react before damage snowballs.
+        const int ExchangesPerTurn = 1;
         var allDice = new List<DiceRoll>();
         var allSC = new List<StateChange>();
         var mech = new List<string>();
@@ -5184,7 +5201,8 @@ move_room_ready:
     /// </summary>
     private async Task<ActionResult> ProcessUseAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
     {
-        var item = FindNamedEntity(player.Inventory, i => i.Name, action.Target);
+        var item = FindBestGenericHealingConsumable(player.Inventory, action.Target)
+            ?? FindNamedEntity(player.Inventory, i => i.Name, action.Target, GetConsumableUseAliases);
 
         // Auto-take from room if the item is on the ground and consumable
         if (item is null)
@@ -5192,7 +5210,8 @@ move_room_ready:
             var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
             if (room is not null)
             {
-                var roomItem = FindNamedEntity(room.Items, i => i.Name, action.Target);
+                var roomItem = FindBestGenericHealingConsumable(room.Items, action.Target)
+                    ?? FindNamedEntity(room.Items, i => i.Name, action.Target, GetConsumableUseAliases);
                 if (roomItem is not null)
                 {
                     // Transfer from room to inventory
@@ -5308,6 +5327,82 @@ move_room_ready:
             hp = -ResolveEffectValue(dmgMatch.Groups[1].Value);
 
         return (hp, mp);
+    }
+
+    private static IEnumerable<string?> GetConsumableUseAliases(InventoryItem item)
+    {
+        if (!item.IsConsumable)
+            yield break;
+
+        var itemText = $"{item.Name} {item.Description} {item.Effect}";
+        var looksHealing = item.Type == ItemType.Potion
+            || itemText.Contains("heal", StringComparison.OrdinalIgnoreCase)
+            || itemText.Contains("health", StringComparison.OrdinalIgnoreCase)
+            || itemText.Contains("hp", StringComparison.OrdinalIgnoreCase);
+
+        if (looksHealing)
+        {
+            yield return "potion";
+            yield return "healing potion";
+            yield return "health potion";
+        }
+
+        var looksMana = itemText.Contains("mana", StringComparison.OrdinalIgnoreCase)
+            || itemText.Contains("magic", StringComparison.OrdinalIgnoreCase)
+            || itemText.Contains("mp", StringComparison.OrdinalIgnoreCase);
+
+        if (looksMana)
+        {
+            yield return "mana potion";
+            yield return "magic potion";
+        }
+    }
+
+    private static InventoryItem? FindBestGenericHealingConsumable(IEnumerable<InventoryItem> items, string? rawQuery)
+    {
+        var query = NormalizeLookupText(rawQuery);
+        if (query is not ("potion" or "healing potion" or "health potion"))
+            return null;
+
+        return items
+            .Where(item => item.IsConsumable && item.Quantity > 0)
+            .Select(item => new { Item = item, Healing = GetExpectedHealingValue(item) })
+            .Where(entry => entry.Healing > 0)
+            .OrderByDescending(entry => entry.Healing)
+            .ThenByDescending(entry => entry.Item.Value)
+            .Select(entry => entry.Item)
+            .FirstOrDefault();
+    }
+
+    private static double GetExpectedHealingValue(InventoryItem item)
+    {
+        if (string.IsNullOrWhiteSpace(item.Effect))
+            return 0;
+
+        var hpMatch = EffectHpRegex.Match(item.Effect);
+        if (hpMatch.Success)
+            return GetExpectedEffectValue(hpMatch.Groups[1].Value);
+
+        var healTokenMatch = EffectHealTokenRegex.Match(item.Effect);
+        if (healTokenMatch.Success)
+            return GetExpectedEffectValue(healTokenMatch.Groups[1].Value);
+
+        return 0;
+    }
+
+    private static double GetExpectedEffectValue(string value)
+    {
+        var trimmed = value.Trim();
+        var diceMatch = System.Text.RegularExpressions.Regex.Match(trimmed, @"^(?<count>\d+)d(?<sides>\d+)(?<mod>[+\-]\d+)?$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (diceMatch.Success)
+        {
+            var count = int.Parse(diceMatch.Groups["count"].Value);
+            var sides = int.Parse(diceMatch.Groups["sides"].Value);
+            var modifier = diceMatch.Groups["mod"].Success ? int.Parse(diceMatch.Groups["mod"].Value) : 0;
+            return count * ((sides + 1) / 2.0) + modifier;
+        }
+
+        return int.TryParse(trimmed, out var flatValue) ? flatValue : 0;
     }
 
     /// <summary>Resolves a value that may be a flat integer or a dice expression like "2d4+2".</summary>
@@ -5677,6 +5772,14 @@ move_room_ready:
         await OverlayWorldNpcStateAsync(shopkeeper, player.ActiveWorldId, player.Id, ct);
 
         var freeForm = await _narrator.ProcessConversationTurnAsync(player, room, shopkeeper, player.Interaction, action.RawInput, ct);
+        if (!freeForm.CombatInitiated
+            && (freeForm.InteractionUpdate is null || freeForm.InteractionUpdate.Mode == InteractionMode.Explore))
+        {
+            freeForm.InteractionUpdate ??= new InteractionUpdate();
+            freeForm.InteractionUpdate.Mode = InteractionMode.Trading;
+            freeForm.InteractionUpdate.NpcDisposition ??= shopkeeper.Disposition;
+        }
+
         ApplyInteractionUpdate(player, room, shopkeeper, freeForm);
 
         // Process quest updates from shopkeeper conversation (accept, decline, turn-in)
@@ -5957,6 +6060,7 @@ move_room_ready:
     private static List<string> CheckNpcMorale(List<Npc> enemies, Room room)
     {
         var messages = new List<string>();
+        var isBossArena = room.EnvironmentTags.Contains("boss_arena", StringComparer.OrdinalIgnoreCase);
         for (int i = enemies.Count - 1; i >= 0; i--)
         {
             var npc = enemies[i];
@@ -5966,7 +6070,7 @@ move_room_ready:
             var ds = npc.DispositionState;
 
             // Non-hostile baseline NPCs surrender when badly wounded
-            if (ds.Baseline >= 50 && hpPct < 0.25)
+            if (!isBossArena && ds.Baseline >= 50 && hpPct < 0.25)
             {
                 npc.IsHostile = false;
                 ds.Emotion = "resigned";
@@ -5976,7 +6080,7 @@ move_room_ready:
                 enemies.Remove(npc);
             }
             // Scared NPCs flee at half HP
-            else if (ds.Emotion.Equals("scared", StringComparison.OrdinalIgnoreCase) && hpPct < 0.5)
+            else if (!isBossArena && ds.Emotion.Equals("scared", StringComparison.OrdinalIgnoreCase) && hpPct < 0.5)
             {
                 room.Npcs.Remove(npc);
                 enemies.Remove(npc);

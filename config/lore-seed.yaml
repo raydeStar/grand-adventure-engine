@@ -705,12 +705,12 @@ rooms:
         personality: "A massive spectral wolf with glowing amber eyes, wreathed in frost. An ancient guardian spirit of the Gloamwood, corrupted by the Aether leaking from the Blackspire. Territorial and aggressive. Will attack on sight unless the player shows dominance or offers an offering."
         faction: "neutral"
         is_hostile: true
-        level: 3
-        hp: 30
-        max_hp: 30
-        attack_bonus: 4
-        damage_dice: "1d6+2"
-        defense: 12
+        level: 2
+        hp: 22
+        max_hp: 22
+        attack_bonus: 2
+        damage_dice: "1d4+1"
+        defense: 11
         loot:
           - id: "wolf_pelt"
             name: "Fenrir's Mane"

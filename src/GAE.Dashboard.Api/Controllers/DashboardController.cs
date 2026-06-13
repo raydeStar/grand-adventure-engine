@@ -739,9 +739,25 @@ public class DashboardController : ControllerBase
         if (string.IsNullOrWhiteSpace(itemLookup))
             return null;
 
-        return _registry.Items.GetAll().FirstOrDefault(candidate =>
+        var templates = _registry.Items.GetAll().ToList();
+        var template = templates.FirstOrDefault(candidate =>
             candidate.Id.Equals(itemLookup, StringComparison.OrdinalIgnoreCase)
             || candidate.Name.Equals(itemLookup, StringComparison.OrdinalIgnoreCase));
+
+        if (template is null && itemLookup.Equals("Potion", StringComparison.OrdinalIgnoreCase))
+        {
+            template = templates
+                .Where(candidate => candidate.IsConsumable)
+                .Where(candidate =>
+                    candidate.Type == ItemType.Potion
+                    || candidate.Tags.Contains("potion", StringComparer.OrdinalIgnoreCase)
+                    || candidate.Tags.Contains("healing", StringComparer.OrdinalIgnoreCase))
+                .OrderBy(candidate => candidate.RequiredLevel)
+                .ThenBy(candidate => candidate.Value)
+                .FirstOrDefault();
+        }
+
+        return template;
     }
 
     private void RecalculatePlayerResources(PlayerCharacter player)

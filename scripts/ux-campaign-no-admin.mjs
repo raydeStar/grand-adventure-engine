@@ -195,7 +195,12 @@ function getRoom(roomId) {
   return roomsCache.find(room => room.id === roomId) || null;
 }
 
-function findRoute(fromRoomId, toRoomId) {
+function roomHasLivingCombatants(roomId) {
+  const room = getRoom(roomId);
+  return (room?.npcs || []).some(npc => typeof npc.hp === 'number' && npc.hp > 0);
+}
+
+function findRoute(fromRoomId, toRoomId, { avoidCombatTransit = true } = {}) {
   if (fromRoomId === toRoomId) return [];
   const queue = [{ roomId: fromRoomId, path: [] }];
   const visited = new Set([fromRoomId]);
@@ -205,6 +210,7 @@ function findRoute(fromRoomId, toRoomId) {
     const room = getRoom(current.roomId);
     for (const [direction, nextRoomId] of Object.entries(room?.exits || {})) {
       if (visited.has(nextRoomId)) continue;
+      if (avoidCombatTransit && nextRoomId !== toRoomId && roomHasLivingCombatants(nextRoomId)) continue;
       const nextPath = [...current.path, direction];
       if (nextRoomId === toRoomId) return nextPath;
       visited.add(nextRoomId);
@@ -223,7 +229,7 @@ async function goTo(page, targetRoomId, label = `go to ${targetRoomId}`) {
     return false;
   }
 
-  const route = findRoute(currentRoomId, targetRoomId);
+  const route = findRoute(currentRoomId, targetRoomId) || findRoute(currentRoomId, targetRoomId, { avoidCombatTransit: false });
   if (!route) {
     report.push(scoreStep(label, state, { success: false, mechanicalSummary: `No route from ${currentRoomId} to ${targetRoomId}.` }, ['room graph has no normal path']));
     return false;
@@ -243,6 +249,15 @@ async function goTo(page, targetRoomId, label = `go to ${targetRoomId}`) {
     return false;
   }
 
+  return true;
+}
+
+async function requireGoTo(page, targetRoomId, label = `go to ${targetRoomId}`) {
+  const ok = await goTo(page, targetRoomId, label);
+  if (!ok) {
+    const state = await readState(page);
+    throw new Error(`${label}: required path failed from ${state.player?.roomId ?? 'unknown'} to ${targetRoomId}`);
+  }
   return true;
 }
 
@@ -278,7 +293,17 @@ async function runCommand(page, command, label = command, extraIssues = []) {
   const state = await readState(page);
   const row = scoreStep(label, state, result, extraIssues);
   report.push(row);
+  await stabilizeBrowserPage(page);
   return { result, state, row };
+}
+
+async function stabilizeBrowserPage(page) {
+  commandCount++;
+  if (commandCount % 30 !== 0) return;
+
+  await page.reload({ waitUntil: 'domcontentloaded', timeout: 60_000 });
+  await expect(page.locator('#command-input')).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('#command-input')).toBeEnabled({ timeout: 30_000 });
 }
 
 function resultDefeatedEnemy(result) {
@@ -286,8 +311,11 @@ function resultDefeatedEnemy(result) {
   if (resultPlayerDefeated(result)) {
     return false;
   }
+  if (/victory is close/i.test(text)) {
+    return false;
+  }
 
-  return /falls|collapses|crumbles|fight is over|it's done|victory|slain|(?:is|has been) defeated/i.test(text);
+  return /falls|collapses|crumbles|fight is over|it's done|slain|(?:is|has been) defeated/i.test(text);
 }
 
 function resultPlayerDefeated(result) {
@@ -302,7 +330,8 @@ async function rest(page, label = 'long rest') {
 async function fight(page, target, label, maxRounds = 12) {
   await rest(page, `${label}: prepare`);
   let command = target ? `attack ${target}` : 'attack';
-  for (let round = 1; round <= maxRounds; round++) {
+  const roundLimit = Math.max(maxRounds, 24);
+  for (let round = 1; round <= roundLimit; round++) {
     const { result, state } = await runCommand(page, command, `${label}: ${command}`);
     if (resultPlayerDefeated(result)) {
       report.push(scoreStep(`${label}: player survived`, state, result, ['player was defeated']));
@@ -311,7 +340,7 @@ async function fight(page, target, label, maxRounds = 12) {
 
     if (resultDefeatedEnemy(result)) {
       if (/combat/i.test(state.prompt || '')) {
-        command = 'attack';
+        command = 'aimed strike';
         continue;
       }
 
@@ -343,11 +372,11 @@ async function fight(page, target, label, maxRounds = 12) {
       throw new Error(`${label}: expected hostile was unavailable`);
     }
 
-    command = 'attack';
+    command = 'aimed strike';
   }
 
   const finalState = await readState(page);
-  report.push(scoreStep(`${label}: defeated within ${maxRounds} rounds`, finalState, { success: false, mechanicalSummary: 'Combat took too long.' }, ['combat did not resolve']));
+  report.push(scoreStep(`${label}: defeated within ${roundLimit} rounds`, finalState, { success: false, mechanicalSummary: 'Combat took too long.' }, ['combat did not resolve']));
   throw new Error(`${label}: combat did not resolve`);
 }
 
@@ -356,6 +385,45 @@ async function runCommands(page, commands) {
     const command = typeof entry === 'string' ? entry : entry.command;
     const label = typeof entry === 'string' ? entry : entry.label || entry.command;
     await runCommand(page, command, label);
+  }
+}
+
+async function buyIfAffordable(page, itemName, price, label) {
+  const state = await readState(page);
+  if ((state.player?.gold ?? 0) < price) {
+    milestones.push(`deferred ${itemName}: ${state.player?.gold ?? 'unknown'} gold`);
+    return false;
+  }
+
+  const { result } = await runCommand(page, `buy ${itemName}`, label || `buy ${itemName}`);
+  if (result?.success === false) {
+    throw new Error(`${label || itemName}: purchase failed`);
+  }
+
+  return true;
+}
+
+async function stockUp(page, label, { basics = 0, greaters = 0, gear = false } = {}) {
+  const origin = (await readState(page)).player?.roomId;
+  await requireGoTo(page, 'general_store', label);
+
+  if (gear) {
+    await buyIfAffordable(page, 'Warden Ring', 15, `${label}: buy Warden Ring`);
+    await buyIfAffordable(page, 'Reinforced Gloves', 8, `${label}: buy Reinforced Gloves`);
+    await buyIfAffordable(page, 'Swiftstep Sandals', 12, `${label}: buy Swiftstep Sandals`);
+  }
+
+  for (let i = 0; i < basics; i++) {
+    await buyIfAffordable(page, 'Healing Draught', 15, `${label}: buy Healing Draught ${i + 1}`);
+  }
+
+  for (let i = 0; i < greaters; i++) {
+    await buyIfAffordable(page, 'Greater Healing Healing Draught', 50, `${label}: buy Greater Healing Draught ${i + 1}`);
+  }
+
+  await runCommand(page, 'inventory', `${label}: check inventory`);
+  if (origin && origin !== 'general_store') {
+    await requireGoTo(page, origin, `${label}: return`);
   }
 }
 
@@ -379,22 +447,36 @@ async function noteLevel(page, milestone) {
   return state.player?.level || 0;
 }
 
-async function acceptQuestIfReady(page, questName, requiredLevel) {
+async function acceptQuestIfReady(page, questName, requiredLevel, { required = true } = {}) {
   const state = await readState(page);
   if ((state.player?.level || 0) < requiredLevel) {
-    milestones.push(`skipped ${questName}: level ${state.player?.level ?? 'unknown'} below ${requiredLevel}`);
+    report.push(scoreStep(`accept quest ${questName}: level gate`, state, {
+      success: false,
+      mechanicalSummary: `Expected level ${requiredLevel}, but ${playerName} is level ${state.player?.level ?? 'unknown'}.`
+    }, ['level progression was insufficient for campaign gate']));
+    if (required) {
+      throw new Error(`accept quest ${questName}: level ${state.player?.level ?? 'unknown'} below ${requiredLevel}`);
+    }
     return false;
   }
 
-  await runCommand(page, `accept quest ${questName}`, `accept quest ${questName}`);
+  const { result } = await runCommand(page, `accept quest ${questName}`, `accept quest ${questName}`);
+  if (required && result?.success === false) {
+    throw new Error(`accept quest ${questName}: command failed`);
+  }
   return true;
 }
 
-async function runAtCityHall(page, label, commands) {
-  await goTo(page, 'city_hall', label);
+async function runAtCityHall(page, label, commands, { required = true } = {}) {
+  const reached = required
+    ? await requireGoTo(page, 'city_hall', label)
+    : await goTo(page, 'city_hall', label);
   const state = await readState(page);
-  if (state.player?.roomId !== 'city_hall') {
+  if (!reached || state.player?.roomId !== 'city_hall') {
     milestones.push(`skipped ${label}: still in ${state.player?.roomId ?? 'unknown'}`);
+    if (required) {
+      throw new Error(`${label}: city hall was required`);
+    }
     return false;
   }
 
@@ -420,32 +502,33 @@ async function main() {
     'tell Mara I licked a sewer pipe for science',
     'walk away'
   ]);
-  await goTo(page, 'tavern_cellar', 'reach the Waterway');
+  await requireGoTo(page, 'tavern_cellar', 'reach the Waterway');
   await fight(page, null, 'Waterway Infestation', 6);
-  await goTo(page, 'spawn', 'return to Mara');
+  await requireGoTo(page, 'spawn', 'return to Mara');
   await runCommands(page, ['talk to Mara', 'tell Mara the Waterway is clear', 'walk away']);
+  await stockUp(page, 'early campaign supplies', { basics: 4, gear: true });
 
-  await goTo(page, 'town_square', 'reach the bazaar');
+  await requireGoTo(page, 'town_square', 'reach the bazaar');
   await runCommands(page, [
     'talk to Bram',
     'accept quest Eyes on the Empire',
     'walk away'
   ]);
-  await goTo(page, 'town_gate', 'patrol eastern gate');
-  await goTo(page, 'back_alley', 'patrol Lowtown');
-  await goTo(page, 'market_stalls', 'patrol market');
-  await goTo(page, 'town_square', 'return to Bram');
+  await requireGoTo(page, 'town_gate', 'patrol eastern gate');
+  await requireGoTo(page, 'back_alley', 'patrol Lowtown');
+  await requireGoTo(page, 'market_stalls', 'patrol market');
+  await requireGoTo(page, 'town_square', 'return to Bram');
   await runCommands(page, [
     'talk to Bram',
     'tell Bram I checked the gate, Lowtown, and the market',
     'walk away'
   ]);
 
-  await goTo(page, 'deep_forest', 'reach the Emberwood');
+  await requireGoTo(page, 'deep_forest', 'reach the Emberwood');
   await fight(page, null, 'Emberwood guardian', 10);
-  await goTo(page, 'volcanic_path', 'reach the volcanic path');
+  await requireGoTo(page, 'volcanic_path', 'reach the volcanic path');
   await fight(page, null, 'Volcanic path', 8);
-  await goTo(page, 'water_temple_entrance', 'reach the flooded tunnels');
+  await requireGoTo(page, 'water_temple_entrance', 'reach the flooded tunnels');
   await fight(page, null, 'Water Temple entrance', 8);
 
   await noteLevel(page, 'main quest readiness');
@@ -457,9 +540,9 @@ async function main() {
     await acceptQuestIfReady(page, 'The Dying Crystal', 2);
     await runCommand(page, 'walk away', 'walk away');
   }
-  await goTo(page, 'water_temple_depths', 'reach Water Temple depths');
+  await requireGoTo(page, 'water_temple_depths', 'reach Water Temple depths');
   await fight(page, null, 'Water Temple depths', 8);
-  await goTo(page, 'water_temple_sanctum', 'reach Water Crystal sanctum');
+  await requireGoTo(page, 'water_temple_sanctum', 'reach Water Crystal sanctum');
   await fight(page, null, 'Water Crystal guardian', 10);
   await runCommands(page, [
     'take Water Crystal'
@@ -468,6 +551,7 @@ async function main() {
     'tell Marquis I recovered the Water Crystal',
     'walk away'
   ]);
+  await stockUp(page, 'post-water supplies', { greaters: 3 });
 
   await noteLevel(page, 'crystal crusade readiness');
 
@@ -479,9 +563,9 @@ async function main() {
     await acceptQuestIfReady(page, 'Trial of Wind', 3);
     await runCommand(page, 'walk away', 'walk away');
   }
-  await goTo(page, 'fire_temple_entrance', 'reach Fire Temple');
+  await requireGoTo(page, 'fire_temple_entrance', 'reach Fire Temple');
   await fight(page, null, 'Fire temple entry', 8);
-  await goTo(page, 'fire_temple_core', 'reach Fire Crystal core');
+  await requireGoTo(page, 'fire_temple_core', 'reach Fire Crystal core');
   await fight(page, null, 'Fire Crystal guardian', 12);
   await runCommands(page, [
     'take Fire Crystal'
@@ -490,12 +574,13 @@ async function main() {
     'tell Marquis I recovered the Fire Crystal',
     'walk away'
   ]);
+  await stockUp(page, 'post-fire supplies', { basics: 2, greaters: 2 });
 
-  await goTo(page, 'mountain_trail', 'reach mountain trail');
+  await requireGoTo(page, 'mountain_trail', 'reach mountain trail');
   await fight(page, null, 'Mountain trail', 10);
-  await goTo(page, 'earth_temple_entrance', 'reach Earth Temple');
+  await requireGoTo(page, 'earth_temple_entrance', 'reach Earth Temple');
   await fight(page, null, 'Earth temple entry', 10);
-  await goTo(page, 'earth_temple_heart', 'reach Earth Crystal heart');
+  await requireGoTo(page, 'earth_temple_heart', 'reach Earth Crystal heart');
   await fight(page, null, 'Earth Crystal guardian', 12);
   await runCommands(page, [
     'take Earth Crystal'
@@ -504,12 +589,13 @@ async function main() {
     'tell Marquis I recovered the Earth Crystal',
     'walk away'
   ]);
+  await stockUp(page, 'post-earth supplies', { greaters: 2 });
 
-  await goTo(page, 'skyward_path', 'reach skyward path');
+  await requireGoTo(page, 'skyward_path', 'reach skyward path');
   await fight(page, null, 'Skyward path', 10);
-  await goTo(page, 'wind_temple_entrance', 'reach Wind Temple');
+  await requireGoTo(page, 'wind_temple_entrance', 'reach Wind Temple');
   await fight(page, null, 'Wind temple entry', 10);
-  await goTo(page, 'wind_temple_apex', 'reach Wind Crystal apex');
+  await requireGoTo(page, 'wind_temple_apex', 'reach Wind Crystal apex');
   await fight(page, null, 'Wind Crystal guardian', 12);
   await runCommands(page, [
     'take Wind Crystal'
@@ -524,25 +610,30 @@ async function main() {
   if (await runAtCityHall(page, 'accept void quest', [
     'talk to Marquis'
   ])) {
-    await acceptQuestIfReady(page, 'The Void Awaits', 5);
+    await acceptQuestIfReady(page, 'The Void Awaits', 4);
     await runCommand(page, 'walk away', 'walk away');
   }
-  await goTo(page, 'void_rift', 'enter the Void');
+  await stockUp(page, 'final supplies', { greaters: 4 });
+  await requireGoTo(page, 'void_rift', 'enter the Void');
   await fight(page, null, 'Void rift', 12);
-  await goTo(page, 'void_corridor', 'reach Void corridor');
+  await requireGoTo(page, 'void_corridor', 'reach Void corridor');
   await fight(page, null, 'Void corridor', 12);
-  await goTo(page, 'void_throne', 'reach final throne');
+  await requireGoTo(page, 'void_throne', 'reach final throne');
   finalBossDefeated = await fight(page, null, 'Final boss', 16);
   await runCommands(page, ['take Shard of Restored Light', 'inventory']);
 }
 
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch({
+  headless: true,
+  args: ['--disable-gpu', '--disable-dev-shm-usage', '--no-sandbox']
+});
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
 const report = [];
 const milestones = [];
 const browserEvents = [];
 let finalBossDefeated = false;
 let campaignError = null;
+let commandCount = 0;
 
 page.on('console', message => {
   if (['error', 'warning'].includes(message.type())) {

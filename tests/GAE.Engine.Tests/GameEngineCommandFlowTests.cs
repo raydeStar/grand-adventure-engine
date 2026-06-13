@@ -491,6 +491,78 @@ public class GameEngineCommandFlowTests
     }
 
     [Fact]
+    public async Task UsePotion_FindsHealingDraughtByGenericPotionAlias()
+    {
+        var stateManager = await CreateStateAsync();
+        var player = await stateManager.GetPlayerAsync(PlayerId);
+        player!.Hp = 5;
+        player.Inventory.Add(new InventoryItem
+        {
+            Name = "Healing Draught",
+            Description = "A small vial of red liquid that heals minor wounds.",
+            IsConsumable = true,
+            Effect = "heal:6",
+            Quantity = 1
+        });
+        await stateManager.SavePlayerAsync(player);
+
+        var narrator = new PerpetualFallbackNarrator();
+        var engine = CreateEngineWithDice(stateManager, narrator);
+
+        var action = engine.ParseCommand(PlayerId, "use potion");
+        var result = await engine.ProcessActionAsync(PlayerId, action);
+
+        Assert.True(result.Success);
+        Assert.Contains("Used Healing Draught", result.MechanicalSummary);
+
+        player = await stateManager.GetPlayerAsync(PlayerId);
+        Assert.Equal(11, player!.Hp);
+        Assert.Empty(player.Inventory);
+    }
+
+    [Fact]
+    public async Task UsePotion_PrefersStrongestHealingDraughtForGenericPotion()
+    {
+        var stateManager = await CreateStateAsync();
+        var player = await stateManager.GetPlayerAsync(PlayerId);
+        player!.Hp = 5;
+        player.MaxHp = 40;
+        player.Inventory.Add(new InventoryItem
+        {
+            Name = "Healing Draught",
+            Description = "A small vial of red liquid that heals minor wounds.",
+            IsConsumable = true,
+            Effect = "Restores 2d4+2 HP",
+            Quantity = 1,
+            Value = 15
+        });
+        player.Inventory.Add(new InventoryItem
+        {
+            Name = "Greater Healing Healing Draught",
+            Description = "A concentrated healing elixir.",
+            IsConsumable = true,
+            Effect = "Restores 30 HP",
+            Quantity = 1,
+            Value = 50
+        });
+        await stateManager.SavePlayerAsync(player);
+
+        var narrator = new PerpetualFallbackNarrator();
+        var engine = CreateEngineWithDice(stateManager, narrator);
+
+        var action = engine.ParseCommand(PlayerId, "use potion");
+        var result = await engine.ProcessActionAsync(PlayerId, action);
+
+        Assert.True(result.Success);
+        Assert.Contains("Used Greater Healing Healing Draught", result.MechanicalSummary);
+
+        player = await stateManager.GetPlayerAsync(PlayerId);
+        Assert.Equal(20, player!.Hp);
+        Assert.Contains(player.Inventory, item => item.Name == "Healing Draught");
+        Assert.DoesNotContain(player.Inventory, item => item.Name == "Greater Healing Healing Draught");
+    }
+
+    [Fact]
     public async Task UseManaPotion_RestoresMp()
     {
         var stateManager = await CreateStateAsync();

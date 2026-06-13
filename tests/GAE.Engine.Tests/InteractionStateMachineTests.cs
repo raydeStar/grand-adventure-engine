@@ -81,6 +81,45 @@ public class InteractionStateMachineTests
     }
 
     [Fact]
+    public async Task Conversation_ModelExploreUpdate_DoesNotEndOrdinaryConversation()
+    {
+        var npc = new Npc { Id = "mara", Name = "Mara", Disposition = "hostile" };
+        var stateManager = await CreateStateAsync(npc: npc);
+        var narrator = CreateConversationNarrator(npc);
+        narrator
+            .Setup(s => s.ProcessConversationTurnAsync(
+                It.IsAny<PlayerCharacter>(),
+                It.IsAny<Room>(),
+                It.IsAny<Npc>(),
+                It.IsAny<InteractionState>(),
+                It.Is<string>(input => input.Contains("honest opinion", StringComparison.OrdinalIgnoreCase)),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new FreeFormResponse
+            {
+                Success = true,
+                Narration = "\"I am irritated, not silent,\" Mara says. \"Here is my reason, and you can argue with it if you have the spine.\"",
+                InteractionUpdate = new InteractionUpdate
+                {
+                    Mode = InteractionMode.Explore,
+                    NpcDisposition = "hostile",
+                    Context = ["Mara stayed sharp but kept talking."]
+                }
+            });
+        var engine = CreateEngine(stateManager, narrator.Object);
+
+        await engine.ProcessActionAsync(PlayerId, engine.ParseCommand(PlayerId, "talk to mara"));
+        var result = await engine.ProcessActionAsync(PlayerId, engine.ParseCommand(PlayerId, "ask Mara for her honest opinion"));
+
+        Assert.True(result.Success);
+        Assert.Equal(InteractionMode.Conversation, result.InteractionUpdate?.Mode);
+
+        var player = await stateManager.GetPlayerAsync(PlayerId);
+        Assert.NotNull(player);
+        Assert.Equal(InteractionMode.Conversation, player.Interaction.Mode);
+        Assert.Equal("Mara", player.Interaction.Target);
+    }
+
+    [Fact]
     public async Task DirectedSpeech_ToNamedNpcFromExplore_StartsConversation()
     {
         var npc = new Npc
