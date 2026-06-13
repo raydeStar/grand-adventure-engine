@@ -686,6 +686,69 @@ public class NarratorServiceTests
         Assert.NotEmpty(response.Narration);
     }
 
+    [Fact]
+    public async Task ProcessFreeFormAsync_WhenHttpFailsOnCasualSocialAction_ReturnsConsequentialNpcReaction()
+    {
+        var handler = new FakeHttpMessageHandler(new HttpRequestException("Connection refused"));
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") };
+        var narrator = new NarratorService(httpClient, NullLogger<NarratorService>.Instance);
+
+        var response = await narrator.ProcessFreeFormAsync(
+            new PlayerCharacter { Name = "Bonk", Race = "Human", Class = "Warrior" },
+            new Room
+            {
+                Id = "inn",
+                Name = "Lantern's Rest",
+                Description = "A crowded inn.",
+                Npcs = [new Npc { Id = "mara", Name = "Mara Vale", Personality = "Gruff but attentive innkeeper." }]
+            },
+            "sup nerd",
+            []);
+
+        Assert.True(response.Success);
+        Assert.Contains("Mara Vale", response.Narration);
+        Assert.Contains("Bonk", response.Narration);
+        Assert.DoesNotContain("moment passes", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("without any dramatic consequences", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("try using", response.Narration, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ProcessFreeFormAsync_WhenLlmReturnsBoringNonConsequence_ReplacesItWithFallback()
+    {
+        var handler = new ResponseHttpMessageHandler("""
+            {
+              "choices": [
+                {
+                  "message": {
+                    "content": "{\"narration\":\"You give it a shot. Mara Vale clocks the gesture, then returns their attention to the wider room. The moment passes without any dramatic consequences.\",\"success\":true,\"statChanges\":{},\"inventoryChanges\":[],\"entityChanges\":[],\"combatInitiated\":false}"
+                  }
+                }
+              ]
+            }
+            """);
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") };
+        var narrator = new NarratorService(httpClient, NullLogger<NarratorService>.Instance);
+
+        var response = await narrator.ProcessFreeFormAsync(
+            new PlayerCharacter { Name = "Bonk", Race = "Human", Class = "Warrior" },
+            new Room
+            {
+                Id = "inn",
+                Name = "Lantern's Rest",
+                Description = "A crowded inn.",
+                Npcs = [new Npc { Id = "mara", Name = "Mara Vale", Personality = "Gruff but attentive innkeeper." }]
+            },
+            "sup nerd",
+            []);
+
+        Assert.True(response.Success);
+        Assert.Contains("Mara Vale", response.Narration);
+        Assert.DoesNotContain("moment passes", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("without any dramatic consequences", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("returns their attention", response.Narration, StringComparison.OrdinalIgnoreCase);
+    }
+
     // â”€â”€ Retry logic tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]

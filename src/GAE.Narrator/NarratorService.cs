@@ -1008,6 +1008,12 @@ public class NarratorService : INarratorService
 
             if (TryParseFreeFormResponse(rawCompletion, out var response))
             {
+                if (IsBoringFreeFormNarration(response.Narration))
+                {
+                    _logger.LogWarning("Free-form action returned non-consequential narration for \"{RawInput}\"; using local consequence fallback.", rawInput);
+                    return BuildLocalFreeFormFallbackResponse(player, room, rawInput);
+                }
+
                 _logger.LogInformation("Free-form action processed: \"{RawInput}\" -> success={Success}", rawInput, response.Success);
                 return response;
             }
@@ -1941,6 +1947,11 @@ public class NarratorService : INarratorService
             || actionPhrase.StartsWith("talk ", StringComparison.OrdinalIgnoreCase)
             || actionPhrase.StartsWith("tell ", StringComparison.OrdinalIgnoreCase)
             || actionPhrase.StartsWith("greet ", StringComparison.OrdinalIgnoreCase)
+            || actionPhrase.StartsWith("hello", StringComparison.OrdinalIgnoreCase)
+            || actionPhrase.StartsWith("hi ", StringComparison.OrdinalIgnoreCase)
+            || actionPhrase.StartsWith("hey ", StringComparison.OrdinalIgnoreCase)
+            || actionPhrase.StartsWith("sup", StringComparison.OrdinalIgnoreCase)
+            || actionPhrase.StartsWith("yo ", StringComparison.OrdinalIgnoreCase)
             || actionPhrase.StartsWith("smile ", StringComparison.OrdinalIgnoreCase)
             || actionPhrase.StartsWith("laugh", StringComparison.OrdinalIgnoreCase)
             || actionPhrase.StartsWith("wave ", StringComparison.OrdinalIgnoreCase)
@@ -1955,18 +1966,31 @@ public class NarratorService : INarratorService
                 var pick = Math.Abs((player.Name + npc.Name).GetHashCode()) % 4;
                 return pick switch
                 {
-                    0 => $"{npc.Name} glances your way, considering you for a moment. The conversation doesn't quite land â€” maybe they're distracted, or maybe you need a different approach. Try using **talk to {npc.Name.ToLowerInvariant()}** to get their full attention.",
-                    1 => $"{npc.Name} acknowledges you with a nod but seems preoccupied. Perhaps a direct **talk to {npc.Name.ToLowerInvariant()}** would draw them into proper conversation.",
-                    2 => $"You catch {npc.Name}'s eye, but the moment passes without quite connecting. Try **talk to {npc.Name.ToLowerInvariant()}** to start a proper conversation.",
-                    _ => $"{npc.Name} seems like they might have something to say, but you haven't quite gotten their attention yet. Try **talk to {npc.Name.ToLowerInvariant()}** to engage them directly."
+                    0 => $"{npc.Name} turns fully toward {player.Name}, one eyebrow rising. \"That is your opening? Bold. I will give you this much: you have my attention, so spend it wisely.\"",
+                    1 => $"{npc.Name} answers with a dry little look that makes the nearby air feel more awake. \"Interesting greeting, {player.Name}. Now say the part you actually came here to say.\"",
+                    2 => $"{npc.Name} studies {player.Name} for a beat, then gestures them closer. \"Strange manners, useful nerve. Come on then; make it worth both our time.\"",
+                    _ => $"{npc.Name} lets the greeting hang just long enough to season it with judgment. \"I have heard worse from better-dressed people, {player.Name}. Go on.\""
                 };
             }
-            return "Your words hang in the air, but nobody here seems to be listening. Try **talk to** someone specific.";
+            return $"{player.Name}'s words cut into the room's hush. No one answers directly, but posture changes, eyes lift, and the silence becomes an invitation to press someone specific.";
         }
 
         return success
-            ? $"You give it a shot. {witnessReaction} The moment passes without any dramatic consequences."
-            : $"You try, but it doesn't quite work out. {witnessReaction} Maybe a different approach.";
+            ? $"{player.Name} commits to the attempt, small as it is. {witnessReaction} It changes no inventory and moves no walls, but it shifts the room's attention and leaves a clear social opening."
+            : $"{player.Name} does try, and the attempt lands crooked. {witnessReaction} The failure still teaches the room something: next time, sharper aim or better timing.";
+    }
+
+    private static bool IsBoringFreeFormNarration(string? narration)
+    {
+        if (string.IsNullOrWhiteSpace(narration))
+            return true;
+
+        return narration.Contains("nothing happens", StringComparison.OrdinalIgnoreCase)
+            || narration.Contains("moment passes", StringComparison.OrdinalIgnoreCase)
+            || narration.Contains("without any dramatic consequences", StringComparison.OrdinalIgnoreCase)
+            || narration.Contains("doesn't quite land", StringComparison.OrdinalIgnoreCase)
+            || narration.Contains("try using", StringComparison.OrdinalIgnoreCase)
+            || narration.Contains("try **talk to", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool TryBuildPlayfulFreeFormNarration(PlayerCharacter player, string roomName, string actionPhrase, string witnessReaction, out string narration)
@@ -2043,9 +2067,9 @@ public class NarratorService : INarratorService
     {
         var witness = room.Npcs.FirstOrDefault()?.Name;
         if (!string.IsNullOrWhiteSpace(witness))
-            return $"{witness} clocks the gesture, then returns their attention to the wider room.";
+            return $"{witness} clocks it, and that tiny choice redraws the social weather: amused, wary, and suddenly available to be pushed further.";
 
-        return "The sound of it fades back into the room almost at once.";
+        return "The room answers in small ways: a floorboard complains, shadows twitch, and the silence gives the action a shape instead of swallowing it.";
     }
 
     private static string ExtractFreeFormActionPhrase(string rawInput)
