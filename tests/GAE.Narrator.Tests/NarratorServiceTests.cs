@@ -708,9 +708,63 @@ public class NarratorServiceTests
         Assert.True(response.Success);
         Assert.Contains("Mara Vale", response.Narration);
         Assert.Contains("Bonk", response.Narration);
+        Assert.Contains("Nerd", response.Narration, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("moment passes", response.Narration, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("without any dramatic consequences", response.Narration, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("try using", response.Narration, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ProcessFreeFormAsync_WhenHttpFailsOnFollowupSocialClarification_ReturnsDifferentBeat()
+    {
+        var handler = new FakeHttpMessageHandler(new HttpRequestException("Connection refused"));
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") };
+        var narrator = new NarratorService(httpClient, NullLogger<NarratorService>.Instance);
+        var player = new PlayerCharacter { Name = "Bonk", Race = "Human", Class = "Warrior" };
+        var room = new Room
+        {
+            Id = "inn",
+            Name = "Lantern's Rest",
+            Description = "A crowded inn.",
+            Npcs = [new Npc { Id = "mara", Name = "Mara Vale", Personality = "Gruff but attentive innkeeper." }]
+        };
+
+        var first = await narrator.ProcessFreeFormAsync(player, room, "sup nerd", []);
+        var second = await narrator.ProcessFreeFormAsync(player, room, "hey now, nerd is a term of endearment", []);
+
+        Assert.True(first.Success);
+        Assert.True(second.Success);
+        Assert.Contains("Mara Vale", second.Narration);
+        Assert.Contains("endearment", second.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.NotEqual(first.Narration, second.Narration);
+        Assert.DoesNotContain("Strange manners, useful nerve", second.Narration, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ProcessFreeFormAsync_WhenHttpFailsOnBoundaryViolation_ReturnsFailedBoundaryReaction()
+    {
+        var handler = new FakeHttpMessageHandler(new HttpRequestException("Connection refused"));
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") };
+        var narrator = new NarratorService(httpClient, NullLogger<NarratorService>.Instance);
+
+        var response = await narrator.ProcessFreeFormAsync(
+            new PlayerCharacter { Name = "Dante", Race = "Halfling", Class = "Rogue" },
+            new Room
+            {
+                Id = "inn",
+                Name = "Lantern's Rest",
+                Description = "A crowded inn.",
+                Npcs = [new Npc { Id = "mara", Name = "Mara Vale", Personality = "Gruff but attentive innkeeper." }]
+            },
+            "I grab her booty",
+            []);
+
+        Assert.False(response.Success);
+        Assert.Contains("Mara Vale", response.Narration);
+        Assert.Contains("wrist", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("No", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("social opening", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("amused, wary", response.Narration, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

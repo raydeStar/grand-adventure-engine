@@ -1025,7 +1025,7 @@ public class NarratorService : INarratorService
             _logger.LogError(ex, "Free-form narration failed for \"{RawInput}\". Raw response: {RawResponse}", rawInput, rawCompletion ?? "<no response>");
         }
 
-        return BuildLocalFreeFormFallbackResponse(player, room, rawInput);
+        return BuildLocalFreeFormFallbackResponse(player, room, rawInput, recentStory);
     }
 
     public async Task<FreeFormResponse> ProcessConversationTurnAsync(PlayerCharacter player, Room room, Npc npc, InteractionState interaction, string rawInput, CancellationToken ct = default)
@@ -1917,19 +1917,28 @@ public class NarratorService : INarratorService
         return -1;
     }
 
-    private static FreeFormResponse BuildLocalFreeFormFallbackResponse(PlayerCharacter player, Room room, string rawInput)
+    private static FreeFormResponse BuildLocalFreeFormFallbackResponse(PlayerCharacter player, Room room, string rawInput, IReadOnlyList<StoryEntry>? recentStory = null)
     {
         var actionPhrase = ExtractFreeFormActionPhrase(rawInput);
         var success = ShouldResolveFreeFormFallbackAsSuccess(actionPhrase);
 
+        if (TryBuildBoundaryViolationFreeFormNarration(player, room, actionPhrase, out var boundaryNarration))
+        {
+            return new FreeFormResponse
+            {
+                Success = false,
+                Narration = boundaryNarration
+            };
+        }
+
         return new FreeFormResponse
         {
             Success = success,
-            Narration = BuildLocalFreeFormFallbackNarration(player, room, actionPhrase, success)
+            Narration = BuildLocalFreeFormFallbackNarration(player, room, actionPhrase, success, recentStory ?? [])
         };
     }
 
-    private static string BuildLocalFreeFormFallbackNarration(PlayerCharacter player, Room room, string actionPhrase, bool success)
+    private static string BuildLocalFreeFormFallbackNarration(PlayerCharacter player, Room room, string actionPhrase, bool success, IReadOnlyList<StoryEntry> recentStory)
     {
         var roomName = string.IsNullOrWhiteSpace(room.Name) ? "the room" : room.Name;
         var witnessReaction = BuildFreeFormWitnessReaction(room);
@@ -1963,14 +1972,7 @@ public class NarratorService : INarratorService
             var npc = room.Npcs.FirstOrDefault();
             if (npc is not null)
             {
-                var pick = Math.Abs((player.Name + npc.Name).GetHashCode()) % 4;
-                return pick switch
-                {
-                    0 => $"{npc.Name} turns fully toward {player.Name}, one eyebrow rising. \"That is your opening? Bold. I will give you this much: you have my attention, so spend it wisely.\"",
-                    1 => $"{npc.Name} answers with a dry little look that makes the nearby air feel more awake. \"Interesting greeting, {player.Name}. Now say the part you actually came here to say.\"",
-                    2 => $"{npc.Name} studies {player.Name} for a beat, then gestures them closer. \"Strange manners, useful nerve. Come on then; make it worth both our time.\"",
-                    _ => $"{npc.Name} lets the greeting hang just long enough to season it with judgment. \"I have heard worse from better-dressed people, {player.Name}. Go on.\""
-                };
+                return BuildSocialFallbackNarration(player, npc, actionPhrase, recentStory);
             }
             return $"{player.Name}'s words cut into the room's hush. No one answers directly, but posture changes, eyes lift, and the silence becomes an invitation to press someone specific.";
         }
@@ -1978,6 +1980,60 @@ public class NarratorService : INarratorService
         return success
             ? $"{player.Name} commits to the attempt, small as it is. {witnessReaction} It changes no inventory and moves no walls, but it shifts the room's attention and leaves a clear social opening."
             : $"{player.Name} does try, and the attempt lands crooked. {witnessReaction} The failure still teaches the room something: next time, sharper aim or better timing.";
+    }
+
+    private static string BuildSocialFallbackNarration(PlayerCharacter player, Npc npc, string actionPhrase, IReadOnlyList<StoryEntry> recentStory)
+    {
+        var normalized = NormalizeLookupText(actionPhrase);
+        var hasRecentNpcBeat = recentStory.Any(entry =>
+            (entry.Narration?.Contains(npc.Name, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (entry.MechanicalSummary?.Contains(npc.Name, StringComparison.OrdinalIgnoreCase) ?? false));
+
+        if (ContainsAny(normalized, "term of endearment", "meant it kindly", "friendly", "joking", "just joking", "apologize", "sorry"))
+        {
+            return $"{npc.Name} points at {player.Name} with the nearest available rag, utensil, or accusing finger. \"Then lead with the endearment, not the brick. Try again with a little polish and I may downgrade you from menace to customer.\"";
+        }
+
+        if (ContainsAny(normalized, "sup", "nerd", "hey", "yo", "hello", "hi"))
+        {
+            var pick = Math.Abs(HashCode.Combine(player.Name, npc.Name, normalized, hasRecentNpcBeat)) % 4;
+            return pick switch
+            {
+                0 => $"{npc.Name}'s mouth twitches despite themself. \"Nerd, is it. Fine, {player.Name}; I collect insults with the cups. State your business before I start charging by the syllable.\"",
+                1 => $"{npc.Name} looks {player.Name} up and down, then taps the counter once to mark the beat. \"That greeting has bruises on it. Still, it got you noticed. Work, gossip, or trouble; pick a lane and walk it.\"",
+                2 => $"{npc.Name} leans closer with theatrical patience. \"Strange manners, {player.Name}. Useful nerve. Turn that into a sentence with a purpose and I will pretend this began gracefully.\"",
+                _ => $"{npc.Name} lets the greeting hang just long enough to season it with judgment. \"I have heard worse from better-dressed people, {player.Name}. Go on, and make the next words earn their rent.\""
+            };
+        }
+
+        var fallbackPick = Math.Abs(HashCode.Combine(player.Name, npc.Name, normalized)) % 3;
+        return fallbackPick switch
+        {
+            0 => $"{npc.Name} gives {player.Name} a measuring look. \"You have my attention. Spend it on something useful and we may both survive the conversation.\"",
+            1 => $"{npc.Name} shifts their stance, now fully engaged. \"There it is, then. Say the useful part plainly and I will answer in kind.\"",
+            _ => $"{npc.Name} folds their arms, but stays with {player.Name}. \"Go on. I am listening, which is already more generosity than most people earn before breakfast.\""
+        };
+    }
+
+    private static bool TryBuildBoundaryViolationFreeFormNarration(PlayerCharacter player, Room room, string actionPhrase, out string narration)
+    {
+        narration = string.Empty;
+        var normalized = NormalizeLookupText(actionPhrase);
+        if (!ContainsAny(normalized, "grab", "grope", "fondle", "slap", "touch", "kiss", "lick"))
+            return false;
+
+        if (!ContainsAny(normalized, "booty", "butt", "ass", "breast", "chest", "thigh", "hips", "body", "her", "him", "them"))
+            return false;
+
+        var npc = room.Npcs.FirstOrDefault();
+        if (npc is null)
+        {
+            narration = $"{player.Name} reaches for trouble and finds only the room's immediate refusal: a chair leg catches, balance betrays them, and dignity pays the first fine.";
+            return true;
+        }
+
+        narration = $"{npc.Name} catches {player.Name}'s wrist before the gesture lands; every nearby conversation goes thin and sharp. \"No,\" {npc.Name} says, calm enough to be dangerous. \"Apologize, explain yourself, or leave before I decide which glass breaks first.\"";
+        return true;
     }
 
     private static bool IsBoringFreeFormNarration(string? narration)
