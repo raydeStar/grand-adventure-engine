@@ -2136,6 +2136,18 @@ move_room_ready:
         var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
         room ??= new Room { Id = player.CurrentRoomId, Name = "Unknown" };
 
+        if (TryBuildBoundaryViolationResult(player, room, action, out var boundaryResult, out var boundaryNpc))
+        {
+            player.LastActiveAt = DateTimeOffset.UtcNow;
+            if (boundaryNpc is not null)
+                await PersistWorldNpcStateAsync(boundaryNpc, player.ActiveWorldId, player.Id, ct);
+
+            await _stateManager.SavePlayerAsync(player, ct);
+            await _stateManager.SaveRoomAsync(room, ct);
+            await PersistInteractionStoryEntry(player, action, boundaryResult, ct);
+            return boundaryResult;
+        }
+
         if (TryFindNpcMentionedByDirectedSpeech(room.Npcs, action.RawInput, out var mentionedNpc))
         {
             return await ProcessTalkInternalAsync(player, new GameAction
@@ -2329,6 +2341,135 @@ move_room_ready:
 
         return result;
     }
+
+    private bool TryBuildBoundaryViolationResult(PlayerCharacter player, Room room, GameAction action, out ActionResult result, out Npc? targetNpc)
+    {
+        result = null!;
+        targetNpc = null;
+
+        if (!IsBoundaryViolationAction(action.RawInput))
+            return false;
+
+        targetNpc = ResolveBoundaryTarget(room, action.RawInput);
+
+        const int dc = 12;
+        var chaMod = player.GetModifier("cha", _rules.EffectiveBaseline);
+        var roll = _dice.RollSkillCheck("boundary", chaMod);
+        roll.TargetNumber = dc;
+        roll.Outcome = ProbabilityEngine.DetermineSkillOutcome(roll, dc);
+
+        var outcome = roll.Outcome switch
+        {
+            RollOutcome.CriticalHit => "backlash defused",
+            RollOutcome.Hit => "backlash contained",
+            RollOutcome.GlancingHit => "sharp warning",
+            RollOutcome.Miss => "public rebuke",
+            _ => "severe backlash"
+        };
+
+        var stateChanges = new List<StateChange>();
+        string narration;
+
+        if (targetNpc is not null)
+        {
+            var oldDisposition = targetNpc.Disposition;
+            var oldHostile = targetNpc.IsHostile;
+            var intensity = roll.Outcome switch
+            {
+                RollOutcome.CriticalHit => 60,
+                RollOutcome.Hit => 70,
+                RollOutcome.GlancingHit => 78,
+                RollOutcome.Miss => 86,
+                _ => 95
+            };
+
+            targetNpc.DispositionState.Emotion = roll.Outcome >= RollOutcome.GlancingHit ? "annoyed" : "angry";
+            targetNpc.DispositionState.Intensity = Math.Clamp(Math.Max(targetNpc.DispositionState.Intensity, intensity), 0, 100);
+            targetNpc.DispositionState.Reason = $"{player.Name} crossed a personal boundary.";
+            targetNpc.DispositionState.LastUpdated = DateTimeOffset.UtcNow;
+            if (!targetNpc.DispositionState.MemoryFlags.Contains("personal-boundary-crossed", StringComparer.OrdinalIgnoreCase))
+                targetNpc.DispositionState.MemoryFlags.Add("personal-boundary-crossed");
+            targetNpc.Disposition = targetNpc.DispositionState.ToFlatDisposition();
+            if (roll.Outcome == RollOutcome.CriticalMiss && targetNpc.Hp.HasValue && targetNpc.Hp > 0)
+                targetNpc.IsHostile = true;
+
+            stateChanges.Add(new StateChange
+            {
+                EntityType = "npc",
+                EntityId = targetNpc.Id,
+                Property = "disposition",
+                OldValue = oldDisposition,
+                NewValue = targetNpc.Disposition
+            });
+
+            if (oldHostile != targetNpc.IsHostile)
+            {
+                stateChanges.Add(new StateChange
+                {
+                    EntityType = "npc",
+                    EntityId = targetNpc.Id,
+                    Property = "isHostile",
+                    OldValue = oldHostile.ToString(),
+                    NewValue = targetNpc.IsHostile.ToString()
+                });
+            }
+
+            narration = BuildBoundaryViolationNarration(player.Name, targetNpc.Name, roll.Outcome);
+        }
+        else
+        {
+            narration = $"{player.Name} reaches for a line the room will not let them cross. The attempt fails before it becomes contact, and the hard silence around it becomes the consequence.";
+        }
+
+        result = new ActionResult
+        {
+            ActionId = action.Id,
+            RawInput = action.RawInput,
+            Success = false,
+            MechanicalSummary = $"[Boundary check: {roll.Total} vs DC {dc} - {outcome}]",
+            Narration = narration,
+            DiceRolls = [roll],
+            StateChanges = stateChanges
+        };
+
+        return true;
+    }
+
+    private static bool IsBoundaryViolationAction(string rawInput)
+    {
+        var normalized = NormalizeLookupText(rawInput);
+        if (string.IsNullOrWhiteSpace(normalized))
+            return false;
+
+        return HasAny(normalized, "grab", "grope", "fondle", "slap", "touch", "kiss", "lick")
+            && HasAny(normalized, "booty", "butt", "ass", "breast", "chest", "thigh", "hips", "body", "her", "him", "them");
+    }
+
+    private static Npc? ResolveBoundaryTarget(Room room, string rawInput)
+    {
+        if (room.Npcs.Count == 0)
+            return null;
+
+        var normalized = NormalizeLookupText(rawInput);
+        foreach (var npc in room.Npcs)
+        {
+            var npcName = NormalizeLookupText(npc.Name);
+            if (npcName.Length >= 3 && ContainsNormalizedPhrase(normalized, npcName))
+                return npc;
+        }
+
+        return room.Npcs.FirstOrDefault();
+    }
+
+    private static string BuildBoundaryViolationNarration(string playerName, string npcName, RollOutcome outcome)
+        => outcome switch
+        {
+            RollOutcome.CriticalHit => $"{npcName} catches {playerName}'s wrist before contact and turns the ugly instant into a clean, unmistakable boundary. The room notices, but {playerName}'s quick recoil keeps the scene from becoming worse.",
+            RollOutcome.Hit => $"{npcName} steps aside before {playerName}'s hand can land, eyes cold and voice low. The warning holds, and the room gives {playerName} a narrow path back to basic manners.",
+            RollOutcome.GlancingHit => $"{npcName} knocks {playerName}'s hand away before contact and lets the silence do half the work. The room tightens around {playerName}, waiting to see whether shame has any useful weight.",
+            RollOutcome.Miss => $"{npcName} stops {playerName} in full view of the room, sharp enough that nearby conversation dies at once. The attempt fails, and what remains is public anger with {playerName}'s name on it.",
+            _ => $"{npcName} catches {playerName}'s arm hard before contact and the whole room turns hostile in a single breath. The attempt fails, the insult is remembered, and every friendly exit from the moment narrows."
+        };
 
     private static string SummarizeEntities<T>(IEnumerable<T> entities, Func<T, string?> getName, Func<T, int>? getQuantity = null)
     {

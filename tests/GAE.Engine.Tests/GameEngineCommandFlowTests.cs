@@ -187,6 +187,64 @@ public class GameEngineCommandFlowTests
     }
 
     [Fact]
+    public async Task ProcessActionAsync_BoundaryViolation_RollsForConsequenceAndPersistsStory()
+    {
+        var stateManager = await CreateStateAsync(room: new Room
+        {
+            Id = "inn",
+            Name = "Crossroads Inn",
+            Description = "A lantern-warmed common room.",
+            Npcs =
+            [
+                new Npc
+                {
+                    Id = "mara",
+                    Name = "Mara Vale",
+                    Disposition = "friendly",
+                    DispositionState = new NpcDispositionState { Emotion = "friendly", Intensity = 65, Baseline = 65 }
+                }
+            ]
+        });
+
+        var dice = new Mock<IProbabilityEngine>(MockBehavior.Strict);
+        dice.Setup(d => d.RollSkillCheck("boundary", 0))
+            .Returns(new DiceRoll { Expression = "1d20", IndividualRolls = [9], Total = 9, Purpose = "Skill check: boundary" });
+
+        var narrator = new Mock<INarratorService>(MockBehavior.Strict);
+        narrator.Setup(service => service.ParseIntentAsync("I grab her booty", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string?)null);
+        var parser = new CommandParser(NullLogger<CommandParser>.Instance);
+        var engine = new GameEngine(stateManager, dice.Object, narrator.Object, parser, new GameRulesConfig(), NullLogger<GameEngine>.Instance);
+
+        var action = engine.ParseCommand(PlayerId, "I grab her booty");
+        var result = await engine.ProcessActionAsync(PlayerId, action);
+
+        Assert.False(result.Success);
+        var roll = Assert.Single(result.DiceRolls);
+        Assert.Equal(12, roll.TargetNumber);
+        Assert.Equal(RollOutcome.Miss, roll.Outcome);
+        Assert.Contains("Boundary check: 9 vs DC 12", result.MechanicalSummary);
+        Assert.Contains("Mara Vale", result.Narration);
+        Assert.Contains("fails", result.Narration, StringComparison.OrdinalIgnoreCase);
+
+        var updatedRoom = await stateManager.GetPlayerRoomAsync(PlayerId, "inn");
+        var mara = Assert.Single(updatedRoom!.Npcs);
+        Assert.Contains("angry", mara.Disposition, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("personal-boundary-crossed", mara.DispositionState.MemoryFlags);
+
+        var entries = await stateManager.GetStoryEntriesAsync(PlayerId, 10);
+        var entry = Assert.Single(entries);
+        Assert.Equal("I grab her booty", entry.RawInput);
+        Assert.Equal(result.Narration, entry.Narration);
+        narrator.Verify(service => service.ProcessFreeFormAsync(
+            It.IsAny<PlayerCharacter>(),
+            It.IsAny<Room>(),
+            It.IsAny<string>(),
+            It.IsAny<IReadOnlyList<StoryEntry>>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task ProcessActionAsync_DropItem_RemovesItFromInventoryAndPlacesItInRoom()
     {
         var stateManager = await CreateStateAsync(room: new Room

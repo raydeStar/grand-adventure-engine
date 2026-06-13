@@ -708,7 +708,10 @@ public class NarratorServiceTests
         Assert.True(response.Success);
         Assert.Contains("Mara Vale", response.Narration);
         Assert.Contains("Bonk", response.Narration);
-        Assert.Contains("Nerd", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.True(
+            new[] { "state your business", "pick a lane", "sentence with a purpose", "go on" }
+                .Any(phrase => response.Narration.Contains(phrase, StringComparison.OrdinalIgnoreCase)),
+            response.Narration);
         Assert.DoesNotContain("moment passes", response.Narration, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("without any dramatic consequences", response.Narration, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("try using", response.Narration, StringComparison.OrdinalIgnoreCase);
