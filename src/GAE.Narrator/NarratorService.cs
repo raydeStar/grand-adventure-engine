@@ -1244,6 +1244,11 @@ public class NarratorService : INarratorService
     {
         var name = npc.Name;
 
+        if (!isOngoing && ShouldUseTopicAwareOpening(rawInput))
+        {
+            return BuildOngoingConversationFallback(npc, playerName, rawInput);
+        }
+
         if (isOngoing)
         {
             return BuildOngoingConversationFallback(npc, playerName, rawInput);
@@ -1363,6 +1368,13 @@ public class NarratorService : INarratorService
         var isSharp = ContainsAny(personality, "stern", "gruff", "suspicious", "hostile", "cold", "intimidat", "blunt");
         var attitude = isSharp ? "curt" : "thoughtful";
 
+        if (ContainsAny(input, "crystal", "recovered", "returned", "delivered"))
+        {
+            return isSharp
+                ? $"{name} gives you a {attitude} look, then lets the mask crack just enough to show relief. \"Then you have done more than survive, {playerName}. Set the proof where people can see it, because hope works better when it has weight.\""
+                : $"{name} exhales as if the room has been holding its breath with them. \"Then the light is not lost, {playerName}. Bring that proof forward and let everyone remember that impossible things still happen.\"";
+        }
+
         if (ContainsAny(input, "quest", "work", "job", "help", "waterway", "infestation", "rat", "clear", "completed", "done"))
         {
             var questHint = npc.QuestsOffered.Count > 0
@@ -1401,6 +1413,15 @@ public class NarratorService : INarratorService
             2 => $"{name} shifts their stance, still engaged. \"You are circling something real, {playerName}. Name the piece you care about most and I will give you the angle I trust.\"",
             _ => $"{name} lets out a small, dry sound. \"Fine, {playerName}, here is my read: trust actions over titles, debts over promises, and anyone who looks too relaxed in a bad place least of all.\"",
         };
+    }
+
+    private static bool ShouldUseTopicAwareOpening(string rawInput)
+    {
+        var input = rawInput.Trim().ToLowerInvariant();
+        return input.StartsWith("tell ", StringComparison.Ordinal)
+            || input.StartsWith("ask ", StringComparison.Ordinal)
+            || input.StartsWith("say to ", StringComparison.Ordinal)
+            || input.StartsWith("speak to ", StringComparison.Ordinal);
     }
 
     private static bool ContainsAny(string text, params string[] keywords)

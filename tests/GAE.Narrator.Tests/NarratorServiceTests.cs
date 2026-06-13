@@ -633,6 +633,41 @@ public class NarratorServiceTests
     }
 
     [Fact]
+    public async Task ProcessConversationTurnAsync_WhenHttpFailsOnInitialDirectedReport_ReturnsTopicAwareFallback()
+    {
+        var handler = new FakeHttpMessageHandler(new HttpRequestException("Connection refused"));
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") };
+        var narrator = new NarratorService(httpClient, NullLogger<NarratorService>.Instance);
+
+        var response = await narrator.ProcessConversationTurnAsync(
+            new PlayerCharacter { Name = "Bonk", Race = "Human", Class = "Warrior", Level = 5 },
+            new Room { Id = "city_hall", Name = "City Hall", Description = "A political chamber." },
+            new Npc
+            {
+                Id = "marquis_odran",
+                Name = "Marquis Odran",
+                Personality = "Dignified, cautious resistance leader.",
+                Disposition = "friendly"
+            },
+            new InteractionState
+            {
+                Mode = InteractionMode.Conversation,
+                Target = "marquis_odran",
+                PlayerTurnCount = 0,
+                NpcDisposition = "friendly"
+            },
+            "tell Marquis Odran I recovered the water crystal");
+
+        Assert.True(response.Success);
+        Assert.Equal(InteractionMode.Conversation, response.InteractionUpdate?.Mode);
+        Assert.Contains("Bonk", response.Narration);
+        Assert.Contains("light", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Say it straight", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Go on", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("?", response.Narration);
+    }
+
+    [Fact]
     public async Task ProcessFreeFormAsync_ForLowStakesAction_WhenHttpFails_ReturnsFallback()
     {
         // Low-stakes actions now go through the LLM for humorous narration.

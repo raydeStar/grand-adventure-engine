@@ -2111,6 +2111,17 @@ move_room_ready:
         var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
         room ??= new Room { Id = player.CurrentRoomId, Name = "Unknown" };
 
+        if (TryFindNpcMentionedByDirectedSpeech(room.Npcs, action.RawInput, out var mentionedNpc))
+        {
+            return await ProcessTalkInternalAsync(player, new GameAction
+            {
+                PlayerId = player.Id,
+                RawInput = action.RawInput,
+                Type = ActionType.Talk,
+                Target = mentionedNpc.Name
+            }, ct);
+        }
+
         var recentStory = await _stateManager.GetRecentStoryForRoomAsync(player.CurrentRoomId, player.ActiveWorldId, 5, ct);
         var freeForm = await _narrator.ProcessFreeFormAsync(player, room, action.RawInput, recentStory, ct);
 
@@ -2467,6 +2478,78 @@ move_room_ready:
     private static Npc? FindNpc(IEnumerable<Npc> npcs, string? rawQuery)
     {
         return FindNamedEntity(npcs, npc => npc.Name, rawQuery, npc => new[] { npc.Id });
+    }
+
+    private static bool TryFindNpcMentionedByDirectedSpeech(IEnumerable<Npc> npcs, string rawInput, out Npc npc)
+    {
+        npc = null!;
+        var normalizedInput = NormalizeLookupText(rawInput);
+        if (string.IsNullOrWhiteSpace(normalizedInput) || !LooksLikeDirectedNpcSpeech(normalizedInput))
+            return false;
+
+        var match = npcs
+            .SelectMany(candidate => BuildNpcMentionAliases(candidate)
+                .Select(alias => new { Npc = candidate, Alias = NormalizeLookupText(alias) }))
+            .Where(entry => entry.Alias.Length >= 3 && ContainsNormalizedPhrase(normalizedInput, entry.Alias))
+            .OrderByDescending(entry => entry.Alias.Length)
+            .ThenBy(entry => entry.Npc.Name.Length)
+            .FirstOrDefault();
+
+        if (match is null)
+            return false;
+
+        npc = match.Npc;
+        return true;
+    }
+
+    private static bool LooksLikeDirectedNpcSpeech(string normalizedInput)
+    {
+        return normalizedInput.StartsWith("tell ", StringComparison.Ordinal)
+            || normalizedInput.StartsWith("ask ", StringComparison.Ordinal)
+            || normalizedInput.StartsWith("say to ", StringComparison.Ordinal)
+            || normalizedInput.StartsWith("speak to ", StringComparison.Ordinal)
+            || normalizedInput.StartsWith("talk to ", StringComparison.Ordinal);
+    }
+
+    private static IEnumerable<string> BuildNpcMentionAliases(Npc npc)
+    {
+        yield return npc.Name;
+        yield return npc.Id;
+
+        foreach (var part in BuildProminentNpcAliasParts(npc.Name))
+            if (IsUsefulNpcMentionAlias(part))
+                yield return part;
+
+        foreach (var part in BuildProminentNpcAliasParts(npc.Id))
+            if (IsUsefulNpcMentionAlias(part))
+                yield return part;
+    }
+
+    private static IEnumerable<string> BuildProminentNpcAliasParts(string? value)
+    {
+        var parts = NormalizeLookupText(value).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0)
+            yield break;
+
+        yield return parts[0];
+
+        if (parts.Length > 1)
+            yield return parts[^1];
+    }
+
+    private static bool ContainsNormalizedPhrase(string text, string phrase)
+    {
+        return text == phrase
+            || text.StartsWith(phrase + " ", StringComparison.Ordinal)
+            || text.EndsWith(" " + phrase, StringComparison.Ordinal)
+            || text.Contains(" " + phrase + " ", StringComparison.Ordinal);
+    }
+
+    private static bool IsUsefulNpcMentionAlias(string alias)
+    {
+        return alias.Length >= 3
+            && alias is not "and" and not "or" and not "but" and not "for" and not "with" and not "from"
+            && alias is not "guard" and not "guardian" and not "lord" and not "lady" and not "master" and not "void";
     }
 
     private static T? FindNamedEntity<T>(
