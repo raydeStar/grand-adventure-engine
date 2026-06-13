@@ -131,6 +131,33 @@ test.describe('Grand Adventure Engine dashboard', () => {
     await expect(page.locator('#story-log')).not.toContainText('<think');
   });
 
+  test('realtime feed join failures fall back to polling', async ({ page }) => {
+    await login(page, 'admin');
+
+    const result = await page.evaluate(async () => {
+      window.signalR = window.signalR || { HubConnectionState: { Connected: 'Connected' } };
+      GameHub.connection = {
+        state: window.signalR?.HubConnectionState?.Connected ?? 'Connected',
+        invoke: async () => { throw new Error('join denied'); }
+      };
+      GameHub.realtimeEnabled = true;
+
+      const statusEvents = [];
+      GameHub.on('status', status => statusEvents.push(status));
+      const joined = await GameHub.joinPlayerFeed('missing-player');
+
+      return {
+        joined,
+        realtimeEnabled: GameHub.realtimeEnabled,
+        statusEvents
+      };
+    });
+
+    expect(result.joined).toBeFalsy();
+    expect(result.realtimeEnabled).toBeFalsy();
+    expect(result.statusEvents).toContain('polling');
+  });
+
   test('user can accept, review, and abandon a seeded quest through the dashboard', async ({ page }, testInfo) => {
     const playerId = uniqueId('pw-quest', testInfo.project.name);
 

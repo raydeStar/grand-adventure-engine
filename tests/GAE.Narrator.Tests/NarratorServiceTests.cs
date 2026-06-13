@@ -594,6 +594,45 @@ public class NarratorServiceTests
     }
 
     [Fact]
+    public async Task ProcessConversationTurnAsync_WhenHttpFailsOnOngoingHostileNpc_ReturnsTalkableSubstantiveFallback()
+    {
+        var handler = new FakeHttpMessageHandler(new HttpRequestException("Connection refused"));
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") };
+        var narrator = new NarratorService(httpClient, NullLogger<NarratorService>.Instance);
+
+        var response = await narrator.ProcessConversationTurnAsync(
+            new PlayerCharacter { Name = "Bonk", Race = "Human", Class = "Warrior", Level = 1 },
+            new Room { Id = "inn", Name = "Lantern's Rest", Description = "A crowded inn with a damp cellar smell." },
+            new Npc
+            {
+                Id = "mara",
+                Name = "Mara",
+                Personality = "Gruff, suspicious innkeeper with a sharp tongue.",
+                Disposition = "hostile",
+                DispositionState = new NpcDispositionState { Emotion = "hostile", Intensity = 25 },
+                KnowledgeScopes = ["local"],
+                QuestsOffered = ["waterway_infestation"]
+            },
+            new InteractionState
+            {
+                Mode = InteractionMode.Conversation,
+                Target = "mara",
+                PlayerTurnCount = 3,
+                NpcDisposition = "hostile"
+            },
+            "ask Mara for her honest opinion and why the Waterway matters");
+
+        Assert.True(response.Success);
+        Assert.Equal(InteractionMode.Conversation, response.InteractionUpdate?.Mode);
+        Assert.Contains("Bonk", response.Narration);
+        Assert.Contains("opinion", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("?", response.Narration);
+        Assert.DoesNotContain("go on", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("not talking", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("send you on your way", response.Narration, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task ProcessFreeFormAsync_ForLowStakesAction_WhenHttpFails_ReturnsFallback()
     {
         // Low-stakes actions now go through the LLM for humorous narration.

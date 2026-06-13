@@ -967,7 +967,7 @@ move_room_ready:
         }
 
         // Look at NPC
-        var npc = FindNamedEntity(room.Npcs, candidate => candidate.Name, action.Target);
+        var npc = FindNpc(room.Npcs, action.Target);
         if (npc is not null)
         {
             var npcDesc = new StringBuilder($"**{npc.Name}**");
@@ -1026,12 +1026,20 @@ move_room_ready:
         if (room is null)
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "You can't attack here." };
 
-        var target = FindNamedEntity(room.Npcs, npc => npc.Name, action.Target);
+        var target = FindNpc(room.Npcs, action.Target);
 
         // Auto-target: if no target specified, pick the first hostile NPC (or any NPC with HP)
         if (target is null && string.IsNullOrWhiteSpace(action.Target))
             target = room.Npcs.FirstOrDefault(n => n.IsHostile && n.Hp.HasValue && n.Hp.Value > 0)
                   ?? room.Npcs.FirstOrDefault(n => n.Hp.HasValue && n.Hp.Value > 0);
+
+        if (target is null && string.IsNullOrWhiteSpace(action.Target))
+            return new ActionResult
+            {
+                ActionId = action.Id,
+                Success = false,
+                MechanicalSummary = "There is nothing here still willing or able to fight."
+            };
 
         if (target is null)
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"Attack target '{action.Target}' was not found in the current room." };
@@ -1218,7 +1226,7 @@ move_room_ready:
         if (room is null)
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "You find no one here to answer you." };
 
-        var target = FindNamedEntity(room.Npcs, npc => npc.Name, action.Target);
+        var target = FindNpc(room.Npcs, action.Target);
         if (target is null)
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"Conversation target '{action.Target}' was not found in the current room." };
 
@@ -2456,14 +2464,29 @@ move_room_ready:
         return $"{label}: {item.Name}{bonuses}";
     }
 
-    private static T? FindNamedEntity<T>(IEnumerable<T> entities, Func<T, string?> getName, string? rawQuery) where T : class
+    private static Npc? FindNpc(IEnumerable<Npc> npcs, string? rawQuery)
+    {
+        return FindNamedEntity(npcs, npc => npc.Name, rawQuery, npc => new[] { npc.Id });
+    }
+
+    private static T? FindNamedEntity<T>(
+        IEnumerable<T> entities,
+        Func<T, string?> getName,
+        string? rawQuery,
+        Func<T, IEnumerable<string?>>? getAliases = null) where T : class
     {
         var query = NormalizeLookupText(rawQuery);
         if (string.IsNullOrWhiteSpace(query))
             return null;
 
         return entities
-            .Select(entity => new { Entity = entity, Candidate = NormalizeLookupText(getName(entity)) })
+            .SelectMany(entity =>
+            {
+                var candidates = new List<string?> { getName(entity) };
+                if (getAliases is not null)
+                    candidates.AddRange(getAliases(entity));
+                return candidates.Select(candidate => new { Entity = entity, Candidate = NormalizeLookupText(candidate) });
+            })
             .Where(entry => !string.IsNullOrWhiteSpace(entry.Candidate))
             .Select(entry => new { entry.Entity, Score = GetNameMatchScore(query, entry.Candidate) })
             .Where(entry => entry.Score > 0)
@@ -2762,7 +2785,7 @@ move_room_ready:
             return null;
         }
 
-        var npc = FindNamedEntity(room.Npcs, n => n.Name, player.Interaction.Target);
+        var npc = FindNpc(room.Npcs, player.Interaction.Target);
         if (npc is null)
         {
             var missingTarget = player.Interaction.Target;
@@ -2967,7 +2990,7 @@ move_room_ready:
         var enemies = room.Npcs.Where(n => combat?.TurnOrder.Any(t => !t.IsPlayer && t.Id == n.Id) == true).ToList();
         if (combat is null || enemies.Count == 0)
         {
-            var singleEnemy = FindNamedEntity(room.Npcs, n => n.Name, player.Interaction.Target);
+            var singleEnemy = FindNpc(room.Npcs, player.Interaction.Target);
             if (singleEnemy is null)
             {
                 player.Interaction.Reset();
@@ -3185,7 +3208,7 @@ move_room_ready:
             // Pick target (first alive enemy)
             Npc? target = null;
             if (!string.IsNullOrWhiteSpace(action.Target))
-                target = FindNamedEntity(enemies.Where(e => e.Hp.HasValue && e.Hp.Value > 0 && room.Npcs.Contains(e)), n => n.Name, action.Target);
+                target = FindNpc(enemies.Where(e => e.Hp.HasValue && e.Hp.Value > 0 && room.Npcs.Contains(e)), action.Target);
             target ??= enemies.FirstOrDefault(e => e.Hp.HasValue && e.Hp.Value > 0 && room.Npcs.Contains(e));
 
             if (target is null) { combatOver = true; break; }
