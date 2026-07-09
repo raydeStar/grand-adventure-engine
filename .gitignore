@@ -45,3 +45,4 @@ tmp_*.py
 ## Theme overlays (personal/playtest branding — not for distribution)
 config/themes/
 scripts/apply-ff-theme.ps1
+cookies.txt
