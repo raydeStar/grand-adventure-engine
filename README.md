@@ -130,6 +130,4 @@ npm run test:e2e
 
 ## License
 
-<!-- TODO: Choose and add a license (MIT, GPL, etc.) -->
-
-*License not yet specified.*
+Licensed under the Apache License 2.0. See [LICENSE](LICENSE) for details.
