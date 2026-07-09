@@ -26,9 +26,31 @@
   --glow-strong: rgba(51,255,102,0.7);
   --scanline-alpha: 0.08;
   --crt-vignette: 0.35;
+
+  /* ── Aliases (these were referenced across the CSS but never defined,
+        so they silently fell back — e.g. error text never turned red) ── */
+  --fg: var(--text);
+  --danger: var(--bad);
+  --text-muted: var(--dim);
+  --card: var(--bg-input);
+  --font-mono: var(--font);
+
+  /* ── Derived phosphor tokens (reusable bloom / focus / surfaces) ── */
+  --r-lg: 4px;
+  --bg-raise: #101410;            /* one step above panel — for elevated surfaces */
+  --accent-soft: rgba(51,255,102,0.12);
+  --bloom: 0 0 6px var(--glow);
+  --bloom-strong: 0 0 14px var(--glow-strong), 0 0 28px var(--glow);
+  --text-bloom: 0 0 4px var(--glow);
+  --focus-ring: 0 0 0 1px var(--accent), 0 0 8px var(--glow);
+  --arcane: var(--mp);            /* cool accent already in the palette — use instead of stray blues */
+  --arcane-soft: rgba(68,170,255,0.12);
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
 [data-theme="amber"] {
+  --bg-raise: #15110a;
+  --accent-soft: rgba(255,170,51,0.12);
   --text: #ccaa66;
   --dim: #776633;
   --accent: #ffaa33;
@@ -57,7 +79,7 @@ body {
 body::after {
   content: '';
   position: fixed;
-  inset: 0;
+  inset: -4px 0 0;
   z-index: 10000;
   pointer-events: none;
   background: repeating-linear-gradient(
@@ -80,6 +102,27 @@ body::before {
 }
 
 .hidden { display: none !important; }
+
+/* Themed text selection — phosphor, not browser-blue */
+::selection { background: var(--accent); color: #000; text-shadow: none; }
+
+/* Keyboard focus ring (mouse clicks stay clean via :focus-visible) */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--r);
+}
+
+/* Respect reduced-motion: keep the interface calm for those who ask for it.
+   Individual decorative effects also gate on this, but this is the backstop. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 
 /* ───────────────────────── PORTAL / LOGIN OVERLAY ───────────────────────── */
 
@@ -2939,3 +2982,917 @@ textarea { resize: vertical; min-height: 80px; }
   margin-right: 4px;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ════════════════════════════════════════════════════════════════════════
+   UX POLISH PASS — "make the CRT come alive"
+   Appended so it layers over the base rules. All motion respects the
+   prefers-reduced-motion backstop defined near the top of this file.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* ─────────────── Living screen: gentle scanline drift ─────────────── */
+/* The scanlines slowly creep — just enough to read as a powered tube,
+   not enough to distract. (One-time power-on lives in the boot screen.) */
+body::after { animation: scanDrift 8s linear infinite; will-change: transform; }
+@keyframes scanDrift { to { transform: translateY(4px); } }
+
+/* ─────────────────────────── BOOT SCREEN ─────────────────────────── */
+.boot-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 20000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  overflow: hidden;
+}
+.boot-screen.boot-done {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.55s var(--ease);
+}
+/* Power-on flash: a bright horizontal line snaps open into the screen. */
+.boot-screen::before {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; top: 50%;
+  height: 2px;
+  background: var(--accent);
+  box-shadow: var(--bloom-strong);
+  animation: bootPowerOn 0.65s var(--ease) forwards;
+}
+@keyframes bootPowerOn {
+  0%   { transform: scaleY(0.4) scaleX(0.05); opacity: 0; }
+  18%  { transform: scaleY(1) scaleX(1); opacity: 1; }
+  40%  { transform: scaleY(180) scaleX(1); opacity: 0.18; }
+  100% { transform: scaleY(180) scaleX(1); opacity: 0; }
+}
+.boot-inner {
+  position: relative;
+  width: min(560px, 86vw);
+  padding: 0 0.5rem;
+  opacity: 0;
+  animation: bootContentIn 0.5s var(--ease) 0.42s forwards;
+}
+@keyframes bootContentIn { from { opacity: 0; } to { opacity: 1; } }
+.boot-logo {
+  font-size: clamp(1.25rem, 4.2vw, 2rem);
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  text-shadow: var(--bloom-strong);
+  line-height: 1.1;
+}
+.boot-sub {
+  margin-top: 0.35rem;
+  font-size: 11px;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.boot-log {
+  margin-top: 1.4rem;
+  min-height: 9.5em;
+  font-family: var(--font);
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+.boot-line { display: block; opacity: 0; animation: bootLineIn 0.18s var(--ease) forwards; }
+.boot-line .ok   { color: var(--ok); text-shadow: var(--text-bloom); float: right; }
+.boot-line .ready { display: inline-block; margin-top: 0.7rem; color: var(--accent); font-weight: 700; letter-spacing: 0.2em; text-shadow: var(--bloom); }
+.boot-dots { color: var(--dim); }
+@keyframes bootLineIn { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+.boot-skip {
+  position: absolute;
+  bottom: 1.4rem;
+  left: 0; right: 0;
+  text-align: center;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--dim);
+  opacity: 0.6;
+}
+
+/* ─────────────────────── PORTAL / LOGIN CONSOLE ─────────────────────── */
+/* Center it — kill the top-floating void — and frame it like a viewport. */
+#portal-overlay.overlay {
+  display: grid;
+  place-items: center;
+  padding: 2rem 1rem;
+}
+#portal-overlay .overlay-shell {
+  width: 100%;
+  max-width: 640px;
+  margin: 0;
+}
+#portal-overlay .hero-card {
+  position: relative;
+  padding: 1.6rem 1.7rem 1.4rem;
+  background:
+    radial-gradient(120% 80% at 50% -10%, var(--accent-soft), transparent 60%),
+    var(--bg-panel);
+  border: 1px solid var(--border-hi);
+  box-shadow: var(--bloom), inset 0 0 60px rgba(0,0,0,0.6);
+}
+/* Corner brackets — the card reads as a screen bezel. */
+#portal-overlay .hero-card::before,
+#portal-overlay .hero-card::after {
+  content: '';
+  position: absolute;
+  width: 14px; height: 14px;
+  border: 1px solid var(--accent);
+  opacity: 0.7;
+  box-shadow: var(--bloom);
+}
+#portal-overlay .hero-card::before { top: 7px; left: 7px; border-right: none; border-bottom: none; }
+#portal-overlay .hero-card::after  { bottom: 7px; right: 7px; border-left: none; border-top: none; }
+
+#portal-overlay .eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+#portal-overlay .eyebrow::before {
+  content: '';
+  width: 7px; height: 7px;
+  background: var(--accent);
+  box-shadow: var(--bloom);
+  animation: portalPulse 2s var(--ease) infinite;
+}
+@keyframes portalPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+#portal-overlay .logo {
+  font-size: clamp(1.5rem, 4.6vw, 2.25rem);
+  letter-spacing: 0.08em;
+  text-shadow: var(--bloom-strong);
+  margin-bottom: 0.45rem;
+}
+#portal-overlay .subtitle { font-size: 12.5px; line-height: 1.6; color: var(--dim); }
+
+#portal-overlay .panel-subsection {
+  margin-top: 1.1rem;
+  padding: 1rem 1.05rem 1.1rem;
+  background: var(--bg-input);
+  border-color: var(--border-hi);
+}
+#portal-overlay .panel-heading h3 {
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  text-shadow: var(--text-bloom);
+}
+/* Login hint chips: from cramped boxes to clear, tappable credential cards. */
+#portal-overlay .login-hints { gap: 0.6rem; margin-bottom: 0.2rem; }
+#portal-overlay .login-hint {
+  gap: 0.2rem;
+  padding: 0.5rem 0.7rem;
+  border-color: var(--border-hi);
+  border-left: 2px solid var(--accent);
+  background: var(--accent-soft);
+}
+#portal-overlay .login-hint .hint-user { font-size: 13px; color: var(--text); }
+
+/* Bigger, calmer inputs with a real glow on focus. */
+#portal-overlay .auth-form input[type="text"],
+#portal-overlay .auth-form input[type="password"] {
+  padding: 0.65rem 0.7rem;
+  font-size: 14px;
+  background: var(--bg);
+}
+#portal-overlay .auth-form input:focus { box-shadow: var(--focus-ring); }
+
+/* The sign-in button as the obvious primary action — a lit terminal key. */
+#portal-overlay #auth-submit {
+  padding: 0.6rem 1.5rem;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* Ambient status footer — fills the lower space with "alive terminal" detail. */
+.portal-statusline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem 1.1rem;
+  margin-top: 1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.portal-statusline .ps-item { display: inline-flex; align-items: center; gap: 0.4rem; }
+.portal-statusline .ps-dot {
+  width: 6px; height: 6px;
+  background: var(--ok);
+  box-shadow: var(--bloom);
+}
+.portal-statusline .ps-cursor {
+  display: inline-block;
+  width: 7px; height: 1em;
+  background: var(--accent);
+  box-shadow: var(--bloom);
+  vertical-align: text-bottom;
+  animation: cursorBlink 1s step-end infinite;
+}
+
+/* ───────────────────── Focal phosphor bloom (selective) ───────────────────── */
+/* The few elements that should feel "lit" rather than merely drawn. */
+.btn-primary { text-shadow: var(--text-bloom); }
+.btn-primary:hover:not(:disabled) { box-shadow: var(--bloom-strong); text-shadow: none; }
+.mode-btn.active { box-shadow: inset 0 0 12px var(--accent-soft); }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+
+/* Don't run the boot power-on / pulses for people who asked for calm. */
+@media (prefers-reduced-motion: reduce) {
+  .boot-screen { display: none !important; }
+  body::after { animation: none !important; }
+  #portal-overlay .eyebrow::before,
+  .portal-statusline .ps-cursor { animation: none !important; }
+}
+
+/* ══════════════════ PLAYER WORKSPACE — the core loop ══════════════════ */
+
+/* ───────────────── Stat HUD: real game gauges, not text ───────────────── */
+.stat-bar {
+  display: flex;
+  align-items: center;
+  gap: 1.15rem;
+  padding: 0.5rem 1rem;
+  background: linear-gradient(180deg, #0d0f0d 0%, #060706 100%);
+  border-top: 1px solid var(--accent);
+  border-bottom: 1px solid var(--border);
+  box-shadow: inset 0 1px 0 var(--accent-soft), 0 -6px 16px rgba(0,0,0,0.55);
+  overflow-x: auto;
+}
+.hud-gauge { display: inline-flex; align-items: center; gap: 0.5rem; flex-shrink: 0; }
+.hud-label {
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.hud-track {
+  position: relative;
+  width: 120px;
+  height: 10px;
+  background: rgba(0,0,0,0.55);
+  border: 1px solid var(--border-hi);
+  border-radius: 1px;
+  overflow: hidden;
+  box-shadow: inset 0 0 4px rgba(0,0,0,0.8);
+}
+.hud-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  transition: width 0.5s var(--ease);
+}
+/* Segment ticks drawn over the fill so the gauge reads as a meter. */
+.hud-track::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(90deg, transparent 0 11px, rgba(0,0,0,0.55) 11px 12px);
+  pointer-events: none;
+}
+.hud-num { font-size: 11px; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
+
+.hud-hp .hud-fill { background: linear-gradient(180deg, #ff8a8a, #ff3b3b); box-shadow: 0 0 9px rgba(255,68,68,0.65); }
+.hud-hp .hud-num { color: var(--hp); }
+.hud-mp .hud-fill { background: linear-gradient(180deg, #8fd0ff, #3b9bff); box-shadow: 0 0 9px rgba(68,170,255,0.6); }
+.hud-mp .hud-num { color: var(--mp); }
+.hud-xp .hud-fill { background: linear-gradient(180deg, #ffe79a, #e6b800); box-shadow: 0 0 9px rgba(230,184,0,0.5); }
+.hud-xp .hud-num { color: var(--xp); }
+
+.hud-chip {
+  flex-shrink: 0;
+  font-size: 11px;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--border-hi);
+  border-radius: var(--r);
+  background: var(--bg-input);
+  letter-spacing: 0.04em;
+}
+.hud-gold { color: var(--gold); margin-left: auto; }
+.hud-level {
+  color: var(--accent);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 10px var(--accent-soft);
+  text-shadow: var(--text-bloom);
+  font-weight: 700;
+}
+/* Low HP: the gauge breathes red — felt tension without a popup. */
+.hud-hp.is-low .hud-fill,
+.hud-hp.is-low .hud-num { animation: hpLow 1.1s ease-in-out infinite; }
+@keyframes hpLow { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+/* The combat/conversation mode badge sits inline at the head of the HUD. */
+.stat-bar .stat-mode-badge { align-self: center; }
+
+/* ───────────────────── Narration: treat it as the star ───────────────────── */
+.narrative-log { padding: 0.5rem 1.1rem 0.8rem; }
+.story-entry { padding: 0.6rem 0; }
+.story-command-line {
+  color: var(--accent);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  opacity: 0.85;
+  text-shadow: var(--text-bloom);
+}
+.story-command-line::before { content: '> '; color: var(--dim); }
+.story-narration {
+  font-size: 13.5px;
+  line-height: 1.75;
+  color: #a9e6b6;                 /* a brighter screen-green, easy to read at length */
+  border-left: 2px solid var(--accent);
+  padding-left: 0.85rem;
+  margin: 0.2rem 0 0.3rem;
+  text-shadow: 0 0 5px var(--glow);
+}
+.story-entry + .story-entry::before {
+  content: '';
+  display: block;
+  height: 1px;
+  margin: 0 0 0.7rem;
+  background: linear-gradient(90deg, var(--border-hi), transparent 70%);
+  opacity: 0.7;
+}
+#story-log .empty-state {
+  padding: 1.4rem 1rem;
+  text-align: center;
+  border: 1px dashed var(--border-hi);
+  border-radius: var(--r);
+  margin: 0.5rem 0;
+}
+
+/* "Narrator is writing" indicator — keeps the screen alive during the wait. */
+.story-entry.pending { padding: 0.6rem 0; }
+.story-pending {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding-left: 0.85rem;
+  margin-top: 0.25rem;
+  color: var(--dim);
+  font-size: 12.5px;
+  font-style: italic;
+}
+.pending-dots { display: inline-flex; gap: 4px; }
+.pending-dots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: var(--bloom);
+  opacity: 0.25;
+  animation: pendingDot 1.25s var(--ease) infinite;
+}
+.pending-dots i:nth-child(2) { animation-delay: 0.18s; }
+.pending-dots i:nth-child(3) { animation-delay: 0.36s; }
+@keyframes pendingDot {
+  0%, 100% { opacity: 0.25; transform: translateY(0); }
+  40%      { opacity: 1; transform: translateY(-2px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pending-dots i { opacity: 0.7; }
+}
+
+/* ───────────────────────── Room panel: framed ───────────────────────── */
+.room-panel {
+  background: linear-gradient(180deg, var(--accent-soft) 0%, transparent 45%);
+  padding: 0.7rem 1.1rem;
+}
+.terminal-titlebar {
+  padding: 0.4rem 1rem;
+  box-shadow: 0 0 12px var(--accent-soft);
+}
+.room-map-container {
+  border-color: var(--border-hi);
+  box-shadow: var(--bloom), inset 0 0 18px rgba(0,0,0,0.6);
+  padding: 0.35rem;
+}
+.room-description { color: var(--text); opacity: 0.82; font-size: 12.5px; }
+.room-summary-label { color: var(--accent); opacity: 0.8; }
+.room-summary-value { font-size: 12px; }
+
+/* ───────────────────── Command bar: the hero input ───────────────────── */
+.command-bar {
+  padding: 0.6rem 1.1rem 0.75rem;
+  background: linear-gradient(180deg, var(--bg-panel), #070807);
+  border-top: 1px solid var(--border);
+}
+.command-bar .prompt {
+  font-size: 16px;
+  text-shadow: var(--bloom);
+}
+#command-input {
+  font-size: 14px;
+  padding: 0.5rem 0.65rem;
+}
+#command-input:focus { box-shadow: var(--focus-ring); }
+#command-submit {
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.4rem 1rem;
+}
+/* Quick-commands & exits as little lit terminal keys. */
+.quick-commands .btn,
+.exit-chip {
+  border-color: var(--border-hi);
+  transition: border-color 0.12s, color 0.12s, box-shadow 0.12s, background 0.12s;
+}
+.quick-commands .btn::before { content: '/'; color: var(--dim); margin-right: 0.15em; }
+.quick-commands .btn:hover:not(:disabled),
+.exit-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: var(--bloom);
+}
+.exit-chip { color: var(--accent); border-color: var(--glow); }
+
+/* ──────────────── Character select: an inviting first run ──────────────── */
+/* While choosing a character there's no room or story yet — collapse those
+   empty panels and center the chooser so the screen isn't a black void. */
+.terminal-output:has(#player-select-panel:not(.hidden)) { justify-content: center; }
+.terminal-output:has(#player-select-panel:not(.hidden)) .room-panel,
+.terminal-output:has(#player-select-panel:not(.hidden)) #story-log { display: none; }
+
+.player-select-panel { padding: 2.4rem 1.5rem; gap: 1rem; }
+.player-select-panel::before {
+  content: '◇ ◈ ◇';
+  letter-spacing: 0.6em;
+  color: var(--accent);
+  opacity: 0.55;
+  text-shadow: var(--bloom);
+  font-size: 13px;
+}
+.player-select-panel h3 {
+  font-size: 18px;
+  letter-spacing: 0.16em;
+  color: var(--accent);
+  text-shadow: var(--bloom-strong);
+}
+.player-select-panel .panel-hint { font-size: 13px; }
+.resume-row input[type="text"] { padding: 0.55rem 0.7rem; font-size: 14px; }
+.resume-row input[type="text"]:focus { box-shadow: var(--focus-ring); }
+
+/* ───────────────────────── App header polish ───────────────────────── */
+.app-header { box-shadow: 0 1px 0 var(--accent-soft); }
+.status-dot.connected { box-shadow: 0 0 7px var(--ok); }
+.player-badge, .session-badge { border-color: var(--border-hi); }
+
+/* ───────────────────────── Mobile workspace ───────────────────────── */
+@media (max-width: 700px) {
+  /* Wrap the HUD so every gauge stays visible instead of scrolling off. */
+  .stat-bar { flex-wrap: wrap; gap: 0.45rem 0.8rem; padding: 0.5rem 0.7rem; }
+  .hud-track { width: 70px; }
+  .hud-gold { margin-left: 0; }
+  /* The realtime label eats width on a phone — the dot already says it. */
+  #connection-status { display: none; }
+  .player-badge, .session-badge { max-width: 150px; }
+}
+
+/* ══════════════════ ADMIN CONSOLE — crisp operator surface ══════════════════ */
+
+/* Summary cards: a quick-glance dashboard that actually reads as one. */
+.summary-cards { gap: 0.6rem; }
+.summary-card {
+  position: relative;
+  padding: 0.65rem 0.6rem 0.6rem;
+  background: linear-gradient(180deg, var(--accent-soft), transparent 75%), var(--bg-input);
+  border-color: var(--border-hi);
+  overflow: hidden;
+}
+.summary-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--accent);
+  box-shadow: var(--bloom);
+  opacity: 0.85;
+}
+.summary-label { margin-bottom: 0.15rem; }
+.summary-value { font-size: 1.55rem; color: var(--accent); text-shadow: var(--bloom); line-height: 1.1; }
+
+/* Health pills */
+.system-health { gap: 0.5rem; }
+.health-item { padding: 0.5rem 0.6rem; border-color: var(--border-hi); }
+.health-dot.ok { box-shadow: 0 0 6px var(--ok); }
+.health-dot.down { box-shadow: 0 0 6px var(--bad); }
+
+/* Tab hover/active with a touch more presence. */
+.admin-toolbar .admin-tab.active { background: var(--accent-soft); }
+
+/* Admin controls: make the operator surface feel like a command deck. */
+.admin-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  gap: 0.35rem;
+  padding: 0.45rem 0.7rem;
+  min-height: 48px;
+  background:
+    linear-gradient(180deg, rgba(51,255,102,0.08), transparent 80%),
+    var(--bg-panel);
+  box-shadow: 0 1px 0 var(--border-hi), 0 8px 18px rgba(0,0,0,0.4);
+}
+.admin-toolbar .admin-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 34px;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid transparent;
+  border-bottom-color: transparent;
+  border-radius: var(--r);
+  margin-bottom: 0;
+}
+.admin-toolbar .admin-tab::before {
+  display: inline-grid;
+  place-items: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  border: 1px solid var(--border-hi);
+  color: var(--dim);
+  background: rgba(0,0,0,0.35);
+  font-size: 10px;
+  line-height: 1;
+}
+.admin-toolbar .admin-tab[data-admin-tab="overview"]::before { content: 'DM'; }
+.admin-toolbar .admin-tab[data-admin-tab="worlds"]::before { content: 'W'; }
+.admin-toolbar .admin-tab[data-admin-tab="tools"]::before { content: 'T'; }
+.admin-toolbar .admin-tab[data-admin-tab="llm"]::before { content: 'AI'; }
+.admin-toolbar .admin-tab[data-admin-tab="registry"]::before { content: 'R'; }
+.admin-toolbar .admin-tab[data-admin-tab="events"]::before { content: 'E'; }
+.admin-toolbar .admin-tab[data-admin-tab="logs"]::before { content: 'L'; }
+.admin-toolbar .admin-tab:hover {
+  border-color: var(--border-hi);
+  box-shadow: inset 0 0 12px var(--accent-soft);
+}
+.admin-toolbar .admin-tab.active {
+  border-color: var(--accent);
+  border-bottom-color: var(--accent);
+  box-shadow: var(--bloom), inset 0 0 14px var(--accent-soft);
+}
+.admin-toolbar .admin-tab.active::before {
+  color: #000;
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: var(--bloom);
+  text-shadow: none;
+}
+.admin-toolbar-spacer { min-width: 0.25rem; }
+#btn-seed-demo-admin {
+  min-height: 34px;
+  border-color: var(--gold);
+  color: var(--gold);
+  background: rgba(230,184,0,0.08);
+}
+#btn-seed-demo-admin::before {
+  content: '+';
+  margin-right: 0.35rem;
+  color: var(--gold);
+}
+#btn-seed-demo-admin:hover:not(:disabled) {
+  color: #000;
+  background: var(--gold);
+  box-shadow: 0 0 14px rgba(230,184,0,0.45);
+}
+
+.admin-tab-body > .panel,
+.admin-tools-section {
+  border-color: var(--border-hi);
+  box-shadow: inset 0 0 24px rgba(0,0,0,0.35);
+}
+.admin-tab-body > .panel h3 {
+  color: var(--accent);
+  text-shadow: var(--text-bloom);
+}
+.admin-tools-section {
+  padding: 0.25rem 0.7rem;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-hi);
+  border-radius: var(--r);
+}
+.admin-tools-section + .admin-tools-section { margin-top: 0.5rem; }
+.admin-tools-header {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--accent);
+  text-shadow: var(--text-bloom);
+}
+.admin-tools-header::before {
+  color: var(--accent);
+  text-shadow: var(--text-bloom);
+}
+.admin-tools-section[open] {
+  box-shadow: var(--bloom), inset 0 0 24px rgba(0,0,0,0.45);
+}
+
+#workspace-admin .world-action-form,
+#workspace-admin .mutation-form {
+  display: grid;
+  gap: 0.7rem;
+}
+#workspace-admin .world-action-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+#workspace-admin .mutation-row {
+  align-items: end;
+}
+#workspace-admin select,
+#workspace-admin input,
+#workspace-admin textarea {
+  min-height: 38px;
+}
+.admin-command-form {
+  gap: 0.55rem;
+}
+.admin-command-form select {
+  max-width: 240px;
+}
+.admin-command-form button[type="submit"],
+#btn-send-msg {
+  min-width: 96px;
+}
+.logs-toolbar {
+  align-items: end;
+  gap: 0.7rem;
+}
+.logs-filters {
+  display: grid;
+  grid-template-columns: minmax(220px, 320px) minmax(180px, 320px) auto;
+  gap: 0.55rem;
+}
+.logs-actions {
+  margin-left: auto;
+}
+
+@media (max-width: 900px) {
+  .admin-toolbar {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+  .admin-toolbar .admin-tab {
+    flex: 0 0 auto;
+  }
+  .admin-toolbar-spacer { display: none; }
+  #btn-seed-demo-admin { flex: 0 0 auto; }
+  .logs-filters { grid-template-columns: 1fr; }
+  .admin-command-form { grid-template-columns: 1fr; }
+  .admin-command-form select { max-width: none; }
+}
+
+/* DM detail empty state: a little ASCII viewport instead of a bare sentence. */
+.dm-detail-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 3rem 1.5rem;
+}
+.dm-detail-empty::before {
+  content: '┌───┐\A│ ? │\A└───┘';
+  white-space: pre;
+  font-size: 1.05rem;
+  line-height: 1.2;
+  color: var(--accent);
+  opacity: 0.5;
+  text-shadow: var(--bloom);
+}
+
+/* DM detail panel header title bloom + result selection glow. */
+.dm-detail-title { text-shadow: var(--bloom-strong); }
+
+/* ── Bring stray off-theme blues/purples back into the phosphor palette ── */
+/* The "AI" actions were a hard purple (#7c4dff) that broke the whole look. */
+.btn-accent {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  text-shadow: var(--text-bloom);
+}
+.btn-accent:hover { background: var(--accent); color: #000; box-shadow: var(--bloom-strong); }
+
+/* Chat bubbles: user reads as cool "arcane" (already a palette blue=MP),
+   AI reads as phosphor — no more random purple. */
+.chat-msg.user { background: var(--arcane-soft); border-color: rgba(68,170,255,0.3); }
+.chat-msg.ai { background: var(--accent-soft); border-color: rgba(51,255,102,0.25); }
+.dm-ai-msg.user { background: var(--arcane-soft); color: #bfe2ff; }
+.registry-chat-input-row input:focus,
+.dm-detail-chat-input-row input:focus { box-shadow: var(--focus-ring); }
+
+/* Selections / tags that were blue → phosphor. */
+.world-card.selected { background: var(--accent-soft); }
+.world-tag { background: var(--accent-soft); border-color: rgba(51,255,102,0.2); }
+.registry-world-tag { background: var(--arcane-soft); border-color: rgba(68,170,255,0.25); }
+.dm-create-prompt { background: var(--accent-soft); border-color: rgba(51,255,102,0.2); }
+
+/* Search inputs get the same focus bloom as everything else. */
+.dm-search-bar input:focus,
+.registry-search-bar input:focus,
+.overview-search-input:focus { box-shadow: var(--focus-ring); }
+
+/* Mobile admin: stack the two-column consoles so nothing gets squeezed. */
+@media (max-width: 700px) {
+  .dm-console-layout,
+  .registry-browse-layout,
+  .registry-browse-layout:has(.registry-editor-col:not(.hidden)),
+  .registry-editor-layout { grid-template-columns: 1fr; }
+  .dm-console-layout { min-height: 0; }
+  .dm-search-bar, .registry-search-bar { flex-wrap: wrap; }
+  .dm-search-bar select { max-width: none; flex: 1 1 40%; }
+}
+
+/* ========================================================================== */
+/* Gameplay UX tightening                                                     */
+/* Keep long-form narration in a comfortable reading lane on wide displays.   */
+/* ========================================================================== */
+
+.story-entry {
+  width: min(100%, 1040px);
+  margin-right: auto;
+}
+
+.story-narration {
+  padding-right: 1rem;
+  text-wrap: pretty;
+}
+
+.room-panel-copy {
+  max-width: 1100px;
+}
+
+@media (max-width: 700px) {
+  /* Give every primary header action a real place instead of clipping it. */
+  .app-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: 0.45rem;
+    padding: 0.55rem 0.65rem;
+  }
+
+  .header-brand {
+    text-align: center;
+  }
+
+  .mode-switch {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.4rem;
+    width: 100%;
+  }
+
+  .mode-btn {
+    min-width: 0;
+    padding: 0.38rem 0.45rem;
+  }
+
+  .header-actions {
+    display: grid;
+    grid-template-columns: auto repeat(3, minmax(0, 1fr));
+    gap: 0.35rem;
+    width: 100%;
+    min-width: 0;
+    margin-left: 0;
+  }
+
+  .player-badge {
+    grid-column: 1 / -1;
+    justify-content: center;
+    max-width: none;
+    min-width: 0;
+  }
+
+  .session-badge {
+    display: none;
+  }
+
+  .status-cluster {
+    justify-content: center;
+    min-width: 28px;
+  }
+
+  #btn-refresh,
+  #btn-logout-header,
+  #btn-open-portal {
+    min-width: 0;
+    padding: 0.35rem 0.25rem;
+    white-space: nowrap;
+  }
+
+  /* Preserve room context beside a compact map rather than hiding it below. */
+  .room-panel {
+    max-height: 34%;
+    padding: 0.55rem 0.65rem;
+  }
+
+  .room-panel-shell {
+    grid-template-columns: 108px minmax(0, 1fr);
+    gap: 0.6rem;
+  }
+
+  .room-map-container {
+    width: 108px;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  .room-map-container canvas {
+    width: 100%;
+    height: auto;
+  }
+
+  .room-panel-copy {
+    gap: 0.2rem;
+  }
+
+  .room-description {
+    max-height: 3.25em;
+    margin-bottom: 0.2rem;
+    font-size: 11.5px;
+    line-height: 1.45;
+  }
+
+  .room-summary {
+    gap: 0.2rem;
+    padding-top: 0.3rem;
+    margin-top: 0;
+  }
+
+  .room-summary-line {
+    grid-template-columns: 42px minmax(0, 1fr);
+    gap: 0.35rem;
+  }
+
+  .room-summary-label {
+    font-size: 9px;
+  }
+
+  .room-summary-value {
+    max-height: 2.7em;
+    overflow: hidden;
+    font-size: 10.5px;
+    line-height: 1.35;
+  }
+
+  /* Put the contextual prompt above the input so the field stays usable. */
+  .command-bar {
+    padding: 0.55rem 0.65rem 0.65rem;
+  }
+
+  .command-bar form {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.4rem;
+  }
+
+  .command-bar .prompt {
+    grid-column: 1 / -1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+  }
+
+  #command-input {
+    width: 100%;
+    min-width: 0;
+    font-size: 13px;
+  }
+
+  #command-submit {
+    padding-inline: 0.8rem;
+  }
+
+  .narrative-log {
+    padding: 0.45rem 0.65rem 0.65rem;
+  }
+
+  .story-entry {
+    padding: 0.5rem 0;
+  }
+
+  .story-narration {
+    padding-left: 0.65rem;
+    padding-right: 0.25rem;
+    font-size: 12.5px;
+    line-height: 1.65;
+  }
+}

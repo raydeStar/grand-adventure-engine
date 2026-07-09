@@ -11,7 +11,7 @@ public class InteractionStateMachineTests
 {
     private const string PlayerId = "test-player";
 
-    // â”€â”€ Conversation entry â”€â”€
+    // ── Conversation entry ──
 
     [Fact]
     public async Task TalkTo_EntersConversationMode()
@@ -78,6 +78,107 @@ public class InteractionStateMachineTests
         var player = await stateManager.GetPlayerAsync(PlayerId);
         Assert.NotNull(player);
         Assert.Equal(2, player.Interaction.PlayerTurnCount);
+    }
+
+    [Fact]
+    public async Task Conversation_ModelExploreUpdate_DoesNotEndOrdinaryConversation()
+    {
+        var npc = new Npc { Id = "mara", Name = "Mara", Disposition = "hostile" };
+        var stateManager = await CreateStateAsync(npc: npc);
+        var narrator = CreateConversationNarrator(npc);
+        narrator
+            .Setup(s => s.ProcessConversationTurnAsync(
+                It.IsAny<PlayerCharacter>(),
+                It.IsAny<Room>(),
+                It.IsAny<Npc>(),
+                It.IsAny<InteractionState>(),
+                It.Is<string>(input => input.Contains("honest opinion", StringComparison.OrdinalIgnoreCase)),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new FreeFormResponse
+            {
+                Success = true,
+                Narration = "\"I am irritated, not silent,\" Mara says. \"Here is my reason, and you can argue with it if you have the spine.\"",
+                InteractionUpdate = new InteractionUpdate
+                {
+                    Mode = InteractionMode.Explore,
+                    NpcDisposition = "hostile",
+                    Context = ["Mara stayed sharp but kept talking."]
+                }
+            });
+        var engine = CreateEngine(stateManager, narrator.Object);
+
+        await engine.ProcessActionAsync(PlayerId, engine.ParseCommand(PlayerId, "talk to mara"));
+        var result = await engine.ProcessActionAsync(PlayerId, engine.ParseCommand(PlayerId, "ask Mara for her honest opinion"));
+
+        Assert.True(result.Success);
+        Assert.Equal(InteractionMode.Conversation, result.InteractionUpdate?.Mode);
+
+        var player = await stateManager.GetPlayerAsync(PlayerId);
+        Assert.NotNull(player);
+        Assert.Equal(InteractionMode.Conversation, player.Interaction.Mode);
+        Assert.Equal("Mara", player.Interaction.Target);
+    }
+
+    [Fact]
+    public async Task DirectedSpeech_ToNamedNpcFromExplore_StartsConversation()
+    {
+        var npc = new Npc
+        {
+            Id = "marquis_ondore",
+            Name = "Marquis Halim Ondore IV",
+            Disposition = "friendly"
+        };
+        var stateManager = await CreateStateAsync(npc: npc);
+        var narrator = CreateConversationNarrator(npc);
+        var engine = CreateEngine(stateManager, narrator.Object);
+
+        var action = engine.ParseCommand(PlayerId, "tell Marquis Halim Ondore IV I recovered the water crystal");
+        var result = await engine.ProcessActionAsync(PlayerId, action);
+
+        Assert.True(result.Success);
+        Assert.Contains("Marquis Halim Ondore IV", result.MechanicalSummary);
+
+        var player = await stateManager.GetPlayerAsync(PlayerId);
+        Assert.NotNull(player);
+        Assert.Equal(InteractionMode.Conversation, player.Interaction.Mode);
+        Assert.Equal("Marquis Halim Ondore IV", player.Interaction.Target);
+    }
+
+    [Fact]
+    public async Task DirectedSpeech_DoesNotMatchLooseWordsInsideMultiWordNpcName()
+    {
+        var npc = new Npc
+        {
+            Id = "exdeath_void",
+            Name = "Exdeath, Master of the Void",
+            Disposition = "hostile"
+        };
+        var stateManager = await CreateStateAsync(npc: npc);
+        var narrator = new Mock<INarratorService>();
+        narrator
+            .Setup(s => s.ProcessFreeFormAsync(
+                It.IsAny<PlayerCharacter>(),
+                It.IsAny<Room>(),
+                It.IsAny<string>(),
+                It.IsAny<IReadOnlyList<StoryEntry>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new FreeFormResponse
+            {
+                Success = true,
+                Narration = "The void swallows the boast and answers with a bitter chill."
+            });
+        var engine = CreateEngine(stateManager, narrator.Object);
+
+        var action = engine.ParseCommand(PlayerId, "tell the void I reject you");
+        var result = await engine.ProcessActionAsync(PlayerId, action);
+
+        Assert.True(result.Success);
+        Assert.Contains("[Free action:", result.MechanicalSummary);
+
+        var player = await stateManager.GetPlayerAsync(PlayerId);
+        Assert.NotNull(player);
+        Assert.Equal(InteractionMode.Explore, player.Interaction.Mode);
+        Assert.Null(player.Interaction.Target);
     }
 
     [Fact]
@@ -148,7 +249,7 @@ public class InteractionStateMachineTests
         Assert.Equal(InteractionMode.Explore, player.Interaction.Mode);
     }
 
-    // â”€â”€ Combat entry â”€â”€
+    // ── Combat entry ──
 
     [Fact]
     public async Task Attack_HostileNpc_EntersCombatMode()
@@ -186,7 +287,7 @@ public class InteractionStateMachineTests
         }
     }
 
-    // â”€â”€ InteractionState model tests â”€â”€
+    // ── InteractionState model tests ──
 
     [Fact]
     public void InteractionState_AppendContext_CapsAt20()
@@ -231,7 +332,7 @@ public class InteractionStateMachineTests
         Assert.Null(state.LeaveConsequence);
     }
 
-    // â”€â”€ Helpers â”€â”€
+    // ── Helpers ──
 
     private static GameEngine CreateEngine(IStateManager stateManager, INarratorService narrator, IProbabilityEngine? dice = null)
     {

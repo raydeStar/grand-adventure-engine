@@ -1,5 +1,5 @@
-# ══════════════════════════════════════════════════════════════════
-# FINAL FANTASY-THEMED SPELL REGISTRY
+﻿# ══════════════════════════════════════════════════════════════════
+# ORIGINAL FANTASY SPELL REGISTRY
 # "Fire, Fira, Firaga — destruction comes in threes." — Vivi
 # ══════════════════════════════════════════════════════════════════
 
@@ -89,7 +89,7 @@ spells:
 
   - id: cure_wounds
     name: Cure
-    description: "A warm glow of restorative magic mends wounds and eases pain. The White Mage's signature spell."
+    description: "A warm glow of restorative magic mends wounds and eases pain. The Dawn Cleric's signature spell."
     school: restoration
     mana_cost: 3
     heal_dice: "1d8+2"
@@ -194,7 +194,7 @@ spells:
 
   - id: poison_spray
     name: Bio
-    description: "A cloud of toxic green Mist sprays toward the target, eating at their flesh."
+    description: "A cloud of toxic green Aether sprays toward the target, eating at their flesh."
     school: conjuration
     mana_cost: 1
     damage_dice: "1d12"
@@ -251,7 +251,7 @@ spells:
 
   - id: haste
     name: Haste
-    description: "Time warps around the target, doubling their speed. A classic support spell — and the reason Summoners are always welcome in a party."
+    description: "Time warps around the target, doubling their speed. A classic support spell — and the reason Eidolon Binders are always welcome in a party."
     school: transmutation
     mana_cost: 6
     status_effect: "hasted"

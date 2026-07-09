@@ -57,8 +57,9 @@ public class BlindAdventureService
             Exits = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         };
 
-        // Give the starting room a forward exit so the player can move
-        startingRoom.Exits["north"] = $"blind_{startingRoomId}_north";
+        // Seed an initial cardinal exit so Blind Adventure works with the standard movement verbs.
+        if (storyline.MaxRooms > 1)
+            startingRoom.Exits["north"] = $"blind_{startingRoomId}_north";
 
         startingRoom.IsDiscovered = true;
         startingRoom.DiscoveredAt = DateTimeOffset.UtcNow;
@@ -81,6 +82,39 @@ public class BlindAdventureService
             player.Id, storyline.Id, storyline.MaxRooms);
 
         return (startingRoom, startingRoom.Description);
+    }
+
+    /// <summary>
+    /// Generates the next room in the active Blind Adventure and records the visit.
+    /// </summary>
+    public async Task<Room> GenerateNextRoomAsync(
+        PlayerCharacter player, Room currentRoom, string direction, CancellationToken ct = default)
+    {
+        var session = player.BlindAdventure
+            ?? throw new InvalidOperationException("Player is not in a blind adventure.");
+
+        var targetRoomId = currentRoom.Exits.TryGetValue(direction, out var existingTarget)
+            ? existingTarget
+            : null;
+        var isNewVisit = string.IsNullOrWhiteSpace(targetRoomId)
+            || !session.VisitedRoomIds.Exists(id => string.Equals(id, targetRoomId, StringComparison.OrdinalIgnoreCase));
+        var nextPlotBeat = session.NextPlotBeat;
+
+        var generatedRoom = await _roomGenerator.GenerateAndPersistRoomAsync(
+            player.Id,
+            currentRoom,
+            direction,
+            session.Storyline,
+            session.VisitedRoomSummaries,
+            nextPlotBeat,
+            Math.Max(0, session.RoomsRemaining - 1),
+            ct);
+
+        TrackRoomVisit(player, generatedRoom);
+        if (isNewVisit && !string.IsNullOrWhiteSpace(nextPlotBeat))
+            session.PlotBeatsDelivered++;
+
+        return generatedRoom;
     }
 
     /// <summary>

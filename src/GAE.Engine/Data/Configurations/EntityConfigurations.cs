@@ -53,10 +53,24 @@ public class PlayerConfiguration : IEntityTypeConfiguration<PlayerEntity>
         builder.Property(p => p.Wis).HasColumnName("wis");
         builder.Property(p => p.Cha).HasColumnName("cha");
         builder.Property(p => p.Luck).HasColumnName("luck");
+        builder.Property(p => p.GameMode).HasColumnName("game_mode")
+            .HasConversion<string>()
+            .HasDefaultValue(GameMode.FullRpg)
+            .IsRequired();
         builder.Property(p => p.CreatedAt).HasColumnName("created_at");
         builder.Property(p => p.LastActiveAt).HasColumnName("last_active_at");
 
         // JSONB columns for complex nested structures
+        builder.Property(p => p.BlindAdventure).HasColumnName("blind_adventure").HasColumnType("jsonb")
+            .HasConversion(
+                v => v == null ? null : JsonSerializer.Serialize(v, JsonDefaults.Options),
+                v => v == null ? null : JsonSerializer.Deserialize<BlindAdventureSession>(v, JsonDefaults.Options));
+
+        builder.Property(p => p.CyoaState).HasColumnName("cyoa_state").HasColumnType("jsonb")
+            .HasConversion(
+                v => v == null ? null : JsonSerializer.Serialize(v, JsonDefaults.Options),
+                v => v == null ? null : JsonSerializer.Deserialize<CyoaState>(v, JsonDefaults.Options));
+
         builder.Property(p => p.Equipment).HasColumnName("equipment").HasColumnType("jsonb")
             .HasConversion(
                 v => JsonSerializer.Serialize(v, JsonDefaults.Options),

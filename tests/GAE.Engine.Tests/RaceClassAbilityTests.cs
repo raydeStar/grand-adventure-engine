@@ -1,4 +1,4 @@
-using GAE.Core.Interfaces;
+﻿using GAE.Core.Interfaces;
 using GAE.Core.Models;
 using GAE.Core.Registry;
 using GAE.Engine.Configuration;
@@ -78,7 +78,7 @@ public class RaceClassAbilityTests
         var state = new InMemoryStateManager();
         var engine = CreateEngine(state, registry: registry);
 
-        // Elf/Viera has "heightened_reflexes" trait → StatBonus dex +1
+        // Elf/Sylvar has "heightened_reflexes" trait → StatBonus dex +1
         var concept = new CharacterConcept
         {
             PlayerDiscordId = PlayerId,
@@ -328,7 +328,7 @@ public class RaceClassAbilityTests
         var state = new InMemoryStateManager();
         var engine = CreateEngine(state, registry: registry);
 
-        // Dwarf/Bangaa has "armored_hide" → DamageResistance physical 2
+        // Dwarf/Drakari has "armored_hide" → DamageResistance physical 2
         var player = CreatePlayer(race: "dwarf");
         player.ActiveTraits = ["armored_hide"];
 
@@ -569,7 +569,7 @@ public class RaceClassAbilityTests
         registry.Races.Register(new RaceDefinition
         {
             Id = "dwarf",
-            Name = "Bangaa",
+            Name = "Drakari",
             StatBonuses = new Dictionary<string, int> { ["con"] = 2, ["str"] = 1 },
             Traits = ["Armored Hide", "Warrior Culture", "Resilient"],
             TraitEffects =
@@ -583,7 +583,7 @@ public class RaceClassAbilityTests
         registry.Races.Register(new RaceDefinition
         {
             Id = "elf",
-            Name = "Viera",
+            Name = "Sylvar",
             StatBonuses = new Dictionary<string, int> { ["dex"] = 2, ["int"] = 1 },
             Traits = ["Keen Senses", "Heightened Reflexes"],
             TraitEffects =
@@ -611,7 +611,7 @@ public class RaceClassAbilityTests
         registry.Classes.Register(new ClassDefinition
         {
             Id = "cleric",
-            Name = "White Mage",
+            Name = "Dawn Cleric",
             HitDie = "d8",
             PrimaryStat = "wis",
             SecondaryStat = "con",

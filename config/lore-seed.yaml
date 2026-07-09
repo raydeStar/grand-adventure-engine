@@ -1,46 +1,46 @@
-﻿# ══════════════════════════════════════════════════════════════════
-# FINAL FANTASY-THEMED LORE SEED
-# "Kupo! Another adventurer wanders into our story." — Mog
+﻿# ------------------------------------------------------------------
+# ORIGINAL FANTASY LORE SEED
+# Original public seed content for Grand Adventure Engine.
 #
-# A love letter to Final Fantasy, reskinned for the Grand Adventure Engine.
-# NOT for public distribution — personal playtest theming only.
-# ══════════════════════════════════════════════════════════════════
+# A love letter to original fantasy, reskinned for the Grand Adventure Engine.
+# Public-safe original fantasy theming.
+# ------------------------------------------------------------------
 
 regions:
-  - id: "rabanastre"
-    name: "Rabanastre"
-    description: "The great desert city, jewel of Dalmasca. Its grand bazaars and towering sandstone archways shelter soldiers, merchants, moogles, and cutthroats alike."
+  - id: "stonewake"
+    name: "Stonewake"
+    description: "The great desert city, jewel of Valeward. Its grand bazaars and towering sandstone archways shelter soldiers, merchants, sprigs, and cutthroats alike."
     tags: ["city", "safe", "trade", "desert"]
 
-  - id: "golmore"
-    name: "The Golmore Jungle"
-    description: "A vast primordial jungle where ancient creatures and wayward spirits roam beneath a canopy no sunlight penetrates. The Viera once called it home."
+  - id: "gloamwood"
+    name: "The Gloamwood"
+    description: "A vast primordial jungle where ancient creatures and wayward spirits roam beneath a canopy no sunlight penetrates. The Sylvar once called it home."
     tags: ["jungle", "dark", "wilderness", "magical"]
 
-  - id: "pharos"
-    name: "The Pharos at Ridorana"
-    description: "A tower of black stone rising from the sea, built by the Occuria to house an ancient power. Something stirs within its highest reaches."
+  - id: "blackspire"
+    name: "The Blackspire at Stormreach"
+    description: "A tower of black stone rising from the sea, built by the Veiled Architects to house an ancient power. Something stirs within its highest reaches."
     tags: ["dungeon", "tower", "dangerous", "ancient"]
 
 factions:
-  - id: "dalmascan_resistance"
-    name: "The Dalmascan Resistance"
-    description: "Freedom fighters loyal to the memory of King Raminas, working in the shadows to liberate Rabanastre from Imperial control."
+  - id: "valewarden_resistance"
+    name: "The Valewarden Resistance"
+    description: "Freedom fighters loyal to the memory of King Arvend, working in the shadows to liberate Stonewake from Imperial control."
 
-  - id: "occuria_cult"
-    name: "The Cult of the Occuria"
-    description: "Zealots who believe the Occuria are gods and seek to awaken the Esper sealed in the Pharos. Dangerously devoted."
+  - id: "architect_cult"
+    name: "The Cult of the Veiled Architects"
+    description: "Zealots who believe the Veiled Architects are gods and seek to awaken the Eidolon sealed in the Blackspire. Dangerously devoted."
 
   - id: "merchants_guild"
-    name: "Rabanastre Merchants' Guild"
-    description: "The shopkeepers, traders, and moogles who keep Rabanastre's economy moving. Gil is the only god they worship."
+    name: "Stonewake Merchants' Guild"
+    description: "The shopkeepers, traders, and sprigs who keep Stonewake's economy moving. Gold is the only god they worship."
 
 rooms:
-  # ── RABANASTRE — CITY ROOMS ────────────────────────────────
+  # -- STONEWAKE — CITY ROOMS --------------------------------
 
   - id: "spawn"
-    name: "The Seventh Heaven"
-    description: "A bustling tavern wedged between two towering sandstone buildings. Ceiling fans creak overhead, struggling against the desert heat. The bar is polished driftwood, the chairs are mismatched, and the air smells of spiced meat and strong coffee. A bounty board near the door overflows with hunt postings. Behind the bar, a young woman with dark hair and striking crimson eyes mixes drinks with the speed and precision of a martial artist — because she is one. A faded AVALANCHE poster hangs behind the bar, half-hidden by bottles. Tifa keeps the drinks flowing and the rumors sharper."
+    name: "The Lantern's Rest"
+    description: "A bustling tavern wedged between two towering sandstone buildings. Ceiling fans creak overhead, struggling against the desert heat. The bar is polished driftwood, the chairs are mismatched, and the air smells of spiced meat and strong coffee. A bounty board near the door overflows with hunt postings. Behind the bar, a young woman with dark hair and striking crimson eyes mixes drinks with the speed and precision of a martial artist — because she is one. A faded Ashen Vow poster hangs behind the bar, half-hidden by bottles. Mara keeps the drinks flowing and the rumors sharper."
     exits:
       east: "town_square"
       south: "back_alley"
@@ -48,46 +48,46 @@ rooms:
     environment_tags: ["indoor", "safe", "lit", "tavern", "busy", "hub"]
     npcs:
       - id: "innkeeper_mara"
-        name: "Tifa Lockhart"
-        personality: "Strong, compassionate, and fiercely protective of anyone she considers family. Runs the Seventh Heaven with a warm smile and iron fists — literally. A master martial artist who could flatten half the tavern without spilling a drink, but prefers to keep the peace. Used to fight with AVALANCHE before settling down to run the bar. Still trains every morning and keeps her Premium Heart gloves behind the counter. Has a complicated history with a certain spiky-haired swordsman she doesn't like to talk about. Knows everyone's secrets and trades them like currency. Flirtatious in a genuine, caring way — not manipulative. Will absolutely throw you through a wall if you start trouble in her bar."
-        faction: "dalmascan_resistance"
-        knowledge_scopes: ["rumors", "town", "golmore", "pharos", "merchants_guild", "dalmascan_resistance", "martial_arts", "avalanche"]
-        quests_offered: ["waterway_infestation", "cactuar_hunt"]
+        name: "Mara Vale"
+        personality: "Strong, compassionate, and fiercely protective of anyone she considers family. Runs the Lantern's Rest with a warm smile and iron fists — literally. A master martial artist who could flatten half the tavern without spilling a drink, but prefers to keep the peace. Used to fight with Ashen Vow before settling down to run the bar. Still trains every morning and keeps her Ironheart gloves behind the counter. Has a complicated history with a certain wandering swordmaster she doesn't like to talk about. Knows everyone's secrets and trades them like currency. Flirtatious in a genuine, caring way — not manipulative. Will absolutely throw you through a wall if you start trouble in her bar."
+        faction: "valewarden_resistance"
+        knowledge_scopes: ["rumors", "town", "gloamwood", "blackspire", "merchants_guild", "valewarden_resistance", "martial_arts", "ashen_vow"]
+        quests_offered: ["waterway_infestation", "needlejack_hunt"]
       - id: "drunk_pete"
-        name: "Wedge"
-        personality: "One half of Biggs & Wedge — except Biggs shipped out weeks ago and Wedge has been drinking ever since. Hapless, good-hearted, and terrible at his job. Claims he once piloted an airship. Nobody believes him. Surprisingly loyal to anyone who shows him kindness."
-        faction: "dalmascan_resistance"
-        knowledge_scopes: ["rumors", "pharos", "airships"]
-        quests_offered: ["wedge_lucky_charm"]
+        name: "Perrin"
+        personality: "One half of Hale & Perrin — except Hale shipped out weeks ago and Perrin has been drinking ever since. Hapless, good-hearted, and terrible at his job. Claims he once piloted an airship. Nobody believes him. Surprisingly loyal to anyone who shows him kindness."
+        faction: "valewarden_resistance"
+        knowledge_scopes: ["rumors", "blackspire", "airships"]
+        quests_offered: ["perrin_lucky_charm"]
     items:
       - id: "chipped_mug"
-        name: "Tifa's Signature Cocktail"
-        description: "A ceramic mug shaped like a Chocobo head, filled with Tifa's famous Cosmo Canyon Sunset — a layered drink that shifts from red to gold. Somehow always warm."
+        name: "Mara's Signature Cocktail"
+        description: "A ceramic mug shaped like a Dunewing head, filled with Mara's famous Cinderfall Sunset — a layered drink that shifts from red to gold. Somehow always warm."
         type: "Misc"
         is_consumable: true
         value: 3
         effect: "Restores 1d4 HP and warms your soul"
       - id: "half_eaten_bread"
-        name: "Gysahl Biscuit"
-        description: "A crunchy biscuit made from gysahl greens. Chocobos love them, and Wedge apparently does too — there's a bite taken out of this one."
+        name: "Sunleaf Biscuit"
+        description: "A crunchy biscuit made from sunleaf greens. Dunewings love them, and Perrin apparently does too — there's a bite taken out of this one."
         type: "Misc"
         is_consumable: true
         value: 1
         effect: "Restores 1d4+1 HP"
       - id: "worn_playing_cards"
-        name: "Triple Triad Deck"
-        description: "A dog-eared deck of Triple Triad cards. Several are missing, and the rest are sticky with spilled ale. The Ifrit card has a mustache drawn on it."
+        name: "Three Crowns Deck"
+        description: "A dog-eared deck of Three Crowns cards. Several are missing, and the rest are sticky with spilled ale. The Cindermaw card has a mustache drawn on it."
         type: "Misc"
         value: 2
-      - id: "avalanche_flyer"
-        name: "Faded AVALANCHE Flyer"
-        description: "A crumpled resistance flyer with the AVALANCHE logo — a meteor streaking through a green circle. Someone has scrawled 'FIGHT THE EMPIRE' across the bottom. Tifa pretends not to know where these keep coming from."
+      - id: "ashen_vow_flyer"
+        name: "Faded Ashen Vow Flyer"
+        description: "A crumpled resistance flyer with the Ashen Vow logo — a meteor streaking through a green circle. Someone has scrawled 'FIGHT THE EMPIRE' across the bottom. Mara pretends not to know where these keep coming from."
         type: "Misc"
         value: 0
 
   - id: "town_square"
-    name: "Rabanastre Bazaar"
-    description: "The beating heart of Rabanastre — a vast open-air marketplace shaded by colorful canvas awnings. Vendors hawk everything from potions to chocobo feathers. A massive crystal fountain dominates the center, its waters glowing faintly blue. An airship rumbles overhead, casting a shadow across the cobblestones. To the north, the clang of hammers. To the east, the great city gates."
+    name: "Stonewake Bazaar"
+    description: "The beating heart of Stonewake — a vast open-air marketplace shaded by colorful canvas awnings. Vendors hawk everything from potions to dunewing feathers. A massive crystal fountain dominates the center, its waters glowing faintly blue. An airship rumbles overhead, casting a shadow across the cobblestones. To the north, the clang of hammers. To the east, the great city gates."
     exits:
       west: "spawn"
       north: "blacksmith"
@@ -100,18 +100,18 @@ rooms:
     environment_tags: ["outdoor", "safe", "lit", "town_center", "bazaar"]
     npcs:
       - id: "guard_bram"
-        name: "Basch fon Ronsenburg"
+        name: "Bram Ironward"
         personality: "A disgraced knight falsely accused of regicide, now serving as a common gate guard under an assumed name. Noble, honorable, and haunted by guilt. Speaks with quiet authority. Respects strength and directness. Won't talk about his past unless trust is earned. The resistance knows who he really is."
-        faction: "dalmascan_resistance"
-        knowledge_scopes: ["town", "dalmascan_resistance", "golmore", "security", "military"]
+        faction: "valewarden_resistance"
+        knowledge_scopes: ["town", "valewarden_resistance", "gloamwood", "security", "military"]
         quests_offered: ["patrol_resistance"]
       - id: "dungeon_master_garrick"
-        name: "Cid Highwind"
+        name: "Garrick Vane"
         personality: "A legendary airship engineer with a cigarette perpetually between his teeth and a spear strapped to his back. Retired from active adventuring but knows every dungeon, ruin, and monster den in the realm. Loud, profane, and deeply competent. Will mark dangerous locations on your map for the right price. Loves telling stories about the old days."
-        faction: "dalmascan_resistance"
+        faction: "valewarden_resistance"
         knowledge_scopes: ["dungeons", "monsters", "treasure", "adventure", "lore", "airships", "technology"]
         level: 5
-        quests_offered: ["cid_airship_parts"]
+        quests_offered: ["garrick_airship_parts"]
     items:
       - id: "loose_cobblestone"
         name: "Cracked Paving Stone"
@@ -125,23 +125,23 @@ rooms:
         value: 1
 
   - id: "blacksmith"
-    name: "Watts' Forge"
-    description: "Waves of heat pour from the open-air forge where a grizzled Bangaa hammers glowing mythril into shape. Swords, spears, and shields hang from every surface — some mundane, others crackling with materia-infused enchantment. A sign reads: 'YOU BREAK IT, YOU BUY IT. YES, THAT INCLUDES YOUR SKULL, KUPO.' A moogle assistant scurries about, taking measurements."
+    name: "Korga's Forge"
+    description: "Waves of heat pour from the open-air forge where a grizzled Drakari hammers glowing mythril into shape. Swords, spears, and shields hang from every surface — some mundane, others crackling with aetherglass-infused enchantment. A sign reads: 'YOU BREAK IT, YOU BUY IT. YES, THAT INCLUDES YOUR SKULL, AYE.' A sprig assistant scurries about, taking measurements."
     exits:
       south: "town_square"
     environment_tags: ["indoor", "safe", "lit", "forge", "hot"]
     npcs:
       - id: "blacksmith_korga"
-        name: "Watts"
-        personality: "A veteran Bangaa weaponsmith who has forged blades for kings, rebels, and monsters alike. Blunt, loud, and relentlessly proud of his craft. Settled in Rabanastre after years on the road. Respects fighters who know their steel. Finds mages amusing. Will give discounts to anyone who impresses him with combat knowledge."
+        name: "Korga"
+        personality: "A veteran Drakari weaponsmith who has forged blades for kings, rebels, and monsters alike. Blunt, loud, and relentlessly proud of his craft. Settled in Stonewake after years on the road. Respects fighters who know their steel. Finds mages amusing. Will give discounts to anyone who impresses him with combat knowledge."
         faction: "merchants_guild"
-        knowledge_scopes: ["weapons", "armor", "combat", "mercenary_life", "mythril", "materia"]
+        knowledge_scopes: ["weapons", "armor", "combat", "mercenary_life", "mythril", "aetherglass"]
         is_shopkeeper: true
         quests_offered: ["watts_masterwork"]
         shop_inventory:
           - id: "thunderstrike_blade"
-            name: "Masamune Replica"
-            description: "A katana that crackles with lightning-aspected aether. Watts' masterwork — he's been looking for someone worthy to carry it. 'It ain't the real thing,' he grunts, 'but it'll do.'"
+            name: "Stormglass Replica"
+            description: "A katana that crackles with lightning-aspected aether. Korga's masterwork — he's been looking for someone worthy to carry it. 'It ain't the real thing,' he grunts, 'but it'll do.'"
             type: "Weapon"
             damage_dice: "3d8+5"
             damage_stat: "STR"
@@ -149,8 +149,8 @@ rooms:
             is_equippable: true
             slot: "Weapon"
           - id: "ironbark_plate"
-            name: "Adamant Armor"
-            description: "Armor forged from adamantite alloy and tempered in dragon's breath. Light enough to move in, tough enough to stop a Behemoth's claw."
+            name: "Ironbark Armor"
+            description: "Armor forged from adamantite alloy and tempered in dragon's breath. Light enough to move in, tough enough to stop a Gorehorn's claw."
             type: "Armor"
             armor_value: 6
             value: 400
@@ -158,7 +158,7 @@ rooms:
             slot: "Armor"
           - id: "starfall_shield"
             name: "Crystal Shield"
-            description: "A round shield inlaid with a fragment of Nethicite. Glows faintly in the dark and hums near magical energy."
+            description: "A round shield inlaid with a fragment of Aetherglass. Glows faintly in the dark and hums near magical energy."
             type: "Shield"
             armor_value: 4
             value: 250
@@ -184,7 +184,7 @@ rooms:
             slot: "Weapon"
           - id: "leather_armor"
             name: "Leather Plate"
-            description: "Sturdy leather armor reinforced with iron rivets. It won't stop a Behemoth, but it's better than your shirt."
+            description: "Sturdy leather armor reinforced with iron rivets. It won't stop a Gorehorn, but it's better than your shirt."
             type: "Armor"
             armor_value: 2
             value: 15
@@ -192,7 +192,7 @@ rooms:
             slot: "Armor"
           - id: "wooden_shield"
             name: "Bronze Shield"
-            description: "A basic bronze shield with the Dalmascan crest. Standard militia issue."
+            description: "A basic bronze shield with the Valewarden crest. Standard militia issue."
             type: "Shield"
             armor_value: 1
             value: 10
@@ -227,8 +227,8 @@ rooms:
             is_two_handed: true
     items:
       - id: "str_amulet"
-        name: "Power Wrist"
-        description: "A leather bracer inlaid with a red materia shard. Grants the wearer increased physical power. Watts keeps it on display — 'For someone who earns it.'"
+        name: "Power Bracer"
+        description: "A leather bracer inlaid with a red aetherglass shard. Grants the wearer increased physical power. Korga keeps it on display — 'For someone who earns it.'"
         type: "Amulet"
         value: 30
         is_equippable: true
@@ -237,21 +237,21 @@ rooms:
           str: 2
 
   - id: "general_store"
-    name: "O'aka's Emporium"
-    description: "A cramped shop stuffed floor to ceiling with everything an adventurer could need. Potions, ethers, phoenix downs, questionable materia, and a taxidermied Cactuar that might be winking at you. O'aka himself grins from behind the counter, rubbing his hands together. 'Welcome, welcome! O'aka the Twenty-Third, merchant extraordinaire, at your service!'"
+    name: "Pip's Emporium"
+    description: "A cramped shop stuffed floor to ceiling with everything an adventurer could need. Healing Draughts, ethers, revival draughts, questionable aetherglass, and a taxidermied Needlejack that might be winking at you. Pip himself grins from behind the counter, rubbing his hands together. 'Welcome, welcome! Pip the Twenty-Third, merchant extraordinaire, at your service!'"
     exits:
       north: "town_square"
     environment_tags: ["indoor", "safe", "lit", "shop", "trade", "cluttered"]
     npcs:
       - id: "shopkeeper_pip"
-        name: "O'aka XXIII"
-        personality: "A fast-talking traveling merchant who wandered into Rabanastre and never left. Cheerful, shameless, and convinced he's doing you a favor with every sale. Claims his family has been merchants for twenty-three generations. Prices are flexible if you're charming enough. Secretly terrified of anything outside the city walls."
+        name: "Pip the Twenty-Third"
+        personality: "A fast-talking traveling merchant who wandered into Stonewake and never left. Cheerful, shameless, and convinced he's doing you a favor with every sale. Claims his family has been merchants for twenty-three generations. Prices are flexible if you're charming enough. Secretly terrified of anything outside the city walls."
         faction: "merchants_guild"
-        knowledge_scopes: ["trade", "supplies", "rumors", "town", "potions", "materia"]
+        knowledge_scopes: ["trade", "supplies", "rumors", "town", "potions", "aetherglass"]
         is_shopkeeper: true
         shop_inventory:
           - id: "healing_potion_1"
-            name: "Hi-Potion"
+            name: "Greater Healing Draught"
             description: "A thick crimson liquid in a crystal vial etched with healing runes. Restores a significant amount of health. Tastes like strawberries and magic."
             type: "Potion"
             is_consumable: true
@@ -260,12 +260,12 @@ rooms:
             quantity: 3
           - id: "torch_1"
             name: "Torch"
-            description: "A simple torch. Lights the way in dark places. Essential for the Pharos."
+            description: "A simple torch. Lights the way in dark places. Essential for the Blackspire."
             type: "Misc"
             value: 2
             quantity: 5
           - id: "minor_healing_potion"
-            name: "Potion"
+            name: "Healing Draught"
             description: "A small vial of red liquid. The most basic healing item, but it's kept many an adventurer alive."
             type: "Potion"
             is_consumable: true
@@ -274,7 +274,7 @@ rooms:
             quantity: 5
           - id: "antidote_1"
             name: "Antidote"
-            description: "A bitter green liquid that neutralizes most common poisons. Essential in the Golmore Jungle."
+            description: "A bitter green liquid that neutralizes most common poisons. Essential in the Gloamwood."
             type: "Potion"
             is_consumable: true
             value: 10
@@ -294,11 +294,11 @@ rooms:
             quantity: 10
           - id: "lockpick_set"
             name: "Lockpick Set"
-            description: "A leather case containing picks and tension wrenches. 'For treasure chests only,' insists O'aka with a wink."
+            description: "A leather case containing picks and tension wrenches. 'For treasure chests only,' insists Pip with a wink."
             type: "Misc"
             value: 20
           - id: "copper_ring"
-            name: "Protect Ring"
+            name: "Warden Ring"
             description: "A copper band etched with protective runes. Warms slightly to the touch and bolsters the wearer's constitution."
             type: "Ring"
             value: 15
@@ -307,7 +307,7 @@ rooms:
             stat_bonuses:
               con: 1
           - id: "leather_gloves"
-            name: "Battle Gloves"
+            name: "Reinforced Gloves"
             description: "Sturdy leather gloves reinforced with metal plates. Improve grip and protect the hands."
             type: "Gloves"
             armor_value: 1
@@ -315,7 +315,7 @@ rooms:
             is_equippable: true
             slot: "Gloves"
           - id: "traveler_boots"
-            name: "Hermes Sandals"
+            name: "Swiftstep Sandals"
             description: "Enchanted sandals blessed by the spirit of speed. They make long journeys far more bearable and the wearer noticeably quicker."
             type: "Boots"
             armor_value: 1
@@ -327,17 +327,17 @@ rooms:
   
   - id: "back_alley"
     name: "Lowtown"
-    description: "A labyrinth of narrow passages beneath Rabanastre's main level. The ceiling is the underside of the bazaar above, dripping condensation. Crates and barrels are stacked haphazardly, and the air smells of damp stone and desperation. Refugees, smugglers, and those the Empire forgot call this home. A masked figure leans against the wall, arms folded, watching you with unsettling calm."
+    description: "A labyrinth of narrow passages beneath Stonewake's main level. The ceiling is the underside of the bazaar above, dripping condensation. Crates and barrels are stacked haphazardly, and the air smells of damp stone and desperation. Refugees, smugglers, and those the Empire forgot call this home. A masked figure leans against the wall, arms folded, watching you with unsettling calm."
     exits:
       north: "spawn"
     environment_tags: ["outdoor", "dark", "shady", "alley", "lowtown"]
     npcs:
       - id: "fence_silas"
-        name: "Gilgamesh"
+        name: "Silas the Grand"
         personality: "A flamboyant, self-proclaimed legendary swordsman who runs a black market arms dealership from Lowtown. Dramatic, boastful, and surprisingly knowledgeable about weapons — though most of his 'legendary collection' is knockoffs. Buys and sells anything with theatrical flair. Claims to have crossed dimensions. Speaks about himself in the third person when excited."
         faction: "merchants_guild"
-        knowledge_scopes: ["black_market", "rumors", "pharos", "occuria_cult", "weapons", "dimensions"]
-        quests_offered: ["gilgamesh_challenge", "tonberry_grudge"]
+        knowledge_scopes: ["black_market", "rumors", "blackspire", "architect_cult", "weapons", "dimensions"]
+        quests_offered: ["silas_challenge", "knife_wight_grudge"]
         level: 6
         hp: 45
         ac: 14
@@ -345,8 +345,8 @@ rooms:
         is_shopkeeper: true
         shop_inventory:
           - id: "shadow_dagger"
-            name: "Zwill Crossblade"
-            description: "A wickedly curved dual-blade that seems to drink the light. Impossibly sharp. 'Gilgamesh acquired this from a ninja in another dimension! ...Probably.'"
+            name: "Nightglass Crossblade"
+            description: "A wickedly curved dual-blade that seems to drink the light. Impossibly sharp. 'Silas the Grand acquired this from a ninja in another dimension! ...Probably.'"
             type: "Weapon"
             damage_dice: "2d8+4"
             damage_stat: "DEX"
@@ -355,7 +355,7 @@ rooms:
             slot: "Weapon"
           - id: "poison_vial"
             name: "Poison Fang"
-            description: "A small vial of viscous purple liquid harvested from a Malboro. Coat a weapon to add poison damage for several strikes."
+            description: "A small vial of viscous purple liquid harvested from a Vinemaw. Coat a weapon to add poison damage for several strikes."
             type: "Misc"
             is_consumable: true
             value: 30
@@ -374,7 +374,7 @@ rooms:
             value: 35
           - id: "cloak_of_shadows"
             name: "Ninja Gear"
-            description: "A dark outfit that seems to shift and blend with the shadows. Light as silk, but surprisingly protective. Gilgamesh swears it belonged to Shadow himself."
+            description: "A dark outfit that seems to shift and blend with the shadows. Light as silk, but surprisingly protective. Silas the Grand swears it belonged to Shadow himself."
             type: "Cloak"
             armor_value: 1
             value: 100
@@ -404,35 +404,35 @@ rooms:
           dex: 1
           lck: 2
       - id: "discarded_bottle"
-        name: "Empty Potion Bottle"
+        name: "Empty Healing Draught Bottle"
         description: "An empty crystal potion vial tossed in the gutter. The label reads 'POTION — Manufactured in Lindblum.'"
         type: "Misc"
         value: 1
       - id: "torn_wanted_poster"
         name: "Torn Imperial Notice"
-        description: "A rain-smeared Imperial bounty notice torn from the board. Only the words 'WANTED — DANGEROUS — 10,000 GIL REWARD' are still legible."
+        description: "A rain-smeared Imperial bounty notice torn from the board. Only the words 'WANTED — DANGEROUS — 10,000 gold REWARD' are still legible."
         type: "Misc"
         value: 1
       - id: "bent_nail"
         name: "Rusty Bolt"
-        description: "A bent iron bolt from some piece of magitek machinery. Could poke an eye out if you tried hard enough."
+        description: "A bent iron bolt from some piece of arcanotech machinery. Could poke an eye out if you tried hard enough."
         type: "Misc"
         value: 1
 
   - id: "town_gate"
-    name: "Rabanastre Gate"
-    description: "The great city gates — two massive stone-and-iron doors tall enough for an airship to taxi through. Beyond them, a sand-swept road curves into the dark tree line of the Golmore Jungle. Claw marks from some massive beast score the outside. Imperial banners hang limp in the desert heat. A Viera warrior stands sentinel, her long ears twitching at every sound from the jungle."
+    name: "Stonewake Gate"
+    description: "The great city gates — two massive stone-and-iron doors tall enough for an airship to taxi through. Beyond them, a sand-swept road curves into the dark tree line of the Gloamwood. Claw marks from some massive beast score the outside. Imperial banners hang limp in the desert heat. A Sylvar warrior stands sentinel, her long ears twitching at every sound from the jungle."
     exits:
       west: "town_square"
       east: "forest_edge"
     environment_tags: ["outdoor", "lit", "fortified", "gate", "desert", "border"]
     npcs:
       - id: "gate_guard_lena"
-        name: "Fran"
-        personality: "A Viera exile who left the Golmore Jungle decades ago, estranged from her people. Quiet, perceptive, and deadly with a bow. Joined the Rabanastre guard because she has nowhere else to go. Recently heard rumors that a kinsman — her younger sister Mjrn — has gone missing in the jungle. Stoic exterior, deep worry beneath. Hard to read, but responds to sincerity."
-        faction: "dalmascan_resistance"
-        knowledge_scopes: ["dalmascan_resistance", "golmore", "monsters", "missing_people", "viera"]
-        quests_offered: ["fran_missing_kin", "rangers_retreat"]
+        name: "Lena"
+        personality: "A Sylvar exile who left the Gloamwood decades ago, estranged from her people. Quiet, perceptive, and deadly with a bow. Joined the Stonewake guard because she has nowhere else to go. Recently heard rumors that a kinsman — her younger sister Mira — has gone missing in the jungle. Stoic exterior, deep worry beneath. Hard to read, but responds to sincerity."
+        faction: "valewarden_resistance"
+        knowledge_scopes: ["valewarden_resistance", "gloamwood", "monsters", "missing_people", "sylvar"]
+        quests_offered: ["lena_missing_kin", "rangers_retreat"]
     items:
       - id: "discarded_torch"
         name: "Spent Torch"
@@ -441,18 +441,18 @@ rooms:
         value: 1
       - id: "militia_notice"
         name: "Hunt Board Posting"
-        description: "A posted hunt notice about increased Malboro activity in the Golmore Jungle. 'RANK B HUNT — Malboro Menace. Report all sightings. Do NOT engage alone.' Someone has written 'too late' in the margin."
+        description: "A posted hunt notice about increased Vinemaw activity in the Gloamwood. 'RANK B HUNT — Vinemaw Menace. Report all sightings. Do NOT engage alone.' Someone has written 'too late' in the margin."
         type: "Misc"
         value: 1
       - id: "broken_arrow"
         name: "Broken Arrow"
-        description: "A snapped arrow shaft with dark stains on the tip. Viera-crafted, by the fletching. Found wedged between the gate's iron bands."
+        description: "A snapped arrow shaft with dark stains on the tip. Sylvar-crafted, by the fletching. Found wedged between the gate's iron bands."
         type: "Misc"
         value: 1
 
   - id: "church"
     name: "The Crystal Sanctum"
-    description: "A serene temple built around a massive natural crystal formation that juts from the sandstone floor. Soft prismatic light refracts through the crystal, casting rainbows across the marble walls. Incense drifts in lazy spirals. The air itself feels cleansing. A White Mage in flowing robes tends to the crystal with quiet reverence, occasionally pausing to listen to something only he can hear."
+    description: "A serene temple built around a massive natural crystal formation that juts from the sandstone floor. Soft prismatic light refracts through the crystal, casting rainbows across the marble walls. Incense drifts in lazy spirals. The air itself feels cleansing. A Dawn Cleric in flowing robes tends to the crystal with quiet reverence, occasionally pausing to listen to something only he can hear."
     exits:
       northwest: "town_square"
       west: "city_hall"
@@ -460,11 +460,11 @@ rooms:
     environment_tags: ["indoor", "safe", "lit", "holy", "chapel", "crystal"]
     npcs:
       - id: "priest_aldric"
-        name: "Minwu"
-        personality: "A legendary White Mage who claims the Crystals speak to him directly. Kind, gentle, and slightly unhinged. Blesses adventurers with genuine enthusiasm. Tends to trail off mid-sentence to listen to 'crystal guidance' no one else can hear. Deeply convinced the world's destruction cycle is approaching — 'The Void stirs again, kupo... wait, I'm not a moogle.' Generous with healing magic."
-        faction: "dalmascan_resistance"
-        knowledge_scopes: ["religion", "blessings", "undead", "holy_relics", "town", "crystals", "espers"]
-        quests_offered: ["crystal_blessing", "esper_call"]
+        name: "Aldric"
+        personality: "A legendary Dawn Cleric who claims the Crystals speak to him directly. Kind, gentle, and slightly unhinged. Blesses adventurers with genuine enthusiasm. Tends to trail off mid-sentence to listen to 'crystal guidance' no one else can hear. Deeply convinced the world's destruction cycle is approaching — 'The Void stirs again, aye... wait, I'm not a sprig.' Generous with healing magic."
+        faction: "valewarden_resistance"
+        knowledge_scopes: ["religion", "blessings", "undead", "holy_relics", "town", "crystals", "eidolons"]
+        quests_offered: ["crystal_blessing", "eidolon_call"]
     items:
       - id: "prayer_candle"
         name: "Crystal Shard"
@@ -473,7 +473,7 @@ rooms:
         value: 1
       - id: "dusty_hymnal"
         name: "Hymn of the Fayth"
-        description: "A leather-bound book of sacred songs. Most of the pages are stuck together, and someone has doodled moogles in the margins."
+        description: "A leather-bound book of sacred songs. Most of the pages are stuck together, and someone has doodled sprigs in the margins."
         type: "Misc"
         value: 2
       - id: "silver_holy_symbol"
@@ -488,7 +488,7 @@ rooms:
 
   - id: "tavern_cellar"
     name: "The Waterway"
-    description: "The Garamsythe Waterway — an ancient sewer network beneath Rabanastre. Slick stone tunnels stretch into darkness, water channels running with murky flow. The air is thick with moisture and the squeaking of rats. Moss-covered pipes drip from overhead. Something large hisses in the shadows between the collapsed sections. Tifa mentioned a pest problem down here — now you see why."
+    description: "The Oldwater Tunnels — an ancient sewer network beneath Stonewake. Slick stone tunnels stretch into darkness, water channels running with murky flow. The air is thick with moisture and the squeaking of rats. Moss-covered pipes drip from overhead. Something large hisses in the shadows between the collapsed sections. Mara mentioned a pest problem down here — now you see why."
     exits:
       up: "spawn"
       east: "water_temple_entrance"
@@ -496,7 +496,7 @@ rooms:
     npcs:
       - id: "giant_rat"
         name: "Dire Rat"
-        personality: "A bloated, aggressive rat the size of a small dog, mutated by exposure to leaking Mist energy in the waterway. Its fur is matted and its teeth glow faintly blue. Fiercely territorial. Hisses and lunges at anything that gets too close."
+        personality: "A bloated, aggressive rat the size of a small dog, mutated by exposure to leaking Aether energy in the waterway. Its fur is matted and its teeth glow faintly blue. Fiercely territorial. Hisses and lunges at anything that gets too close."
         faction: "neutral"
         is_hostile: true
         level: 1
@@ -508,18 +508,18 @@ rooms:
         loot:
           - id: "rat_tail"
             name: "Rat Tail"
-            description: "A thick, greasy rat tail. Disgusting, but alchemists in the bazaar pay good gil for these."
+            description: "A thick, greasy rat tail. Disgusting, but alchemists in the bazaar pay good gold for these."
             type: "Misc"
             value: 2
     items:
       - id: "aged_wine_bottle"
         name: "Baccus Wine"
-        description: "A dusty bottle of vintage wine from the old kingdom. Tifa probably doesn't know it's down here. Worth a fortune to the right collector."
+        description: "A dusty bottle of vintage wine from the old kingdom. Mara probably doesn't know it's down here. Worth a fortune to the right collector."
         type: "Misc"
         value: 8
       - id: "rat_chewed_coin_pouch"
-        name: "Gnawed Gil Pouch"
-        description: "A small leather pouch gnawed open by rats. A few tarnished gil coins still jingle inside."
+        name: "Gnawed gold Pouch"
+        description: "A small leather pouch gnawed open by rats. A few tarnished gold coins still jingle inside."
         type: "Misc"
         value: 3
       - id: "rusty_key"
@@ -529,31 +529,31 @@ rooms:
         value: 5
 
   - id: "market_stalls"
-    name: "Moogle Market"
-    description: "A cluster of colorful stalls and flying moogles in an open clearing northeast of the bazaar. The moogles run a brisk trade in fresh food, gossip, and unsolicited advice. Their leader, Matoya, is ancient even by moogle standards — she sits atop a stack of crates, peering at customers through spectacles thicker than bottle-caps. The smell of fresh kupo nuts mingles with dried herbs and grilled behemoth skewers. A winding alley leads south toward the Moogle Post."
+    name: "Sprig Market"
+    description: "A cluster of colorful stalls and flying sprigs in an open clearing northeast of the bazaar. The sprigs run a brisk trade in fresh food, gossip, and unsolicited advice. Their leader, Nessa, is ancient even by sprig standards — she sits atop a stack of crates, peering at customers through spectacles thicker than bottle-caps. The smell of fresh aye nuts mingles with dried herbs and grilled behemoth skewers. A winding alley leads south toward the Sprig Post."
     exits:
       southwest: "town_square"
       south: "town_well"
-    environment_tags: ["outdoor", "safe", "lit", "market", "busy", "moogle"]
+    environment_tags: ["outdoor", "safe", "lit", "market", "busy", "sprig"]
     npcs:
       - id: "merchant_bess"
-        name: "Matoya"
-        personality: "An ancient, sharp-eyed woman who has been selling potions and wisdom at the moogle market for longer than anyone can remember. Knows everyone's business. Warm to those who buy, frosty to those who browse. Speaks in proverbs and riddles. Claims to have taught a Warrior of Light once. Her broom sweeps by itself."
+        name: "Nessa"
+        personality: "An ancient, sharp-eyed woman who has been selling potions and wisdom at the sprig market for longer than anyone can remember. Knows everyone's business. Warm to those who buy, frosty to those who browse. Speaks in proverbs and riddles. Claims to have taught a Lightbound Champion once. Her broom sweeps by itself."
         faction: "merchants_guild"
         knowledge_scopes: ["rumors", "town", "food", "gossip", "merchants_guild", "crystals", "ancient_lore"]
         is_shopkeeper: true
         shop_inventory:
           - id: "fresh_bread"
-            name: "Kupo Nut Bread"
-            description: "A warm loaf of bread baked with kupo nuts. Simple but satisfying. Moogles swear by it."
+            name: "Sunleaf Nut Bread"
+            description: "A warm loaf of bread baked with aye nuts. Simple but satisfying. Sprigs swear by it."
             type: "Misc"
             is_consumable: true
             value: 2
             effect: "Restores 1 HP"
             quantity: 5
           - id: "meat_pie"
-            name: "Behemoth Steak"
-            description: "A sizzling cut of behemoth flank, flash-grilled over moogle flames. Don't ask how a moogle hunted a behemoth."
+            name: "Gorehorn Steak"
+            description: "A sizzling cut of behemoth flank, flash-grilled over sprig flames. Don't ask how a sprig hunted a behemoth."
             type: "Misc"
             is_consumable: true
             value: 3
@@ -567,14 +567,14 @@ rooms:
             quantity: 5
     items:
       - id: "bruised_apple"
-        name: "Gysahl Green"
-        description: "A fresh gysahl green that fell off a cart. Chocobos go wild for these. Still edible for non-chocobos, probably."
+        name: "Sunleaf Green"
+        description: "A fresh sunleaf green that fell off a cart. Dunewings go wild for these. Still edible for non-dunewings, probably."
         type: "Misc"
         is_consumable: true
         value: 1
       - id: "torn_silk_scarf"
         name: "Torn Silk Sash"
-        description: "A once-fine silk sash with a tear along one edge. The colors are still vibrant — Dalmascan royal purple and gold."
+        description: "A once-fine silk sash with a tear along one edge. The colors are still vibrant — Valewarden royal purple and gold."
         type: "Misc"
         value: 3
       - id: "cracked_mirror"
@@ -584,57 +584,57 @@ rooms:
         value: 2
 
   - id: "town_well"
-    name: "Moogle Post"
-    description: "A quiet corner southwest of the bazaar, centered around an ancient well topped with a cheerful moogle statue. The well is old — far older than the city. Its stones are covered in moss and faded runes that nobody can read anymore. Moogles have claimed it as their unofficial mail depot. Letters and packages in tiny bags are stacked around the base. A familiar-looking cat sits atop the moogle statue, watching the world with unsettling intelligence. A narrow path winds north to the Moogle Market."
+    name: "Sprig Post"
+    description: "A quiet corner southwest of the bazaar, centered around an ancient well topped with a cheerful sprig statue. The well is old — far older than the city. Its stones are covered in moss and faded runes that nobody can read anymore. Sprigs have claimed it as their unofficial mail depot. Letters and packages in tiny bags are stacked around the base. A familiar-looking cat sits atop the sprig statue, watching the world with unsettling intelligence. A narrow path winds north to the Sprig Market."
     exits:
       northeast: "town_square"
       north: "market_stalls"
-    environment_tags: ["outdoor", "safe", "dim", "mysterious", "well", "moogle"]
+    environment_tags: ["outdoor", "safe", "dim", "mysterious", "well", "sprig"]
     npcs:
       - id: "stray_cat_whiskers"
-        name: "Cait Sith"
-        personality: "A black-and-white cat wearing a tiny gold crown and a red cape. Speaks in a thick accent. Claims to be a fortune-teller but his predictions are spectacularly wrong 90% of the time. Actually appears to be a sentient magical construct rather than a real cat. Cannot be recruited, but will tell your fortune (badly) if asked. Rides an invisible moogle, apparently."
+        name: "Whiskerjack"
+        personality: "A black-and-white cat wearing a tiny gold crown and a red cape. Speaks in a thick accent. Claims to be a fortune-teller but his predictions are spectacularly wrong 90% of the time. Actually appears to be a sentient magical construct rather than a real cat. Cannot be recruited, but will tell your fortune (badly) if asked. Rides an invisible sprig, apparently."
         faction: "merchants_guild"
-        knowledge_scopes: ["fortune_telling", "rumors", "moogles", "ancient_lore"]
-        quests_offered: ["moogle_mail"]
+        knowledge_scopes: ["fortune_telling", "rumors", "sprigs", "ancient_lore"]
+        quests_offered: ["sprig_mail"]
     items:
       - id: "mossy_coin"
-        name: "Ancient Gil"
-        description: "An old gil coin fished out of the well, covered in green moss. From the old Dalmascan kingdom. Might be lucky. Might be cursed."
+        name: "Ancient gold"
+        description: "An old gold coin fished out of the well, covered in green moss. From the old Valewarden kingdom. Might be lucky. Might be cursed."
         type: "Misc"
         value: 1
       - id: "frayed_rope"
-        name: "Moogle Mail Cord"
-        description: "A short length of cord cut from the moogle mail pulley. Worn thin but still has some use."
+        name: "Sprig Mail Cord"
+        description: "A short length of cord cut from the sprig mail pulley. Worn thin but still has some use."
         type: "Misc"
         value: 2
 
-  # ── GOLMORE JUNGLE — WILDERNESS ROOMS ───────────────────────
+  # -- GLOAMWOOD - WILDERNESS ROOMS -----------------------
 
   - id: "forest_edge"
-    name: "Golmore Entrance"
-    description: "The tree line hits you like a wall of green. Ancient trees tower overhead, their canopy so thick it blocks the sky and traps the Mist below. Strange bioluminescent fungi dot the undergrowth. The path splits — north toward shimmering lights between the trees, and east deeper into the jungle where the Mist thickens. A beast sits at the crossroads, watching you with ancient, intelligent eyes."
+    name: "Gloamwood Entrance"
+    description: "The tree line hits you like a wall of green. Ancient trees tower overhead, their canopy so thick it blocks the sky and traps the Aether below. Strange bioluminescent fungi dot the undergrowth. The path splits — north toward shimmering lights between the trees, and east deeper into the jungle where the Aether thickens. A beast sits at the crossroads, watching you with ancient, intelligent eyes."
     exits:
       west: "town_gate"
       north: "fairy_grove"
       east: "deep_forest"
-    environment_tags: ["outdoor", "forest", "dim", "wilderness", "mist"]
+    environment_tags: ["outdoor", "forest", "dim", "wilderness", "aether"]
     npcs:
       - id: "ranger_thorne"
-        name: "Red XIII"
-        personality: "A flame-maned beast — not a dog, not a lion, something older. Intelligent, articulate, and deeply wise despite looking like he should be chasing chocobos. Patrols the jungle edge to keep Rabanastre safe. Speaks in a low, measured growl. Respects nature and anyone who doesn't waste his time. Will warn about dangers ahead with absolute honesty."
-        faction: "dalmascan_resistance"
-        knowledge_scopes: ["golmore", "monsters", "pharos", "survival", "herbs", "ancient_beasts"]
+        name: "Thorne"
+        personality: "A flame-maned beast — not a dog, not a lion, something older. Intelligent, articulate, and deeply wise despite looking like he should be chasing dunewings. Patrols the jungle edge to keep Stonewake safe. Speaks in a low, measured growl. Respects nature and anyone who doesn't waste his time. Will warn about dangers ahead with absolute honesty."
+        faction: "valewarden_resistance"
+        knowledge_scopes: ["gloamwood", "monsters", "blackspire", "survival", "herbs", "ancient_beasts"]
     items:
       - id: "odd_mushroom"
-        name: "Malboro Sprout"
+        name: "Vinemaw Sprout"
         description: "A plump mushroom with a spotted purple cap. It smells earthy and slightly sweet. Probably safe to eat. The emphasis is on 'probably.'"
         type: "Misc"
         is_consumable: true
         value: 2
       - id: "bird_feather"
-        name: "Chocobo Feather"
-        description: "A long golden feather from a wild chocobo. It catches the light beautifully. Some say carrying one brings good luck."
+        name: "Dunewing Feather"
+        description: "A long golden feather from a wild dunewing. It catches the light beautifully. Some say carrying one brings good luck."
         type: "Misc"
         value: 1
       - id: "smooth_river_stone"
@@ -644,18 +644,18 @@ rooms:
         value: 1
 
   - id: "fairy_grove"
-    name: "Eruyt Village"
-    description: "A hidden settlement in the treetops where crystalline platforms connect ancient wooden dwellings. Soft golden light filters through leaves that shimmer like glass. Bioluminescent sprites dart between mushroom rings, leaving trails of sparkling Mist. A massive Viera elder tree stands at the center, its trunk carved with faces that watch all who enter. A bizarre creature perches on a branch — an octopus wearing a bowtie. It waves a tentacle at you."
+    name: "Elderbough Village"
+    description: "A hidden settlement in the treetops where crystalline platforms connect ancient wooden dwellings. Soft golden light filters through leaves that shimmer like glass. Bioluminescent sprites dart between mushroom rings, leaving trails of sparkling Aether. A massive Sylvar elder tree stands at the center, its trunk carved with faces that watch all who enter. A bizarre creature perches on a branch — an octopus wearing a bowtie. It waves a tentacle at you."
     exits:
       south: "forest_edge"
       up: "skyward_path"
-    environment_tags: ["outdoor", "forest", "magical", "lit", "fae", "viera_village"]
+    environment_tags: ["outdoor", "forest", "magical", "lit", "fae", "sylvar_village"]
     npcs:
       - id: "fae_trickster"
         name: "Ultros"
-        personality: "A purple octopus with a bowtie, a flair for the dramatic, and absolutely no business being in a tree. Self-proclaimed guardian of Eruyt Village — the actual Viera tolerate him because he's entertaining. Speaks in bad puns and worse pickup lines. Will not let anyone take items from the village without a battle of wits (or actual battle). If charmed, offers bonus treasure. If insulted, becomes genuinely dangerous. Loves pretty adventurers."
+        personality: "A purple octopus with a bowtie, a flair for the dramatic, and absolutely no business being in a tree. Self-proclaimed guardian of Elderbough Village — the actual Sylvar tolerate him because he's entertaining. Speaks in bad puns and worse pickup lines. Will not let anyone take items from the village without a battle of wits (or actual battle). If charmed, offers bonus treasure. If insulted, becomes genuinely dangerous. Loves pretty adventurers."
         faction: "neutral"
-        knowledge_scopes: ["fae", "forest", "riddles", "ancient_secrets", "viera"]
+        knowledge_scopes: ["fae", "forest", "riddles", "ancient_secrets", "sylvar"]
         level: 4
         hp: 30
         max_hp: 30
@@ -665,13 +665,13 @@ rooms:
         loot:
           - id: "fae_dust"
             name: "Handful of Stardust"
-            description: "Glittering motes of crystallized Mist. Could be sold for good gil, or used to enchant equipment."
+            description: "Glittering motes of crystallized Aether. Could be sold for good gold, or used to enchant equipment."
             type: "Misc"
             value: 50
     items:
       - id: "fairy_crown"
         name: "Genji Helm"
-        description: "A legendary helm said to be from another dimension. Dramatically boosts magical ability. Ultros claims Gilgamesh dropped it — 'He drops everything, that guy!'"
+        description: "A legendary helm said to be from another dimension. Dramatically boosts magical ability. Ultros claims Silas the Grand dropped it — 'He drops everything, that guy!'"
         type: "Helmet"
         armor_value: 2
         value: 600
@@ -684,7 +684,7 @@ rooms:
           description_override: "+5 to INT and WIS while worn"
       - id: "healing_mushroom"
         name: "Elixir Mushroom"
-        description: "A luminous mushroom that pulses with warm Mist energy. Eating it restores health and cures all status ailments."
+        description: "A luminous mushroom that pulses with warm Aether energy. Eating it restores health and cures all status ailments."
         type: "Potion"
         is_consumable: true
         value: 25
@@ -692,25 +692,25 @@ rooms:
         quantity: 3
 
   - id: "deep_forest"
-    name: "The Feywood"
-    description: "The Mist is so thick you can barely see your own hands. Ancient roots snake across the ground like tripwires, and every sound is swallowed by the damp stillness. Something large crashed through here recently — broken trees and deep claw marks scar the trail heading south toward crumbling black stone ruins. The air tastes of ozone and something primal."
+    name: "The Emberwood"
+    description: "The Aether is so thick you can barely see your own hands. Ancient roots snake across the ground like tripwires, and every sound is swallowed by the damp stillness. Something large crashed through here recently — broken trees and deep claw marks scar the trail heading south toward crumbling black stone ruins. The air tastes of ozone and something primal."
     exits:
       west: "forest_edge"
       south: "dungeon_entrance"
       east: "volcanic_path"
-    environment_tags: ["outdoor", "forest", "dark", "fog", "dangerous", "mist"]
+    environment_tags: ["outdoor", "forest", "dark", "fog", "dangerous", "aether"]
     npcs:
       - id: "wolf_alpha"
         name: "Fenrir"
-        personality: "A massive spectral wolf with glowing amber eyes, wreathed in frost. An ancient guardian spirit of the Golmore Jungle, corrupted by the Mist leaking from the Pharos. Territorial and aggressive. Will attack on sight unless the player shows dominance or offers an offering."
+        personality: "A massive spectral wolf with glowing amber eyes, wreathed in frost. An ancient guardian spirit of the Gloamwood, corrupted by the Aether leaking from the Blackspire. Territorial and aggressive. Will attack on sight unless the player shows dominance or offers an offering."
         faction: "neutral"
         is_hostile: true
-        level: 3
-        hp: 30
-        max_hp: 30
-        attack_bonus: 4
-        damage_dice: "1d6+2"
-        defense: 12
+        level: 2
+        hp: 22
+        max_hp: 22
+        attack_bonus: 2
+        damage_dice: "1d4+1"
+        defense: 11
         loot:
           - id: "wolf_pelt"
             name: "Fenrir's Mane"
@@ -718,46 +718,46 @@ rooms:
             type: "Misc"
             value: 150
 
-  # ── THE PHAROS AT RIDORANA — DUNGEON ROOMS ─────────────────
+  # -- THE BLACKSPIRE AT STORMREACH — DUNGEON ROOMS -----------------
 
   - id: "dungeon_entrance"
-    name: "Pharos Entrance"
-    description: "A colossal archway of black obsidian frames a darkness that seems to breathe. The tower rises impossibly high above, piercing the clouds. Carved into the lintel are the Occuria script — angular, alien symbols that make your teeth ache. Someone has scratched 'TURN BACK' in common tongue below them. The Mist here is thick enough to taste. The path ascends into the tower's interior."
+    name: "Blackspire Entrance"
+    description: "A colossal archway of black obsidian frames a darkness that seems to breathe. The tower rises impossibly high above, piercing the clouds. Carved into the lintel are the Veiled Architects script — angular, alien symbols that make your teeth ache. Someone has scratched 'TURN BACK' in common tongue below them. The Aether here is thick enough to taste. The path ascends into the tower's interior."
     exits:
       north: "deep_forest"
       down: "dungeon_hall"
       east: "mountain_trail"
-    environment_tags: ["outdoor", "ruins", "dark", "dangerous", "dungeon_entrance", "pharos"]
+    environment_tags: ["outdoor", "ruins", "dark", "dangerous", "dungeon_entrance", "blackspire"]
     items:
       - id: "crumbling_brick"
         name: "Obsidian Shard"
-        description: "A chunk of the Pharos's outer wall that sheared off. Smooth, impossibly black, and slightly warm to the touch."
+        description: "A chunk of the Blackspire's outer wall that sheared off. Smooth, impossibly black, and slightly warm to the touch."
         type: "Misc"
         value: 1
       - id: "faded_map_fragment"
-        name: "Pharos Map Fragment"
+        name: "Blackspire Map Fragment"
         description: "A torn piece of parchment showing a rough layout of the tower's lower floors. Most of the ink has faded, but a few passages and trap warnings are still visible."
         type: "Misc"
         value: 5
       - id: "adventurer_journal"
         name: "Explorer's Journal"
-        description: "A water-stained journal from a previous explorer. The last entry reads: 'The cultists worship an Esper in the summit. If you fight the High Seeker, destroy the staff first — it heals the beast.' The rest is unreadable."
+        description: "A water-stained journal from a previous explorer. The last entry reads: 'The cultists worship an Eidolon in the summit. If you fight the High Seeker, destroy the staff first — it heals the beast.' The rest is unreadable."
         type: "Misc"
         value: 3
 
   - id: "dungeon_hall"
-    name: "Pharos First Ascent"
-    description: "A vast spiraling corridor within the Pharos, lined with crumbling pillars of black stone. Magitek torches flicker in crystal sconces — someone has been maintaining them. Ancient tiles crunch underfoot, their mosaics depicting the Occuria's judgment of mortal races. The hall branches east toward the sound of chanting, and a heavy sealed door blocks the ascent further up."
+    name: "Blackspire First Ascent"
+    description: "A vast spiraling corridor within the Blackspire, lined with crumbling pillars of black stone. Arcanotech torches flicker in crystal sconces — someone has been maintaining them. Ancient tiles crunch underfoot, their mosaics depicting the Veiled Architects' judgment of mortal races. The hall branches east toward the sound of chanting, and a heavy sealed door blocks the ascent further up."
     exits:
       up: "dungeon_entrance"
       east: "cultist_shrine"
       down: "dungeon_depths"
-    environment_tags: ["indoor", "underground", "dark", "dungeon", "dangerous", "pharos"]
+    environment_tags: ["indoor", "underground", "dark", "dungeon", "dangerous", "blackspire"]
     npcs:
       - id: "skeleton_guard_1"
         name: "Iron Giant"
-        personality: "A massive animated suit of ancient armor, powered by Mist energy from the tower's core. Mindless but devastatingly strong. Its visor glows with crimson light. Attacks any living creature on sight. The Cult uses them as guardians."
-        faction: "occuria_cult"
+        personality: "A massive animated suit of ancient armor, powered by Aether energy from the tower's core. Mindless but devastatingly strong. Its visor glows with crimson light. Attacks any living creature on sight. The Cult uses them as guardians."
+        faction: "architect_cult"
         is_hostile: true
         level: 3
         hp: 22
@@ -778,7 +778,7 @@ rooms:
     items:
       - id: "old_shield"
         name: "Ancient Shield"
-        description: "A shield from the Pharos's original garrison. Dented and scarred from centuries of service. Still holds together. Barely."
+        description: "A shield from the Blackspire's original garrison. Dented and scarred from centuries of service. Still holds together. Barely."
         type: "Shield"
         armor_value: 2
         value: 15
@@ -786,17 +786,17 @@ rooms:
         slot: "Shield"
 
   - id: "cultist_shrine"
-    name: "Hall of the Occuria"
-    description: "A circular chamber dominated by a floating crystal altar crackling with dark Mist energy. Strange symbols rotate slowly in the air around it. Hooded figures kneel in prayer, murmuring in the Occuria's alien tongue — the words make reality shimmer at the edges. They haven't noticed you. Yet. A massive carved eye watches from the far wall, and you're not entirely sure it's just a carving."
+    name: "Hall of the Veiled Architects"
+    description: "A circular chamber dominated by a floating crystal altar crackling with dark Aether energy. Strange symbols rotate slowly in the air around it. Hooded figures kneel in prayer, murmuring in the Veiled Architects' alien tongue — the words make reality shimmer at the edges. They haven't noticed you. Yet. A massive carved eye watches from the far wall, and you're not entirely sure it's just a carving."
     exits:
       west: "dungeon_hall"
-    environment_tags: ["indoor", "underground", "dark", "shrine", "dangerous", "cultist", "occuria"]
+    environment_tags: ["indoor", "underground", "dark", "shrine", "dangerous", "cultist", "veiled_architects"]
     npcs:
       - id: "cultist_leader"
-        name: "Seymour Guado"
-        personality: "The High Seeker of the Occuria Cult — beautiful, charismatic, and utterly insane. Believes death is a gift and the Esper sealed in the Pharos summit is the key to 'eternal peace.' Will try to recruit the player with honeyed words before resorting to magic. Immune to intimidation — he genuinely welcomes death. His staff channels the tower's Mist directly."
-        faction: "occuria_cult"
-        knowledge_scopes: ["occuria_cult", "espers", "rituals", "pharos"]
+        name: "Veyran Oris"
+        personality: "The High Seeker of the Veiled Architects Cult — beautiful, charismatic, and utterly insane. Believes death is a gift and the Eidolon sealed in the Blackspire summit is the key to 'eternal peace.' Will try to recruit the player with honeyed words before resorting to magic. Immune to intimidation — he genuinely welcomes death. His staff channels the tower's Aether directly."
+        faction: "architect_cult"
+        knowledge_scopes: ["architect_cult", "eidolons", "rituals", "blackspire"]
         is_hostile: true
         level: 3
         hp: 22
@@ -807,7 +807,7 @@ rooms:
         loot:
           - id: "acolyte_staff"
             name: "Staff of the Magus"
-            description: "A gnarled staff that hums with raw Mist energy. Seymour channeled the Occuria's power through this. It boosts magic damage significantly and whispers to its wielder in the dark."
+            description: "A gnarled staff that hums with raw Aether energy. Veyran channeled the Veiled Architects' power through this. It boosts magic damage significantly and whispers to its wielder in the dark."
             type: "Weapon"
             damage_dice: "3d6+4"
             damage_stat: "INT"
@@ -815,10 +815,10 @@ rooms:
             is_equippable: true
             slot: "Weapon"
       - id: "cultist_grunt"
-        name: "Tonberry"
+        name: "Knife Wight"
         personality: "A small, hooded creature holding a chef's knife and a lantern. Walks slowly but deliberately toward its prey. Remarkably patient. The Cult didn't recruit it — it was already here. It has a grudge. Don't ask against whom."
-        faction: "occuria_cult"
-        knowledge_scopes: ["occuria_cult"]
+        faction: "architect_cult"
+        knowledge_scopes: ["architect_cult"]
         is_hostile: true
         level: 2
         hp: 15
@@ -828,23 +828,23 @@ rooms:
         defense: 11
     items:
       - id: "cult_treasure"
-        name: "Esper Offering Chest"
-        description: "A chest filled with gil coins and enchanted trinkets offered to the sealed Esper. The cultists won't miss it. Probably. The Tonberry might, though."
+        name: "Eidolon Offering Chest"
+        description: "A chest filled with gold coins and enchanted trinkets offered to the sealed Eidolon. The cultists won't miss it. Probably. The Knife Wight might, though."
         type: "Misc"
         value: 200
 
   - id: "dungeon_depths"
-    name: "Pharos Summit"
-    description: "The highest chamber of the Pharos. The ceiling opens to the sky — or what was the sky. The Mist here is so concentrated it forms visible currents of energy, swirling around a massive crystal formation at the chamber's center. Chained to the crystal by bindings of light is the Esper — Ultima, the High Seraph. A being of terrible beauty, wings spread wide, eyes burning with power that predates the world. The chains are cracking. It sees you. It smiles."
+    name: "Blackspire Summit"
+    description: "The highest chamber of the Blackspire. The ceiling opens to the sky — or what was the sky. The Aether here is so concentrated it forms visible currents of energy, swirling around a massive crystal formation at the chamber's center. Chained to the crystal by bindings of light is the Eidolon — Aurelion, the Bound Seraph. A being of terrible beauty, wings spread wide, eyes burning with power that predates the world. The chains are cracking. It sees you. It smiles."
     exits:
       up: "dungeon_hall"
-    environment_tags: ["indoor", "underground", "dark", "boss_arena", "mist_storm", "dangerous", "pharos_summit"]
+    environment_tags: ["indoor", "underground", "dark", "boss_arena", "mist_storm", "dangerous", "blackspire_summit"]
     npcs:
       - id: "boss_goretusk"
-        name: "Ultima, the High Seraph"
-        personality: "An ancient Esper — one of the Scions of Light bound by the Occuria eons ago. Beautiful, terrifying, and theatrically aware of her own magnificence. Speaks in archaic verse. Believes mortals are insects — but entertaining insects. Loves to monologue before annihilating. Cannot be reasoned with — only destroyed. VICTORY CONDITION: defeating this Esper proves your legend."
-        faction: "occuria_cult"
-        knowledge_scopes: ["pharos", "ancient_evil", "occuria_cult", "espers"]
+        name: "Aurelion, the Bound Seraph"
+        personality: "An ancient Eidolon — one of the Scions of Light bound by the Veiled Architects eons ago. Beautiful, terrifying, and theatrically aware of her own magnificence. Speaks in archaic verse. Believes mortals are insects — but entertaining insects. Loves to monologue before annihilating. Cannot be reasoned with — only destroyed. VICTORY CONDITION: defeating this Eidolon proves your legend."
+        faction: "architect_cult"
+        knowledge_scopes: ["blackspire", "ancient_evil", "architect_cult", "eidolons"]
         is_hostile: true
         level: 8
         hp: 95
@@ -855,13 +855,13 @@ rooms:
         defense: 13
         loot:
           - id: "goretusk_tusk"
-            name: "Esper Shard"
-            description: "A fragment of Ultima's crystallized essence, torn free during the battle. It pulses with divine power. Proof that you actually did it."
+            name: "Eidolon Shard"
+            description: "A fragment of Aurelion's crystallized essence, torn free during the battle. It pulses with divine power. Proof that you actually did it."
             type: "QuestItem"
             value: 1000
           - id: "champion_blade"
             name: "Tournesol"
-            description: "The legendary sunflower blade, forged in Ultima's own divine fire and quenched in holy water. Absurdly powerful. You earned this."
+            description: "The legendary sunflower blade, forged in Aurelion's own divine fire and quenched in holy water. Absurdly powerful. You earned this."
             type: "Weapon"
             damage_dice: "4d8+8"
             damage_stat: "STR"
@@ -873,39 +873,39 @@ rooms:
               str: 3
               con: 2
 
-  # ── CITY HALL — QUESTLINE HUB ──────────────────────────────────
+  # -- CITY HALL — QUESTLINE HUB ----------------------------------
 
   - id: "city_hall"
-    name: "Dalmascan City Hall"
-    description: "A grand sandstone building with pillars carved to resemble the old Dalmascan kings. Imperial banners hang reluctantly beside the Dalmascan crest — a compromise that satisfies no one. Inside, marble floors echo with the footsteps of bureaucrats, petitioners, and the occasional resistance sympathizer. At the far end of the main chamber, behind a desk buried in dispatches and intelligence reports, sits a man whose calm exterior belies the desperate fire in his eyes. Marquis Ondore — the last political voice of free Dalmasca — gestures for you to approach. A side corridor leads east toward the Crystal Sanctum."
+    name: "Valewarden City Hall"
+    description: "A grand sandstone building with pillars carved to resemble the old Valewarden kings. Imperial banners hang reluctantly beside the Valewarden crest — a compromise that satisfies no one. Inside, marble floors echo with the footsteps of bureaucrats, petitioners, and the occasional resistance sympathizer. At the far end of the main chamber, behind a desk buried in dispatches and intelligence reports, sits a man whose calm exterior belies the deidolonate fire in his eyes. Marquis Odran — the last political voice of free Valeward — gestures for you to approach. A side corridor leads east toward the Crystal Sanctum."
     exits:
       southeast: "town_square"
       east: "church"
     environment_tags: ["indoor", "safe", "lit", "political", "official"]
     npcs:
-      - id: "marquis_ondore"
-        name: "Marquis Halim Ondore IV"
-        personality: "The political leader of what remains of the Dalmascan resistance movement. Dignified, cautious, and burdened by the weight of an occupied nation on his shoulders. Speaks with measured precision — every word is calculated for maximum effect and minimum Imperial suspicion. Publicly maintains the fiction of cooperation with the Empire while secretly funding the resistance. Desperate enough to trust adventurers with the kingdom's last hope: the elemental Crystals that once protected Dalmasca. Treats the player with the respect of an equal, because he has no other choice."
-        faction: "dalmascan_resistance"
-        knowledge_scopes: ["politics", "dalmascan_resistance", "crystals", "town", "empire", "history", "void"]
+      - id: "marquis_odran"
+        name: "Marquis Halim Odran IV"
+        personality: "The political leader of what remains of the Valewarden resistance movement. Dignified, cautious, and burdened by the weight of an occupied nation on his shoulders. Speaks with measured precision — every word is calculated for maximum effect and minimum Imperial suspicion. Publicly maintains the fiction of cooperation with the Empire while secretly funding the resistance. Deidolonate enough to trust adventurers with the kingdom's last hope: the elemental Crystals that once protected Valeward. Treats the player with the respect of an equal, because he has no other choice."
+        faction: "valewarden_resistance"
+        knowledge_scopes: ["politics", "valewarden_resistance", "crystals", "town", "empire", "history", "void"]
         quests_offered: ["crystal_dying", "crystal_crusade_fire", "crystal_crusade_earth", "crystal_crusade_wind", "the_void_awaits"]
     items:
-      - id: "dalmascan_seal"
-        name: "Dalmascan Royal Seal"
-        description: "A heavy wax seal bearing the crest of the Dalmascan royal family — a sunburst over crossed swords. Ondore keeps it on his desk as a reminder of what was lost and what must be reclaimed."
+      - id: "valewarden_seal"
+        name: "Valewarden Royal Seal"
+        description: "A heavy wax seal bearing the crest of the Valewarden royal family — a sunburst over crossed swords. Odran keeps it on his desk as a reminder of what was lost and what must be reclaimed."
         type: "Misc"
         value: 0
       - id: "crystal_map"
         name: "Crystal Temple Map"
-        description: "A hand-drawn map showing the locations of four ancient temples dedicated to the elemental Crystals. Notes in Ondore's precise handwriting mark each site with warnings and tactical observations."
+        description: "A hand-drawn map showing the locations of four ancient temples dedicated to the elemental Crystals. Notes in Odran's precise handwriting mark each site with warnings and tactical observations."
         type: "Misc"
         value: 10
 
-  # ── WATER TEMPLE ───────────────────────────────────────────────
+  # -- WATER TEMPLE -----------------------------------------------
 
   - id: "water_temple_entrance"
     name: "Flooded Tunnels"
-    description: "Beyond the familiar dampness of the Garamsythe Waterway, the passage opens into something far older. Ancient stone arches rise from knee-deep water, their surfaces carved with flowing script that glows a faint cerulean blue. The current pulls gently eastward, deeper into the dark. Bioluminescent algae clings to the walls, casting an eerie underwater glow that makes shadows dance like living things. The air is cold and tastes of salt and old magic. Something massive displaces water in the depths below — a rhythmic surge, like breathing."
+    description: "Beyond the familiar dampness of the Oldwater Tunnels, the passage opens into something far older. Ancient stone arches rise from knee-deep water, their surfaces carved with flowing script that glows a faint cerulean blue. The current pulls gently eastward, deeper into the dark. Bioluminescent algae clings to the walls, casting an eerie underwater glow that makes shadows dance like living things. The air is cold and tastes of salt and old magic. Something massive displaces water in the depths below — a rhythmic surge, like breathing."
     exits:
       west: "tavern_cellar"
       down: "water_temple_depths"
@@ -913,7 +913,7 @@ rooms:
     npcs:
       - id: "water_elemental"
         name: "Water Elemental"
-        personality: "A swirling vortex of animate water given crude sentience by the concentrated Mist in the temple. It does not think — it reacts. Anything that disturbs the sacred waters triggers its wrath. It rises from the flood with a sound like a crashing wave and strikes with tendrils of pressurized water that can shear through stone."
+        personality: "A swirling vortex of animate water given crude sentience by the concentrated Aether in the temple. It does not think — it reacts. Anything that disturbs the sacred waters triggers its wrath. It rises from the flood with a sound like a crashing wave and strikes with tendrils of pressurized water that can shear through stone."
         faction: "neutral"
         is_hostile: true
         level: 2
@@ -944,8 +944,8 @@ rooms:
     environment_tags: ["indoor", "underground", "dark", "flooded", "dangerous", "water_temple"]
     npcs:
       - id: "sahagin_warrior"
-        name: "Sahagin Warrior"
-        personality: "A muscular, fish-scaled humanoid armed with a coral trident and a shield of hardened kelp. One of the temple's ancient guardians, awakened by the disturbance in the Mist. It communicates in gurgling clicks and fights with the discipline of a trained soldier. Patrols the flooded chambers in a methodical pattern, striking from beneath the waterline with terrifying speed."
+        name: "Reefkin Warrior"
+        personality: "A muscular, fish-scaled humanoid armed with a coral trident and a shield of hardened kelp. One of the temple's ancient guardians, awakened by the disturbance in the Aether. It communicates in gurgling clicks and fights with the discipline of a trained soldier. Patrols the flooded chambers in a methodical pattern, striking from beneath the waterline with terrifying speed."
         faction: "neutral"
         is_hostile: true
         level: 3
@@ -957,7 +957,7 @@ rooms:
         loot:
           - id: "coral_trident"
             name: "Coral Trident"
-            description: "A trident carved from living coral, still faintly warm with the Sahagin's life force. Surprisingly sharp and well-balanced."
+            description: "A trident carved from living coral, still faintly warm with the Reefkin's life force. Surprisingly sharp and well-balanced."
             type: "Weapon"
             damage_dice: "1d8+1"
             damage_stat: "STR"
@@ -967,14 +967,14 @@ rooms:
 
   - id: "water_temple_sanctum"
     name: "Sanctum of the Tidal Lord"
-    description: "The deepest chamber opens into a vast underwater cathedral. The water here is crystal clear and glows from within, illuminating a massive altar of white coral at the room's center. Resting upon the altar, the Water Crystal pulses with serene blue light — a heartbeat of pure elemental power. But between you and the Crystal, the water erupts. A serpentine form of impossible size rises from the depths — Leviathan, the Tidal Lord. Its scales shimmer like liquid sapphire, its eyes burn with the cold intelligence of the deepest ocean, and when it opens its jaws, you see the storm that lives inside."
+    description: "The deepest chamber opens into a vast underwater cathedral. The water here is crystal clear and glows from within, illuminating a massive altar of white coral at the room's center. Resting upon the altar, the Water Crystal pulses with serene blue light — a heartbeat of pure elemental power. But between you and the Crystal, the water erupts. A serpentine form of impossible size rises from the depths — Tidewrought, the Tidal Lord. Its scales shimmer like liquid sapphire, its eyes burn with the cold intelligence of the deepest ocean, and when it opens its jaws, you see the storm that lives inside."
     exits:
       up: "water_temple_depths"
     environment_tags: ["indoor", "underground", "lit", "boss_arena", "flooded", "water_temple", "sacred"]
     npcs:
-      - id: "leviathan_guardian"
-        name: "Leviathan, the Tidal Lord"
-        personality: "An ancient Esper bound to guard the Water Crystal since before Dalmasca existed. Leviathan is not mindless — it is proud, territorial, and contemptuous of mortals who dare enter its sanctum. It speaks in a voice like crashing waves, demanding to know why you have disturbed its eternal vigil. Only those who prove their strength in combat may claim the Crystal. Leviathan fights with tidal waves, crushing water pressure, and the sheer overwhelming force of the deep ocean. It will not negotiate. It will not yield. It will test you, and if you are found wanting, the sea will claim you."
+      - id: "tidewrought_guardian"
+        name: "Tidewrought, the Tidal Lord"
+        personality: "An ancient Eidolon bound to guard the Water Crystal since before Valeward existed. Tidewrought is not mindless — it is proud, territorial, and contemptuous of mortals who dare enter its sanctum. It speaks in a voice like crashing waves, demanding to know why you have disturbed its eternal vigil. Only those who prove their strength in combat may claim the Crystal. Tidewrought fights with tidal waves, crushing water pressure, and the sheer overwhelming force of the deep ocean. It will not negotiate. It will not yield. It will test you, and if you are found wanting, the sea will claim you."
         faction: "neutral"
         is_hostile: true
         level: 3
@@ -984,19 +984,19 @@ rooms:
         damage_dice: "1d6+1"
         defense: 12
         loot:
-          - id: "leviathan_scale"
-            name: "Leviathan's Scale"
+          - id: "tidewrought_scale"
+            name: "Tidewrought's Scale"
             description: "A single scale from the Tidal Lord, harder than adamantite and shimmering with oceanic power. Proof of a battle that should have been impossible."
             type: "Misc"
             value: 200
     items:
       - id: "water_crystal"
         name: "Water Crystal"
-        description: "One of the four elemental Crystals that once protected Dalmasca. It pulses with the gentle rhythm of ocean tides and radiates a calming blue aura. When you hold it, you hear the distant sound of waves on a shore you've never visited. The Marquis will want to see this."
+        description: "One of the four elemental Crystals that once protected Valeward. It pulses with the gentle rhythm of ocean tides and radiates a calming blue aura. When you hold it, you hear the distant sound of waves on a shore you've never visited. The Marquis will want to see this."
         type: "Quest"
         value: 0
 
-  # ── FIRE TEMPLE ────────────────────────────────────────────────
+  # -- FIRE TEMPLE ------------------------------------------------
 
   - id: "volcanic_path"
     name: "Scorched Trail"
@@ -1008,7 +1008,7 @@ rooms:
     npcs:
       - id: "fire_bomb"
         name: "Fire Bomb"
-        personality: "A spherical mass of compressed flame given rudimentary awareness by volcanic Mist. It bounces erratically across the scorched landscape, igniting anything flammable it contacts. When threatened, it swells to twice its size and detonates — only to reform moments later from the nearest lava vent. Mindless, destructive, and annoyingly persistent. It giggles — a crackling, popping sound like a campfire — as it burns things."
+        personality: "A spherical mass of compressed flame given rudimentary awareness by volcanic Aether. It bounces erratically across the scorched landscape, igniting anything flammable it contacts. When threatened, it swells to twice its size and detonates — only to reform moments later from the nearest lava vent. Mindless, destructive, and annoyingly persistent. It giggles — a crackling, popping sound like a campfire — as it burns things."
         faction: "neutral"
         is_hostile: true
         level: 3
@@ -1032,7 +1032,7 @@ rooms:
 
   - id: "fire_temple_entrance"
     name: "Obsidian Temple"
-    description: "An imposing temple carved directly into the volcanic mountainside, its facade of polished obsidian reflecting the hellish orange glow of the surrounding lava fields. Two massive braziers flank the entrance, burning with flames that have not gone out in millennia. The interior is a cathedral of black glass and carved fire motifs — salamanders, phoenixes, and the unmistakable sigil of Ifrit etched into every surface. The heat is almost unbearable. Deeper inside, a knight in flame-scorched armor stands guard before the descent to the temple's core, sword drawn and wreathed in fire."
+    description: "An imposing temple carved directly into the volcanic mountainside, its facade of polished obsidian reflecting the hellish orange glow of the surrounding lava fields. Two massive braziers flank the entrance, burning with flames that have not gone out in millennia. The interior is a cathedral of black glass and carved fire motifs — salamanders, phoenixes, and the unmistakable sigil of Cindermaw etched into every surface. The heat is almost unbearable. Deeper inside, a knight in flame-scorched armor stands guard before the descent to the temple's core, sword drawn and wreathed in fire."
     exits:
       north: "volcanic_path"
       down: "fire_temple_core"
@@ -1062,14 +1062,14 @@ rooms:
 
   - id: "fire_temple_core"
     name: "Heart of the Inferno"
-    description: "The temple's core is a natural magma chamber harnessed by ancient engineering. Rivers of molten rock flow through carved channels around a central stone platform, the heat distorting the air into shimmering waves. The Fire Crystal hovers above a basalt altar at the platform's center, burning with an inner flame so intense it casts no shadow — only light. And between you and the Crystal, rising from the magma itself, comes Ifrit. The Infernal Lord. His horns scrape the chamber ceiling. His muscles are carved from living flame. His eyes are twin furnaces of rage, and when he roars, the magma surges and the very stones crack with the sound."
+    description: "The temple's core is a natural magma chamber harnessed by ancient engineering. Rivers of molten rock flow through carved channels around a central stone platform, the heat distorting the air into shimmering waves. The Fire Crystal hovers above a basalt altar at the platform's center, burning with an inner flame so intense it casts no shadow — only light. And between you and the Crystal, rising from the magma itself, comes Cindermaw. The Infernal Lord. His horns scrape the chamber ceiling. His muscles are carved from living flame. His eyes are twin furnaces of rage, and when he roars, the magma surges and the very stones crack with the sound."
     exits:
       up: "fire_temple_entrance"
     environment_tags: ["indoor", "underground", "hot", "boss_arena", "volcanic", "fire_temple", "sacred"]
     npcs:
-      - id: "ifrit_guardian"
-        name: "Ifrit, the Infernal Lord"
-        personality: "An ancient Esper of fire and wrath, guardian of the Fire Crystal since the world was young. Ifrit is fury incarnate — a being of pure elemental rage who views all intruders as fuel for his flames. Unlike Leviathan's cold pride, Ifrit burns with volcanic passion. He roars challenges, hurls fireballs, and charges with horns lowered. He respects only those strong enough to survive his onslaught. If you can withstand his Hellfire — his ultimate attack that turns the air itself into an inferno — he will acknowledge you as worthy. But he will not make it easy. Nothing worth having ever is."
+      - id: "cindermaw_guardian"
+        name: "Cindermaw, the Infernal Lord"
+        personality: "An ancient Eidolon of fire and wrath, guardian of the Fire Crystal since the world was young. Cindermaw is fury incarnate — a being of pure elemental rage who views all intruders as fuel for his flames. Unlike Tidewrought's cold pride, Cindermaw burns with volcanic passion. He roars challenges, hurls fireballs, and charges with horns lowered. He respects only those strong enough to survive his onslaught. If you can withstand his Cinderstorm — his ultimate attack that turns the air itself into an inferno — he will acknowledge you as worthy. But he will not make it easy. Nothing worth having ever is."
         faction: "neutral"
         is_hostile: true
         level: 4
@@ -1079,23 +1079,23 @@ rooms:
         damage_dice: "1d6+2"
         defense: 12
         loot:
-          - id: "ifrit_horn"
-            name: "Ifrit's Horn"
+          - id: "cindermaw_horn"
+            name: "Cindermaw's Horn"
             description: "A shard of horn broken from the Infernal Lord himself. It radiates heat that never fades and glows like an ember in the dark."
             type: "Misc"
             value: 220
     items:
       - id: "fire_crystal"
         name: "Fire Crystal"
-        description: "One of the four elemental Crystals of Dalmasca. It burns with an inner flame that does not consume — warm in your hands but never painful. When you hold it, you feel a surge of courage and defiance, as though the fire itself refuses to be extinguished. The Marquis awaits."
+        description: "One of the four elemental Crystals of Valeward. It burns with an inner flame that does not consume — warm in your hands but never painful. When you hold it, you feel a surge of courage and defiance, as though the fire itself refuses to be extinguished. The Marquis awaits."
         type: "Quest"
         value: 0
 
-  # ── EARTH TEMPLE ───────────────────────────────────────────────
+  # -- EARTH TEMPLE -----------------------------------------------
 
   - id: "mountain_trail"
     name: "Rocky Switchbacks"
-    description: "A punishing trail of loose scree and crumbling switchbacks ascending the mountain range east of the Pharos. The air thins as you climb, and the wind carries the taste of mineral dust and ancient stone. Below, the black spire of the Pharos recedes into the haze. Above, a mountain peak crowned with the ruins of a temple older than any living memory. The trail is not natural — something carved these steps into the mountainside with deliberate, geological patience. A golem of fused stone and crystal blocks the narrowest point of the path, grinding forward on legs of living rock."
+    description: "A punishing trail of loose scree and crumbling switchbacks ascending the mountain range east of the Blackspire. The air thins as you climb, and the wind carries the taste of mineral dust and ancient stone. Below, the black spire of the Blackspire recedes into the haze. Above, a mountain peak crowned with the ruins of a temple older than any living memory. The trail is not natural — something carved these steps into the mountainside with deliberate, geological patience. A golem of fused stone and crystal blocks the narrowest point of the path, grinding forward on legs of living rock."
     exits:
       west: "dungeon_entrance"
       up: "earth_temple_entrance"
@@ -1103,7 +1103,7 @@ rooms:
     npcs:
       - id: "stone_golem"
         name: "Stone Golem"
-        personality: "A hulking construct of fused granite and crystal veins, animated by earth-aspected Mist. It was built to guard the mountain trail millennia ago and has been doing so without rest, complaint, or creativity ever since. It fights by swinging massive stone fists and stomping hard enough to trigger rockslides. Immune to reason, immune to charm, and very nearly immune to sharp objects. It does not speak. It blocks. It smashes. It endures."
+        personality: "A hulking construct of fused granite and crystal veins, animated by earth-aspected Aether. It was built to guard the mountain trail millennia ago and has been doing so without rest, complaint, or creativity ever since. It fights by swinging massive stone fists and stomping hard enough to trigger rockslides. Immune to reason, immune to charm, and very nearly immune to sharp objects. It does not speak. It blocks. It smashes. It endures."
         faction: "neutral"
         is_hostile: true
         level: 3
@@ -1135,7 +1135,7 @@ rooms:
     npcs:
       - id: "earth_elemental"
         name: "Earth Elemental"
-        personality: "A vaguely humanoid mass of compacted soil, stone, and crystal, animated by the temple's concentrated earth Mist. It moves with grinding deliberation — slow but unstoppable, like a landslide given purpose. When struck, chunks break away only to reform from the surrounding stone. It guards the passage to the temple's heart with the patience of geology itself."
+        personality: "A vaguely humanoid mass of compacted soil, stone, and crystal, animated by the temple's concentrated earth Aether. It moves with grinding deliberation — slow but unstoppable, like a landslide given purpose. When struck, chunks break away only to reform from the surrounding stone. It guards the passage to the temple's heart with the patience of geology itself."
         faction: "neutral"
         is_hostile: true
         level: 3
@@ -1153,14 +1153,14 @@ rooms:
 
   - id: "earth_temple_heart"
     name: "Heart of the Mountain"
-    description: "The temple's innermost chamber is a vast natural cavern where crystalline formations grow in impossible geometries — spires of amethyst, veins of emerald, walls of raw diamond that catch and scatter light into a thousand prismatic shards. At the center, the Earth Crystal hangs suspended in a cage of living stone, rotating slowly, radiating a deep amber glow that makes the entire cavern feel alive. The ground shakes. Cracks spider-web across the floor. And from the bedrock itself, Titan rises — the Earthshaker. A colossus of stone and crystal, each footstep an earthquake, each fist a landslide. The mountain is his body. The temple is his throne. And you are trespassing."
+    description: "The temple's innermost chamber is a vast natural cavern where crystalline formations grow in impossible geometries — spires of amethyst, veins of emerald, walls of raw diamond that catch and scatter light into a thousand prismatic shards. At the center, the Earth Crystal hangs suspended in a cage of living stone, rotating slowly, radiating a deep amber glow that makes the entire cavern feel alive. The ground shakes. Cracks spider-web across the floor. And from the bedrock itself, Stonegrief rises — the Earthshaker. A colossus of stone and crystal, each footstep an earthquake, each fist a landslide. The mountain is his body. The temple is his throne. And you are trespassing."
     exits:
       south: "earth_temple_entrance"
     environment_tags: ["indoor", "underground", "lit", "boss_arena", "earth_temple", "sacred", "crystal_cavern"]
     npcs:
-      - id: "titan_guardian"
-        name: "Titan, the Earthshaker"
-        personality: "The eldest of the Crystal guardians — an Esper who was ancient when the mountains were young. Titan is patient, immovable, and devastatingly powerful. He does not rage like Ifrit or surge like Leviathan — he endures, and he crushes. His voice is the grinding of tectonic plates, felt in the bones more than heard in the ears. He will give you one chance to leave. If you refuse, he brings the mountain down on your head. His Earthen Fury attack reshapes the terrain itself. To defeat Titan is to prove that mortal will can move mountains."
+      - id: "stonegrief_guardian"
+        name: "Stonegrief, the Earthshaker"
+        personality: "The eldest of the Crystal guardians — an Eidolon who was ancient when the mountains were young. Stonegrief is patient, immovable, and devastatingly powerful. He does not rage like Cindermaw or surge like Tidewrought — he endures, and he crushes. His voice is the grinding of tectonic plates, felt in the bones more than heard in the ears. He will give you one chance to leave. If you refuse, he brings the mountain down on your head. His Earthen Fury attack reshapes the terrain itself. To defeat Stonegrief is to prove that mortal will can move mountains."
         faction: "neutral"
         is_hostile: true
         level: 4
@@ -1170,23 +1170,23 @@ rooms:
         damage_dice: "1d6+2"
         defense: 13
         loot:
-          - id: "titan_geode"
-            name: "Titan's Geode"
-            description: "A crystalline geode torn from Titan's body. Inside, perfect amethyst crystals pulse with the slow heartbeat of the earth."
+          - id: "stonegrief_geode"
+            name: "Stonegrief's Geode"
+            description: "A crystalline geode torn from Stonegrief's body. Inside, perfect amethyst crystals pulse with the slow heartbeat of the earth."
             type: "Misc"
             value: 240
     items:
       - id: "earth_crystal"
         name: "Earth Crystal"
-        description: "One of the four elemental Crystals of Dalmasca. It is heavy — heavier than it should be — and radiates a deep amber warmth. When you hold it, you feel rooted, unshakeable, as though the earth itself has your back. The ground beneath your feet feels more solid. The Marquis needs this."
+        description: "One of the four elemental Crystals of Valeward. It is heavy — heavier than it should be — and radiates a deep amber warmth. When you hold it, you feel rooted, unshakeable, as though the earth itself has your back. The ground beneath your feet feels more solid. The Marquis needs this."
         type: "Quest"
         value: 0
 
-  # ── WIND TEMPLE ────────────────────────────────────────────────
+  # -- WIND TEMPLE ------------------------------------------------
 
   - id: "skyward_path"
     name: "Spiraling Canopy Path"
-    description: "A narrow path of woven branches and crystallized sap spirals upward through the canopy above Eruyt Village, climbing higher than any tree has a right to grow. The air freshens with each step, and the jungle sounds fade below until all you hear is wind through leaves and the distant cry of skyborne creatures. Cloud wisps drift between the uppermost branches. A drake with wings of translucent wind membrane circles overhead, watching you with predatory interest. The path continues upward, toward a break in the canopy where sunlight blazes through."
+    description: "A narrow path of woven branches and crystallized sap spirals upward through the canopy above Elderbough Village, climbing higher than any tree has a right to grow. The air freshens with each step, and the jungle sounds fade below until all you hear is wind through leaves and the distant cry of skyborne creatures. Cloud wisps drift between the uppermost branches. A drake with wings of translucent wind membrane circles overhead, watching you with predatory interest. The path continues upward, toward a break in the canopy where sunlight blazes through."
     exits:
       down: "fairy_grove"
       up: "wind_temple_entrance"
@@ -1211,7 +1211,7 @@ rooms:
             value: 25
     items:
       - id: "sky_feather"
-        name: "Cloud Chocobo Feather"
+        name: "Sky Dunewing Feather"
         description: "A pure white feather drifting down from somewhere above the clouds. It falls impossibly slowly, as if gravity is merely a suggestion."
         type: "Misc"
         value: 10
@@ -1244,14 +1244,14 @@ rooms:
 
   - id: "wind_temple_apex"
     name: "Apex of the Storm Empress"
-    description: "The temple's highest point is an open-air pinnacle above the clouds, with nothing but sky in every direction. The Wind Crystal floats in the center of a permanent vortex — a controlled tornado of white wind that spirals upward into the heavens. The crystal sings. A high, clear note that resonates in your chest and makes the air itself vibrate with power. And then the clouds part. Garuda descends — the Storm Empress — her wings spanning the width of the platform, her feathers crackling with lightning, her eyes twin hurricanes of emerald fury. She lands with a gust that nearly throws you from the pinnacle, and she speaks in a voice that is the roar of a thousand storms."
+    description: "The temple's highest point is an open-air pinnacle above the clouds, with nothing but sky in every direction. The Wind Crystal floats in the center of a permanent vortex — a controlled tornado of white wind that spirals upward into the heavens. The crystal sings. A high, clear note that resonates in your chest and makes the air itself vibrate with power. And then the clouds part. Stormvein descends — the Storm Empress — her wings spanning the width of the platform, her feathers crackling with lightning, her eyes twin hurricanes of emerald fury. She lands with a gust that nearly throws you from the pinnacle, and she speaks in a voice that is the roar of a thousand storms."
     exits:
       south: "wind_temple_entrance"
     environment_tags: ["outdoor", "high", "boss_arena", "windy", "wind_temple", "sacred", "sky"]
     npcs:
-      - id: "garuda_guardian"
-        name: "Garuda, the Storm Empress"
-        personality: "The most capricious of the Crystal guardians — an Esper of wind and storm who delights in the chaos of battle. Garuda is vain, theatrical, and utterly merciless. She views combat as art and destruction as beauty. Her wings generate hurricane-force winds, her talons crackle with lightning, and her Aerial Blast can tear the sky apart. Unlike the stoic Titan or the prideful Leviathan, Garuda laughs as she fights — a sound like thunder rolling across mountain peaks. She will test your speed, your reflexes, and your resolve. If you cannot match the storm, the fall from this height will be very, very long."
+      - id: "stormvein_guardian"
+        name: "Stormvein, the Storm Empress"
+        personality: "The most capricious of the Crystal guardians — an Eidolon of wind and storm who delights in the chaos of battle. Stormvein is vain, theatrical, and utterly merciless. She views combat as art and destruction as beauty. Her wings generate hurricane-force winds, her talons crackle with lightning, and her Sky Rend can tear the sky apart. Unlike the stoic Stonegrief or the prideful Tidewrought, Stormvein laughs as she fights — a sound like thunder rolling across mountain peaks. She will test your speed, your reflexes, and your resolve. If you cannot match the storm, the fall from this height will be very, very long."
         faction: "neutral"
         is_hostile: true
         level: 4
@@ -1261,19 +1261,19 @@ rooms:
         damage_dice: "1d6+2"
         defense: 12
         loot:
-          - id: "garuda_plume"
-            name: "Garuda's Plume"
+          - id: "stormvein_plume"
+            name: "Stormvein's Plume"
             description: "A single feather from the Storm Empress, crackling with residual lightning. It floats of its own accord and points toward the nearest storm."
             type: "Misc"
             value: 210
     items:
       - id: "wind_crystal"
         name: "Wind Crystal"
-        description: "One of the four elemental Crystals of Dalmasca. It weighs almost nothing and hums with a constant, gentle vibration — the breath of the sky itself. When you hold it, the air around you stirs, and for a moment you understand what it means to be truly free. The Marquis is waiting."
+        description: "One of the four elemental Crystals of Valeward. It weighs almost nothing and hums with a constant, gentle vibration — the breath of the sky itself. When you hold it, the air around you stirs, and for a moment you understand what it means to be truly free. The Marquis is waiting."
         type: "Quest"
         value: 0
 
-  # ── THE VOID — FINAL DUNGEON ───────────────────────────────────
+  # -- THE VOID — FINAL DUNGEON -----------------------------------
 
   - id: "void_rift"
     name: "The Void Rift"
@@ -1285,7 +1285,7 @@ rooms:
     npcs:
       - id: "void_wraith"
         name: "Void Wraith"
-        personality: "A being that was once something else — human, beast, it no longer matters. The Void consumed its identity, leaving only a hollow shape of dark energy that hungers for the substance of reality. It attacks not out of malice but out of desperate, mindless need — consuming light, warmth, and life to fill the emptiness where its soul used to be. It makes no sound. It casts no shadow. It simply reaches for you with hands made of nothing."
+        personality: "A being that was once something else — human, beast, it no longer matters. The Void consumed its identity, leaving only a hollow shape of dark energy that hungers for the substance of reality. It attacks not out of malice but out of deidolonate, mindless need — consuming light, warmth, and life to fill the emptiness where its soul used to be. It makes no sound. It casts no shadow. It simply reaches for you with hands made of nothing."
         faction: "neutral"
         is_hostile: true
         level: 5
@@ -1303,7 +1303,7 @@ rooms:
 
   - id: "void_corridor"
     name: "Corridor of Shattered Dimensions"
-    description: "A twisted hallway where the laws of physics have been revoked. The floor is made of floating debris from a hundred different realities — cobblestones from a city that never existed, grass from a field that was erased, bones from creatures that evolution never designed. Gravity shifts without warning. Distances lie. The corridor stretches infinitely ahead and is also only three steps long. In the fractured reflections on every surface, you can see yourself — but wrong. Older, younger, victorious, defeated, dead. A knight of void energy materializes from the dimensional wreckage, its armor a patchwork of stolen realities."
+    description: "A twisted hallway where the laws of physics have been revoked. The floor is made of floating debris from a hundred different realities — cobblestones from a city that never existed, grass from a field that was erased, bones from creatures that evolution never designed. Gravity shifts without warning. Distances lie. The corridor stretches infinitely ahead and is also only three steps long. In the fractured reflections on every surface, you can see yourself — but wrong. Older, younger, victorious, defeated, dead. A knight of void energy aetherglasslizes from the dimensional wreckage, its armor a patchwork of stolen realities."
     exits:
       up: "void_rift"
       north: "void_throne"
@@ -1311,7 +1311,7 @@ rooms:
     npcs:
       - id: "void_knight"
         name: "Void Knight"
-        personality: "Once a champion who entered the Void to challenge Exdeath and lost. Now it serves the Master of the Void as an eternal sentinel, its will consumed and its body rebuilt from the substance of nothingness. It fights with the skill of a lifetime warrior and the strength of something that no longer needs muscles, bones, or mercy. Its sword cuts through reality itself, and its shield deflects not just attacks but causality. It speaks a single word when it attacks — the name it no longer remembers."
+        personality: "Once a champion who entered the Void to challenge Nullthorn and lost. Now it serves the Master of the Void as an eternal sentinel, its will consumed and its body rebuilt from the substance of nothingness. It fights with the skill of a lifetime warrior and the strength of something that no longer needs muscles, bones, or mercy. Its sword cuts through reality itself, and its shield deflects not just attacks but causality. It speaks a single word when it attacks — the name it no longer remembers."
         faction: "neutral"
         is_hostile: true
         level: 5
@@ -1333,14 +1333,14 @@ rooms:
 
   - id: "void_throne"
     name: "Throne of Nothingness"
-    description: "The heart of the Void. All the shattered dimensions converge here, forming a vast amphitheater of absolute darkness broken only by distant, dying stars that are not stars at all but the last light of consumed worlds. At the center sits a throne carved from the absence of everything — not stone, not metal, not crystal, but the space where matter used to be. And upon that throne sits Exdeath. Once a tree. Then a warlock. Now something beyond mortal comprehension — a consciousness that has merged with the Void itself, seeking to reduce all of existence to the beautiful simplicity of nothing. He rises. The darkness bows. And in a voice that is the silence between heartbeats, he welcomes you to the end of everything."
+    description: "The heart of the Void. All the shattered dimensions converge here, forming a vast amphitheater of absolute darkness broken only by distant, dying stars that are not stars at all but the last light of consumed worlds. At the center sits a throne carved from the absence of everything — not stone, not metal, not crystal, but the space where matter used to be. And upon that throne sits Nullthorn. Once a tree. Then a warlock. Now something beyond mortal comprehension — a consciousness that has merged with the Void itself, seeking to reduce all of existence to the beautiful simplicity of nothing. He rises. The darkness bows. And in a voice that is the silence between heartbeats, he welcomes you to the end of everything."
     exits:
       south: "void_corridor"
     environment_tags: ["indoor", "underground", "dark", "boss_arena", "void", "final_dungeon", "endgame"]
     npcs:
-      - id: "exdeath_void"
-        name: "Exdeath, Master of the Void"
-        personality: "The final boss. A being who was once a tree in the Great Forest of Moore, into which countless evil souls were sealed — until the accumulated darkness achieved sentience. Exdeath sought the power of the Void to erase all existence, believing nothingness to be the ultimate form of perfection. He is theatrical, philosophical, and utterly convinced of his righteousness. He monologues about the beauty of oblivion with genuine passion. His power is immense — he wields the Void itself as a weapon, opening dimensional rifts, erasing matter, and warping reality. His ultimate attack, Grand Cross, inflicts every status ailment simultaneously. Defeating Exdeath is not just winning a fight — it is rejecting nothingness and affirming that existence, messy and painful as it is, matters."
+      - id: "nullthorn_void"
+        name: "Nullthorn, Master of the Void"
+        personality: "The final boss. A being who was once a tree in the Witherwood, into which countless evil souls were sealed — until the accumulated darkness achieved sentience. Nullthorn sought the power of the Void to erase all existence, believing nothingness to be the ultimate form of perfection. He is theatrical, philosophical, and utterly convinced of his righteousness. He monologues about the beauty of oblivion with genuine passion. His power is immense — he wields the Void itself as a weapon, opening dimensional rifts, erasing matter, and warping reality. His ultimate attack, Null Crown, inflicts every status ailment simultaneously. Defeating Nullthorn is not just winning a fight — it is rejecting nothingness and affirming that existence, messy and painful as it is, matters."
         faction: "neutral"
         is_hostile: true
         level: 6
@@ -1350,14 +1350,14 @@ rooms:
         damage_dice: "1d8+2"
         defense: 14
         loot:
-          - id: "exdeath_crystal"
+          - id: "nullthorn_crystal"
             name: "Crystal of the Void"
-            description: "The crystallized essence of the Void's power, ripped from Exdeath's shattered throne. It contains the captured light of a thousand worlds and hums with the potential of everything that was almost lost."
+            description: "The crystallized essence of the Void's power, ripped from Nullthorn's shattered throne. It contains the captured light of a thousand worlds and hums with the potential of everything that was almost lost."
             type: "Misc"
             value: 2000
           - id: "brave_blade"
-            name: "Brave Blade"
-            description: "A legendary sword that materializes in your hand the moment Exdeath falls — forged from the collective courage of every warrior who ever stood against the dark. Its power grows with the wielder's resolve. The Void could not consume it. Nothing can."
+            name: "Dawnblade"
+            description: "A legendary sword that aetherglasslizes in your hand the moment Nullthorn falls — forged from the collective courage of every warrior who ever stood against the dark. Its power grows with the wielder's resolve. The Void could not consume it. Nothing can."
             type: "Weapon"
             damage_dice: "4d8+10"
             damage_stat: "STR"
@@ -1372,6 +1372,6 @@ rooms:
     items:
       - id: "void_crystal"
         name: "Shard of Restored Light"
-        description: "When Exdeath falls, the Void begins to collapse — and from the wreckage, this crystal forms. It contains a fragment of every world the Void consumed, now freed. It pulses with warm, golden light. Proof that you saved everything. The Marquis needs to see this."
+        description: "When Nullthorn falls, the Void begins to collapse — and from the wreckage, this crystal forms. It contains a fragment of every world the Void consumed, now freed. It pulses with warm, golden light. Proof that you saved everything. The Marquis needs to see this."
         type: "Quest"
         value: 0

@@ -1,20 +1,38 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Grand Adventure Engine</title>
+  <title>Grand Adventure Engine — AI-Narrated Text Adventure RPG</title>
+  <meta name="description" content="Self-hosted AI-narrated text adventure RPG. Type actions in plain English; real dice, quests, and persistent worlds decide what happens." />
+  <meta name="theme-color" content="#0a0f0a" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Grand Adventure Engine" />
+  <meta property="og:description" content="Self-hosted AI-narrated text adventure RPG for Discord and the web. Real dice, quests, and persistent worlds — powered by your own local LLM." />
+  <meta property="og:image" content="https://raw.githubusercontent.com/raydeStar/grand-adventure-engine/master/docs/images/social-preview.png" />
+  <meta property="og:image:width" content="1280" />
+  <meta property="og:image:height" content="640" />
+  <meta name="twitter:card" content="summary_large_image" />
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=23" />
+  <link rel="stylesheet" href="css/style.css?v=26" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.7/signalr.min.js"
           crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="https://cdn.jsdelivr.net/npm/rot-js@2/dist/rot.min.js"
           crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </head>
 <body data-theme="green">
+  <div id="boot-screen" class="boot-screen" aria-hidden="true">
+    <div class="boot-inner">
+      <div class="boot-logo">Grand Adventure Engine</div>
+      <div class="boot-sub">phosphor terminal interface</div>
+      <pre id="boot-log" class="boot-log"></pre>
+    </div>
+    <div class="boot-skip">press any key to skip</div>
+  </div>
+
   <div id="portal-overlay" class="overlay">
     <div class="overlay-shell">
       <section class="hero-card panel">
@@ -61,6 +79,12 @@
         </div>
 
         <p id="portal-message" class="inline-message hidden"></p>
+
+        <div class="portal-statusline">
+          <span class="ps-item"><span class="ps-dot"></span> Engine online</span>
+          <span class="ps-item">Phosphor-green</span>
+          <span class="ps-item">Awaiting operator<span class="ps-cursor"></span></span>
+        </div>
       </section>
     </div>
   </div>
@@ -114,6 +138,27 @@
                 <p id="resume-message" class="inline-message hidden"></p>
 
                 <form id="create-form" class="create-form-inline hidden">
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="char-destination-mode">Adventure</label>
+                      <select id="char-destination-mode">
+                        <option value="world">World Adventure</option>
+                        <option value="blind">Blind Adventure</option>
+                      </select>
+                    </div>
+                    <div class="form-group" id="char-world-group">
+                      <label for="char-world">World</label>
+                      <select id="char-world"></select>
+                    </div>
+                    <div class="form-group hidden" id="char-blind-group">
+                      <label for="char-blind-storyline">Blind Template</label>
+                      <select id="char-blind-storyline"></select>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label>Starting Point</label>
+                    <div id="char-destination-preview" class="inline-message info"></div>
+                  </div>
                   <div class="form-row">
                     <div class="form-group">
                       <label for="char-name">Name</label>
@@ -182,13 +227,11 @@
             </div>
 
             <div id="stat-bar" class="stat-bar">
-              <span class="stat-label">HP</span> <span class="stat-hp stat-empty">░░░░░░░░░░</span> <span class="stat-hp">0/0</span>
-              <span class="stat-sep"> │ </span>
-              <span class="stat-label">MP</span> <span class="stat-mp stat-empty">░░░░░░░░░░</span> <span class="stat-mp">0/0</span>
-              <span class="stat-sep"> │ </span>
-              <span class="stat-label">XP</span> <span class="stat-xp stat-empty">░░░░░░░░░░</span> <span class="stat-xp">0/100</span>
-              <span class="stat-sep"> │ </span>
-              <span class="stat-gold">Gold:0</span>
+              <span class="hud-gauge hud-hp"><span class="hud-label">HP</span><span class="hud-track"><span class="hud-fill"></span></span><span class="hud-num">0/0</span></span>
+              <span class="hud-gauge hud-mp"><span class="hud-label">MP</span><span class="hud-track"><span class="hud-fill"></span></span><span class="hud-num">0/0</span></span>
+              <span class="hud-gauge hud-xp"><span class="hud-label">XP</span><span class="hud-track"><span class="hud-fill"></span></span><span class="hud-num">0/100</span></span>
+              <span class="hud-chip hud-gold">◈ 0</span>
+              <span class="hud-chip hud-level">LV 1</span>
             </div>
 
             <div class="command-bar">
@@ -615,7 +658,7 @@
                 <div id="quest-gen-dialog" class="quest-gen-dialog hidden">
                   <h4>AI Quest Generator</h4>
                   <label>Brief (what should this quest be about?):</label>
-                  <textarea id="quest-gen-brief" rows="3" placeholder="e.g. An NPC in Rabanastre needs help recovering a stolen artifact from the sewers..."></textarea>
+                  <textarea id="quest-gen-brief" rows="3" placeholder="e.g. An NPC in Stonewake needs help recovering a stolen artifact from the sewers..."></textarea>
                   <label>World:</label>
                   <select id="quest-gen-world"><option value="">Default World</option></select>
                   <label>Lore context (select entries to include):</label>
@@ -733,10 +776,11 @@
     </main>
   </div>
 
+  <script src="js/boot.js?v=1"></script>
   <script src="js/api.js?v=8"></script>
   <script src="js/signalr-client.js?v=3"></script>
   <script src="js/room-map.js?v=3"></script>
-  <script src="js/ui.js?v=27"></script>
-  <script src="js/app.js?v=26"></script>
+  <script src="js/ui.js?v=29"></script>
+  <script src="js/app.js?v=27"></script>
 </body>
 </html>

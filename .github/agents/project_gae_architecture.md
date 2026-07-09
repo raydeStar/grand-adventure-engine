@@ -1,17 +1,16 @@
 ---
 name: GAE Architecture Overview
-description: Key architecture decisions for Grand Adventure Engine — LM Studio, no DB, in-memory state
+description: Current architecture notes for Grand Adventure Engine
 type: project
 ---
 
-Grand Adventure Engine (GAE) is a .NET 10 project with these key architectural choices:
+Grand Adventure Engine (GAE) is a .NET project with these key architectural choices:
 
-- **LM Studio** is the AI backend (OpenAI-compatible API at localhost:1234)
-- **No database** — state is in-memory, journaled to disk (InMemoryStateManager / JournaledStateManager)
-- **WorldKnowledgeBuilder is nullable** in NarratorService — narrator works without lore, just loses context
-- **Disposition is dual-layer** — Npc.Disposition (flat string) and Npc.DispositionState (rich object) must stay in sync
-- **NPC knowledge scoping** — NPCs only know lore matching their KnowledgeScopes tags
-- **World knowledge** comes from YAML lore seeds loaded into a ContentRegistry at startup
+- **LM Studio / OpenAI-compatible HTTP** is the narrator backend by default.
+- **PostgreSQL via EF Core** is the primary persistence path.
+- **YAML seeds** load rules, lore, quests, registry content, and demo world data into the content registry.
+- **Disposition is dual-layer**: `Npc.Disposition` stays in sync with `Npc.DispositionState`.
+- **NPC knowledge is scoped**: conversations use lore matching the NPC's `KnowledgeScopes`.
+- **Multi-world state is isolated** by world IDs, active world context, and world-scoped NPC state.
 
-**Why:** Project is day-old, scope is intentionally bounded — AI narrator/DM for a game world.
-**How to apply:** Respect the no-DB constraint, keep lore integration gracefully degradable, maintain dual disposition sync.
+Use the current source and AGENTS.md as authoritative when these notes drift.

@@ -1,4 +1,4 @@
-using GAE.Core.Models;
+﻿using GAE.Core.Models;
 using GAE.Engine.Registry;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -68,7 +68,7 @@ public class QuestTrackerTests
         {
             Id = "town_gate",
             Name = "Town Gate",
-            Npcs = [new Npc { Id = "ranger_thorne", Name = "Red XIII", Hp = 20, MaxHp = 20 }]
+            Npcs = [new Npc { Id = "ranger_thorne", Name = "Thorne", Hp = 20, MaxHp = 20 }]
         };
 
         var summary = await _tracker.OnRoomEnteredAsync(player, destination);
@@ -76,6 +76,32 @@ public class QuestTrackerTests
         Assert.NotNull(summary);
         Assert.Contains("Escort objective complete", summary, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(QuestStatus.ReadyToTurnIn, player.QuestLog[0].Status);
+    }
+
+    [Fact]
+    public async Task OnEnemyKilledAsync_MatchesDistinctBossNameTokenWhenIdsDrift()
+    {
+        var player = CreatePlayer();
+        _engine.AcceptQuest(player, "ifrit_quest");
+
+        var summary = await _tracker.OnEnemyKilledAsync(player, "cindermaw_guardian", "Ifrit, the Infernal Lord");
+
+        Assert.NotNull(summary);
+        Assert.Contains("Objective complete", summary, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(QuestStatus.ReadyToTurnIn, player.QuestLog[0].Status);
+    }
+
+    [Fact]
+    public async Task OnEnemyKilledAsync_DoesNotMatchOnOneSharedDescriptiveToken()
+    {
+        var player = CreatePlayer();
+        _engine.AcceptQuest(player, "ifrit_quest");
+
+        var summary = await _tracker.OnEnemyKilledAsync(player, "infernal_hound", "Infernal Hound");
+
+        Assert.Null(summary);
+        Assert.Equal(QuestStatus.Active, player.QuestLog[0].Status);
+        Assert.False(player.QuestLog[0].Objectives[0].IsComplete);
     }
 
     [Fact]
@@ -177,9 +203,9 @@ public class QuestTrackerTests
                             Id = "escort_ranger",
                             Type = ObjectiveType.Escort,
                             TargetId = "ranger_thorne",
-                            TargetName = "Red XIII",
+                            TargetName = "Thorne",
                             LocationConstraint = "town_gate",
-                            Description = "Escort Red XIII back to the gate"
+                            Description = "Escort Thorne back to the gate"
                         }
                     ]
                 }
@@ -199,6 +225,32 @@ public class QuestTrackerTests
                     Id = "failure_stage",
                     Name = "Guard the Treaty",
                     Objectives = [new QuestObjective { Id = "keep_safe", Type = ObjectiveType.Custom, CustomCondition = "Do not ruin the treaty." }]
+                }
+            ]
+        });
+
+        registry.Quests.Register(new QuestDefinition
+        {
+            Id = "ifrit_quest",
+            Name = "Trial of Fire",
+            GiverId = "marquis_ondore",
+            Stages =
+            [
+                new QuestStage
+                {
+                    Id = "defeat_ifrit",
+                    Name = "Defeat Ifrit",
+                    Objectives =
+                    [
+                        new QuestObjective
+                        {
+                            Id = "kill_ifrit",
+                            Type = ObjectiveType.Kill,
+                            TargetId = "ifrit_guardian",
+                            TargetName = "Ifrit, the Infernal Lord",
+                            Description = "Defeat Ifrit, the Infernal Lord"
+                        }
+                    ]
                 }
             ]
         });

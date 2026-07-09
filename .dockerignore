@@ -3,6 +3,8 @@
 **/node_modules/
 **/.git/
 **/data/
+**/.env
+**/cookies.txt
 **/*.user
 **/*.sln.docstates
 **/[Tt]est[Rr]esult*/

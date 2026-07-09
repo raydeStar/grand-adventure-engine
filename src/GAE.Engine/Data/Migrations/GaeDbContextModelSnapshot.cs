@@ -300,6 +300,10 @@ namespace GAE.Engine.Data.Migrations
                         .HasColumnType("text")
                         .HasColumnName("backstory");
 
+                    b.Property<string>("BlindAdventure")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("blind_adventure");
+
                     b.Property<int>("Cha")
                         .HasColumnType("integer")
                         .HasColumnName("cha");
@@ -321,6 +325,10 @@ namespace GAE.Engine.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("current_room_id");
+
+                    b.Property<string>("CyoaState")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("cyoa_state");
 
                     b.Property<int>("Dex")
                         .HasColumnType("integer")
@@ -344,6 +352,13 @@ namespace GAE.Engine.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("faction");
+
+                    b.Property<string>("GameMode")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("FullRpg")
+                        .HasColumnName("game_mode");
 
                     b.Property<string>("Gender")
                         .IsRequired()

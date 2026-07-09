@@ -186,6 +186,87 @@ public class GameEngineCommandFlowTests
         Assert.Equal(result.Narration, entry.Narration);
     }
 
+    [Theory]
+    [InlineData("I grab the chest")]
+    [InlineData("I touch the wall over there")]
+    public async Task ProcessActionAsync_InnocentSubstringMatches_DoNotTriggerBoundaryConsequences(string rawInput)
+    {
+        var stateManager = await CreateStateAsync(room: new Room
+        {
+            Id = "inn",
+            Name = "Crossroads Inn",
+            Description = "A lantern-warmed common room with a locked treasure chest.",
+            Npcs = [new Npc { Id = "mara", Name = "Mara Vale" }]
+        });
+        var engine = CreateEngine(stateManager, new PerpetualFallbackNarrator());
+
+        var result = await engine.ProcessActionAsync(PlayerId, engine.ParseCommand(PlayerId, rawInput));
+
+        Assert.True(result.Success);
+        Assert.DoesNotContain("Boundary check", result.MechanicalSummary, StringComparison.OrdinalIgnoreCase);
+        var room = await stateManager.GetPlayerRoomAsync(PlayerId, "inn");
+        Assert.DoesNotContain("personal-boundary-crossed", Assert.Single(room!.Npcs).DispositionState.MemoryFlags);
+    }
+
+    [Fact]
+    public async Task ProcessActionAsync_BoundaryViolation_RollsForConsequenceAndPersistsStory()
+    {
+        var stateManager = await CreateStateAsync(room: new Room
+        {
+            Id = "inn",
+            Name = "Crossroads Inn",
+            Description = "A lantern-warmed common room.",
+            Npcs =
+            [
+                new Npc
+                {
+                    Id = "mara",
+                    Name = "Mara Vale",
+                    Disposition = "friendly",
+                    DispositionState = new NpcDispositionState { Emotion = "friendly", Intensity = 65, Baseline = 65 }
+                }
+            ]
+        });
+
+        var dice = new Mock<IProbabilityEngine>(MockBehavior.Strict);
+        dice.Setup(d => d.RollSkillCheck("boundary", 0))
+            .Returns(new DiceRoll { Expression = "1d20", IndividualRolls = [9], Total = 9, Purpose = "Skill check: boundary" });
+
+        var narrator = new Mock<INarratorService>(MockBehavior.Strict);
+        narrator.Setup(service => service.ParseIntentAsync("I grab her booty", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string?)null);
+        var parser = new CommandParser(NullLogger<CommandParser>.Instance);
+        var engine = new GameEngine(stateManager, dice.Object, narrator.Object, parser, new GameRulesConfig(), NullLogger<GameEngine>.Instance);
+
+        var action = engine.ParseCommand(PlayerId, "I grab her booty");
+        var result = await engine.ProcessActionAsync(PlayerId, action);
+
+        Assert.False(result.Success);
+        var roll = Assert.Single(result.DiceRolls);
+        Assert.Equal(12, roll.TargetNumber);
+        Assert.Equal(RollOutcome.Miss, roll.Outcome);
+        Assert.Contains("Boundary check: 9 vs DC 12", result.MechanicalSummary);
+        Assert.Contains("Mara Vale", result.Narration);
+        Assert.Contains("you", result.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("fails", result.Narration, StringComparison.OrdinalIgnoreCase);
+
+        var updatedRoom = await stateManager.GetPlayerRoomAsync(PlayerId, "inn");
+        var mara = Assert.Single(updatedRoom!.Npcs);
+        Assert.Contains("angry", mara.Disposition, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("personal-boundary-crossed", mara.DispositionState.MemoryFlags);
+
+        var entries = await stateManager.GetStoryEntriesAsync(PlayerId, 10);
+        var entry = Assert.Single(entries);
+        Assert.Equal("I grab her booty", entry.RawInput);
+        Assert.Equal(result.Narration, entry.Narration);
+        narrator.Verify(service => service.ProcessFreeFormAsync(
+            It.IsAny<PlayerCharacter>(),
+            It.IsAny<Room>(),
+            It.IsAny<string>(),
+            It.IsAny<IReadOnlyList<StoryEntry>>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     [Fact]
     public async Task ProcessActionAsync_DropItem_RemovesItFromInventoryAndPlacesItInRoom()
     {
@@ -465,6 +546,101 @@ public class GameEngineCommandFlowTests
         Assert.Equal(15, player!.Hp); // 5 + 10 = 15 (MaxHp is 20, no clamp needed)
         Assert.Single(player.Inventory); // 2 - 1 = 1 remaining
         Assert.Equal(1, player.Inventory[0].Quantity);
+    }
+
+    [Fact]
+    public async Task UsePotion_ParsesCompactHealEffect()
+    {
+        var stateManager = await CreateStateAsync();
+        var player = await stateManager.GetPlayerAsync(PlayerId);
+        player!.Hp = 5;
+        player.Inventory.Add(new InventoryItem { Name = "Healing Draught", IsConsumable = true, Effect = "heal:6", Quantity = 1 });
+        await stateManager.SavePlayerAsync(player);
+
+        var narrator = new PerpetualFallbackNarrator();
+        var engine = CreateEngineWithDice(stateManager, narrator);
+
+        var action = engine.ParseCommand(PlayerId, "use healing draught");
+        var result = await engine.ProcessActionAsync(PlayerId, action);
+
+        Assert.True(result.Success);
+        Assert.Contains("Restored 6 HP", result.MechanicalSummary);
+
+        player = await stateManager.GetPlayerAsync(PlayerId);
+        Assert.Equal(11, player!.Hp);
+        Assert.Empty(player.Inventory);
+    }
+
+    [Fact]
+    public async Task UsePotion_FindsHealingDraughtByGenericPotionAlias()
+    {
+        var stateManager = await CreateStateAsync();
+        var player = await stateManager.GetPlayerAsync(PlayerId);
+        player!.Hp = 5;
+        player.Inventory.Add(new InventoryItem
+        {
+            Name = "Healing Draught",
+            Description = "A small vial of red liquid that heals minor wounds.",
+            IsConsumable = true,
+            Effect = "heal:6",
+            Quantity = 1
+        });
+        await stateManager.SavePlayerAsync(player);
+
+        var narrator = new PerpetualFallbackNarrator();
+        var engine = CreateEngineWithDice(stateManager, narrator);
+
+        var action = engine.ParseCommand(PlayerId, "use potion");
+        var result = await engine.ProcessActionAsync(PlayerId, action);
+
+        Assert.True(result.Success);
+        Assert.Contains("Used Healing Draught", result.MechanicalSummary);
+
+        player = await stateManager.GetPlayerAsync(PlayerId);
+        Assert.Equal(11, player!.Hp);
+        Assert.Empty(player.Inventory);
+    }
+
+    [Fact]
+    public async Task UsePotion_PrefersStrongestHealingDraughtForGenericPotion()
+    {
+        var stateManager = await CreateStateAsync();
+        var player = await stateManager.GetPlayerAsync(PlayerId);
+        player!.Hp = 5;
+        player.MaxHp = 40;
+        player.Inventory.Add(new InventoryItem
+        {
+            Name = "Healing Draught",
+            Description = "A small vial of red liquid that heals minor wounds.",
+            IsConsumable = true,
+            Effect = "Restores 2d4+2 HP",
+            Quantity = 1,
+            Value = 15
+        });
+        player.Inventory.Add(new InventoryItem
+        {
+            Name = "Greater Healing Draught",
+            Description = "A concentrated healing elixir.",
+            IsConsumable = true,
+            Effect = "Restores 30 HP",
+            Quantity = 1,
+            Value = 50
+        });
+        await stateManager.SavePlayerAsync(player);
+
+        var narrator = new PerpetualFallbackNarrator();
+        var engine = CreateEngineWithDice(stateManager, narrator);
+
+        var action = engine.ParseCommand(PlayerId, "use potion");
+        var result = await engine.ProcessActionAsync(PlayerId, action);
+
+        Assert.True(result.Success);
+        Assert.Contains("Used Greater Healing Draught", result.MechanicalSummary);
+
+        player = await stateManager.GetPlayerAsync(PlayerId);
+        Assert.Equal(20, player!.Hp);
+        Assert.Contains(player.Inventory, item => item.Name == "Healing Draught");
+        Assert.DoesNotContain(player.Inventory, item => item.Name == "Greater Healing Draught");
     }
 
     [Fact]

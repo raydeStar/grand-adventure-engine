@@ -47,6 +47,30 @@ LM Studio runs the AI that narrates the game. It's free and runs entirely on you
 
 > **Tip:** LM Studio uses an OpenAI-compatible API. The engine connects to it via the `LmStudio:Endpoint` config setting. Inside Docker, this is automatically set to `http://host.docker.internal:1234`.
 
+### Ollama / Unsloth Studio option
+
+ProjectBonk can also call Ollama directly, or use Unsloth Studio through its protected OpenAI-compatible API.
+
+1. Install Ollama and pull or create your model.
+2. Set the narrator provider to `Ollama`.
+3. Use Ollama's default endpoint, `http://localhost:11434` locally or `http://host.docker.internal:11434` from Docker.
+4. Set `LmStudio:ContextLength` to `16384` for a 16K context window.
+5. Set `LmStudio:Think` to `false` to ask thinking models to answer directly.
+
+Example `.env` values for Docker:
+
+```env
+LM_STUDIO_PROVIDER=Ollama
+LM_STUDIO_ENDPOINT=http://host.docker.internal:11434
+LM_STUDIO_MODEL=diffusiongemma:latest
+LM_STUDIO_CONTEXT_LENGTH=16384
+LM_STUDIO_THINK=false
+```
+
+If you use Ollama's OpenAI-compatible `/v1/chat/completions` endpoint instead of ProjectBonk's native Ollama mode, context size is not a per-request OpenAI field. Create an Ollama `Modelfile` with `PARAMETER num_ctx 16384`, run `ollama create`, then point `LM_STUDIO_MODEL` at that created model.
+
+For Dockerized Unsloth Studio, use `OpenAICompatible`, set `LM_STUDIO_ENDPOINT=http://host.docker.internal:8000`, and set `LM_STUDIO_API_KEY` to a Studio API key. Context length is chosen when the model is loaded in Studio; `LM_STUDIO_THINK=false` sends Studio's `enable_thinking=false` request extension.
+
 ---
 
 ## 3. Configure Environment Variables
@@ -55,8 +79,22 @@ Create a `.env` file in the project root (next to `docker-compose.yml`):
 
 ```env
 # ── Required ──────────────────────────────────
-# LM Studio model name (use "default" to auto-detect the loaded model)
+# Narrator provider: OpenAICompatible for LM Studio, Ollama for Ollama native /api/chat
+LM_STUDIO_PROVIDER=OpenAICompatible
+
+# Narrator endpoint. Use http://host.docker.internal:11434 for Ollama in Docker,
+# or http://host.docker.internal:8000 for Dockerized Unsloth Studio.
+LM_STUDIO_ENDPOINT=http://host.docker.internal:1234
+
+# Narrator model name (use "default" to auto-detect the loaded model)
 LM_STUDIO_MODEL=default
+
+# Optional bearer token, required for Unsloth Studio's /v1 API
+LM_STUDIO_API_KEY=
+
+# Optional request options
+LM_STUDIO_CONTEXT_LENGTH=
+LM_STUDIO_THINK=
 
 # ── Discord Bot (optional — skip if dashboard-only) ──
 DISCORD_TOKEN=your_discord_bot_token_here
@@ -180,8 +218,12 @@ All settings can be overridden via environment variables using the `__` (double 
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `LmStudio:Endpoint` | `http://localhost:1234` | LM Studio API URL |
+| `LmStudio:Provider` | `OpenAICompatible` | Narrator backend mode: `OpenAICompatible` for LM Studio or `Ollama` for native Ollama `/api/chat` |
+| `LmStudio:Endpoint` | `http://localhost:1234` | Narrator API URL. Use `http://host.docker.internal:8000` for Dockerized Unsloth Studio |
 | `LmStudio:Model` | `default` | Model name (or `default` for auto-detect) |
+| `LmStudio:ApiKey` | *(empty)* | Optional bearer token for protected OpenAI-compatible backends such as Unsloth Studio |
+| `LmStudio:ContextLength` | *(empty)* | Optional context length. In native Ollama mode this is sent as `options.num_ctx`; use `16384` for 16K. For OpenAI-compatible Unsloth Studio, set context length when loading the model in Studio |
+| `LmStudio:Think` | *(empty)* | Optional thinking control. In native Ollama mode this is sent as `think`; in OpenAI-compatible mode this sends `enable_thinking=false` and `reasoning_effort=none` when set to `false` |
 | `LmStudio:RetryCount` | `1` | Retries on transient LM Studio failures |
 | `LmStudio:RetryDelayMs` | `2000` | Delay between retries (ms) |
 | `Discord:Token` | *(empty)* | Discord bot token |
@@ -191,6 +233,7 @@ All settings can be overridden via environment variables using the `__` (double 
 | `DashboardAuth:Admin:Username` | `admin` | Admin dashboard login |
 | `DashboardAuth:Admin:Password` | `GAE-Admin-Local!123` | Admin dashboard password |
 | `DashboardAuth:SessionHours` | `12` | Login session duration |
+| `DashboardAuth:ShowLoginPasswords` | `false` | Include passwords in anonymous login hints; only enable for private local demos |
 | `ConnectionStrings:GameDatabase` | *(see appsettings.json)* | PostgreSQL connection string |
 
 See [dashboard-ops.md](dashboard-ops.md) for additional admin operations and environment overrides.

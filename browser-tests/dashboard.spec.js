@@ -28,6 +28,18 @@ test.describe('Grand Adventure Engine dashboard', () => {
     return result;
   }
 
+  async function submitCreateCharacter(page) {
+    const responsePromise = page.waitForResponse((response) => {
+      if (!response.url().includes('/api/dashboard/characters')) return false;
+      return response.request().method() === 'POST';
+    });
+
+    await page.locator('#create-form').getByRole('button', { name: 'Create' }).click();
+    const createResponse = await responsePromise;
+    expect(createResponse.ok()).toBeTruthy();
+    return await createResponse.json();
+  }
+
   // Clean up test-created players after each test
   test.afterEach(async ({ request }) => {
     try {
@@ -55,10 +67,10 @@ test.describe('Grand Adventure Engine dashboard', () => {
     await page.locator('#char-race').selectOption('Human');
     await page.locator('#char-class').selectOption('Warrior');
     await page.locator('#char-backstory').fill('Provisioned by the browser E2E harness.');
-    await page.locator('#create-form').getByRole('button', { name: 'Create' }).click();
+    await submitCreateCharacter(page);
 
     await expect(page.locator('#dashboard')).toBeVisible();
-    await expect(page.locator('#header-player')).toContainText('Playwright Hero');
+    await expect(page.locator('#header-player')).toContainText('Playwright Hero', { timeout: 30_000 });
     await expect(page.locator('#command-input')).toBeEnabled();
     // Room name is theme-dependent; just verify the player spawned in a real room.
     await expect(page.locator('#room-name')).not.toBeEmpty();
@@ -71,7 +83,45 @@ test.describe('Grand Adventure Engine dashboard', () => {
     await expect(page.locator('#story-log')).not.toContainText('Exits:');
     await expect(page.locator('#story-log')).not.toContainText('You see:');
     await expect(page.locator('#story-log')).not.toContainText('Items:');
+    await expect(page.locator('#story-log')).not.toContainText('<think');
     await expect(page.locator('#room-desc')).not.toBeEmpty();
+
+    // Guard the gameplay surface itself: readable on desktop and genuinely
+    // usable on a phone, where the header/prompt previously squeezed controls.
+    const gameplayLayout = await page.evaluate(() => {
+      const rect = (selector) => document.querySelector(selector)?.getBoundingClientRect();
+      const header = document.querySelector('.app-header');
+      const storyEntry = rect('#story-log .story-entry');
+      const roomCopy = rect('.room-panel-copy');
+      const commandPrompt = rect('#command-prompt');
+      const commandInput = rect('#command-input');
+      const portalButton = rect('#btn-open-portal');
+
+      return {
+        viewportWidth: window.innerWidth,
+        headerClientWidth: header?.clientWidth || 0,
+        headerScrollWidth: header?.scrollWidth || 0,
+        storyWidth: storyEntry?.width || 0,
+        roomCopyWidth: roomCopy?.width || 0,
+        roomCopyHeight: roomCopy?.height || 0,
+        promptBottom: commandPrompt?.bottom || 0,
+        inputTop: commandInput?.top || 0,
+        inputWidth: commandInput?.width || 0,
+        portalLeft: portalButton?.left || 0,
+        portalRight: portalButton?.right || 0
+      };
+    });
+
+    expect(gameplayLayout.storyWidth).toBeLessThanOrEqual(1041);
+    if (testInfo.project.name === 'mobile-chromium') {
+      expect(gameplayLayout.headerScrollWidth).toBeLessThanOrEqual(gameplayLayout.headerClientWidth + 1);
+      expect(gameplayLayout.portalLeft).toBeGreaterThanOrEqual(0);
+      expect(gameplayLayout.portalRight).toBeLessThanOrEqual(gameplayLayout.viewportWidth + 1);
+      expect(gameplayLayout.inputWidth).toBeGreaterThan(220);
+      expect(gameplayLayout.promptBottom).toBeLessThanOrEqual(gameplayLayout.inputTop + 1);
+      expect(gameplayLayout.roomCopyWidth).toBeGreaterThan(100);
+      expect(gameplayLayout.roomCopyHeight).toBeGreaterThan(20);
+    }
 
     await page.locator('#command-input').fill('stats');
     await page.getByRole('button', { name: 'Send' }).click();
@@ -79,6 +129,106 @@ test.describe('Grand Adventure Engine dashboard', () => {
     await expect(page.locator('#command-input')).toBeEnabled({ timeout: 30_000 });
 
     await expect(page.getByRole('button', { name: 'Open Admin Console' })).toHaveCount(0);
+  });
+
+  test('story log replaces same-length batches when the active story changes', async ({ page }, testInfo) => {
+    const firstName = `First Switch ${testInfo.project.name}`;
+    const secondName = `Second Switch ${testInfo.project.name}`;
+
+    await login(page, 'admin');
+    await page.evaluate((name) => {
+      UI.showDashboard(true);
+      UI.showPortal(false);
+      UI.$('story-log').innerHTML = '';
+      UI._lastStoryCount = 0;
+      UI._lastStorySignature = '';
+      UI._renderedActionIds.clear();
+      UI.renderStoryLog([{
+        id: 'story-first',
+        rawInput: 'character-creation',
+        narration: `${name} the Human Warrior enters the world.`
+      }]);
+    }, firstName);
+
+    await expect(page.locator('#story-log .story-entry')).toHaveCount(1);
+    await expect(page.locator('#story-log')).toContainText(firstName);
+    await expect(page.locator('#story-log')).not.toContainText('<think');
+
+    await page.evaluate((name) => {
+      UI.renderStoryLog([{
+        id: 'story-second',
+        rawInput: 'character-creation',
+        narration: `${name} the Human Warrior enters the world.`
+      }]);
+    }, secondName);
+
+    await expect(page.locator('#story-log .story-entry')).toHaveCount(1);
+    await expect(page.locator('#story-log')).toContainText(secondName);
+    await expect(page.locator('#story-log')).not.toContainText(firstName);
+    await expect(page.locator('#story-log')).not.toContainText('<think');
+  });
+
+  test('story polling preserves locally appended entries and an active pending indicator', async ({ page }) => {
+    await login(page, 'admin');
+
+    const result = await page.evaluate(() => {
+      UI.showDashboard(true);
+      UI.showPortal(false);
+      UI.$('story-log').innerHTML = '';
+      UI._lastStoryCount = 0;
+      UI._lastStorySignature = '';
+      UI._renderedActionIds.clear();
+
+      const first = { id: 'story-first', rawInput: 'look', narration: 'The room waits.' };
+      const second = { id: 'story-second', rawInput: 'listen', narration: 'A floorboard creaks.' };
+      UI.renderStoryLog([first]);
+      const firstNode = UI.$('story-log').querySelector('[data-action-id="story-first"]');
+      UI.appendStoryEntry(second, 'success');
+      UI._cancelStreaming();
+      const secondNode = UI.$('story-log').querySelector('[data-action-id="story-second"]');
+
+      UI.renderStoryLog([second, first]);
+      const entriesPreserved = firstNode === UI.$('story-log').querySelector('[data-action-id="story-first"]')
+        && secondNode === UI.$('story-log').querySelector('[data-action-id="story-second"]');
+
+      UI.beginPendingAction('search the rafters');
+      const pendingNode = UI._pendingNode;
+      UI.renderStoryLog([second, first]);
+      const pendingPreserved = pendingNode === UI._pendingNode && UI.$('story-log').contains(pendingNode);
+      UI.endPendingAction();
+
+      return { entriesPreserved, pendingPreserved };
+    });
+
+    expect(result.entriesPreserved).toBeTruthy();
+    expect(result.pendingPreserved).toBeTruthy();
+  });
+
+  test('realtime feed join failures fall back to polling', async ({ page }) => {
+    await login(page, 'admin');
+
+    const result = await page.evaluate(async () => {
+      window.signalR = window.signalR || { HubConnectionState: { Connected: 'Connected' } };
+      GameHub.connection = {
+        state: window.signalR?.HubConnectionState?.Connected ?? 'Connected',
+        invoke: async () => { throw new Error('join denied'); }
+      };
+      GameHub.realtimeEnabled = true;
+
+      const statusEvents = [];
+      GameHub.on('status', status => statusEvents.push(status));
+      const joined = await GameHub.joinPlayerFeed('missing-player');
+
+      return {
+        joined,
+        realtimeEnabled: GameHub.realtimeEnabled,
+        statusEvents
+      };
+    });
+
+    expect(result.joined).toBeFalsy();
+    expect(result.realtimeEnabled).toBeFalsy();
+    expect(result.statusEvents).toContain('polling');
   });
 
   test('user can accept, review, and abandon a seeded quest through the dashboard', async ({ page }, testInfo) => {
@@ -91,7 +241,7 @@ test.describe('Grand Adventure Engine dashboard', () => {
     await page.locator('#char-race').selectOption('Human');
     await page.locator('#char-class').selectOption('Warrior');
     await page.locator('#char-backstory').fill('Quest E2E coverage via Playwright.');
-    await page.locator('#create-form').getByRole('button', { name: 'Create' }).click();
+    await submitCreateCharacter(page);
 
     await expect(page.locator('#dashboard')).toBeVisible();
     await expect(page.locator('#room-name')).not.toBeEmpty();
@@ -188,7 +338,7 @@ test.describe('Grand Adventure Engine dashboard', () => {
       document.dispatchEvent(new CustomEvent('overview-play-player', { detail: { playerId: 'demo-user' } }));
     });
     await expect(page.locator('#room-name')).toContainText('QA Lab');
-    await expect(page.locator('#stat-bar')).toContainText('Gold:15');
+    await expect(page.locator('#stat-bar .hud-gold')).toContainText('15');
 
     const playerSnapshot = await page.evaluate(async () => {
       const player = await API.getPlayer('demo-user');
@@ -258,7 +408,7 @@ test.describe('Grand Adventure Engine dashboard', () => {
     });
 
     expect(renderSnapshot.header).toContain('Shape Walker');
-    expect(renderSnapshot.statBar).toContain('Gold:44');
+    expect(renderSnapshot.statBar).toContain('◈ 44');
     expect(renderSnapshot.stats).toContain('Focus');
     expect(renderSnapshot.details).toContain('Alignment Note:Chaotic useful');
     expect(renderSnapshot.equipment).toContain('Focus Stone:Obsidian Focus');

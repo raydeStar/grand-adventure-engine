@@ -1,5 +1,5 @@
-# ══════════════════════════════════════════════════════════════════
-# LOREBOOK SEED — Hierarchical World Lore for Ivalice
+﻿# ══════════════════════════════════════════════════════════════════
+# LOREBOOK SEED — Hierarchical World Lore for Elarion
 # Lore tree: Planet → Region → City/Zone → Faction/Location → NPC/Event
 # ══════════════════════════════════════════════════════════════════
 
@@ -17,7 +17,7 @@ lore_entries:
     discovery_trigger: "auto"
     description: "How fighting works in this world."
     content: >
-      Combat in Ivalice is turn-based and brutal. When hostilities begin, you and your
+      Combat in Elarion is turn-based and brutal. When hostilities begin, you and your
       opponent trade blows in sequence. Your STR governs melee damage, DEX determines
       hit chance and dodge, and CON is the difference between walking away and being
       carried out. Spellcasters draw from MP to unleash magical attacks — INT boosts
@@ -50,17 +50,17 @@ lore_entries:
     is_starter_lore: true
     cascade_down: false
     discovery_trigger: "auto"
-    description: "How the arcane arts function in Ivalice."
+    description: "How the arcane arts function in Elarion."
     content: >
-      Magic flows through the Mist — an invisible energy that permeates Ivalice.
-      Spellcasters channel Mist through learned formulae (registered spells) or raw
+      Magic flows through the Aether — an invisible energy that permeates Elarion.
+      Spellcasters channel Aether through learned formulae (registered spells) or raw
       willpower (improvised spells). Registered spells are reliable and cost fixed MP.
       Improvised spells are creative but risky — exceed your power cap and the spell
       fizzles spectacularly. Your class determines your spell cap and which registered
       spells you can learn. Even non-casters can attempt minor cantrips, though the
       results tend to be... entertaining.
-    narrator_hint: "Weave Mist lore into magic-related narration. The Mist is visible in certain areas as a faint shimmer."
-    tags: ["tutorial", "magic", "mist", "starter"]
+    narrator_hint: "Weave Aether lore into magic-related narration. The Aether is visible in certain areas as a faint shimmer."
+    tags: ["tutorial", "magic", "aether", "starter"]
 
   - id: "lore-mechanics-equipment"
     name: "Equipment & Inventory"
@@ -74,7 +74,7 @@ lore_entries:
       Gloves, Ring, Amulet, and Bracelet. Each piece may grant stat bonuses or special
       effects. Weapons have damage dice (like 1d8+2), and armor provides a flat defense
       bonus. Two-handed weapons sacrifice your shield slot for extra damage. Consumables
-      like potions can be used in or out of combat. Shops sell gear for Gil — the
+      like potions can be used in or out of combat. Shops sell gear for gold — the
       universal currency. If you can't afford it, there's always the old-fashioned
       way: take it off something that doesn't need it anymore.
     narrator_hint: "Reference equipment naturally when the player finds loot, visits a shop, or asks about gear."
@@ -84,116 +84,116 @@ lore_entries:
   #  PLANET-LEVEL LORE — Root of the hierarchy
   # ═══════════════════════════════════════════════════════════
 
-  - id: "lore-ivalice"
-    name: "Ivalice"
+  - id: "lore-elarion"
+    name: "Elarion"
     lore_scope: "planet"
     is_starter_lore: true
     cascade_down: false
     discovery_trigger: "auto"
-    description: "The world of Ivalice — a land of crystal, conflict, and ancient powers."
+    description: "The world of Elarion — a land of crystal, conflict, and ancient powers."
     content: >
-      Ivalice is a world where magic flows through an energy called the Mist, where
-      ancient beings called the Occuria once shaped the course of history from their
+      Elarion is a world where magic flows through an energy called the Aether, where
+      ancient beings called the Veiled Architects once shaped the course of history from their
       hidden realm, and where empires rise and fall like desert tides. The great city
-      of Rabanastre sits at the crossroads of trade and conflict — a jewel of the
-      desert kingdom of Dalmasca, now under the shadow of Imperial occupation.
-      Espers — beings of immense power — slumber in forgotten places, and the
-      nethicite crystals that once powered civilizations now threaten to destroy them.
-      Adventures begin in taverns. Yours begins at The Seventh Heaven.
-    narrator_hint: "Ivalice is the backdrop for everything. Reference the Mist, the political tension, and the ancient mysteries when setting atmosphere."
-    tags: ["world", "ivalice", "starter"]
+      of Stonewake sits at the crossroads of trade and conflict — a jewel of the
+      desert kingdom of Valeward, now under the shadow of Imperial occupation.
+      Eidolons — beings of immense power — slumber in forgotten places, and the
+      aetherglass crystals that once powered civilizations now threaten to destroy them.
+      Adventures begin in taverns. Yours begins at The Lantern's Rest.
+    narrator_hint: "Elarion is the backdrop for everything. Reference the Aether, the political tension, and the ancient mysteries when setting atmosphere."
+    tags: ["world", "elarion", "starter"]
 
   # ═══════════════════════════════════════════════════════════
-  #  REGION: DALMASCA
+  #  REGION: VALEWARD
   # ═══════════════════════════════════════════════════════════
 
-  - id: "lore-dalmasca"
-    name: "The Kingdom of Dalmasca"
+  - id: "lore-valeward"
+    name: "The Kingdom of Valeward"
     lore_scope: "region"
-    parent_lore_id: "lore-ivalice"
+    parent_lore_id: "lore-elarion"
     is_starter_lore: false
     cascade_down: false
     discovery_trigger: "talk"
     description: "A desert kingdom under Imperial occupation."
     content: >
-      Dalmasca was once a proud, independent kingdom ruled by the Dalmascan royal line.
-      Two years ago, the Archadian Empire invaded under the pretense of a peace treaty.
-      King Raminas was assassinated, the princess vanished, and Dalmasca became a
+      Valeward was once a proud, independent kingdom ruled by the Valewarden royal line.
+      Two years ago, the Veyr Empire invaded under the pretense of a peace treaty.
+      King Arvend was assassinated, the princess vanished, and Valeward became a
       conquered province. Now Imperial soldiers patrol the streets, taxes bleed the
       merchants dry, and the people endure with quiet defiance. But whispers of
       resistance grow louder in the back alleys, and not everyone has accepted
       the Empire's rule.
     teaser: "A desert kingdom with a troubled recent history..."
     narrator_hint: "The Imperial occupation is the central political conflict. NPCs have strong opinions about it."
-    linked_entity_ids: ["rabanastre"]
-    tags: ["region", "dalmasca", "politics", "empire"]
+    linked_entity_ids: ["stonewake"]
+    tags: ["region", "valeward", "politics", "empire"]
 
   # ═══════════════════════════════════════════════════════════
-  #  CITY: RABANASTRE
+  #  CITY: STONEWAKE
   # ═══════════════════════════════════════════════════════════
 
-  - id: "lore-rabanastre"
-    name: "Rabanastre"
+  - id: "lore-stonewake"
+    name: "Stonewake"
     lore_scope: "city"
-    parent_lore_id: "lore-dalmasca"
+    parent_lore_id: "lore-valeward"
     cascade_down: false
     discovery_trigger: "explore"
     discovery_source_id: "spawn"
-    description: "The great desert city, jewel of Dalmasca."
+    description: "The great desert city, jewel of Valeward."
     content: >
-      Rabanastre is a sprawling desert metropolis of sandstone archways, grand bazaars,
+      Stonewake is a sprawling desert metropolis of sandstone archways, grand bazaars,
       and narrow back alleys. The city is divided between the sunlit upper districts where
       Imperial officers and wealthy merchants reside, and the lower quarters where the
-      common folk scrape by. The Garamsythe Waterway runs beneath everything — an
+      common folk scrape by. The Oldwater Tunnels runs beneath everything — an
       ancient sewer system that now serves as both a trade route for smugglers and a
       highway for monsters. The city's beating heart is the town square, where news,
-      gossip, and gil flow freely.
+      gossip, and gold flow freely.
     teaser: "A great desert city you've heard stories about..."
-    narrator_hint: "Rabanastre is bustling, hot, and full of contrasts — wealth next to poverty, Imperial order next to underground chaos."
+    narrator_hint: "Stonewake is bustling, hot, and full of contrasts — wealth next to poverty, Imperial order next to underground chaos."
     linked_entity_ids: ["spawn", "town_square", "back_alley"]
-    tags: ["city", "rabanastre", "dalmasca", "desert"]
+    tags: ["city", "stonewake", "valeward", "desert"]
 
   # ═══════════════════════════════════════════════════════════
-  #  LOCATIONS IN RABANASTRE
+  #  LOCATIONS IN STONEWAKE
   # ═══════════════════════════════════════════════════════════
 
-  - id: "lore-seventh-heaven"
-    name: "The Seventh Heaven"
+  - id: "lore-lanterns-rest"
+    name: "The Lantern's Rest"
     lore_scope: "location"
-    parent_lore_id: "lore-rabanastre"
+    parent_lore_id: "lore-stonewake"
     cascade_down: false
     discovery_trigger: "explore"
     discovery_source_id: "spawn"
     description: "A bustling tavern run by a former resistance fighter."
     content: >
-      The Seventh Heaven is more than just a tavern — it's a sanctuary. Run by Tifa
-      Lockhart, a former member of the resistance group AVALANCHE, the bar serves as an
+      The Lantern's Rest is more than just a tavern — it's a sanctuary. Run by Mara
+      Vale, a former member of the resistance group Ashen Vow, the bar serves as an
       unofficial meeting point for those who oppose Imperial rule. The drinks are strong,
       the food is surprisingly good, and if you know the right words, you can access
-      information networks that reach across all of Dalmasca. A faded AVALANCHE poster
+      information networks that reach across all of Valeward. A faded Ashen Vow poster
       hangs behind the bar, half-hidden by bottles — a reminder of fights past and
       perhaps fights yet to come.
     teaser: "A tavern where the drinks come with a side of secrets..."
-    narrator_hint: "The Seventh Heaven feels warm and safe despite the world outside. Tifa's presence makes it a hub of quiet resistance."
+    narrator_hint: "The Lantern's Rest feels warm and safe despite the world outside. Mara's presence makes it a hub of quiet resistance."
     linked_entity_ids: ["spawn", "innkeeper_mara"]
-    tags: ["location", "tavern", "seventh-heaven", "avalanche"]
+    tags: ["location", "tavern", "lanterns-rest", "ashen_vow"]
 
-  - id: "lore-garamsythe"
-    name: "The Garamsythe Waterway"
+  - id: "lore-oldwater"
+    name: "The Oldwater Tunnels"
     lore_scope: "location"
-    parent_lore_id: "lore-rabanastre"
+    parent_lore_id: "lore-stonewake"
     cascade_down: false
     discovery_trigger: "explore"
     discovery_source_id: "tavern_cellar"
-    description: "Ancient sewers beneath Rabanastre, now a monster-infested smuggler highway."
+    description: "Ancient sewers beneath Stonewake, now a monster-infested smuggler highway."
     content: >
-      The Garamsythe Waterway is an ancient system of canals and tunnels beneath
-      Rabanastre, originally built to manage floodwaters from the Estersand. Over the
+      The Oldwater Tunnels is an ancient system of canals and tunnels beneath
+      Stonewake, originally built to manage floodwaters from the Estersand. Over the
       centuries it became a smuggler's route, a hiding place for fugitives, and eventually
-      a breeding ground for monsters. Giant rats, flans, and worse things lurk in the
+      a breeding ground for monsters. Giant rats, slimes, and worse things lurk in the
       dark. The Resistance uses certain passages for covert movement, though they're
       careful — the deeper sections are truly dangerous. Strange markings on the oldest
-      walls suggest the waterway predates Rabanastre itself.
+      walls suggest the waterway predates Stonewake itself.
     teaser: "Dark tunnels beneath the city where things lurk..."
     narrator_hint: "The waterway is claustrophobic, damp, and echoing. Light sources flicker. Something is always watching."
     linked_entity_ids: ["tavern_cellar"]
@@ -203,20 +203,20 @@ lore_entries:
   #  FACTIONS
   # ═══════════════════════════════════════════════════════════
 
-  - id: "lore-dalmascan-resistance"
-    name: "The Dalmascan Resistance"
+  - id: "lore-valewarden-resistance"
+    name: "The Valewarden Resistance"
     lore_scope: "faction"
-    parent_lore_id: "lore-dalmasca"
+    parent_lore_id: "lore-valeward"
     cascade_down: false
     discovery_trigger: "talk"
     discovery_source_id: "innkeeper_mara"
-    description: "Freedom fighters loyal to the memory of King Raminas."
+    description: "Freedom fighters loyal to the memory of King Arvend."
     content: >
-      The Dalmascan Resistance is a loosely organized network of freedom fighters,
-      spies, smugglers, and ordinary citizens united by one goal: liberating Dalmasca
+      The Valewarden Resistance is a loosely organized network of freedom fighters,
+      spies, smugglers, and ordinary citizens united by one goal: liberating Valeward
       from Imperial rule. They operate in cells — small groups that know only their
       immediate contacts — to prevent the Empire from rolling up the entire network
-      if one member is captured. Tifa Lockhart's Seventh Heaven serves as an unofficial
+      if one member is captured. Mara Vale's Lantern's Rest serves as an unofficial
       headquarters. The Resistance lacks the military power to challenge the Empire
       directly, so they rely on sabotage, intelligence gathering, and building alliances
       with sympathetic factions. Rumors say they're searching for something that could
@@ -224,232 +224,232 @@ lore_entries:
     teaser: "Whispers of organized resistance against the Empire..."
     narrator_hint: "The Resistance is real but cautious. NPCs won't openly discuss it unless they trust the player."
     linked_entity_ids: ["innkeeper_mara", "drunk_pete"]
-    tags: ["faction", "resistance", "dalmasca", "avalanche"]
+    tags: ["faction", "resistance", "valeward", "ashen_vow"]
 
-  - id: "lore-occuria-cult"
-    name: "The Cult of the Occuria"
+  - id: "lore-veiled_architects-cult"
+    name: "The Cult of the Veiled Architects"
     lore_scope: "faction"
-    parent_lore_id: "lore-ivalice"
+    parent_lore_id: "lore-elarion"
     cascade_down: false
     discovery_trigger: "talk"
-    description: "Zealots who worship the ancient Occuria as gods."
+    description: "Zealots who worship the ancient Veiled Architects as gods."
     content: >
-      The Cult of the Occuria is a fanatical religious order that believes the Occuria —
-      ancient, godlike beings who once shaped Ivalice's history — are the true rulers
-      of the world and must be served absolutely. They seek to awaken the Esper sealed
-      within the Pharos at Ridorana, believing this will herald the Occuria's return.
-      Their members are found throughout Ivalice, often disguised as scholars, merchants,
+      The Cult of the Veiled Architects is a fanatical religious order that believes the Veiled Architects —
+      ancient, godlike beings who once shaped Elarion's history — are the true rulers
+      of the world and must be served absolutely. They seek to awaken the Eidolon sealed
+      within the Blackspire at Stormreach, believing this will herald the Veiled Architects' return.
+      Their members are found throughout Elarion, often disguised as scholars, merchants,
       or even Imperial officers. They are willing to kill, manipulate, and sacrifice
       anything in service of their divine masters. Most people dismiss them as lunatics.
       Those who've seen their work up close know better.
     teaser: "A strange religious order with dangerous beliefs..."
     narrator_hint: "The Cult operates in the shadows. Their members seem normal until they don't. Creepy undertones."
-    tags: ["faction", "cult", "occuria", "antagonist"]
+    tags: ["faction", "cult", "veiled_architects", "antagonist"]
 
   - id: "lore-merchants-guild"
-    name: "Rabanastre Merchants' Guild"
+    name: "Stonewake Merchants' Guild"
     lore_scope: "faction"
-    parent_lore_id: "lore-rabanastre"
+    parent_lore_id: "lore-stonewake"
     cascade_down: false
     discovery_trigger: "talk"
-    description: "The shopkeepers and traders who keep Rabanastre's economy alive."
+    description: "The shopkeepers and traders who keep Stonewake's economy alive."
     content: >
-      The Merchants' Guild is the economic backbone of Rabanastre. Run by a council
+      The Merchants' Guild is the economic backbone of Stonewake. Run by a council
       of the city's wealthiest traders, they control prices, regulate trade routes,
       and maintain the Grand Bazaar. They're officially neutral in the conflict between
       the Empire and the Resistance, but in practice they'll do business with anyone
-      who has Gil. Several Moogles hold senior positions — their natural affinity for
-      commerce and bookkeeping makes them invaluable. The Guild's motto: "Gil doesn't
+      who has gold. Several Sprigs hold senior positions — their natural affinity for
+      commerce and bookkeeping makes them invaluable. The Guild's motto: "gold doesn't
       care whose pocket it came from." They charge membership fees, offer bulk discounts,
       and occasionally hire adventurers for caravan escort work.
     teaser: "A powerful trading organization in the city..."
     narrator_hint: "The Guild is pragmatic and mercenary. They respect wealth and shrewd dealing above all."
     linked_entity_ids: ["merchants_guild"]
-    tags: ["faction", "merchants", "trade", "moogle"]
+    tags: ["faction", "merchants", "trade", "sprig"]
 
   # ═══════════════════════════════════════════════════════════
   #  NPCs
   # ═══════════════════════════════════════════════════════════
 
-  - id: "lore-tifa"
-    name: "Tifa Lockhart"
+  - id: "lore-mara"
+    name: "Mara Vale"
     lore_scope: "npc"
-    parent_lore_id: "lore-dalmascan-resistance"
+    parent_lore_id: "lore-valewarden-resistance"
     cascade_down: false
     discovery_trigger: "talk"
     discovery_source_id: "innkeeper_mara"
-    description: "Bartender, martial artist, and former AVALANCHE operative."
+    description: "Bartender, martial artist, and former Ashen Vow operative."
     content: >
-      Tifa Lockhart runs The Seventh Heaven with warmth, precision, and fists that
-      could crack sandstone. A former member of the eco-resistance group AVALANCHE,
-      she came to Rabanastre after that chapter of her life ended — though she doesn't
-      talk about why. She carries a complicated history with a spiky-haired swordsman
+      Mara Vale runs The Lantern's Rest with warmth, precision, and fists that
+      could crack sandstone. A former member of the old resistance cell Ashen Vow,
+      she came to Stonewake after that chapter of her life ended — though she doesn't
+      talk about why. She carries a complicated history with a wandering swordmaster
       and a grief she keeps locked behind her smile. As a bartender, she's everyone's
-      confidant. As a fighter, she's terrifying — her Premium Heart gloves sit behind
-      the counter, always within reach. She feeds intelligence to the Dalmascan
+      confidant. As a fighter, she's terrifying — her Ironheart gloves sit behind
+      the counter, always within reach. She feeds intelligence to the Valewarden
       Resistance but isn't officially a member. Her tavern is neutral ground, and
       she enforces that with extreme prejudice.
-    teaser: "The bartender at The Seventh Heaven — seems like more than she lets on..."
-    narrator_hint: "Tifa is warm but guarded about her past. High CHA unlocks more personal details. She's observant and notices everything."
+    teaser: "The bartender at The Lantern's Rest — seems like more than she lets on..."
+    narrator_hint: "Mara is warm but guarded about her past. High CHA unlocks more personal details. She's observant and notices everything."
     linked_entity_ids: ["innkeeper_mara", "spawn"]
-    tags: ["npc", "tifa", "avalanche", "bartender", "martial-artist"]
+    tags: ["npc", "mara", "ashen_vow", "bartender", "martial-artist"]
 
-  - id: "lore-wedge"
-    name: "Wedge"
+  - id: "lore-perrin"
+    name: "Perrin"
     lore_scope: "npc"
-    parent_lore_id: "lore-dalmascan-resistance"
+    parent_lore_id: "lore-valewarden-resistance"
     cascade_down: false
     discovery_trigger: "talk"
     discovery_source_id: "drunk_pete"
-    description: "A perpetually drunk resistance member waiting for his partner Biggs to return."
+    description: "A perpetually drunk resistance member waiting for his partner Hale to return."
     content: >
-      Wedge is one half of the legendary duo Biggs & Wedge — except Biggs shipped
-      out on a mission weeks ago and hasn't come back. Since then, Wedge has been
-      drowning his worry (and his sorrows) at The Seventh Heaven's bar. He's hapless,
+      Perrin is one half of the legendary duo Hale & Perrin — except Hale shipped
+      out on a mission weeks ago and hasn't come back. Since then, Perrin has been
+      drowning his worry (and his sorrows) at The Lantern's Rest's bar. He's hapless,
       good-hearted, and terrible at keeping secrets, which is why the Resistance only
       gives him low-level assignments. He claims he once piloted an airship — a story
       that changes slightly every time he tells it. Despite his bumbling exterior,
-      Wedge is surprisingly loyal and brave when it matters. He just needs someone
+      Perrin is surprisingly loyal and brave when it matters. He just needs someone
       to believe in him.
     teaser: "A drunk regular at the tavern — seems to know people..."
-    narrator_hint: "Wedge is comic relief but has genuine heart. He accidentally drops hints about Resistance activities when drunk."
+    narrator_hint: "Perrin is comic relief but has genuine heart. He accidentally drops hints about Resistance activities when drunk."
     linked_entity_ids: ["drunk_pete", "spawn"]
-    tags: ["npc", "wedge", "biggs", "comic-relief", "resistance"]
+    tags: ["npc", "perrin", "hale", "comic-relief", "resistance"]
 
   # ═══════════════════════════════════════════════════════════
-  #  REGIONS: GOLMORE JUNGLE
+  #  REGION: GLOAMWOOD
   # ═══════════════════════════════════════════════════════════
 
-  - id: "lore-golmore"
-    name: "The Golmore Jungle"
+  - id: "lore-gloamwood"
+    name: "The Gloamwood"
     lore_scope: "region"
-    parent_lore_id: "lore-ivalice"
+    parent_lore_id: "lore-elarion"
     cascade_down: false
     discovery_trigger: "explore"
     description: "A vast primordial jungle of ancient magic and forgotten peoples."
     content: >
-      The Golmore Jungle is a trackless expanse of ancient trees, bioluminescent fungi,
-      and predatory wildlife. The Viera — a reclusive race of tall, rabbit-eared warriors
+      The Gloamwood is a trackless expanse of ancient trees, bioluminescent fungi,
+      and predatory wildlife. The Sylvar — a reclusive race of tall, rabbit-eared warriors
       — once called it home, though most have retreated deeper into the forest or left
-      entirely. The jungle is saturated with Mist, making magic unpredictable and powerful
+      entirely. The jungle is saturated with Aether, making magic unpredictable and powerful
       within its borders. Ancient ruins dot the undergrowth, remnants of a civilization
-      that predated even the Occuria. Travelers who enter without a guide rarely return.
+      that predated even the Veiled Architects. Travelers who enter without a guide rarely return.
       Those who do return speak of whispers in the canopy and lights that move with purpose.
     teaser: "A dark jungle to the south that few return from..."
-    narrator_hint: "The jungle is alive and aware. Nature here has opinions. The Mist makes everything slightly surreal."
-    linked_entity_ids: ["golmore"]
-    tags: ["region", "jungle", "viera", "mist", "dangerous"]
+    narrator_hint: "The jungle is alive and aware. Nature here has opinions. The Aether makes everything slightly surreal."
+    linked_entity_ids: ["gloamwood"]
+    tags: ["region", "jungle", "sylvar", "aether", "dangerous"]
 
   # ═══════════════════════════════════════════════════════════
-  #  REGIONS: PHAROS AT RIDORANA
+  #  REGIONS: BLACKSPIRE AT STORMREACH
   # ═══════════════════════════════════════════════════════════
 
-  - id: "lore-pharos"
-    name: "The Pharos at Ridorana"
+  - id: "lore-blackspire"
+    name: "The Blackspire at Stormreach"
     lore_scope: "region"
-    parent_lore_id: "lore-ivalice"
+    parent_lore_id: "lore-elarion"
     cascade_down: false
     discovery_trigger: "talk"
-    description: "A black tower rising from the sea, prison of an ancient Esper."
+    description: "A black tower rising from the sea, prison of an ancient Eidolon."
     content: >
-      The Pharos at Ridorana is a monolithic tower of black stone that rises from
-      the ocean south of Ivalice. Built by the Occuria in an age before recorded
+      The Blackspire at Stormreach is a monolithic tower of black stone that rises from
+      the ocean south of Elarion. Built by the Veiled Architects in an age before recorded
       history, it serves as both a beacon and a prison — within its highest chamber
-      sleeps an Esper of devastating power, sealed away because even the Occuria
+      sleeps an Eidolon of devastating power, sealed away because even the Veiled Architects
       feared what it could do. The tower is filled with traps, guardians, and puzzles
-      designed to prevent anyone from reaching the summit. The Cult of the Occuria
-      believes awakening this Esper will herald a new age. The Resistance believes
+      designed to prevent anyone from reaching the summit. The Cult of the Veiled Architects
+      believes awakening this Eidolon will herald a new age. The Resistance believes
       it could be weaponized against the Empire. Everyone agrees: it's extremely dangerous.
     teaser: "A mysterious black tower visible on the distant horizon..."
-    narrator_hint: "The Pharos is endgame content. Build dread and mystery when it's mentioned. No one who's gone inside has come back the same."
-    linked_entity_ids: ["pharos"]
-    tags: ["region", "pharos", "tower", "esper", "endgame", "occuria"]
+    narrator_hint: "The Blackspire is endgame content. Build dread and mystery when it's mentioned. No one who's gone inside has come back the same."
+    linked_entity_ids: ["blackspire"]
+    tags: ["region", "blackspire", "tower", "eidolon", "endgame", "veiled_architects"]
 
   # ═══════════════════════════════════════════════════════════
   #  HISTORY & EVENTS
   # ═══════════════════════════════════════════════════════════
 
-  - id: "lore-fall-of-dalmasca"
-    name: "The Fall of Dalmasca"
+  - id: "lore-fall-of-valeward"
+    name: "The Fall of Valeward"
     lore_scope: "event"
-    parent_lore_id: "lore-dalmasca"
+    parent_lore_id: "lore-valeward"
     cascade_down: false
     discovery_trigger: "talk"
-    description: "The night the Empire took Dalmasca and King Raminas was murdered."
+    description: "The night the Empire took Valeward and King Arvend was murdered."
     content: >
-      Two years ago, the Archadian Empire extended an offer of peace to King Raminas
-      of Dalmasca. The king traveled to Nalbina Fortress for the signing ceremony.
-      He never returned. The official Imperial account claims Dalmascan traitors
+      Two years ago, the Veyr Empire extended an offer of peace to King Arvend
+      of Valeward. The king traveled to Northgate Keep for the signing ceremony.
+      He never returned. The official Imperial account claims Valewarden traitors
       assassinated the king to provoke war. The truth, whispered in back alleys:
       the Empire orchestrated the assassination and used the chaos to justify a full
-      military occupation. Princess Ashelia, heir to the throne, was reported dead —
+      military occupation. Princess Seris, heir to the throne, was reported dead —
       but no body was ever found. The Resistance clings to the hope that she lives.
-      The anniversary of the Fall is a day of mourning in Rabanastre, observed in
+      The anniversary of the Fall is a day of mourning in Stonewake, observed in
       silence under the watchful eyes of Imperial soldiers.
     teaser: "Something terrible happened to this kingdom not long ago..."
-    narrator_hint: "The Fall is recent history and deeply emotional for Dalmascans. NPCs react strongly when it's mentioned."
-    tags: ["event", "history", "dalmasca", "empire", "assassination"]
+    narrator_hint: "The Fall is recent history and deeply emotional for Valewardens. NPCs react strongly when it's mentioned."
+    tags: ["event", "history", "valeward", "empire", "assassination"]
 
-  - id: "lore-mist"
-    name: "The Mist"
+  - id: "lore-aether"
+    name: "The Aether"
     lore_scope: "history"
-    parent_lore_id: "lore-ivalice"
+    parent_lore_id: "lore-elarion"
     cascade_down: false
     discovery_trigger: "talk"
-    description: "The invisible magical energy that permeates all of Ivalice."
+    description: "The invisible magical energy that permeates all of Elarion."
     content: >
-      The Mist is the lifeblood of magic in Ivalice. It flows through the air like
+      The Aether is the lifeblood of magic in Elarion. It flows through the air like
       an invisible current, concentrating in certain areas — jungles, ruins, and
-      places where the earth is thin. Spellcasters draw upon the Mist to fuel their
-      magic, and Mist-dense areas amplify magical effects (sometimes dangerously).
-      Nethicite — a rare crystal — can absorb and store Mist, making it incredibly
-      valuable and incredibly dangerous. The ancient Occuria crafted nethicite as tools
-      of control. The Empire now seeks it as a weapon. In high concentrations, Mist
+      places where the earth is thin. Spellcasters draw upon the Aether to fuel their
+      magic, and Aether-dense areas amplify magical effects (sometimes dangerously).
+      Aetherglass — a rare crystal — can absorb and store Aether, making it incredibly
+      valuable and incredibly dangerous. The ancient Veiled Architects crafted aetherglass as tools
+      of control. The Empire now seeks it as a weapon. In high concentrations, Aether
       can warp reality: animals grow monstrous, the dead stir, and the boundaries
       between worlds grow thin.
     teaser: "A strange energy that seems to power magic in this world..."
-    narrator_hint: "The Mist is everywhere but invisible to most. Describe it as a shimmer, a tingling, or a pressure in the air when it's relevant."
-    tags: ["history", "mist", "magic", "nethicite", "occuria"]
+    narrator_hint: "The Aether is everywhere but invisible to most. Describe it as a shimmer, a tingling, or a pressure in the air when it's relevant."
+    tags: ["history", "aether", "magic", "aetherglass", "veiled_architects"]
 
-  - id: "lore-occuria"
-    name: "The Occuria"
+  - id: "lore-veiled_architects"
+    name: "The Veiled Architects"
     lore_scope: "history"
-    parent_lore_id: "lore-ivalice"
+    parent_lore_id: "lore-elarion"
     cascade_down: false
     discovery_trigger: "quest"
-    description: "Ancient godlike beings who once shaped the destiny of Ivalice."
+    description: "Ancient godlike beings who once shaped the destiny of Elarion."
     content: >
-      The Occuria are ancient, incorporeal beings who existed before mortal races
-      walked Ivalice. They shaped history from the shadows — creating the Espers
-      as servants, crafting nethicite to control the flow of Mist, and manipulating
-      mortal rulers as puppets. When a mortal dared defy them, the Occuria sealed
-      their most powerful Esper in the Pharos and withdrew from the world. Or so
-      the stories say. Some scholars believe the Occuria never truly left — that
+      The Veiled Architects are ancient, incorporeal beings who existed before mortal races
+      walked Elarion. They shaped history from the shadows — creating the Eidolons
+      as servants, crafting aetherglass to control the flow of Aether, and manipulating
+      mortal rulers as puppets. When a mortal dared defy them, the Veiled Architects sealed
+      their most powerful Eidolon in the Blackspire and withdrew from the world. Or so
+      the stories say. Some scholars believe the Veiled Architects never truly left — that
       they still whisper in the ears of the powerful, nudging history toward their
       unknowable ends. The Cult worships them. The wise fear them.
     teaser: "Legends speak of ancient beings who shaped the world..."
-    narrator_hint: "The Occuria should feel Lovecraftian — vast, alien, and beyond mortal comprehension. They are not benevolent."
-    tags: ["history", "occuria", "gods", "ancient", "esper", "deep-lore"]
+    narrator_hint: "The Veiled Architects should feel Lovecraftian — vast, alien, and beyond mortal comprehension. They are not benevolent."
+    tags: ["history", "veiled_architects", "gods", "ancient", "eidolon", "deep-lore"]
 
-  - id: "lore-espers"
-    name: "The Espers"
+  - id: "lore-eidolons"
+    name: "The Eidolons"
     lore_scope: "history"
-    parent_lore_id: "lore-occuria"
+    parent_lore_id: "lore-veiled_architects"
     cascade_down: false
     discovery_trigger: "quest"
-    description: "Powerful beings created by the Occuria, now sealed across Ivalice."
+    description: "Powerful beings created by the Veiled Architects, now sealed across Elarion."
     content: >
-      Espers are beings of immense magical power, created by the Occuria as servants
-      and weapons. When the Espers rebelled — seeking freedom from their creators —
-      the Occuria crushed them and sealed each one in a prison of stone and magic.
-      These prisons are scattered across Ivalice: in forgotten ruins, deep caverns,
-      and the depths of the Pharos. An Esper can be freed by a mortal of sufficient
-      power and will, binding the Esper to their service. This is the foundation
-      of summoning magic. But the most powerful Esper — the one sealed in the Pharos —
+      Eidolons are beings of immense magical power, created by the Veiled Architects as servants
+      and weapons. When the Eidolons rebelled — seeking freedom from their creators —
+      the Veiled Architects crushed them and sealed each one in a prison of stone and magic.
+      These prisons are scattered across Elarion: in forgotten ruins, deep caverns,
+      and the depths of the Blackspire. An Eidolon can be freed by a mortal of sufficient
+      power and will, binding the Eidolon to their service. This is the foundation
+      of summoning magic. But the most powerful Eidolon — the one sealed in the Blackspire —
       has never been freed. There's a reason for that.
     teaser: "Ancient creatures of incredible power, locked away for centuries..."
-    narrator_hint: "Espers are endgame mysteries. Build intrigue and dread. Each one has a tragic backstory."
-    tags: ["history", "espers", "summoning", "occuria", "power"]
+    narrator_hint: "Eidolons are endgame mysteries. Build intrigue and dread. Each one has a tragic backstory."
+    tags: ["history", "eidolons", "summoning", "veiled_architects", "power"]
 
   # ═══════════════════════════════════════════════════════════
   #  CRYSTAL QUESTLINE — First-Visit Discovery Lore
@@ -458,13 +458,13 @@ lore_entries:
   - id: "lore-crystals"
     name: "The Elemental Crystals"
     lore_scope: "history"
-    parent_lore_id: "lore-ivalice"
+    parent_lore_id: "lore-elarion"
     cascade_down: false
     discovery_trigger: "explore"
     discovery_source_id: "city_hall"
-    description: "The four elemental Crystals that once protected Dalmasca from the Void."
+    description: "The four elemental Crystals that once protected Valeward from the Void."
     content: >
-      Long before the Archadian Empire, long before the Occuria withdrew from mortal
+      Long before the Veyr Empire, long before the Veiled Architects withdrew from mortal
       affairs, four elemental Crystals were set in place to shield the world from the
       Void — a dimension of absolute nothingness that presses against reality like
       dark water against glass. The Water Crystal commanded the tides and the healing
@@ -474,11 +474,11 @@ lore_entries:
       of the faithful to the heavens. Together, they formed a barrier that kept the
       Void at bay. But the Crystals are fading. Their guardians sleep. And in the
       darkness beneath the Crystal Sanctum, something is already pushing through.
-      Marquis Ondore believes that recovering and reuniting the four Crystals is
-      Dalmasca's only hope — and perhaps the world's.
+      Marquis Odran believes that recovering and reuniting the four Crystals is
+      Valeward's only hope — and perhaps the world's.
     teaser: "Ancient crystals that protected the world from an unspeakable force..."
     narrator_hint: "The Crystals are the central MacGuffin of the main questline. Reference them with reverence and urgency. Their light is fading and the consequences are existential."
-    linked_entity_ids: ["city_hall", "marquis_ondore"]
+    linked_entity_ids: ["city_hall", "marquis_odran"]
     tags: ["history", "crystals", "void", "main-quest", "elemental"]
 
   - id: "lore-water-temple"
@@ -488,23 +488,23 @@ lore_entries:
     cascade_down: false
     discovery_trigger: "explore"
     discovery_source_id: "water_temple_entrance"
-    description: "An ancient temple beneath the Garamsythe Waterway, home to the Water Crystal."
+    description: "An ancient temple beneath the Oldwater Tunnels, home to the Water Crystal."
     content: >
-      Beneath the familiar damp of the Garamsythe Waterway lies something far older —
+      Beneath the familiar damp of the Oldwater Tunnels lies something far older —
       a temple carved from living stone by hands that understood water the way a poet
-      understands words. The Water Temple predates Rabanastre by millennia, built in
+      understands words. The Water Temple predates Stonewake by millennia, built in
       an age when the Crystals were first set in place. Its halls are flooded not by
-      accident but by design — the water itself is sacred, infused with elemental Mist
-      that gives it a faint blue luminescence. Leviathan, the Tidal Lord, was bound
-      here as the Crystal's eternal guardian. The Sahagin who patrol the depths are
+      accident but by design — the water itself is sacred, infused with elemental Aether
+      that gives it a faint blue luminescence. Tidewrought, the Tidal Lord, was bound
+      here as the Crystal's eternal guardian. The Reefkin who patrol the depths are
       not monsters — they are the temple's original caretakers, preserved by the
       Crystal's power long after their civilization crumbled to dust. The temple's
       deepest sanctum holds the Water Crystal on a coral altar, and the sea itself
       answers to the guardian who watches over it.
     teaser: "Ancient flooded tunnels glowing with unnatural blue light..."
-    narrator_hint: "The Water Temple is serene and dangerous. The water is sacred. Leviathan is proud, not evil. This is a place of ancient power, not corruption."
+    narrator_hint: "The Water Temple is serene and dangerous. The water is sacred. Tidewrought is proud, not evil. This is a place of ancient power, not corruption."
     linked_entity_ids: ["water_temple_entrance", "water_temple_depths", "water_temple_sanctum"]
-    tags: ["location", "dungeon", "water-temple", "crystal", "leviathan"]
+    tags: ["location", "dungeon", "water-temple", "crystal", "tidewrought"]
 
   - id: "lore-fire-temple"
     name: "The Fire Temple"
@@ -513,9 +513,9 @@ lore_entries:
     cascade_down: false
     discovery_trigger: "explore"
     discovery_source_id: "volcanic_path"
-    description: "A volcanic temple east of the Feywood, forged in obsidian and guarded by Ifrit."
+    description: "A volcanic temple east of the Emberwood, forged in obsidian and guarded by Cindermaw."
     content: >
-      East of the Feywood, where the jungle surrenders to scorched earth and lava
+      East of the Emberwood, where the jungle surrenders to scorched earth and lava
       fields, an obsidian temple rises from the flank of an active volcano. The Fire
       Temple was built — or perhaps grown — from the volcanic rock itself, its halls
       shaped by the same elemental force that the Fire Crystal embodies. Unlike the
@@ -524,14 +524,14 @@ lore_entries:
       that serve as both illumination and defense. The Flame Knights who guard the
       upper halls were once mortal warriors who sought to claim the Crystal and
       failed — their punishment is eternal service, their armor fused to charred bone
-      by Ifrit's contempt. The Infernal Lord himself waits in the temple's core, a
-      magma chamber where the Fire Crystal floats above a basalt altar. Ifrit does
+      by Cindermaw's contempt. The Infernal Lord himself waits in the temple's core, a
+      magma chamber where the Fire Crystal floats above a basalt altar. Cindermaw does
       not guard the Crystal out of duty — he guards it because the flame belongs to
       him, and he does not share.
     teaser: "A temple of obsidian and flame built into a living volcano..."
-    narrator_hint: "The Fire Temple is hostile and aggressive. Everything burns. Ifrit is fury personified. The theme is passion, rage, and the destructive power of unchecked fire."
+    narrator_hint: "The Fire Temple is hostile and aggressive. Everything burns. Cindermaw is fury personified. The theme is passion, rage, and the destructive power of unchecked fire."
     linked_entity_ids: ["volcanic_path", "fire_temple_entrance", "fire_temple_core"]
-    tags: ["location", "dungeon", "fire-temple", "crystal", "ifrit", "volcano"]
+    tags: ["location", "dungeon", "fire-temple", "crystal", "cindermaw", "volcano"]
 
   - id: "lore-earth-temple"
     name: "The Earth Temple"
@@ -540,24 +540,24 @@ lore_entries:
     cascade_down: false
     discovery_trigger: "explore"
     discovery_source_id: "mountain_trail"
-    description: "A mountain temple east of the Pharos, where Titan guards the Earth Crystal in stone."
+    description: "A mountain temple east of the Blackspire, where Stonegrief guards the Earth Crystal in stone."
     content: >
-      The mountain trail east of the Pharos ascends through punishing switchbacks
+      The mountain trail east of the Blackspire ascends through punishing switchbacks
       to a temple that is as much a part of the mountain as the stone itself. The
-      Earth Temple was not built in the conventional sense — it was shaped by Titan,
+      Earth Temple was not built in the conventional sense — it was shaped by Stonegrief,
       the Earthshaker, who carved its halls from living bedrock with the patience of
       geological ages. Crystal veins thread through the walls like luminous arteries,
       and the air hums with a subsonic vibration — the mountain's heartbeat, regulated
       by the Earth Crystal. The temple's innermost chamber is a natural cavern of
       impossible beauty, where formations of amethyst, emerald, and raw diamond grow
-      in geometries that defy nature. Titan is the oldest and most patient of the four
+      in geometries that defy nature. Stonegrief is the oldest and most patient of the four
       guardians. He does not rage, he does not rush. He endures. And he has been
       waiting a very, very long time for someone worthy to claim the Crystal he
       protects. He has not yet been disappointed. That is not a compliment.
     teaser: "An ancient temple built into the bones of a mountain..."
-    narrator_hint: "The Earth Temple is solid, ancient, and humbling. Titan is patience incarnate. The theme is endurance, permanence, and the weight of ages."
+    narrator_hint: "The Earth Temple is solid, ancient, and humbling. Stonegrief is patience incarnate. The theme is endurance, permanence, and the weight of ages."
     linked_entity_ids: ["mountain_trail", "earth_temple_entrance", "earth_temple_heart"]
-    tags: ["location", "dungeon", "earth-temple", "crystal", "titan", "mountain"]
+    tags: ["location", "dungeon", "earth-temple", "crystal", "stonegrief", "mountain"]
 
   - id: "lore-wind-temple"
     name: "The Wind Temple"
@@ -566,14 +566,14 @@ lore_entries:
     cascade_down: false
     discovery_trigger: "explore"
     discovery_source_id: "skyward_path"
-    description: "A floating temple above the clouds near Eruyt Village, where Garuda guards the Wind Crystal."
+    description: "A floating temple above the clouds near Elderbough Village, where Stormvein guards the Wind Crystal."
     content: >
-      High above Eruyt Village, past a spiraling path through the canopy and into
+      High above Elderbough Village, past a spiraling path through the canopy and into
       open sky, the Wind Temple floats among the clouds — held aloft by the same
       elemental force that the Wind Crystal embodies. The temple is a marvel of
       impossible architecture: bridges of solidified air, towers of white marble
       thinner than bone yet stronger than steel, and wind chimes of crystal and
-      mythril that sing an eternal melody. Garuda, the Storm Empress, rules this
+      mythril that sing an eternal melody. Stormvein, the Storm Empress, rules this
       domain with capricious fury. She is the youngest and most volatile of the
       four guardians — vain, theatrical, and delighted by destruction. The Sylphs
       who serve her are minor wind spirits given form by the temple's magic, and
@@ -582,9 +582,9 @@ lore_entries:
       note so pure it resonates in the chest. Those who wish to claim it must match
       the storm — and survive the fall if they cannot.
     teaser: "A temple floating among the clouds, singing with wind and light..."
-    narrator_hint: "The Wind Temple is beautiful, vertiginous, and dangerous. Garuda is theatrical and vain. The theme is freedom, speed, and the terrible beauty of the storm."
+    narrator_hint: "The Wind Temple is beautiful, vertiginous, and dangerous. Stormvein is theatrical and vain. The theme is freedom, speed, and the terrible beauty of the storm."
     linked_entity_ids: ["skyward_path", "wind_temple_entrance", "wind_temple_apex"]
-    tags: ["location", "dungeon", "wind-temple", "crystal", "garuda", "sky"]
+    tags: ["location", "dungeon", "wind-temple", "crystal", "stormvein", "sky"]
 
   - id: "lore-the-void"
     name: "The Void"
@@ -599,17 +599,17 @@ lore_entries:
       nothingness that exists in the spaces between realities, pressing against the
       walls of the world like dark water against glass. When the elemental Crystals
       were strong, they held the Void at bay. As they faded, the barrier weakened,
-      and something on the other side began to push through. Exdeath — once a tree
-      in the Great Forest of Moore, into which countless evil souls were sealed until
+      and something on the other side began to push through. Nullthorn — once a tree
+      in the Witherwood, into which countless evil souls were sealed until
       the accumulated darkness achieved sentience — seeks to merge the Void with
       reality, reducing all of existence to the beautiful simplicity of nothing.
       The rift beneath the Crystal Sanctum is his doorway. Within the Void, the
       laws of physics are suggestions at best. Space folds. Time stutters. The
       dead walk alongside the living, and the walls are made of shattered memories
       from worlds already consumed. At its heart sits the Throne of Nothingness,
-      and upon it, Exdeath waits — patient, philosophical, and utterly convinced
+      and upon it, Nullthorn waits — patient, philosophical, and utterly convinced
       that the end of everything is an act of mercy.
     teaser: "A crack in reality where the laws of existence have been revoked..."
-    narrator_hint: "The Void is the endgame. It should feel existentially threatening — not just dangerous, but wrong on a fundamental level. Exdeath is the final boss and a genuine philosophical threat. The theme is nothingness versus existence, despair versus hope."
+    narrator_hint: "The Void is the endgame. It should feel existentially threatening — not just dangerous, but wrong on a fundamental level. Nullthorn is the final boss and a genuine philosophical threat. The theme is nothingness versus existence, despair versus hope."
     linked_entity_ids: ["void_rift", "void_corridor", "void_throne"]
-    tags: ["location", "dungeon", "void", "final-dungeon", "exdeath", "endgame"]
+    tags: ["location", "dungeon", "void", "final-dungeon", "nullthorn", "endgame"]

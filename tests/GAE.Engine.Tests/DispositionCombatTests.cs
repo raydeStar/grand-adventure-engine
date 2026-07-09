@@ -157,6 +157,25 @@ public class DispositionCombatTests
         Assert.DoesNotContain("surrenders", result.MechanicalSummary, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task BossArenaNpc_DoesNotSurrenderWhenBadlyWounded()
+    {
+        var npc = CreateHostileNpc("Nullthorn", emotion: "hostile", intensity: 90, hp: 4, maxHp: 20);
+        npc.DispositionState.Baseline = 65;
+        var state = await CreateCombatStateAsync(npc, environmentTags: ["boss_arena"]);
+        await SetupCombatAsync(state, npc);
+
+        var dice = CreateCombatDice(attackTotal: 15, damageTotal: 1, goldRoll: 10);
+        var engine = CreateEngine(state, dice.Object);
+
+        var action = engine.ParseCommand(PlayerId, "attack nullthorn");
+        var result = await engine.ProcessActionAsync(PlayerId, action);
+
+        Assert.True(result.Success);
+        Assert.DoesNotContain("surrenders", result.MechanicalSummary, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("flees", result.MechanicalSummary, StringComparison.OrdinalIgnoreCase);
+    }
+
     // ═══════════════════════════════════════════════════════════════════
     //  NPC Morale — Flee
     // ═══════════════════════════════════════════════════════════════════
@@ -405,7 +424,9 @@ public class DispositionCombatTests
     }
 
     private static async Task<InMemoryStateManager> CreateCombatStateAsync(
-        Npc enemy, bool npcStartsHostile = true)
+        Npc enemy,
+        bool npcStartsHostile = true,
+        IEnumerable<string>? environmentTags = null)
     {
         enemy.IsHostile = npcStartsHostile;
         var room = new Room
@@ -414,6 +435,7 @@ public class DispositionCombatTests
             Name = "The Arena",
             Description = "A stone arena for combat.",
             Npcs = [enemy],
+            EnvironmentTags = environmentTags?.ToList() ?? [],
             Exits = new Dictionary<string, string> { ["north"] = "corridor" }
         };
 

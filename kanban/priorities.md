@@ -1,5 +1,9 @@
 # Task Priorities
 
+Current note (2026-04-23): this file is partially stale relative to the codebase.
+Use [docs/V1-LAUNCH-SCOPE.md](../docs/V1-LAUNCH-SCOPE.md) as the source of truth
+for launch scope and finishing priorities.
+
 Work through these in order. Each group should be finished before moving to the next, but within a group you can jump around based on what you feel like tackling.
 
 ---

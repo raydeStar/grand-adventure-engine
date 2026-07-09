@@ -38,6 +38,7 @@ const PLAYER_SELECT_IDS = [
 
 const UI = {
   _roomContext: null,
+  _creationOptions: null,
 
   $(id) {
     return document.getElementById(id);
@@ -55,6 +56,8 @@ const UI = {
     const form = this.$('create-form');
     form.classList.toggle('hidden', !show);
     if (show) {
+      this.updateCreationDestinationMode(this.$('char-destination-mode')?.value || 'world');
+      this.refreshCreationDestinationPreview();
       this.$('char-name').focus();
     }
   },
@@ -62,6 +65,73 @@ const UI = {
   showPlayerSelect(show) {
     const panel = this.$('player-select-panel');
     if (panel) panel.classList.toggle('hidden', !show);
+  },
+
+  populateCreationOptions(options) {
+    this._creationOptions = options || { worlds: [], blindStorylines: [], defaultWorldId: 'default-world' };
+
+    const worlds = this._creationOptions.worlds || [];
+    const blindStorylines = this._creationOptions.blindStorylines || [];
+    const defaultWorldId = this._creationOptions.defaultWorldId || 'default-world';
+
+    const worldSelect = this.$('char-world');
+    if (worldSelect) {
+      const previousWorldId = worldSelect.value;
+      worldSelect.innerHTML = worlds.length
+        ? worlds.map((world) => `<option value="${this.esc(world.id)}">${this.esc(world.name)}</option>`).join('')
+        : '<option value="">No worlds available</option>';
+
+      const preferredWorldId = worlds.some((world) => world.id === previousWorldId)
+        ? previousWorldId
+        : worlds.some((world) => world.id === defaultWorldId)
+          ? defaultWorldId
+          : (worlds[0]?.id || '');
+      worldSelect.value = preferredWorldId;
+    }
+
+    const blindSelect = this.$('char-blind-storyline');
+    if (blindSelect) {
+      const previousStorylineId = blindSelect.value;
+      blindSelect.innerHTML = blindStorylines.length
+        ? blindStorylines.map((storyline) => `<option value="${this.esc(storyline.id)}">${this.esc(storyline.name)}</option>`).join('')
+        : '<option value="">No Blind templates available</option>';
+
+      if (blindStorylines.length > 0) {
+        blindSelect.value = blindStorylines.some((storyline) => storyline.id === previousStorylineId)
+          ? previousStorylineId
+          : blindStorylines[0].id;
+      }
+    }
+
+    this.updateCreationDestinationMode(this.$('char-destination-mode')?.value || 'world');
+    this.refreshCreationDestinationPreview();
+  },
+
+  updateCreationDestinationMode(mode) {
+    this.$('char-world-group')?.classList.toggle('hidden', mode !== 'world');
+    this.$('char-blind-group')?.classList.toggle('hidden', mode !== 'blind');
+    this.refreshCreationDestinationPreview();
+  },
+
+  refreshCreationDestinationPreview() {
+    const preview = this.$('char-destination-preview');
+    if (!preview) return;
+
+    const mode = this.$('char-destination-mode')?.value || 'world';
+    if (mode === 'blind') {
+      const storylineId = this.$('char-blind-storyline')?.value || '';
+      const storyline = (this._creationOptions?.blindStorylines || []).find((item) => item.id === storylineId);
+      preview.textContent = storyline
+        ? `${storyline.setting}. Tone: ${storyline.tone}. Theme: ${storyline.theme}.`
+        : 'Choose a Blind Adventure template to begin with an authored scenario.';
+      return;
+    }
+
+    const worldId = this.$('char-world')?.value || '';
+    const world = (this._creationOptions?.worlds || []).find((item) => item.id === worldId);
+    preview.textContent = world
+      ? (world.characterCreationIntro || world.description || `Begin in ${world.name}.`)
+      : 'Choose a world to decide where this character enters the story.';
   },
 
   setResumeMessage(message, tone = 'info') {
@@ -188,6 +258,10 @@ const UI = {
   },
 
   setUserCommandState(enabled, isAuthenticated = true) {
+    if (enabled && this._streamNode) {
+      return;
+    }
+
     this.$('command-input').disabled = !enabled;
     this.$('command-submit').disabled = !enabled;
     this.$('command-input').placeholder = enabled
@@ -275,6 +349,9 @@ const UI = {
     this.renderRoom(null);
     this.renderStatBar(null);
     html('story-log', '');
+    this._lastStoryCount = 0;
+    this._lastStorySignature = '';
+    this._renderedActionIds.clear();
     this.setUserCommandState(false, isAuthenticated);
     this.showPlayerSelect(true);
   },
@@ -291,6 +368,7 @@ const UI = {
     set('header-player', `${player.name} | Lv.${player.level} ${player.race} ${player.class}`);
     set('char-title', player.name);
     set('char-meta', `${player.race} ${player.class} | Room ${player.currentRoomId}`);
+    this.showPlayerSelect(false);
     this.setUserCommandState(true, true);
 
     this.setBar('hp-bar', 'hp-text', player.hp, player.maxHp);
@@ -380,46 +458,44 @@ const UI = {
   },
 
   _lastStoryCount: 0,
+  _lastStorySignature: '',
   _renderedActionIds: new Set(),
 
   renderStoryLog(entries) {
     const log = this.$('story-log');
+    if ((this._streamNode && log.contains(this._streamNode))
+      || (this._pendingNode && log.contains(this._pendingNode))) {
+      return;
+    }
+
     if (!entries.length) {
       log.innerHTML = '<div class="empty-state">No story recorded yet.</div>';
       this._lastStoryCount = 0;
+      this._lastStorySignature = '';
       this._renderedActionIds.clear();
       return;
     }
 
+    const nextStorySignature = this._getStorySignature(entries);
+
     // Skip rebuild when entry count has not changed (prevents re-animation and flash)
-    if (this._lastStoryCount === entries.length && log.querySelector('.story-entry')) {
+    if (this._lastStoryCount === entries.length
+      && this._lastStorySignature === nextStorySignature
+      && log.querySelector('.story-entry')) {
+      return;
+    }
+
+    const serverIds = entries.map((entry) => entry.actionId || entry.id).filter(Boolean);
+    const serverEntriesAlreadyRendered = serverIds.length === entries.length
+      && serverIds.every((id) => this._renderedActionIds.has(id));
+    if (serverEntriesAlreadyRendered && log.querySelector('.story-entry')) {
+      this._lastStoryCount = entries.length;
+      this._lastStorySignature = nextStorySignature;
       return;
     }
 
     this._lastStoryCount = entries.length;
-
-    // Preserve any DOM nodes for entries we already appended via appendStoryEntry.
-    // Collect the actionIds currently in the log so we can avoid duplicating them.
-    const existingIds = new Set();
-    log.querySelectorAll('[data-action-id]').forEach((node) => {
-      existingIds.add(node.dataset.actionId);
-    });
-
-    // If the log already has entries that match the server data, skip the full rebuild
-    // to avoid the flash. Only rebuild if we have nothing rendered yet.
-    if (existingIds.size > 0) {
-      // Reconcile: add any entries from the server that we don't already have
-      const reversed = [...entries].reverse();
-      for (const entry of reversed) {
-        const id = entry.actionId || entry.id;
-        if (id && existingIds.has(id)) continue;
-        // This entry wasn't rendered locally — prepend it at the correct position
-        // For simplicity, just skip the rebuild entirely when we already have content.
-        // The local append path keeps the log accurate, and the count guard above
-        // will prevent re-entry once counts align.
-      }
-      return;
-    }
+    this._lastStorySignature = nextStorySignature;
 
     log.innerHTML = '';
     this._renderedActionIds.clear();
@@ -433,6 +509,7 @@ const UI = {
 
   appendStoryEntry(entry, tone) {
     const log = this.$('story-log');
+    this.endPendingAction(); // the real entry has arrived — clear the "writing" indicator
     if (log.querySelector('.empty-state')) {
       log.innerHTML = '';
     }
@@ -446,6 +523,78 @@ const UI = {
 
     // Keep _lastStoryCount in sync so renderStoryLog won't full-rebuild
     this._lastStoryCount++;
+  },
+
+  /* ── "Narrator is writing" indicator ──────────────────────────────────
+     The server blocks until the whole narration is generated, so without
+     this the screen sits dead after a command. We echo the command at once
+     and show a living indicator (rotating flavor + pulsing dots) so the
+     player can see the world is responding. Cleared when the entry lands. */
+  _pendingNode: null,
+  _pendingTimer: null,
+  _pendingPhrases: [
+    'the narrator considers your move',
+    'the world responds',
+    'ink dries on the page',
+    'consulting the threads of fate',
+    'weaving the next moment'
+  ],
+
+  beginPendingAction(commandText) {
+    const log = this.$('story-log');
+    if (!log) return;
+    if (log.querySelector('.empty-state')) log.innerHTML = '';
+    this.endPendingAction();
+
+    const node = document.createElement('div');
+    node.className = 'story-entry pending fade-slide-in';
+    let html = '';
+    if (commandText) html += `<div class="story-command-line">&gt; ${this.esc(commandText)}</div>`;
+    html += '<div class="story-pending" aria-live="polite">'
+      + '<span class="pending-label"></span>'
+      + '<span class="pending-dots"><i></i><i></i><i></i></span>'
+      + '</div>';
+    node.innerHTML = html;
+    log.appendChild(node);
+    this._pendingNode = node;
+    log.scrollTop = log.scrollHeight;
+
+    const label = node.querySelector('.pending-label');
+    if (label) {
+      const phrases = this._pendingPhrases;
+      let i = 0;
+      label.textContent = phrases[0];
+      this._pendingTimer = setInterval(() => {
+        i = (i + 1) % phrases.length;
+        label.textContent = phrases[i];
+      }, 1700);
+    }
+  },
+
+  endPendingAction() {
+    if (this._pendingTimer) { clearInterval(this._pendingTimer); this._pendingTimer = null; }
+    if (this._pendingNode && this._pendingNode.parentNode) {
+      this._pendingNode.parentNode.removeChild(this._pendingNode);
+    }
+    this._pendingNode = null;
+  },
+
+  _getStorySignature(entries) {
+    return (entries || []).map((entry) => {
+      const id = entry.actionId || entry.id;
+      if (id) return `id:${id}`;
+
+      const timestamp = entry.timestamp || entry.createdAt || entry.occurredAt || '';
+      const command = entry.command || entry.rawInput || entry.input || '';
+      const narration = entry.narration || '';
+      const mechanical = entry.mechanicalSummary || '';
+      return [
+        timestamp,
+        command,
+        narration.slice(0, 80),
+        mechanical.slice(0, 80)
+      ].join(':');
+    }).join('|');
   },
 
   _appendStoryNode(entry, tone, animate) {
@@ -552,6 +701,7 @@ const UI = {
 
   _streamTimer: null,
   _streamNode: null,
+  _finishStreaming: null,
 
   _startStreaming(parentNode, text, trailingHtml) {
     // Cancel any previous stream
@@ -572,10 +722,11 @@ const UI = {
     parentNode.appendChild(narrationDiv);
 
     let charIndex = 0;
-    const escaped = this.esc(text);
     const log = this.$('story-log');
     const input = this.$('command-input');
     const submit = this.$('command-submit');
+    const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+    const characters = Array.from(text);
 
     // Disable input while streaming
     if (input) input.disabled = true;
@@ -589,6 +740,7 @@ const UI = {
         this._streamTimer = null;
       }
       this._streamNode = null;
+      this._finishStreaming = null;
 
       // Show full text with formatting
       textSpan.innerHTML = UI.formatNarration(text);
@@ -612,6 +764,7 @@ const UI = {
       if (submit) submit.disabled = false;
       if (log) log.scrollTop = log.scrollHeight;
     };
+    this._finishStreaming = finishStream;
 
     // Click-to-skip on the narration node
     const skipHandler = () => {
@@ -622,19 +775,25 @@ const UI = {
     parentNode.style.cursor = 'pointer';
 
     const tick = () => {
-      if (charIndex < escaped.length) {
-        // Advance 1-3 chars per tick for natural feel
-        const chunk = Math.min(escaped.length - charIndex, 1 + Math.floor(Math.random() * 2));
+      if (charIndex < characters.length) {
+        // Reveal enough words to feel alive without making long narrator turns drag.
+        const perTick = Math.max(1, Math.ceil(characters.length / 280));
+        const chunk = Math.min(characters.length - charIndex, perTick + Math.floor(Math.random() * 2));
         charIndex += chunk;
-        textSpan.textContent = text.slice(0, charIndex);
+        textSpan.textContent = characters.slice(0, charIndex).join('');
         if (log) log.scrollTop = log.scrollHeight;
-        this._streamTimer = setTimeout(tick, 18);
+        this._streamTimer = setTimeout(tick, 22);
       } else {
         finishStream();
         parentNode.removeEventListener('click', skipHandler);
         parentNode.style.cursor = '';
       }
     };
+
+    if (prefersReducedMotion) {
+      finishStream();
+      return;
+    }
 
     this._streamTimer = setTimeout(tick, 18);
   },
@@ -644,15 +803,9 @@ const UI = {
       clearTimeout(this._streamTimer);
       this._streamTimer = null;
     }
-    // If there's a streaming node, instantly complete it
-    if (this._streamNode) {
-      const cursor = this._streamNode.querySelector('.cursor-blink');
-      if (cursor) cursor.remove();
-      const textSpan = this._streamNode.querySelector('.streaming-text');
-      if (textSpan) {
-        // Already has partial text — leave it as-is (full text was set)
-      }
-      this._streamNode = null;
+    if (this._finishStreaming) {
+      this._finishStreaming();
+      return;
     }
     // Re-enable input in case it was locked
     const input = this.$('command-input');
@@ -1745,37 +1898,37 @@ const UI = {
 
     if (!player) {
       bar.innerHTML =
-        '<span class="stat-label">HP</span> <span class="stat-hp stat-empty">\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591</span> <span class="stat-hp">0/0</span>' +
-        '<span class="stat-sep"> \u2502 </span>' +
-        '<span class="stat-label">MP</span> <span class="stat-mp stat-empty">\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591</span> <span class="stat-mp">0/0</span>' +
-        '<span class="stat-sep"> \u2502 </span>' +
-        '<span class="stat-label">XP</span> <span class="stat-xp stat-empty">\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591</span> <span class="stat-xp">0/100</span>' +
-        '<span class="stat-sep"> \u2502 </span>' +
-        '<span class="stat-gold">Gold:0</span>';
+        this._gauge('HP', 0, 0, 'hp') +
+        this._gauge('MP', 0, 0, 'mp') +
+        this._gauge('XP', 0, 100, 'xp') +
+        '<span class="hud-chip hud-gold">\u25c8 0</span>' +
+        '<span class="hud-chip hud-level">LV 1</span>';
       return;
     }
 
-    const hp = this._blockBar(player.hp, player.maxHp, 'stat-hp');
-    const mp = this._blockBar(player.mp, player.maxMp, 'stat-mp');
     const xpGoal = Math.max(100, player.level * 100);
-    const xp = this._blockBar(player.xp, xpGoal, 'stat-xp');
-    const sep = '<span class="stat-sep"> \u2502 </span>';
-
     bar.innerHTML =
-      `<span class="stat-label">HP</span> ${hp} <span class="stat-hp">${player.hp}/${player.maxHp}</span>${sep}` +
-      `<span class="stat-label">MP</span> ${mp} <span class="stat-mp">${player.mp}/${player.maxMp}</span>${sep}` +
-      `<span class="stat-label">XP</span> ${xp} <span class="stat-xp">${player.xp}/${xpGoal}</span>${sep}` +
-      `<span class="stat-gold">Gold:${player.gold}</span>${sep}` +
-      `<span class="stat-level">Lv.${player.level}</span>`;
+      this._gauge('HP', player.hp, player.maxHp, 'hp') +
+      this._gauge('MP', player.mp, player.maxMp, 'mp') +
+      this._gauge('XP', player.xp, xpGoal, 'xp') +
+      `<span class="hud-chip hud-gold">\u25c8 ${player.gold}</span>` +
+      `<span class="hud-chip hud-level">LV ${player.level}</span>`;
   },
 
-  _blockBar(current, max, cssClass, width = 10) {
+  // A glowing HUD gauge: label + fillable track + numeric readout.
+  // Low HP gets a tense pulse (driven by the .is-low class in CSS).
+  _gauge(label, current, max, kind) {
     const safeMax = Math.max(1, max || 1);
-    const filled = Math.round((Math.max(0, current) / safeMax) * width);
-    const empty = width - filled;
-    const filledStr = '\u2588'.repeat(filled);
-    const emptyStr = '\u2591'.repeat(empty);
-    return `<span class="stat-bar-track" style="width:${width}ch"><span class="${cssClass} stat-filled">${filledStr}</span><span class="${cssClass} stat-empty">${emptyStr}</span></span>`;
+    const cur = Math.max(0, current || 0);
+    const pct = Math.min(100, Math.round((cur / safeMax) * 100));
+    const low = kind === 'hp' && pct <= 30 ? ' is-low' : '';
+    return (
+      `<span class="hud-gauge hud-${kind}${low}">` +
+        `<span class="hud-label">${label}</span>` +
+        `<span class="hud-track"><span class="hud-fill" style="width:${pct}%"></span></span>` +
+        `<span class="hud-num">${cur}/${max || 0}</span>` +
+      `</span>`
+    );
   },
 
   /* ── Theme toggle ── */
@@ -1979,6 +2132,30 @@ const UI = {
       return;
     }
 
+    if (mode === 'cyoa') {
+      container.innerHTML = [
+        ['1', '1'],
+        ['2', '2'],
+        ['3', '3'],
+        ['4', '4'],
+        ['saves', 'cyoa saves'],
+        ['end', 'cyoa end']
+      ].map(([label, cmd]) =>
+        `<button class="btn btn-secondary btn-sm exit-chip interaction-chip" data-interaction-cmd="${this.esc(cmd)}" type="button">${this.esc(label)}</button>`
+      ).join('');
+      return;
+    }
+
+    if (mode === 'blindadventure') {
+      container.innerHTML = [
+        ['look', 'look'],
+        ['end adventure', 'adventure end']
+      ].map(([label, cmd]) =>
+        `<button class="btn btn-secondary btn-sm exit-chip interaction-chip" data-interaction-cmd="${this.esc(cmd)}" type="button">${this.esc(label)}</button>`
+      ).join('');
+      return;
+    }
+
     const exits = room ? Object.keys(room.exits || {}) : [];
     container.innerHTML = exits.length
       ? exits.map((d) => `<button class="btn btn-secondary btn-sm exit-chip" data-room-exit="${this.esc(d)}" type="button">go ${this.esc(d)}</button>`).join('')
@@ -1999,6 +2176,16 @@ const UI = {
 
     if (mode === 'combat' && target) {
       prompt.innerHTML = `<span class="prompt-mode combat">[COMBAT: ${this.esc(target)}]</span> &gt;`;
+      return;
+    }
+
+    if (mode === 'cyoa') {
+      prompt.innerHTML = '<span class="prompt-mode event">[CYOA]</span> &gt;';
+      return;
+    }
+
+    if (mode === 'blindadventure') {
+      prompt.innerHTML = '<span class="prompt-mode event">[BLIND ADVENTURE]</span> &gt;';
       return;
     }
 

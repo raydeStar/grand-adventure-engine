@@ -12,17 +12,27 @@ namespace GAE.Dashboard.Api.Controllers;
 public class DashboardAuthController : ControllerBase
 {
     private readonly IDashboardAuthService _authService;
+    private readonly IWebHostEnvironment _environment;
+    private readonly IConfiguration _configuration;
 
-    public DashboardAuthController(IDashboardAuthService authService)
+    public DashboardAuthController(
+        IDashboardAuthService authService,
+        IWebHostEnvironment environment,
+        IConfiguration configuration)
     {
         _authService = authService;
+        _environment = environment;
+        _configuration = configuration;
     }
 
     [AllowAnonymous]
     [HttpGet("options")]
     public IActionResult GetLoginOptions()
     {
-        return Ok(new { accounts = _authService.GetLoginHints() });
+        var includePasswords = !_environment.IsProduction()
+            || _configuration.GetValue<bool>("DashboardAuth:ShowLoginPasswords");
+
+        return Ok(new { accounts = _authService.GetLoginHints(includePasswords) });
     }
 
     [AllowAnonymous]

@@ -1,132 +1,99 @@
-<!-- TODO: Create a banner image (~1200x400) showing a fantasy tavern scene
-     with a Discord chat overlay on one side and dice/character sheet on the other.
-     Style: pixel art or stylized fantasy illustration. -->
-<!-- ![Grand Adventure Engine Banner](docs/images/banner.png) -->
-
 # Grand Adventure Engine
 
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE) [![.NET 10](https://img.shields.io/badge/.NET-10-512BD4.svg)](https://dotnet.microsoft.com/) [![Docker](https://img.shields.io/badge/Docker-ready-2496ED.svg)](docker-compose.yml)
 
-**A multiplayer text RPG that lives in your Discord server — powered by AI storytelling and real game mechanics.**
+**A self-hosted, AI-narrated text adventure game you can play in Discord or your browser.** Type what you want to do — in plain English — and an AI narrator tells you what happens, while a real game engine rolls the dice behind the scenes.
 
-You and your friends play a fantasy adventure right inside Discord. An AI narrator describes the world around you, reacts to your choices, and brings characters to life — but the actual game rules (combat, loot, skill checks) are handled by a fair, consistent engine under the hood. The AI tells the story. The math keeps it honest.
+![Grand Adventure Engine — self-hosted, rules-first, local-LLM-ready text adventure RPG](docs/images/social-preview.png)
 
-<!-- TODO: Create a screenshot (~800x500) of a Discord thread showing a player
-     exploring a room, with the bot narrating the scene and presenting choices.
-     Capture a real session or mock one up in Discord. -->
-<!-- ![Gameplay Screenshot](docs/images/gameplay-discord.png) -->
+## What makes it different
 
----
+Most AI storytelling apps are improv: the AI makes everything up as it goes, and nothing really counts. Grand Adventure Engine is a **game**. Your character has real stats, real inventory, and real quests. Combat is decided by dice rolls, not vibes. Shopkeepers remember if you were rude. The AI's job is to tell the story beautifully — the engine's job is to make it true.
 
-## What Can You Do?
+- **Play in plain English.** Standard commands like `look`, `go north`, and `attack` work, but so does *"search the rafters for a hidden latch"* or *"flex at the bartender."* Every input matters — there are no canned "that didn't work" responses.
+- **Describe a character, get a character.** Tell the game *"a sneaky goblin alchemist"* and it builds a full playable sheet: stats, gear, traits, and backstory.
+- **Dice decide.** Attacks, skill checks, loot, and quest progress are resolved by game rules. Critical hits and fumbles actually happen — and the narrator reacts to what really occurred.
+- **People remember you.** NPCs track how you've treated them and only know the lore they should plausibly know. The innkeeper doesn't know the dragon's weakness — but someone out there does.
+- **Play where your friends are.** Run it as a Discord bot for your server, use the retro terminal-style web dashboard, or both at once.
+- **Many worlds, one engine.** Each world can carry its own rules, lore, quests, portals, and NPC relationships.
+- **Yours, entirely.** Self-hosted, open source, and built to run against local AI models (LM Studio or Ollama) — no required cloud AI subscription, no data leaving your machine.
 
-**Create a Character by Just Talking** — No spreadsheets. No stat calculators. Just tell the game who you want to be — *"I want to be a sneaky goblin alchemist"* — and it builds your full character from there. Race, class, stats, backstory, starting gear, all of it.
+## Screens
 
-**Explore and Fight** — Wander through rooms, talk to characters, pick up items, and get into turn-based battles with HP, magic, and gold on the line. Die? You wake up at the tavern, a little poorer but ready to try again.
+![Playing Grand Adventure Engine: the story log shows narrated actions with dice rolls, an ASCII room map, and glowing HP/MP/XP gauges](docs/images/gameplay.png)
 
-**Your World, Your Story** — Every player gets their own version of the world. If you loot a chest or defeat a monster, that's *your* experience — it doesn't change things for other players.
+| The player console | The amber theme |
+| --- | --- |
+| ![Login screen styled as a glowing green CRT terminal](docs/images/login.png) | ![Gameplay in the alternate amber phosphor theme](docs/images/gameplay-amber.png) |
 
-**Take On Quests** — Hunt monsters, deliver packages, discover hidden places. The game tracks your progress and rewards you when you're done.
+| Booting up | Game master tools |
+| --- | --- |
+| ![Retro power-on boot sequence](docs/images/boot.png) | ![Admin console showing world summary, health checks, and room catalogue](docs/images/admin.png) |
 
-**Meet Characters Who Feel Alive** — NPCs remember how you've treated them. Some are friendly. Some are not. How they act depends on the game rules — how they *talk* depends on the AI.
+## How it works
 
-**New here?** Read the [Player Guide](docs/player-guide.md) for a full walkthrough of commands, combat, and quests.
+When you type an action, the engine — not the AI — decides the outcome:
 
-<!-- TODO: Create a screenshot (~800x500) of the browser dashboard showing
-     the admin view with player state, NPC panels, or quest tracking visible.
-     Use the running dashboard at localhost:8181 with the admin account. -->
-<!-- ![Dashboard Screenshot](docs/images/dashboard.png) -->
+```text
+Your words  →  command parser  →  game rules & dice  →  AI narrator  →  the story
+```
 
----
+The narrator only describes what actually happened. If the dice say you missed, the story says you missed. If the AI backend is offline, the game keeps working with built-in narration.
 
-## How It Works
+New player? Start with the **[Player Guide](docs/player-guide.md)**.
 
-> **The AI is the storyteller, not the referee.**
+## Run it yourself
 
-The AI's job is to make the game feel alive — describing scenes, voicing characters, reacting to the unexpected. But it never decides whether your attack hits or how much gold you find. That's all handled by the game engine, the same way every time, for every player. Fair and square.
+You'll need [Docker Desktop](https://www.docker.com/products/docker-desktop/), the [.NET 10 SDK](https://dotnet.microsoft.com/download), and a local AI backend ([LM Studio](https://lmstudio.ai/) or [Ollama](https://ollama.com/)). A Discord bot token is optional — only needed for Discord play.
 
-There's an admin dashboard for managing players, editing lore, and inspecting the game in real time.
-
-*"The architecture is sound. The rules are fair. The dice are ready."* — Sir Thaddeus
-
----
-
-## Want to Run Your Own?
-
-This is a self-hosted project — you run it on your own machine or server. Here's what you'll need:
-
-| What | Why |
-|---|---|
-| [.NET 10 SDK](https://dotnet.microsoft.com/) | Runs the game engine |
-| [Node.js 20+](https://nodejs.org/) | Powers the dashboard and tests |
-| [LM Studio](https://lmstudio.ai/) | Runs the AI locally on your machine (free, private, no API keys) |
-| [Docker](https://www.docker.com/) | Runs supporting services |
-| A Discord bot token | Connects the game to your Discord server ([how to get one](https://discord.com/developers/applications)) |
-
-### Setup
-
-**Full step-by-step instructions:** [Self-Hosting Setup Guide](docs/setup-guide.md)
-
-Quick start:
-
-```bash
-# Build the project
+```powershell
 dotnet build GrandAdventureEngine.slnx
-
-# Copy and edit the example environment config
-cp .env.example .env
-# Edit .env with your Discord token and any password changes
-
-# Start the dashboard
+Copy-Item .env.example .env
+notepad .env   # set your passwords and AI backend
 powershell -ExecutionPolicy Bypass -File .\scripts\reset-docker-stack.ps1
 ```
 
-Once it's running, open your browser to `http://localhost:8181` for the dashboard. If that port is already in use, the script picks a new one and tells you.
+Then open the dashboard at `http://localhost:8181` and sign in (`user` / `GAE-User-Local!123` by default — change the defaults before exposing anything beyond your machine).
 
-### Default Logins
+The full walkthrough, including Discord setup and AI backend configuration, is in the **[Self-Hosting Setup Guide](docs/setup-guide.md)**.
 
-| Role | Username | Password |
-|---|---|---|
-| Player | `user` | `GAE-User-Local!123` |
-| Game Master | `admin` | `GAE-Admin-Local!123` |
+## Documentation
 
----
-
-## For Developers
+- [Player Guide](docs/player-guide.md) — how to play, all commands
+- [Self-Hosting Setup Guide](docs/setup-guide.md) — full installation walkthrough
+- [Dashboard Operator Guide](docs/dashboard-ops.md) — running and managing a server
+- [Known Gaps](docs/known-gaps.md) — honest list of rough edges
 
 <details>
-<summary>Architecture & technical details</summary>
+<summary><strong>For developers</strong> — project layout and tests</summary>
 
-### Project Structure
+| Path | Purpose |
+| --- | --- |
+| `src/GAE.Core` | Models and shared interfaces |
+| `src/GAE.Engine` | Game rules, command parsing, quests, combat, persistence |
+| `src/GAE.Narrator` | LM Studio, Ollama, and OpenAI-compatible narrator integration |
+| `src/GAE.Dashboard.Api` | ASP.NET Core API, SignalR hub, and static dashboard |
+| `src/GAE.Discord` | Discord bot service |
+| `config` | Rules, lore, quests, monsters, classes, races, and item seeds |
+| `tests` | Unit, integration, and narrator tests |
+| `browser-tests` | Playwright end-to-end and visual tests |
+| `docs` | Player, setup, ops, and design notes |
 
-| Module | What It Does |
-|---|---|
-| **GAE.Core** | Game data models and shared contracts (no external dependencies) |
-| **GAE.Engine** | The game rules — combat, loot, skill checks, state management |
-| **GAE.Narrator** | Connects to your local AI (LM Studio) for narration |
-| **GAE.WikiSync** | *(deprecated — world data now loaded from YAML seed files via content registry)* |
-| **GAE.Discord** | The Discord bot that players interact with |
-| **GAE.Dashboard.Api** | Web dashboard with real-time updates |
+Run the test suites:
 
-### Running Tests
-
-```bash
-# Unit & integration tests
+```powershell
 dotnet test
-
-# Browser-based end-to-end tests
-npm run test:e2e
+npm run test:e2e:visual:safe
 ```
 
-### More Docs
-
-- [Player Guide](docs/player-guide.md) — How to play: commands, combat, quests, tips
-- [Self-Hosting Setup Guide](docs/setup-guide.md) — Full installation and configuration walkthrough
-- [Operator Guide](docs/dashboard-ops.md) — Dashboard admin workflows, environment variables, manual operations
+Browser tests expect a running app; prefer the `:safe` Playwright scripts when updating visual snapshots. Design/scope notes live in [docs/MULTI-WORLD-SCOPE.md](docs/MULTI-WORLD-SCOPE.md) and [docs/DATABASE-MIGRATION-SCOPE.md](docs/DATABASE-MIGRATION-SCOPE.md).
 
 </details>
 
----
+## Good to know
+
+- **Bundled content:** the included worlds, quests, and items are original demo content. Audit or replace them before running a long-lived public server.
+- **Security:** never commit real `.env` files, Discord tokens, or connection strings — and rotate any token that was ever committed. Default passwords are for local development only. Keep `GAE_DASHBOARD_SHOW_LOGIN_PASSWORDS=false` outside private demos, and put the dashboard behind proper network controls before exposing it to the internet.
 
 ## License
 

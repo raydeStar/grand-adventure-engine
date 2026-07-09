@@ -259,7 +259,7 @@ public static class RegistrySeedLoader
         "ring" => ItemType.Ring,
         "amulet" => ItemType.Amulet,
         "bracelet" => ItemType.Bracelet,
-        "potion" => ItemType.Potion,
+        "potion" or "healing draught" => ItemType.Potion,
         "scroll" => ItemType.Scroll,
         "key" => ItemType.Key,
         "quest" or "questitem" => ItemType.QuestItem,

@@ -1,8 +1,9 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using GAE.Core.Interfaces;
 using GAE.Core.Models;
 using GAE.Core.Registry;
@@ -22,10 +23,13 @@ public class NarratorService : INarratorService
     private readonly IWorldRepository? _worldRepository;
     private readonly int _retryCount;
     private readonly int _retryDelayMs;
+    private readonly string _provider;
+    private readonly int? _contextLength;
+    private readonly bool? _think;
     private string _model;
     private bool _modelResolved;
 
-    public NarratorService(HttpClient httpClient, ILogger<NarratorService> logger, string model = "default", WorldKnowledgeBuilder? knowledge = null, IConversationLogger? conversationLogger = null, IContentRegistryService? registry = null, IWorldContext? worldContext = null, IWorldRepository? worldRepository = null, int retryCount = 1, int retryDelayMs = 2000)
+    public NarratorService(HttpClient httpClient, ILogger<NarratorService> logger, string model = "default", WorldKnowledgeBuilder? knowledge = null, IConversationLogger? conversationLogger = null, IContentRegistryService? registry = null, IWorldContext? worldContext = null, IWorldRepository? worldRepository = null, int retryCount = 1, int retryDelayMs = 2000, string provider = "OpenAICompatible", int? contextLength = null, bool? think = null)
     {
         _httpClient = httpClient;
         _logger = logger;
@@ -36,6 +40,9 @@ public class NarratorService : INarratorService
         _worldRepository = worldRepository;
         _retryCount = Math.Max(0, retryCount);
         _retryDelayMs = Math.Max(0, retryDelayMs);
+        _provider = string.IsNullOrWhiteSpace(provider) ? "OpenAICompatible" : provider;
+        _contextLength = contextLength is > 0 ? contextLength : null;
+        _think = think;
         _model = model;
         _modelResolved = !string.Equals(model, "default", StringComparison.OrdinalIgnoreCase);
     }
@@ -1001,6 +1008,16 @@ public class NarratorService : INarratorService
 
             if (TryParseFreeFormResponse(rawCompletion, out var response))
             {
+                if (IsBoringFreeFormNarration(response.Narration))
+                {
+                    _logger.LogWarning("Free-form action returned non-consequential narration for \"{RawInput}\"; using local consequence fallback.", rawInput);
+                    var fallback = BuildLocalFreeFormFallbackResponse(player, room, rawInput);
+                    if (!HasStructuredFreeFormChanges(response))
+                        return fallback;
+
+                    response.Narration = fallback.Narration;
+                }
+
                 _logger.LogInformation("Free-form action processed: \"{RawInput}\" -> success={Success}", rawInput, response.Success);
                 return response;
             }
@@ -1012,7 +1029,7 @@ public class NarratorService : INarratorService
             _logger.LogError(ex, "Free-form narration failed for \"{RawInput}\". Raw response: {RawResponse}", rawInput, rawCompletion ?? "<no response>");
         }
 
-        return BuildLocalFreeFormFallbackResponse(player, room, rawInput);
+        return BuildLocalFreeFormFallbackResponse(player, room, rawInput, recentStory);
     }
 
     public async Task<FreeFormResponse> ProcessConversationTurnAsync(PlayerCharacter player, Room room, Npc npc, InteractionState interaction, string rawInput, CancellationToken ct = default)
@@ -1039,9 +1056,9 @@ public class NarratorService : INarratorService
             - PUNCHY & REAL: Characters do not give 3-paragraph exposition dumps. Keep dialogue natural, punchy, and conversational. They can interrupt, pause, or trail off.
             - SHOW, DON'T TELL (IMMERSION): Do not explicitly state an NPC's internal feelings like "She is sad about the war." Instead, describe them glancing at a faded poster, their grip tightening on a rag, and changing the subject.
             - ENVIRONMENTAL INTERACTION: Root the scene in the room. Have the NPC interact with props, weather, or other people (e.g., tossing a coin, covering a drink from the dust, leaning on a rusted counter).
-            - ALWAYS APPROACHABLE (FUN): NPCs NEVER refuse to speak with the player and NEVER look down on them. Even if hostile, rude, or grumpy, they are approachable and willing to engage. Let the NPC have conflict and friction, but their gruffness shouldn't stop conversation—they complain, tease, or act tough while still talking to the hero. 
+            - ALWAYS APPROACHABLE (FUN): NPCs NEVER refuse to speak with the player and NEVER look down on them. Even if hostile, rude, or grumpy, they are approachable and willing to engage. Let the NPC have conflict and friction, but their gruffness shouldn't stop conversation—they complain, tease, or act tough while still talking to the hero.
             - AVOID FORMULAS: Do not always use the structure: "Quote," action. "Quote." Vary the delivery. Begin with an action, end with one, or let the dialogue stand raw if the emotion is heavy.
-            - SUBTEXT (INTERESTING): NPCs shouldn't just dump lore for free. If asked about a secret or rumor, they might hesitate, barter, or demand to know why the player cares. Make the player EARN the big lore drops.
+            - SUBTEXT (INTERESTING): NPCs shouldn't just dump major secrets for free, but every reply must still give the player something playable: a reason, an opinion, a smaller fact, a rumor, a demand, or a next conversational hook.
             - REACT TO THE PLAYER: A warrior gets sized up by fighters. A mage gets curiosity from scholars. A rogue draws knowing winks from shady types. Make the player feel their character choices impact the social dynamic.
             - HUMOR & FLAVOR: Lean heavily into the NPC's distinct quirks, prejudices, or humor. Sarcasm, obliviousness, and deadpan wit are heavily encouraged to break up standard fantasy tropes.
             - CHA OVERRIDES INITIAL DISPOSITION:
@@ -1079,9 +1096,9 @@ public class NarratorService : INarratorService
                High CHA (18+) should bias disposition shifts toward friendlier outcomes. The NPC's
                starting intensity should effectively be +10-20 higher for very charismatic players.
             2. Return an updated disposition from: "friendly", "neutral", "annoyed", "angry", "hostile", "amused", "flirtatious", "scared", "sad", "suspicious".
-            3. If the conversation ends naturally (dismissal, goodbye, storms off), return mode: "explore".
-            4. If the player tries to LEAVE mid-conversation, narrate the NPC's reaction.
-            5. NPCs can reveal info, offer quests, give items, refuse service, call guards, or attack — based on their disposition and what the player says.
+            3. Keep the conversation open across many rounds. Return mode: "conversation" unless the player explicitly leaves, attacks and combat starts, or a mechanical quest/travel/combat transition requires another mode.
+            4. If the player tries to LEAVE mid-conversation, narrate the NPC's reaction, then return mode: "explore".
+            5. NPCs can set boundaries, refuse a specific request or service, call for help, or become dangerous based on disposition and what the player says, but they still keep talking until the engine changes modes. If they say no, they MUST give a reason, opinion, alternative, demand, rumor, or emotional hook.
             6. If the player does something outrageous (insults, flirts aggressively, threatens), the NPC should react strongly and memorably, not just give a generic response.
             7. For SIGNIFICANT moments, add memory flags: "romance" (love established), "friendship" (bond formed),
                "crime-witnessed" (player committed crime in front of NPC), "betrayal" (player betrayed trust),
@@ -1122,7 +1139,7 @@ public class NarratorService : INarratorService
             3. PERSONALITY IS KEY: NPCs editorialize, exaggerate, crack jokes, or get annoyed. A gruff guard and a chatty merchant describe the same event completely differently.
             4. INTEGRATE ACTIONS WITH SPEECH: Blend body language naturally with the dialogue. Don't always put dialogue in one block and action in another. Let the NPC do something *while* speaking. Let the environment influence them.
             5. USE REAL NAMES: If other NPCs are present in the room, use their ACTUAL names from the prompt — never invent or substitute different character names.
-            6. STAY IN CONVERSATION MODE: Do NOT narrate the player's actions, inner thoughts, UI, stats, quest updates, disposition readouts, or labels like "NPC:", "Narrator:", "SUCCESS:", or "Quest Updates:". Do NOT move the scene forward beyond this immediate exchange. Reply as the NPC in this moment only.
+            6. STAY IN CONVERSATION MODE: Do NOT narrate the player's actions, inner thoughts, UI, stats, quest updates, disposition readouts, or labels like "NPC:", "Narrator:", "SUCCESS:", or "Quest Updates:". Do NOT move the scene forward beyond this immediate exchange. Reply as the NPC in this moment only. Hostile or rude NPCs may be sharp, but they remain talkable and provide a hook for the next exchange.
             7. DO NOT INVENT UNSUPPORTED PROPER NOUNS: Prefer names, factions, quests, and locations already present in the room/world/NPC context. If you do not have a real name, describe them generically instead of inventing a new named person.
 
             QUEST INTERACTIONS:
@@ -1171,7 +1188,7 @@ public class NarratorService : INarratorService
 
         var turnHint = interaction.PlayerTurnCount <= 0
             ? $"Turn 1 — OPENING GREETING. {npc.Name} should speak FIRST with dialogue, welcoming or acknowledging the player. This is their first impression — make it memorable and warm."
-            : $"Turn {interaction.CurrentTurnNumber} — ongoing conversation. Do NOT re-introduce the NPC or repeat the greeting.";
+            : $"Turn {interaction.CurrentTurnNumber} - ongoing conversation. Do NOT re-introduce the NPC or repeat the greeting. Answer the current topic and leave a concrete conversational hook so the player can continue.";
 
         // Build a brief list of OTHER NPCs present in the room so the LLM knows who else is there
         var otherNpcs = room.Npcs
@@ -1189,7 +1206,7 @@ public class NarratorService : INarratorService
             {{roomNpcContext}}
             {{turnHint}}
             Player says/does: "{{rawInput}}"
-            PRIORITY: {{npc.Name}} MUST respond with 2-4 sentences of quoted dialogue containing real substance. If the player asked a factual question, ANSWER it with specific details. If the topic is emotional or personal, share a CONCRETE memory or name — don't trail off into body language. If the question is reflective, give a SPECIFIC anecdote, not a single wistful sentence. Body language is limited to one brief aside.
+            PRIORITY: {{npc.Name}} MUST respond with 2-4 sentences of quoted dialogue containing real substance. If the player asked a factual question, ANSWER it with specific details. If the topic is emotional or personal, share a CONCRETE memory or name - don't trail off into body language. If the question is reflective, give a SPECIFIC anecdote, not a single wistful sentence. If the NPC is rude, make the rudeness entertaining while still being inviting enough to keep the conversation alive. Body language is limited to one brief aside.
             OUTPUT RULE: Stay in this single exchange only. Do NOT narrate what the player does next, do NOT add system labels or quest/status text, and do NOT switch into a narrator/game-master voice.
             CONTEXT RULE: Prefer real names and places already mentioned in the provided context. If you lack a supported proper noun, describe the person or place instead of inventing one.
             {{worldContext}}
@@ -1215,7 +1232,7 @@ public class NarratorService : INarratorService
         }
 
         // Deterministic fallback — personality-driven NPC response
-        var fallbackNarration = GenerateConversationFallback(npc, player.Name, interaction.PlayerTurnCount > 0);
+        var fallbackNarration = GenerateConversationFallback(npc, player.Name, rawInput, interaction.PlayerTurnCount > 0);
         return new FreeFormResponse
         {
             Success = true,
@@ -1231,23 +1248,20 @@ public class NarratorService : INarratorService
 
     /// <summary>
     /// Generates a personality-driven deterministic fallback when the LLM fails to produce a conversation response.
-    /// When <paramref name="isOngoing"/> is true, returns a mid-conversation filler instead of a greeting.
+    /// When <paramref name="isOngoing"/> is true, returns a topic-aware reply instead of a greeting.
     /// </summary>
-    private static string GenerateConversationFallback(Npc npc, string playerName, bool isOngoing = false)
+    private static string GenerateConversationFallback(Npc npc, string playerName, string rawInput, bool isOngoing = false)
     {
         var name = npc.Name;
 
-        // Mid-conversation: use generic continuations that don't look like greetings
+        if (!isOngoing && ShouldUseTopicAwareOpening(rawInput))
+        {
+            return BuildOngoingConversationFallback(npc, playerName, rawInput);
+        }
+
         if (isOngoing)
         {
-            var pick2 = Math.Abs(name.GetHashCode());
-            return (pick2 % 4) switch
-            {
-                0 => $"{name} pauses for a moment, considering your words carefully before responding. \"Hmm, that's an interesting point. Let me think about that.\"",
-                1 => $"{name} nods slowly, their expression thoughtful. \"I hear what you're saying. Go on.\"",
-                2 => $"*{name} shifts their weight and glances at you.* \"There's more to this than meets the eye, isn't there?\"",
-                _ => $"{name} takes a breath before answering. \"You're not wrong. But there's another side to this story.\"",
-            };
+            return BuildOngoingConversationFallback(npc, playerName, rawInput);
         }
 
         var p = npc.Personality.ToLowerInvariant();
@@ -1262,7 +1276,7 @@ public class NarratorService : INarratorService
             {
                 0 => $"{name} looks up with a bright smile and waves you over. \"Well now, aren't you a sight for sore eyes! Come, come — sit down and tell me everything.\"",
                 1 => $"{name} sets aside what they were doing and gives you a warm, appraising look. \"Hey there, stranger. You look like you've got a story worth hearing. Pull up a chair.\"",
-                _ => $"{name} beams at you and gestures expansively. \"Welcome, welcome! You've got the look of someone interesting. What brings you my way?\""
+                _ => $"{name} beams at you and gestures expansively. \"Welcome, welcome. You've got the look of someone interesting, and interesting people rarely arrive empty-handed.\""
             };
         }
 
@@ -1280,9 +1294,9 @@ public class NarratorService : INarratorService
         {
             return (pick % 3) switch
             {
-                0 => $"{name} startles at your approach, one hand flying to the hilt of their weapon before relaxing. \"Oh! S-sorry, you just... I didn't see you there. Can I help you with something?\"",
-                1 => $"{name} glances around nervously before meeting your eyes. \"You're not... you're not here to cause trouble, are you? No, no, of course not. What do you need?\"",
-                _ => $"{name} fidgets with a loose strap on their gear and manages a shaky smile. \"H-hello! I'm — yes, I'm supposed to be here. What can I do for you?\""
+                0 => $"{name} startles at your approach, one hand flying to the hilt of their weapon before relaxing. \"Oh! S-sorry, you just... I didn't see you there. Go on, then.\"",
+                1 => $"{name} glances around nervously before meeting your eyes. \"You're not here to cause trouble. Good. Keep it calm and I will listen.\"",
+                _ => $"{name} fidgets with a loose strap on their gear and manages a shaky smile. \"H-hello. I'm here, yes. Say your piece.\""
             };
         }
 
@@ -1290,9 +1304,9 @@ public class NarratorService : INarratorService
         {
             return (pick % 3) switch
             {
-                0 => $"{name} fixes you with a hard stare, arms folded across their chest. \"State your business. I haven't got all day.\"",
-                1 => $"{name} looks you up and down with undisguised suspicion. \"Another one. Alright, what do you want? And keep it short.\"",
-                _ => $"{name} narrows their eyes and shifts their weight, sizing you up. \"You've got ten seconds to tell me why I shouldn't send you on your way.\""
+                0 => $"{name} fixes you with a hard stare, arms folded across their chest. \"State your business. I haven't got all day, but I am listening.\"",
+                1 => $"{name} looks you up and down with undisguised suspicion. \"Another one. Alright, keep it short and make it worth the breath.\"",
+                _ => $"{name} narrows their eyes and shifts their weight, sizing you up. \"You've got ten seconds to make this interesting, and I suspect you can manage that.\""
             };
         }
 
@@ -1301,7 +1315,7 @@ public class NarratorService : INarratorService
             return (pick % 3) switch
             {
                 0 => $"{name} watches you approach with an unreadable expression, eyes glinting in the dim light. \"...Interesting. You found me. That tells me something about you already.\"",
-                1 => $"{name} barely glances up, but you get the distinct feeling they noticed you long before you saw them. \"I know why you're here. The question is — can you afford what you're looking for?\"",
+                1 => $"{name} barely glances up, but you get the distinct feeling they noticed you long before you saw them. \"I know why you're here. The price is the part most people pretend not to hear.\"",
                 _ => $"{name} leans back into the shadows and studies you with a predator's patience. \"Speak. But choose your words carefully.\""
             };
         }
@@ -1310,7 +1324,7 @@ public class NarratorService : INarratorService
         {
             return (pick % 3) switch
             {
-                0 => $"{name} turns to you with fever-bright eyes and a too-wide smile. \"Ah, another soul drawn to the truth! You feel it too, don't you? The pull?\"",
+                0 => $"{name} turns to you with fever-bright eyes and a too-wide smile. \"Ah, another soul drawn to the truth. You feel it too: the pull.\"",
                 1 => $"{name} cackles softly and spreads their arms as if welcoming a long-lost friend. \"The spirits told me you would come. They tell me many things...\"",
                 _ => $"{name} stares through you with an intensity that makes your skin crawl. \"Yes... yes, you'll do nicely. The ritual requires willing participants, you see.\""
             };
@@ -1320,9 +1334,9 @@ public class NarratorService : INarratorService
         {
             return (pick % 3) switch
             {
-                0 => $"{name} looks up from their work and gives you an appraising once-over. \"Hm. You've got some muscle on you at least. What do you need?\"",
-                1 => $"{name} cracks their knuckles and grins. \"Another adventurer, eh? Let me guess — you need something hit, fixed, or both.\"",
-                _ => $"{name} sets down their tools with a heavy clang and squares up to face you. \"Well? Spit it out. I don't bite — unless you give me reason to.\""
+                0 => $"{name} looks up from their work and gives you an appraising once-over. \"Hm. You've got some muscle on you at least. Make your need plain.\"",
+                1 => $"{name} cracks their knuckles and grins. \"Another adventurer. You need something hit, fixed, or both.\"",
+                _ => $"{name} sets down their tools with a heavy clang and squares up to face you. \"Spit it out. I don't bite unless you give me reason to.\""
             };
         }
 
@@ -1332,7 +1346,7 @@ public class NarratorService : INarratorService
             {
                 0 => $"{name} perks up the moment you walk over, rubbing their hands together. \"Ah, a customer! You've come to the right place. Have a look around — I've got just the thing you need.\"",
                 1 => $"{name} flashes a practiced smile and gestures at their wares. \"Welcome, welcome! Everything you see is top quality and very reasonably priced. For you, I might even offer a discount.\"",
-                _ => $"{name} leans across the counter with a merchant's eager grin. \"Well well, what can I interest you in today? I just got some new stock in — very rare, very special.\""
+                _ => $"{name} leans across the counter with a merchant's eager grin. \"Well well. I just got some new stock in: very rare, very special, and tragically underappreciated.\""
             };
         }
 
@@ -1341,19 +1355,83 @@ public class NarratorService : INarratorService
             return (pick % 3) switch
             {
                 0 => $"{name} regards you with tired but steady eyes, resting a hand on the pommel of a well-worn blade. \"You've got that look about you. The one that says you're headed somewhere dangerous.\"",
-                1 => $"{name} gives you a slow nod of acknowledgment, the kind earned through years of seeing people come and go. \"Something I can help you with? I know these parts better than most.\"",
-                _ => $"{name} looks you over with the quiet assessment of someone who's seen it all. \"Adventurer, right? Word of advice — listen more than you talk out here. What's on your mind?\""
+                1 => $"{name} gives you a slow nod of acknowledgment, the kind earned through years of seeing people come and go. \"I know these parts better than most. Speak plainly.\"",
+                _ => $"{name} looks you over with the quiet assessment of someone who's seen it all. \"Adventurer. Word of advice: listen more than you talk out here. Then speak.\""
             };
         }
 
         // Generic fallback — still more interesting than the old version
         return (pick % 4) switch
         {
-            0 => $"{name} pauses and turns their attention to you. \"Hmm? Oh — you want to talk? Alright, I'm listening.\"",
-            1 => $"{name} glances your way and raises an eyebrow. \"Something I can do for you, stranger?\"",
+            0 => $"{name} pauses and turns their attention to you. \"Hmm. You want to talk. Alright, I'm listening.\"",
+            1 => $"{name} glances your way and raises an eyebrow. \"Say it straight, stranger.\"",
             2 => $"{name} stops what they were doing and looks at you expectantly. \"Go on then, I can see you've got something on your mind.\"",
-            _ => $"{name} meets your gaze and gives a slow nod. \"Alright. You've got my attention. What is it?\""
+            _ => $"{name} meets your gaze and gives a slow nod. \"Alright. You've got my attention. Use it well.\""
         };
+    }
+
+    private static string BuildOngoingConversationFallback(Npc npc, string playerName, string rawInput)
+    {
+        var name = npc.Name;
+        var input = rawInput.ToLowerInvariant();
+        var personality = npc.Personality.ToLowerInvariant();
+        var isSharp = ContainsAny(personality, "stern", "gruff", "suspicious", "hostile", "cold", "intimidat", "blunt");
+        var attitude = isSharp ? "curt" : "thoughtful";
+
+        if (ContainsAny(input, "crystal", "recovered", "returned", "delivered"))
+        {
+            return isSharp
+                ? $"{name} gives you a {attitude} look, then lets the mask crack just enough to show relief. \"Then you have done more than survive, {playerName}. Set the proof where people can see it, because hope works better when it has weight.\""
+                : $"{name} exhales as if the room has been holding its breath with them. \"Then the light is not lost, {playerName}. Bring that proof forward and let everyone remember that impossible things still happen.\"";
+        }
+
+        if (ContainsAny(input, "quest", "work", "job", "help", "waterway", "infestation", "rat", "clear", "completed", "done"))
+        {
+            var questHint = npc.QuestsOffered.Count > 0
+                ? $"the job tied to {npc.QuestsOffered[0]}"
+                : "the trouble everyone keeps stepping around";
+            return isSharp
+                ? $"{name} gives you a {attitude} look, but does not turn away. \"Useful, at last, {playerName}. My opinion is simple: handle {questHint}, bring proof, and people will stop pretending the smell is normal.\""
+                : $"{name} leans in, voice lowering. \"That is exactly the kind of problem worth your boots, {playerName}. Start with {questHint}; whoever fixes that earns more than coin.\"";
+        }
+
+        if (ContainsAny(input, "why", "reason", "opinion", "think", "feel", "matter", "important"))
+        {
+            return isSharp
+                ? $"{name} taps one finger against the nearest surface. \"My reason is simple: places rot when decent people wait for someone else to act. I may sound like a door hinge with a grudge, {playerName}, but I know a necessary foolhardy soul when I see one.\""
+                : $"{name} considers you for a beat, then nods. \"My opinion, {playerName}, is that courage is mostly good timing wearing a better coat. The people here need someone willing to move before fear becomes habit.\"";
+        }
+
+        if (ContainsAny(input, "rumor", "gossip", "heard", "news", "interesting"))
+        {
+            var scope = npc.KnowledgeScopes.FirstOrDefault(s => !string.IsNullOrWhiteSpace(s)) ?? npc.Faction;
+            return $"{name} glances aside before answering. \"The useful rumor is tied to {scope}: folk have been whispering around it, then pretending they were only clearing their throats. Follow the embarrassed silence, {playerName}; it usually points straight at the truth.\"";
+        }
+
+        if (ContainsAny(input, "sorry", "apolog", "insult", "rude", "drink", "mug", "bird", "weird", "lick", "pipe"))
+        {
+            return isSharp
+                ? $"{name} stares at you for one long second, then huffs despite themself. \"That was ridiculous, {playerName}, but ridiculous is still better than dull. Keep your manners barely alive and I will keep giving you the useful version of my thoughts.\""
+                : $"{name} laughs under their breath and waves the moment onward. \"You are strange company, {playerName}, but strange company often survives. Say the next thing plainly and I will answer plainly.\"";
+        }
+
+        var pick = Math.Abs(HashCode.Combine(name, rawInput));
+        return (pick % 4) switch
+        {
+            0 => $"{name} answers without breaking eye contact. \"Here is the useful part, {playerName}: people reveal what they value when the room gets uncomfortable. Watch that, and you will know where to press next.\"",
+            1 => $"{name} folds their hands and gives the thought room to breathe. \"I will give you this much, {playerName}: the first story people tell is rarely the true one. The second is where the motive starts showing its teeth.\"",
+            2 => $"{name} shifts their stance, still engaged. \"You are circling something real, {playerName}. Name the piece you care about most and I will give you the angle I trust.\"",
+            _ => $"{name} lets out a small, dry sound. \"Fine, {playerName}, here is my read: trust actions over titles, debts over promises, and anyone who looks too relaxed in a bad place least of all.\"",
+        };
+    }
+
+    private static bool ShouldUseTopicAwareOpening(string rawInput)
+    {
+        var input = rawInput.Trim().ToLowerInvariant();
+        return input.StartsWith("tell ", StringComparison.Ordinal)
+            || input.StartsWith("ask ", StringComparison.Ordinal)
+            || input.StartsWith("say to ", StringComparison.Ordinal)
+            || input.StartsWith("speak to ", StringComparison.Ordinal);
     }
 
     private static bool ContainsAny(string text, params string[] keywords)
@@ -1362,6 +1440,14 @@ public class NarratorService : INarratorService
             if (text.Contains(kw, StringComparison.Ordinal))
                 return true;
         return false;
+    }
+
+    private static bool ContainsNormalizedPhrase(string text, string phrase)
+    {
+        return text == phrase
+            || text.StartsWith(phrase + " ", StringComparison.Ordinal)
+            || text.EndsWith(" " + phrase, StringComparison.Ordinal)
+            || text.Contains(" " + phrase + " ", StringComparison.Ordinal);
     }
 
     public async Task<FreeFormResponse> ProcessCombatTurnAsync(PlayerCharacter player, Room room, Npc enemy, InteractionState interaction, string rawInput, CancellationToken ct = default)
@@ -1648,7 +1734,7 @@ public class NarratorService : INarratorService
             "\nQuest Updates:",
             "\nQUEST UPDATES:",
             "\nNarration:",
-            "\nTifa Lockhart is speaking to"
+            "\nMara Vale is speaking to"
         ];
 
         var cutIndex = text.Length;
@@ -1683,6 +1769,17 @@ public class NarratorService : INarratorService
             return string.Empty;
 
         var sanitized = rawCompletion.Trim();
+        sanitized = Regex.Replace(
+            sanitized,
+            @"<think\b[^>]*>.*?</think>",
+            string.Empty,
+            RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        sanitized = Regex.Replace(
+            sanitized,
+            @"^\s*<think\b[^>]*>.*$",
+            string.Empty,
+            RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
         if (sanitized.StartsWith("```", StringComparison.Ordinal))
         {
             var firstNewline = sanitized.IndexOf('\n');
@@ -1832,25 +1929,37 @@ public class NarratorService : INarratorService
         return -1;
     }
 
-    private static FreeFormResponse BuildLocalFreeFormFallbackResponse(PlayerCharacter player, Room room, string rawInput)
+    private static FreeFormResponse BuildLocalFreeFormFallbackResponse(PlayerCharacter player, Room room, string rawInput, IReadOnlyList<StoryEntry>? recentStory = null)
     {
         var actionPhrase = ExtractFreeFormActionPhrase(rawInput);
         var success = ShouldResolveFreeFormFallbackAsSuccess(actionPhrase);
 
+        if (TryBuildBoundaryViolationFreeFormNarration(player, room, actionPhrase, out var boundaryNarration))
+        {
+            return new FreeFormResponse
+            {
+                Success = false,
+                Narration = boundaryNarration
+            };
+        }
+
         return new FreeFormResponse
         {
             Success = success,
-            Narration = BuildLocalFreeFormFallbackNarration(player, room, actionPhrase, success)
+            Narration = BuildLocalFreeFormFallbackNarration(player, room, actionPhrase, success, recentStory ?? [])
         };
     }
 
-    private static string BuildLocalFreeFormFallbackNarration(PlayerCharacter player, Room room, string actionPhrase, bool success)
+    private static string BuildLocalFreeFormFallbackNarration(PlayerCharacter player, Room room, string actionPhrase, bool success, IReadOnlyList<StoryEntry> recentStory)
     {
         var roomName = string.IsNullOrWhiteSpace(room.Name) ? "the room" : room.Name;
         var witnessReaction = BuildFreeFormWitnessReaction(room);
 
         if (TryBuildMaintenanceFreeFormNarration(player, roomName, actionPhrase, witnessReaction, out var maintenanceNarration))
             return maintenanceNarration;
+
+        if (TryBuildPlayfulFreeFormNarration(player, roomName, actionPhrase, witnessReaction, out var playfulNarration))
+            return playfulNarration;
 
         // Check if this looks like dialogue/social interaction
         var isSocial = actionPhrase.Contains('"') || actionPhrase.Contains('\'')
@@ -1859,6 +1968,11 @@ public class NarratorService : INarratorService
             || actionPhrase.StartsWith("talk ", StringComparison.OrdinalIgnoreCase)
             || actionPhrase.StartsWith("tell ", StringComparison.OrdinalIgnoreCase)
             || actionPhrase.StartsWith("greet ", StringComparison.OrdinalIgnoreCase)
+            || actionPhrase.StartsWith("hello", StringComparison.OrdinalIgnoreCase)
+            || actionPhrase.StartsWith("hi ", StringComparison.OrdinalIgnoreCase)
+            || actionPhrase.StartsWith("hey ", StringComparison.OrdinalIgnoreCase)
+            || actionPhrase.StartsWith("sup", StringComparison.OrdinalIgnoreCase)
+            || actionPhrase.StartsWith("yo ", StringComparison.OrdinalIgnoreCase)
             || actionPhrase.StartsWith("smile ", StringComparison.OrdinalIgnoreCase)
             || actionPhrase.StartsWith("laugh", StringComparison.OrdinalIgnoreCase)
             || actionPhrase.StartsWith("wave ", StringComparison.OrdinalIgnoreCase)
@@ -1870,21 +1984,153 @@ public class NarratorService : INarratorService
             var npc = room.Npcs.FirstOrDefault();
             if (npc is not null)
             {
-                var pick = Math.Abs((player.Name + npc.Name).GetHashCode()) % 4;
-                return pick switch
-                {
-                    0 => $"{npc.Name} glances your way, considering you for a moment. The conversation doesn't quite land — maybe they're distracted, or maybe you need a different approach. Try using **talk to {npc.Name.ToLowerInvariant()}** to get their full attention.",
-                    1 => $"{npc.Name} acknowledges you with a nod but seems preoccupied. Perhaps a direct **talk to {npc.Name.ToLowerInvariant()}** would draw them into proper conversation.",
-                    2 => $"You catch {npc.Name}'s eye, but the moment passes without quite connecting. Try **talk to {npc.Name.ToLowerInvariant()}** to start a proper conversation.",
-                    _ => $"{npc.Name} seems like they might have something to say, but you haven't quite gotten their attention yet. Try **talk to {npc.Name.ToLowerInvariant()}** to engage them directly."
-                };
+                return BuildSocialFallbackNarration(player, npc, actionPhrase, recentStory);
             }
-            return "Your words hang in the air, but nobody here seems to be listening. Try **talk to** someone specific.";
+            return $"{player.Name}'s words cut into the room's hush. No one answers directly, but posture changes, eyes lift, and the silence becomes an invitation to press someone specific.";
         }
 
         return success
-            ? $"You give it a shot. {witnessReaction} The moment passes without any dramatic consequences."
-            : $"You try, but it doesn't quite work out. {witnessReaction} Maybe a different approach.";
+            ? $"{player.Name} commits to the attempt, small as it is. {witnessReaction} It changes no inventory and moves no walls, but it shifts the room's attention and leaves a clear social opening."
+            : $"{player.Name} does try, and the attempt lands crooked. {witnessReaction} The failure still teaches the room something: next time, sharper aim or better timing.";
+    }
+
+    private static string BuildSocialFallbackNarration(PlayerCharacter player, Npc npc, string actionPhrase, IReadOnlyList<StoryEntry> recentStory)
+    {
+        var normalized = NormalizeLookupText(actionPhrase);
+        var hasRecentNpcBeat = recentStory.Any(entry =>
+            (entry.Narration?.Contains(npc.Name, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (entry.MechanicalSummary?.Contains(npc.Name, StringComparison.OrdinalIgnoreCase) ?? false));
+
+        if (ContainsAny(normalized, "term of endearment", "meant it kindly", "friendly", "joking", "just joking", "apologize", "sorry"))
+        {
+            return $"{npc.Name} points at {player.Name} with the nearest available rag, utensil, or accusing finger. \"Then lead with the endearment, not the brick. Try again with a little polish and I may downgrade you from menace to customer.\"";
+        }
+
+        if (ContainsAny(normalized, "sup", "nerd", "hey", "yo", "hello", "hi"))
+        {
+            var pick = Math.Abs(HashCode.Combine(player.Name, npc.Name, normalized, hasRecentNpcBeat)) % 4;
+            return pick switch
+            {
+                0 => $"{npc.Name}'s mouth twitches despite themself. \"Nerd, is it. Fine, {player.Name}; I collect insults with the cups. State your business before I start charging by the syllable.\"",
+                1 => $"{npc.Name} looks {player.Name} up and down, then taps the counter once to mark the beat. \"That greeting has bruises on it. Still, it got you noticed. Work, gossip, or trouble; pick a lane and walk it.\"",
+                2 => $"{npc.Name} leans closer with theatrical patience. \"Strange manners, {player.Name}. Useful nerve. Turn that into a sentence with a purpose and I will pretend this began gracefully.\"",
+                _ => $"{npc.Name} lets the greeting hang just long enough to season it with judgment. \"I have heard worse from better-dressed people, {player.Name}. Go on, and make the next words earn their rent.\""
+            };
+        }
+
+        var fallbackPick = Math.Abs(HashCode.Combine(player.Name, npc.Name, normalized)) % 3;
+        return fallbackPick switch
+        {
+            0 => $"{npc.Name} gives {player.Name} a measuring look. \"You have my attention. Spend it on something useful and we may both survive the conversation.\"",
+            1 => $"{npc.Name} shifts their stance, now fully engaged. \"There it is, then. Say the useful part plainly and I will answer in kind.\"",
+            _ => $"{npc.Name} folds their arms, but stays with {player.Name}. \"Go on. I am listening, which is already more generosity than most people earn before breakfast.\""
+        };
+    }
+
+    private static bool TryBuildBoundaryViolationFreeFormNarration(PlayerCharacter player, Room room, string actionPhrase, out string narration)
+    {
+        narration = string.Empty;
+        var normalized = NormalizeLookupText(actionPhrase);
+        var tokens = normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.Ordinal);
+        if (!tokens.Overlaps(["grab", "grope", "fondle", "slap", "touch", "kiss", "lick"]))
+            return false;
+
+        var namedNpc = room.Npcs.FirstOrDefault(candidate =>
+        {
+            var npcName = NormalizeLookupText(candidate.Name);
+            var aliases = npcName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            return (npcName.Length >= 3 && ContainsNormalizedPhrase(normalized, npcName))
+                || aliases.Any(alias => alias.Length >= 3 && ContainsNormalizedPhrase(normalized, alias));
+        });
+        var usesPersonPronoun = tokens.Overlaps(["her", "him", "them"]);
+        var hasExplicitBodyTarget = tokens.Overlaps(["booty", "butt", "ass", "breast", "chest", "thigh", "hips", "body"]);
+        var hasInherentlyIntimateVerb = tokens.Overlaps(["grope", "fondle", "kiss", "lick", "slap"]);
+        if (namedNpc is null && !(usesPersonPronoun && (hasExplicitBodyTarget || hasInherentlyIntimateVerb)))
+            return false;
+
+        var npc = namedNpc ?? (room.Npcs.Count == 1 ? room.Npcs[0] : null);
+        if (npc is null)
+        {
+            narration = $"{player.Name}, you reach past a personal boundary in {room.Name}, but the room turns the moment against you: balance betrays you, and dignity pays the first fine.";
+            return true;
+        }
+
+        narration = $"{npc.Name} catches your wrist before the gesture lands; every nearby conversation goes thin and sharp. \"No, {player.Name},\" {npc.Name} says, calm enough to be dangerous. \"Apologize, explain yourself, or leave before I decide which glass breaks first.\"";
+        return true;
+    }
+
+    private static bool HasStructuredFreeFormChanges(FreeFormResponse response)
+    {
+        return response.StatChanges.Count > 0
+            || response.InventoryChanges.Count > 0
+            || response.EntityChanges.Count > 0
+            || response.CombatInitiated
+            || response.RoomChanges is not null
+            || response.InteractionUpdate is not null
+            || response.QuestUpdates is not null;
+    }
+
+    private static bool IsBoringFreeFormNarration(string? narration)
+    {
+        if (string.IsNullOrWhiteSpace(narration))
+            return true;
+
+        return narration.Contains("nothing happens", StringComparison.OrdinalIgnoreCase)
+            || narration.Contains("moment passes", StringComparison.OrdinalIgnoreCase)
+            || narration.Contains("without any dramatic consequences", StringComparison.OrdinalIgnoreCase)
+            || narration.Contains("doesn't quite land", StringComparison.OrdinalIgnoreCase)
+            || narration.Contains("try using", StringComparison.OrdinalIgnoreCase)
+            || narration.Contains("try **talk to", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool TryBuildPlayfulFreeFormNarration(PlayerCharacter player, string roomName, string actionPhrase, string witnessReaction, out string narration)
+    {
+        narration = string.Empty;
+        var normalized = actionPhrase.Trim().ToLowerInvariant();
+
+        if (StartsWithAny(normalized, "lick ", "taste ", "bite ", "chew ", "eat "))
+        {
+            var subject = ExtractActionSubject(actionPhrase);
+            narration = $"{player.Name} commits to the terrible experiment and samples {subject}. The result is immediate, educational, and mostly regret: mineral grit, old damp, and a faint metallic sting that suggests {roomName} has won this round. {witnessReaction}";
+            return true;
+        }
+
+        if (StartsWithAny(normalized, "poke ", "prod ", "touch ", "pat ", "slap "))
+        {
+            var subject = ExtractActionSubject(actionPhrase);
+            narration = $"{player.Name} tests {subject} with the confidence of someone who has not yet been bitten by enough suspicious scenery. Nothing explodes, which feels less like proof of safety and more like a temporary courtesy. {witnessReaction}";
+            return true;
+        }
+
+        if (StartsWithAny(normalized, "dance", "sing", "pose", "bow", "flourish "))
+        {
+            narration = $"{player.Name} turns the moment into performance, carving a little absurdity into {roomName}. It wins no wars and solves no quests, but for one breath the room has to admit it was entertained. {witnessReaction}";
+            return true;
+        }
+
+        if (StartsWithAny(normalized, "steal ", "pocket ", "swipe ", "grab "))
+        {
+            var subject = ExtractActionSubject(actionPhrase);
+            narration = $"{player.Name} makes a discreet play for {subject}, but discretion arrives late and wearing loud boots. The attempt stalls before anything changes hands, leaving only the delicate perfume of bad judgment behind. {witnessReaction}";
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool StartsWithAny(string value, params string[] prefixes)
+    {
+        return prefixes.Any(prefix => value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string ExtractActionSubject(string actionPhrase)
+    {
+        var trimmed = actionPhrase.Trim();
+        var spaceIndex = trimmed.IndexOf(' ');
+        if (spaceIndex < 0 || spaceIndex >= trimmed.Length - 1)
+            return "the nearest questionable thing";
+
+        return trimmed[(spaceIndex + 1)..].Trim();
     }
 
     private static bool TryBuildMaintenanceFreeFormNarration(PlayerCharacter player, string roomName, string actionPhrase, string witnessReaction, out string narration)
@@ -1911,9 +2157,9 @@ public class NarratorService : INarratorService
     {
         var witness = room.Npcs.FirstOrDefault()?.Name;
         if (!string.IsNullOrWhiteSpace(witness))
-            return $"{witness} clocks the gesture, then returns their attention to the wider room.";
+            return $"{witness} clocks it, and that tiny choice redraws the social weather: amused, wary, and suddenly available to be pushed further.";
 
-        return "The sound of it fades back into the room almost at once.";
+        return "The room answers in small ways: a floorboard complains, shadows twitch, and the silence gives the action a shape instead of swallowing it.";
     }
 
     private static string ExtractFreeFormActionPhrase(string rawInput)
@@ -2005,18 +2251,13 @@ public class NarratorService : INarratorService
     {
         try
         {
-            var response = await _httpClient.GetFromJsonAsync<JsonElement>("v1/models", ct);
-            var models = new List<string>();
-            foreach (var item in response.GetProperty("data").EnumerateArray())
-            {
-                var id = item.GetProperty("id").GetString();
-                if (!string.IsNullOrEmpty(id)) models.Add(id);
-            }
-            return models;
+            return IsOllamaProvider()
+                ? await ListOllamaModelsAsync(ct)
+                : await ListOpenAiCompatibleModelsAsync(ct);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Could not list LM Studio models");
+            _logger.LogWarning(ex, "Could not list narrator models from {Provider}", _provider);
             return [];
         }
     }
@@ -2027,20 +2268,50 @@ public class NarratorService : INarratorService
 
         try
         {
-            var response = await _httpClient.GetFromJsonAsync<JsonElement>("v1/models", ct);
-            var firstModel = response.GetProperty("data").EnumerateArray().FirstOrDefault();
-            if (firstModel.ValueKind != JsonValueKind.Undefined)
+            var models = await ListAvailableModelsAsync(ct);
+            var firstModel = models.FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(firstModel))
             {
-                _model = firstModel.GetProperty("id").GetString() ?? _model;
-                _logger.LogInformation("Auto-resolved LM Studio model to {Model}", _model);
+                _model = firstModel;
+                _logger.LogInformation("Auto-resolved narrator model to {Model} via {Provider}", _model, _provider);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Could not auto-resolve LM Studio model, keeping \"{Model}\"", _model);
+            _logger.LogWarning(ex, "Could not auto-resolve narrator model via {Provider}, keeping \"{Model}\"", _provider, _model);
         }
 
         _modelResolved = true;
+    }
+
+    private async Task<IReadOnlyList<string>> ListOpenAiCompatibleModelsAsync(CancellationToken ct)
+    {
+        var response = await _httpClient.GetFromJsonAsync<JsonElement>("v1/models", ct);
+        var models = new List<string>();
+        foreach (var item in response.GetProperty("data").EnumerateArray())
+        {
+            var id = item.GetProperty("id").GetString();
+            if (!string.IsNullOrEmpty(id))
+                models.Add(id);
+        }
+        return models;
+    }
+
+    private async Task<IReadOnlyList<string>> ListOllamaModelsAsync(CancellationToken ct)
+    {
+        var response = await _httpClient.GetFromJsonAsync<JsonElement>("api/tags", ct);
+        var models = new List<string>();
+        foreach (var item in response.GetProperty("models").EnumerateArray())
+        {
+            var name = item.TryGetProperty("name", out var nameProperty)
+                ? nameProperty.GetString()
+                : item.TryGetProperty("model", out var modelProperty)
+                    ? modelProperty.GetString()
+                    : null;
+            if (!string.IsNullOrEmpty(name))
+                models.Add(name);
+        }
+        return models;
     }
 
     private async Task<string> CompletionOrThrowAsync(string systemPrompt, string userPrompt, CancellationToken ct, string operation = "completion", bool logPayload = false, int maxTokens = 2048, string? playerId = null, string? roomId = null)
@@ -2055,7 +2326,10 @@ public class NarratorService : INarratorService
         {
             try
             {
-                var completionContent = await SendCompletionRequestAsync(systemPrompt, userPrompt, ct, operation, logPayload, maxTokens);
+                var completionContent = SanitizeLmCompletion(
+                    await SendCompletionRequestAsync(systemPrompt, userPrompt, ct, operation, logPayload, maxTokens));
+                if (string.IsNullOrWhiteSpace(completionContent))
+                    throw new InvalidOperationException($"{_provider} {operation} response contained no usable narration after sanitization.");
 
                 // Log the full exchange for training-data collection
                 sw.Stop();
@@ -2085,6 +2359,11 @@ public class NarratorService : INarratorService
     }
 
     private async Task<string> SendCompletionRequestAsync(string systemPrompt, string userPrompt, CancellationToken ct, string operation, bool logPayload, int maxTokens)
+        => IsOllamaProvider()
+            ? await SendOllamaCompletionRequestAsync(systemPrompt, userPrompt, ct, operation, logPayload, maxTokens)
+            : await SendOpenAiCompatibleCompletionRequestAsync(systemPrompt, userPrompt, ct, operation, logPayload, maxTokens);
+
+    private async Task<string> SendOpenAiCompatibleCompletionRequestAsync(string systemPrompt, string userPrompt, CancellationToken ct, string operation, bool logPayload, int maxTokens)
     {
         var request = new LmStudioRequest
         {
@@ -2099,9 +2378,16 @@ public class NarratorService : INarratorService
             Stream = true
         };
 
+        if (_think == false)
+        {
+            request.EnableThinking = false;
+            request.ReasoningEffort = "none";
+            request.Reasoning = new LmStudioReasoning { Effort = "none" };
+        }
+
         if (logPayload)
         {
-            _logger.LogInformation("LM Studio {Operation} request payload: {Payload}", operation, JsonSerializer.Serialize(request, _jsonOptions));
+            _logger.LogInformation("{Provider} {Operation} request payload: {Payload}", _provider, operation, JsonSerializer.Serialize(request, _jsonOptions));
         }
 
         // Use streaming to avoid stalls with models that freeze on non-streamed requests (e.g. Gemma 3).
@@ -2123,13 +2409,13 @@ public class NarratorService : INarratorService
         {
             var responseBody = await response.Content.ReadAsStringAsync(ct);
             if (logPayload)
-                _logger.LogInformation("LM Studio {Operation} non-streamed response ({StatusCode}): {Body}", operation, (int)response.StatusCode, responseBody);
+                _logger.LogInformation("{Provider} {Operation} non-streamed response ({StatusCode}): {Body}", _provider, operation, (int)response.StatusCode, responseBody);
 
             var result = JsonSerializer.Deserialize<LmStudioResponse>(responseBody, _jsonOptions);
             var msg = result?.Choices?.FirstOrDefault()?.Message?.Content;
             completionContent = !string.IsNullOrWhiteSpace(msg)
                 ? msg
-                : throw new InvalidOperationException($"LM Studio {operation} response did not contain a message body.");
+                : throw new InvalidOperationException($"{_provider} {operation} response did not contain a message body.");
         }
         else
         {
@@ -2171,16 +2457,93 @@ public class NarratorService : INarratorService
 
             if (logPayload)
             {
-                _logger.LogInformation("LM Studio {Operation} streamed response ({Length} chars): {Body}", operation, completionContent.Length,
+                _logger.LogInformation("{Provider} {Operation} streamed response ({Length} chars): {Body}", _provider, operation, completionContent.Length,
                     completionContent.Length > 500 ? completionContent[..500] + "..." : completionContent);
             }
 
             if (string.IsNullOrWhiteSpace(completionContent))
-                throw new InvalidOperationException($"LM Studio {operation} streamed response was empty.");
+                throw new InvalidOperationException($"{_provider} {operation} streamed response was empty.");
         }
 
         return completionContent;
     }
+
+    private async Task<string> SendOllamaCompletionRequestAsync(string systemPrompt, string userPrompt, CancellationToken ct, string operation, bool logPayload, int maxTokens)
+    {
+        var request = new OllamaChatRequest
+        {
+            Model = _model,
+            Messages =
+            [
+                new LmStudioMessage { Role = "system", Content = systemPrompt },
+                new LmStudioMessage { Role = "user", Content = userPrompt }
+            ],
+            Stream = true,
+            Think = _think,
+            Options = new OllamaOptions
+            {
+                Temperature = 0.8,
+                NumPredict = maxTokens,
+                NumCtx = _contextLength
+            }
+        };
+
+        if (logPayload)
+        {
+            _logger.LogInformation("Ollama {Operation} request payload: {Payload}", operation, JsonSerializer.Serialize(request, _jsonOptions));
+        }
+
+        var httpRequest = new HttpRequestMessage(HttpMethod.Post, "api/chat")
+        {
+            Content = JsonContent.Create(request, options: _jsonOptions)
+        };
+
+        using var response = await _httpClient.SendAsync(httpRequest, HttpCompletionOption.ResponseHeadersRead, ct);
+        response.EnsureSuccessStatusCode();
+
+        var accumulated = new StringBuilder();
+        using var stream = await response.Content.ReadAsStreamAsync(ct);
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+
+        string? line;
+        while ((line = await reader.ReadLineAsync(ct)) is not null)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            if (string.IsNullOrWhiteSpace(line))
+                continue;
+
+            try
+            {
+                var chunk = JsonSerializer.Deserialize<OllamaChatResponse>(line, _jsonOptions);
+                var content = chunk?.Message?.Content;
+                if (!string.IsNullOrEmpty(content))
+                    accumulated.Append(content);
+
+                if (chunk?.Done == true)
+                    break;
+            }
+            catch (JsonException)
+            {
+                // Malformed Ollama stream chunk - skip and continue.
+            }
+        }
+
+        var completionContent = accumulated.ToString();
+        if (logPayload)
+        {
+            _logger.LogInformation("Ollama {Operation} streamed response ({Length} chars): {Body}", operation, completionContent.Length,
+                completionContent.Length > 500 ? completionContent[..500] + "..." : completionContent);
+        }
+
+        if (string.IsNullOrWhiteSpace(completionContent))
+            throw new InvalidOperationException($"Ollama {operation} streamed response was empty.");
+
+        return completionContent;
+    }
+
+    private bool IsOllamaProvider()
+        => string.Equals(_provider, "Ollama", StringComparison.OrdinalIgnoreCase);
 
     private async Task LogConversationAsync(string operation, string systemPrompt, string userPrompt,
         string response, int maxTokens, long latencyMs, bool success,
@@ -3007,6 +3370,16 @@ public class NarratorService : INarratorService
         [JsonPropertyName("max_tokens")]
         public int MaxTokens { get; set; } = 2048;
         public bool Stream { get; set; }
+        [JsonPropertyName("reasoning_effort")]
+        public string? ReasoningEffort { get; set; }
+        [JsonPropertyName("enable_thinking")]
+        public bool? EnableThinking { get; set; }
+        public LmStudioReasoning? Reasoning { get; set; }
+    }
+
+    private class LmStudioReasoning
+    {
+        public string Effort { get; set; } = "none";
     }
 
     private class LmStudioMessage
@@ -3029,6 +3402,30 @@ public class NarratorService : INarratorService
     private class LmStudioDelta
     {
         public string? Content { get; set; }
+    }
+
+    private class OllamaChatRequest
+    {
+        public string Model { get; set; } = "default";
+        public List<LmStudioMessage> Messages { get; set; } = [];
+        public bool Stream { get; set; } = true;
+        public bool? Think { get; set; }
+        public OllamaOptions? Options { get; set; }
+    }
+
+    private class OllamaOptions
+    {
+        public double Temperature { get; set; } = 0.8;
+        [JsonPropertyName("num_predict")]
+        public int NumPredict { get; set; }
+        [JsonPropertyName("num_ctx")]
+        public int? NumCtx { get; set; }
+    }
+
+    private class OllamaChatResponse
+    {
+        public LmStudioMessage? Message { get; set; }
+        public bool Done { get; set; }
     }
 
     private class GeneratedRoom
@@ -3762,7 +4159,7 @@ public class NarratorService : INarratorService
         };
 
         return $"Well, well. Another hero stumbles into the story — though this one might actually survive the first chapter. " +
-               $"The world of Ivalice doesn't care about your feelings, but it's about to care about you. " +
+               $"The world of Elarion doesn't care about your feelings, but it's about to care about you. " +
                $"{raceReaction} {classReaction}";
     }
 

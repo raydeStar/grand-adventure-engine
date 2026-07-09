@@ -8,14 +8,14 @@ Identified during the Thornwall demo world playthrough. None are blockers for th
 
 **Current behavior:** Items sit on the ground in shops. Players `take` them for free. NPCs like Korga and Pip have personality text about being merchants, but there's no mechanical transaction.
 
-**Impact:** Low for demo (everything is OP loot anyway). High for a real game ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â economy matters.
+**Impact:** Low for demo (everything is OP loot anyway). High for a real game — economy matters.
 
 **What's needed:**
 - `ProcessBuyAsync` / `ProcessSellAsync` action handlers in GameEngine
 - NPC `IsShopkeeper` flag with a `ShopInventory` separate from room items (so loot doesn't vanish when someone takes it)
 - Gold deduction on buy, gold gain on sell (probably at reduced value)
 - Price display when looking at shop items
-- Haggle mechanic ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â CHA persuade check to lower prices (already have the social check infrastructure)
+- Haggle mechanic — CHA persuade check to lower prices (already have the social check infrastructure)
 - Pip's "shameless haggler" personality should make haggling harder, Korga's "will give discounts to people who impress her" should make it easier
 
 ---
@@ -51,7 +51,7 @@ Identified during the Thornwall demo world playthrough. None are blockers for th
 - When an enemy dies, remove from turn order and continue
 - Fleeing should still work (escape the whole encounter)
 
-**Existing infrastructure:** `CombatState`, `CombatParticipant`, `CombatPhase`, and `InitiativeFormula` are all defined in models and game-rules.yaml ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â just not wired up.
+**Existing infrastructure:** `CombatState`, `CombatParticipant`, `CombatPhase`, and `InitiativeFormula` are all defined in models and game-rules.yaml — just not wired up.
 
 ---
 
@@ -65,7 +65,7 @@ Identified during the Thornwall demo world playthrough. None are blockers for th
 - Option A: Auto-equip on take if the slot is empty and the item is equippable (IMPLEMENTED)
 - Option B: Support compound command `take and equip thunderstrike blade`
 - Option C: `CommandParser` recognizes `grab` / `wield` / `don` as take-and-equip variants
-- Probably Option A is best ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â auto-equip when the slot is empty, prompt "You found X. Equip it? (currently using Y)" when the slot is occupied
+- Probably Option A is best — auto-equip when the slot is empty, prompt "You found X. Equip it? (currently using Y)" when the slot is occupied
 
 ---
 
@@ -81,7 +81,7 @@ Identified during the Thornwall demo world playthrough. None are blockers for th
 
 | Gap | Effort | Impact | Priority |
 |-----|--------|--------|----------|
-| Mechanical potion use | Small | High (combat reliability) | **P1** Ã¢â‚¬â€ DONE |
-| Multi-enemy combat | Large | High (immersion) | **P2** Ã¢â‚¬â€ DONE |
-| Buy/sell system | Medium | Medium (economy) | **P3** Ã¢â‚¬â€ DONE |
-| Auto-equip on take | Small | Low (QoL) | **P4** Ã¢â‚¬â€ DONE |
+| Mechanical potion use | Small | High (combat reliability) | **P1** — DONE |
+| Multi-enemy combat | Large | High (immersion) | **P2** — DONE |
+| Buy/sell system | Medium | Medium (economy) | **P3** — DONE |
+| Auto-equip on take | Small | Low (QoL) | **P4** — DONE |

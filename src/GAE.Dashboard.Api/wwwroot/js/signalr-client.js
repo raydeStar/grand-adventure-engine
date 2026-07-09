@@ -72,26 +72,34 @@ const GameHub = {
   },
 
   async joinPlayerFeed(playerId) {
-    if (this.connection?.state === signalR.HubConnectionState.Connected) {
-      await this.connection.invoke('JoinPlayerFeed', playerId);
-    }
+    return this._invokeIfConnected('JoinPlayerFeed', playerId);
   },
 
   async joinRoomFeed(roomId) {
-    if (this.connection?.state === signalR.HubConnectionState.Connected) {
-      await this.connection.invoke('JoinRoomFeed', roomId);
-    }
+    return this._invokeIfConnected('JoinRoomFeed', roomId);
   },
 
   async leaveRoomFeed(roomId) {
-    if (this.connection?.state === signalR.HubConnectionState.Connected) {
-      await this.connection.invoke('LeaveRoomFeed', roomId);
-    }
+    return this._invokeIfConnected('LeaveRoomFeed', roomId);
   },
 
   async joinAdminFeed() {
-    if (this.connection?.state === signalR.HubConnectionState.Connected) {
-      await this.connection.invoke('JoinAdminFeed');
+    return this._invokeIfConnected('JoinAdminFeed');
+  },
+
+  async _invokeIfConnected(method, ...args) {
+    if (!window.signalR || this.connection?.state !== signalR.HubConnectionState.Connected) {
+      return false;
+    }
+
+    try {
+      await this.connection.invoke(method, ...args);
+      return true;
+    } catch (err) {
+      this.realtimeEnabled = false;
+      this._emit('status', 'polling');
+      console.warn(`SignalR ${method} failed; continuing with polling.`, err);
+      return false;
     }
   },
 

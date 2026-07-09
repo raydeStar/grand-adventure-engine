@@ -1,5 +1,6 @@
-using System.Net;
+﻿using System.Net;
 using System.Text.Json;
+using System.Net.Http.Headers;
 using GAE.Core.Interfaces;
 using GAE.Core.Models;
 using GAE.Narrator;
@@ -221,6 +222,133 @@ public class NarratorServiceTests
     }
 
     [Fact]
+    public async Task NarrateActionAsync_WithOllamaProvider_SendsContextAndThinkingOptions()
+    {
+        var handler = new CapturingOllamaHandler();
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:11434/") };
+        var narrator = new NarratorService(
+            httpClient,
+            NullLogger<NarratorService>.Instance,
+            model: "diffusiongemma-test",
+            provider: "Ollama",
+            contextLength: 16_384,
+            think: false);
+
+        var narration = await narrator.NarrateActionAsync(new NarratorContext
+        {
+            Player = new PlayerCharacter { Id = "p1", Name = "Thorin", Race = "Dwarf", Class = "Fighter" },
+            CurrentRoom = new Room { Id = "forge", Name = "Forge", Description = "A smoky forge." },
+            Action = new GameAction { PlayerId = "p1", RawInput = "inspect the anvil", Type = ActionType.Use },
+            MechanicalResult = new ActionResult { Success = true, MechanicalSummary = "You inspect the anvil." }
+        });
+
+        Assert.Contains("anvil", narration, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("/api/chat", handler.RequestPath);
+        Assert.False(string.IsNullOrWhiteSpace(handler.RequestBody));
+
+        using var json = JsonDocument.Parse(handler.RequestBody!);
+        var root = json.RootElement;
+        Assert.Equal("diffusiongemma-test", root.GetProperty("model").GetString());
+        Assert.False(root.GetProperty("think").GetBoolean());
+        Assert.True(root.GetProperty("stream").GetBoolean());
+        Assert.Equal(16_384, root.GetProperty("options").GetProperty("num_ctx").GetInt32());
+        Assert.Equal(512, root.GetProperty("options").GetProperty("num_predict").GetInt32());
+    }
+
+    [Fact]
+    public async Task NarrateActionAsync_WithOpenAiCompatibleProvider_SendsBearerAndThinkingOptions()
+    {
+        var handler = new CapturingOpenAiCompatibleHandler();
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:8000/") };
+        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "sk-unsloth-test");
+        var narrator = new NarratorService(
+            httpClient,
+            NullLogger<NarratorService>.Instance,
+            model: "diffusiongemma",
+            think: false);
+
+        var narration = await narrator.NarrateActionAsync(new NarratorContext
+        {
+            Player = new PlayerCharacter { Id = "p1", Name = "Thorin", Race = "Dwarf", Class = "Fighter" },
+            CurrentRoom = new Room { Id = "forge", Name = "Forge", Description = "A smoky forge." },
+            Action = new GameAction { PlayerId = "p1", RawInput = "inspect the anvil", Type = ActionType.Use },
+            MechanicalResult = new ActionResult { Success = true, MechanicalSummary = "You inspect the anvil." }
+        });
+
+        Assert.Contains("anvil", narration, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("/v1/chat/completions", handler.RequestPath);
+        Assert.Equal("Bearer", handler.AuthorizationScheme);
+        Assert.Equal("sk-unsloth-test", handler.AuthorizationParameter);
+        Assert.False(string.IsNullOrWhiteSpace(handler.RequestBody));
+
+        using var json = JsonDocument.Parse(handler.RequestBody!);
+        var root = json.RootElement;
+        Assert.Equal("diffusiongemma", root.GetProperty("model").GetString());
+        Assert.False(root.GetProperty("enable_thinking").GetBoolean());
+        Assert.Equal("none", root.GetProperty("reasoning_effort").GetString());
+        Assert.Equal("none", root.GetProperty("reasoning").GetProperty("effort").GetString());
+    }
+
+    [Fact]
+    public async Task NarrateActionAsync_StripsOpenAiCompatibleThinkBlocks()
+    {
+        var handler = new CapturingOpenAiCompatibleHandler("""
+            data: {"choices":[{"delta":{"content":"<think>private scratchpad that should never reach the story log</think>"}}]}
+
+            data: {"choices":[{"delta":{"content":"Thorin checks the anvil, and the soot gives up one honest clue."}}]}
+
+            data: [DONE]
+
+            """);
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:8000/") };
+        var narrator = new NarratorService(
+            httpClient,
+            NullLogger<NarratorService>.Instance,
+            model: "diffusiongemma",
+            think: false);
+
+        var narration = await narrator.NarrateActionAsync(new NarratorContext
+        {
+            Player = new PlayerCharacter { Id = "p1", Name = "Thorin", Race = "Dwarf", Class = "Fighter" },
+            CurrentRoom = new Room { Id = "forge", Name = "Forge", Description = "A smoky forge." },
+            Action = new GameAction { PlayerId = "p1", RawInput = "inspect the anvil", Type = ActionType.Use },
+            MechanicalResult = new ActionResult { Success = true, MechanicalSummary = "You inspect the anvil." }
+        });
+
+        Assert.DoesNotContain("<think>", narration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("scratchpad", narration, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("honest clue", narration, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task NarrateActionAsync_UsesFallbackForDanglingThinkBlock()
+    {
+        var handler = new CapturingOpenAiCompatibleHandler("""
+            data: {"choices":[{"delta":{"content":"<think>private scratchpad without a closing tag"}}]}
+
+            data: [DONE]
+
+            """);
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:8000/") };
+        var narrator = new NarratorService(
+            httpClient,
+            NullLogger<NarratorService>.Instance,
+            model: "diffusiongemma",
+            think: false);
+
+        var narration = await narrator.NarrateActionAsync(new NarratorContext
+        {
+            Player = new PlayerCharacter { Id = "p1", Name = "Thorin", Race = "Dwarf", Class = "Fighter" },
+            CurrentRoom = new Room { Id = "forge", Name = "Forge", Description = "A smoky forge." },
+            Action = new GameAction { PlayerId = "p1", RawInput = "inspect the anvil", Type = ActionType.Use },
+            MechanicalResult = new ActionResult { Success = true, MechanicalSummary = "You inspect the anvil." }
+        });
+
+        Assert.DoesNotContain("<think>", narration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("scratchpad", narration, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task NarrateActionAsync_ForMissingLookTarget_AvoidsTemplateFailureText()
     {
         var handler = new FakeHttpMessageHandler(new HttpRequestException("HTTP should not be called for deterministic look narration."));
@@ -269,7 +397,7 @@ public class NarratorServiceTests
         // making the JSON syntactically invalid. The narration is still extractable.
         var garbledJson = """
             {
-              "narration": "\"Well, if you're looking for trouble, you don't have to look far,\" Tifa says, wiping down a stray spill with a quick, practiced motion.",
+              "narration": "\"Well, if you're looking for trouble, you don't have to look far,\" Mara says, wiping down a stray spill with a quick, practiced motion.",
               "success": true,
               "statChanges": {},
              lyinventoryChanges": [],
@@ -282,7 +410,7 @@ public class NarratorServiceTests
         var result = NarratorService.TryParseFreeFormResponse(garbledJson, out var response);
 
         Assert.True(result);
-        Assert.Contains("Tifa says", response.Narration);
+        Assert.Contains("Mara says", response.Narration);
         Assert.Contains("trouble", response.Narration);
         Assert.True(response.Success);
     }
@@ -310,7 +438,7 @@ public class NarratorServiceTests
     public void TryParseFreeFormResponse_WithPlainNarration_SalvagesReply()
     {
         var plainNarration = """
-            Tifa stops polishing a glass and leans forward, her crimson eyes narrowing slightly.
+            Mara stops polishing a glass and leans forward, her crimson eyes narrowing slightly.
 
             "You want to know about the Merchants Guild?" she asks, voice low as if sharing a secret. "They're not what they seem."
             "They control half the trade in this quarter, and they always want a cut."
@@ -327,7 +455,7 @@ public class NarratorServiceTests
     public void TryParseFreeFormResponse_WithPlainNarrationAndSchemaTail_TrimsArtifacts()
     {
         var plainNarrationWithTail = """
-            Tifa Lockhart: "That poster?" she says, turning around to glance at the faded print. "That was another life."
+            Mara Vale: "That poster?" she says, turning around to glance at the faded print. "That was another life."
 
             She raises her glass slightly. "Sometimes the old fights come knocking anyway."
 
@@ -351,7 +479,7 @@ public class NarratorServiceTests
     public void TryParseFreeFormResponse_WithPromptTailAfterNarration_TrimsPromptArtifacts()
     {
         var narrationWithPromptTail = """
-            Tifa slides a glass across the bar. "You come here looking for trouble or company?" she asks with a crooked smile.
+            Mara slides a glass across the bar. "You come here looking for trouble or company?" she asks with a crooked smile.
 
             You're playing a text-based RPG where choices change outcomes and tone determines atmosphere.
 
@@ -371,7 +499,7 @@ public class NarratorServiceTests
     public void TryParseFreeFormResponse_WithGameplayScaffoldingTail_TrimsIt()
     {
         var narrationWithGameplayTail = """
-            Tifa raises her glass. "To Ivalice," she says with a grin that doesn't quite hide her caution.
+            Mara raises her glass. "To Elarion," she says with a grin that doesn't quite hide her caution.
 
             Health: 90/100
             Stamina: 75/80
@@ -381,7 +509,7 @@ public class NarratorServiceTests
         var result = NarratorService.TryParseFreeFormResponse(narrationWithGameplayTail, out var response);
 
         Assert.True(result);
-        Assert.Contains("To Ivalice", response.Narration);
+        Assert.Contains("To Elarion", response.Narration);
         Assert.DoesNotContain("Health:", response.Narration);
         Assert.DoesNotContain("Stamina:", response.Narration);
         Assert.DoesNotContain("The player can", response.Narration);
@@ -391,7 +519,7 @@ public class NarratorServiceTests
     public void TryParseFreeFormResponse_WithPromptEcho_DoesNotTreatItAsNarration()
     {
         var promptEcho = """
-            You are now voicing Tifa Lockhart in direct conversation with the player.
+            You are now voicing Mara Vale in direct conversation with the player.
 
             CRITICAL RESPONSE RULES:
             1. The narration MUST contain 2-4 full sentences of quoted NPC speech.
@@ -466,6 +594,80 @@ public class NarratorServiceTests
     }
 
     [Fact]
+    public async Task ProcessConversationTurnAsync_WhenHttpFailsOnOngoingHostileNpc_ReturnsTalkableSubstantiveFallback()
+    {
+        var handler = new FakeHttpMessageHandler(new HttpRequestException("Connection refused"));
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") };
+        var narrator = new NarratorService(httpClient, NullLogger<NarratorService>.Instance);
+
+        var response = await narrator.ProcessConversationTurnAsync(
+            new PlayerCharacter { Name = "Bonk", Race = "Human", Class = "Warrior", Level = 1 },
+            new Room { Id = "inn", Name = "Lantern's Rest", Description = "A crowded inn with a damp cellar smell." },
+            new Npc
+            {
+                Id = "mara",
+                Name = "Mara",
+                Personality = "Gruff, suspicious innkeeper with a sharp tongue.",
+                Disposition = "hostile",
+                DispositionState = new NpcDispositionState { Emotion = "hostile", Intensity = 25 },
+                KnowledgeScopes = ["local"],
+                QuestsOffered = ["waterway_infestation"]
+            },
+            new InteractionState
+            {
+                Mode = InteractionMode.Conversation,
+                Target = "mara",
+                PlayerTurnCount = 3,
+                NpcDisposition = "hostile"
+            },
+            "ask Mara for her honest opinion and why the Waterway matters");
+
+        Assert.True(response.Success);
+        Assert.Equal(InteractionMode.Conversation, response.InteractionUpdate?.Mode);
+        Assert.Contains("Bonk", response.Narration);
+        Assert.Contains("opinion", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("?", response.Narration);
+        Assert.DoesNotContain("go on", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("not talking", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("send you on your way", response.Narration, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ProcessConversationTurnAsync_WhenHttpFailsOnInitialDirectedReport_ReturnsTopicAwareFallback()
+    {
+        var handler = new FakeHttpMessageHandler(new HttpRequestException("Connection refused"));
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") };
+        var narrator = new NarratorService(httpClient, NullLogger<NarratorService>.Instance);
+
+        var response = await narrator.ProcessConversationTurnAsync(
+            new PlayerCharacter { Name = "Bonk", Race = "Human", Class = "Warrior", Level = 5 },
+            new Room { Id = "city_hall", Name = "City Hall", Description = "A political chamber." },
+            new Npc
+            {
+                Id = "marquis_odran",
+                Name = "Marquis Odran",
+                Personality = "Dignified, cautious resistance leader.",
+                Disposition = "friendly"
+            },
+            new InteractionState
+            {
+                Mode = InteractionMode.Conversation,
+                Target = "marquis_odran",
+                PlayerTurnCount = 0,
+                NpcDisposition = "friendly"
+            },
+            "tell Marquis Odran I recovered the water crystal");
+
+        Assert.True(response.Success);
+        Assert.Equal(InteractionMode.Conversation, response.InteractionUpdate?.Mode);
+        Assert.Contains("Bonk", response.Narration);
+        Assert.Contains("light", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Say it straight", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Go on", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("?", response.Narration);
+    }
+
+    [Fact]
     public async Task ProcessFreeFormAsync_ForLowStakesAction_WhenHttpFails_ReturnsFallback()
     {
         // Low-stakes actions now go through the LLM for humorous narration.
@@ -482,6 +684,183 @@ public class NarratorServiceTests
 
         Assert.NotNull(response);
         Assert.NotEmpty(response.Narration);
+    }
+
+    [Fact]
+    public async Task ProcessFreeFormAsync_WhenHttpFailsOnCasualSocialAction_ReturnsConsequentialNpcReaction()
+    {
+        var handler = new FakeHttpMessageHandler(new HttpRequestException("Connection refused"));
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") };
+        var narrator = new NarratorService(httpClient, NullLogger<NarratorService>.Instance);
+
+        var response = await narrator.ProcessFreeFormAsync(
+            new PlayerCharacter { Name = "Bonk", Race = "Human", Class = "Warrior" },
+            new Room
+            {
+                Id = "inn",
+                Name = "Lantern's Rest",
+                Description = "A crowded inn.",
+                Npcs = [new Npc { Id = "mara", Name = "Mara Vale", Personality = "Gruff but attentive innkeeper." }]
+            },
+            "sup nerd",
+            []);
+
+        Assert.True(response.Success);
+        Assert.Contains("Mara Vale", response.Narration);
+        Assert.Contains("Bonk", response.Narration);
+        Assert.True(
+            new[] { "state your business", "pick a lane", "sentence with a purpose", "go on" }
+                .Any(phrase => response.Narration.Contains(phrase, StringComparison.OrdinalIgnoreCase)),
+            response.Narration);
+        Assert.DoesNotContain("moment passes", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("without any dramatic consequences", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("try using", response.Narration, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ProcessFreeFormAsync_WhenHttpFailsOnFollowupSocialClarification_ReturnsDifferentBeat()
+    {
+        var handler = new FakeHttpMessageHandler(new HttpRequestException("Connection refused"));
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") };
+        var narrator = new NarratorService(httpClient, NullLogger<NarratorService>.Instance);
+        var player = new PlayerCharacter { Name = "Bonk", Race = "Human", Class = "Warrior" };
+        var room = new Room
+        {
+            Id = "inn",
+            Name = "Lantern's Rest",
+            Description = "A crowded inn.",
+            Npcs = [new Npc { Id = "mara", Name = "Mara Vale", Personality = "Gruff but attentive innkeeper." }]
+        };
+
+        var first = await narrator.ProcessFreeFormAsync(player, room, "sup nerd", []);
+        var second = await narrator.ProcessFreeFormAsync(player, room, "hey now, nerd is a term of endearment", []);
+
+        Assert.True(first.Success);
+        Assert.True(second.Success);
+        Assert.Contains("Mara Vale", second.Narration);
+        Assert.Contains("endearment", second.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.NotEqual(first.Narration, second.Narration);
+        Assert.DoesNotContain("Strange manners, useful nerve", second.Narration, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ProcessFreeFormAsync_WhenHttpFailsOnBoundaryViolation_ReturnsFailedBoundaryReaction()
+    {
+        var handler = new FakeHttpMessageHandler(new HttpRequestException("Connection refused"));
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") };
+        var narrator = new NarratorService(httpClient, NullLogger<NarratorService>.Instance);
+
+        var response = await narrator.ProcessFreeFormAsync(
+            new PlayerCharacter { Name = "Dante", Race = "Halfling", Class = "Rogue" },
+            new Room
+            {
+                Id = "inn",
+                Name = "Lantern's Rest",
+                Description = "A crowded inn.",
+                Npcs = [new Npc { Id = "mara", Name = "Mara Vale", Personality = "Gruff but attentive innkeeper." }]
+            },
+            "I grab her booty",
+            []);
+
+        Assert.False(response.Success);
+        Assert.Contains("Mara Vale", response.Narration);
+        Assert.Contains("wrist", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("No", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("social opening", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("amused, wary", response.Narration, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("I grab the chest")]
+    [InlineData("I touch the wall over there")]
+    public async Task ProcessFreeFormAsync_InnocentSubstringMatches_DoNotUseBoundaryFallback(string rawInput)
+    {
+        var narrator = new NarratorService(
+            new HttpClient(new FakeHttpMessageHandler(new HttpRequestException("Connection refused")))
+            {
+                BaseAddress = new Uri("http://localhost:1234/")
+            },
+            NullLogger<NarratorService>.Instance);
+
+        var response = await narrator.ProcessFreeFormAsync(
+            new PlayerCharacter { Name = "Dante", Race = "Halfling", Class = "Rogue" },
+            new Room
+            {
+                Id = "inn",
+                Name = "Lantern's Rest",
+                Description = "A crowded inn with a locked treasure chest.",
+                Npcs = [new Npc { Id = "mara", Name = "Mara Vale" }]
+            },
+            rawInput,
+            []);
+
+        Assert.DoesNotContain("catches your wrist", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("personal boundary", response.Narration, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ProcessFreeFormAsync_WhenLlmReturnsBoringNonConsequence_ReplacesItWithFallback()
+    {
+        var handler = new ResponseHttpMessageHandler("""
+            {
+              "choices": [
+                {
+                  "message": {
+                    "content": "{\"narration\":\"You give it a shot. Mara Vale clocks the gesture, then returns their attention to the wider room. The moment passes without any dramatic consequences.\",\"success\":true,\"statChanges\":{},\"inventoryChanges\":[],\"entityChanges\":[],\"combatInitiated\":false}"
+                  }
+                }
+              ]
+            }
+            """);
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") };
+        var narrator = new NarratorService(httpClient, NullLogger<NarratorService>.Instance);
+
+        var response = await narrator.ProcessFreeFormAsync(
+            new PlayerCharacter { Name = "Bonk", Race = "Human", Class = "Warrior" },
+            new Room
+            {
+                Id = "inn",
+                Name = "Lantern's Rest",
+                Description = "A crowded inn.",
+                Npcs = [new Npc { Id = "mara", Name = "Mara Vale", Personality = "Gruff but attentive innkeeper." }]
+            },
+            "sup nerd",
+            []);
+
+        Assert.True(response.Success);
+        Assert.Contains("Mara Vale", response.Narration);
+        Assert.DoesNotContain("moment passes", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("without any dramatic consequences", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("returns their attention", response.Narration, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ProcessFreeFormAsync_WhenBoringNarrationCarriesState_PreservesStructuredChanges()
+    {
+        var handler = new ResponseHttpMessageHandler("""
+            {
+              "choices": [
+                {
+                  "message": {
+                    "content": "{\"narration\":\"The moment passes without any dramatic consequences.\",\"success\":true,\"statChanges\":{\"gold\":3},\"inventoryChanges\":[{\"action\":\"add\",\"itemName\":\"Old Coin\",\"quantity\":1}],\"entityChanges\":[],\"combatInitiated\":false}"
+                  }
+                }
+              ]
+            }
+            """);
+        var narrator = new NarratorService(
+            new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") },
+            NullLogger<NarratorService>.Instance);
+
+        var response = await narrator.ProcessFreeFormAsync(
+            new PlayerCharacter { Name = "Bonk", Race = "Human", Class = "Warrior" },
+            new Room { Id = "inn", Name = "Lantern's Rest", Description = "A crowded inn." },
+            "search beneath the loose floorboard",
+            []);
+
+        Assert.Equal(3, response.StatChanges["gold"]);
+        Assert.Equal("Old Coin", Assert.Single(response.InventoryChanges).ItemName);
+        Assert.DoesNotContain("moment passes", response.Narration, StringComparison.OrdinalIgnoreCase);
     }
 
     // ── Retry logic tests ─────────────────────────────────────────
@@ -607,6 +986,64 @@ public class NarratorServiceTests
             {
                 Content = new StringContent(_responseBody)
             });
+        }
+    }
+
+    private class CapturingOllamaHandler : HttpMessageHandler
+    {
+        public string? RequestPath { get; private set; }
+        public string? RequestBody { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            RequestPath = request.RequestUri?.AbsolutePath;
+            RequestBody = request.Content is null
+                ? null
+                : await request.Content.ReadAsStringAsync(cancellationToken);
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""
+                    {"message":{"role":"assistant","content":"Thorin studies the anvil; it answers with soot, silence, and one useful dent."},"done":true}
+                    """)
+            };
+        }
+    }
+
+    private class CapturingOpenAiCompatibleHandler : HttpMessageHandler
+    {
+        private readonly string _responseBody;
+
+        public CapturingOpenAiCompatibleHandler(string? responseBody = null)
+        {
+            _responseBody = responseBody ?? """
+                data: {"choices":[{"delta":{"content":"Thorin studies the anvil; it answers with soot, silence, and one useful dent."}}]}
+
+                data: [DONE]
+
+                """;
+        }
+
+        public string? RequestPath { get; private set; }
+        public string? RequestBody { get; private set; }
+        public string? AuthorizationScheme { get; private set; }
+        public string? AuthorizationParameter { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            RequestPath = request.RequestUri?.AbsolutePath;
+            RequestBody = request.Content is null
+                ? null
+                : await request.Content.ReadAsStringAsync(cancellationToken);
+            AuthorizationScheme = request.Headers.Authorization?.Scheme;
+            AuthorizationParameter = request.Headers.Authorization?.Parameter;
+
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(_responseBody)
+            };
+            response.Content.Headers.ContentType = new MediaTypeHeaderValue("text/event-stream");
+            return response;
         }
     }
 

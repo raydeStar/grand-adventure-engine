@@ -9,12 +9,17 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       Discord__Token: "${DISCORD_TOKEN:-}"
       Discord__ChannelId: "${DISCORD_CHANNEL_ID:-}"
-      LmStudio__Endpoint: "http://host.docker.internal:1234"
+      LmStudio__Provider: "${LM_STUDIO_PROVIDER:-OpenAICompatible}"
+      LmStudio__Endpoint: "${LM_STUDIO_ENDPOINT:-http://host.docker.internal:1234}"
       LmStudio__Model: "${LM_STUDIO_MODEL:-default}"
+      LmStudio__ApiKey: "${LM_STUDIO_API_KEY:-}"
+      LmStudio__ContextLength: "${LM_STUDIO_CONTEXT_LENGTH:-}"
+      LmStudio__Think: "${LM_STUDIO_THINK:-}"
       DashboardAuth__User__Username: "${GAE_DASHBOARD_USER_USERNAME:-user}"
       DashboardAuth__User__Password: "${GAE_DASHBOARD_USER_PASSWORD:-GAE-User-Local!123}"
       DashboardAuth__Admin__Username: "${GAE_DASHBOARD_ADMIN_USERNAME:-admin}"
       DashboardAuth__Admin__Password: "${GAE_DASHBOARD_ADMIN_PASSWORD:-GAE-Admin-Local!123}"
+      DashboardAuth__ShowLoginPasswords: "${GAE_DASHBOARD_SHOW_LOGIN_PASSWORDS:-false}"
       ConnectionStrings__GameDatabase: "Host=postgres;Port=5432;Database=gae;Username=gae_app;Password=${GAE_DB_PASSWORD:-gae_dev_password}"
     volumes:
       - gae_data:/app/data

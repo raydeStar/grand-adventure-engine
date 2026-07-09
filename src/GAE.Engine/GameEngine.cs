@@ -295,6 +295,17 @@ public class GameEngine : IGameEngine
             .Select(kv => kv.Key)
             .ToList();
 
+        var requestedWorldId = string.IsNullOrWhiteSpace(concept.WorldId)
+            ? WorldDefaults.DefaultWorldId
+            : concept.WorldId.Trim();
+        var startingWorld = _worldRepository is not null
+            ? await _worldRepository.GetWorldAsync(requestedWorldId, ct)
+            : null;
+        var startingWorldId = startingWorld?.Id ?? WorldDefaults.DefaultWorldId;
+        var startingRoomId = !string.IsNullOrWhiteSpace(startingWorld?.SpawnRoomId)
+            ? startingWorld.SpawnRoomId
+            : WorldDefaults.DefaultSpawnRoomId;
+
         var statValues = concept.StatMethod switch
         {
             StatAllocationMethod.Roll4d6DropLowest => _dice.RollStatArray(),
@@ -315,7 +326,10 @@ public class GameEngine : IGameEngine
             Class = concept.Class,
             Backstory = concept.Backstory,
             Gold = concept.StartingGold ?? _rules.CharacterCreation.StartingGold,
-            CurrentRoomId = "spawn"
+            ActiveWorldId = startingWorldId,
+            HomeWorldId = startingWorldId,
+            CurrentRoomId = startingRoomId,
+            NarratorPresetId = startingWorld?.DefaultNarratorPresetId
         };
 
         // Populate stats from rules-defined attributes
@@ -401,6 +415,19 @@ public class GameEngine : IGameEngine
         }
 
         await _stateManager.SavePlayerAsync(player, ct);
+        if (_worldRepository is not null)
+        {
+            await _worldRepository.SavePlayerWorldStateAsync(new PlayerWorldState
+            {
+                PlayerId = player.Id,
+                WorldId = player.ActiveWorldId,
+                CurrentRoomId = player.CurrentRoomId,
+                HasVisited = true,
+                FirstVisitedAt = DateTimeOffset.UtcNow,
+                LastVisitedAt = DateTimeOffset.UtcNow
+            }, ct);
+        }
+
         _logger.LogInformation("Created character {Name} ({Race} {Class}) for {Id}", player.Name, player.Race, player.Class, player.Id);
         return player;
     }
@@ -578,9 +605,13 @@ public class GameEngine : IGameEngine
 
         if (_registry is not null)
         {
-            var template = _registry.Items.GetAll().FirstOrDefault(candidate =>
+            var templates = _registry.Items.GetAll().ToList();
+            var template = templates.FirstOrDefault(candidate =>
                 candidate.Id.Equals(itemLookup, StringComparison.OrdinalIgnoreCase)
                 || candidate.Name.Equals(itemLookup, StringComparison.OrdinalIgnoreCase));
+
+            if (template is null && itemLookup.Equals("Potion", StringComparison.OrdinalIgnoreCase))
+                template = ItemTemplateSelection.ResolveGenericHealingPotion(templates);
 
             if (template is not null)
                 return template.ToInventoryItem();
@@ -779,6 +810,20 @@ public class GameEngine : IGameEngine
         var targetRoom = await _stateManager.GetPlayerRoomAsync(player.Id, simpleTargetId, ct);
         if (targetRoom is null)
         {
+            if (player.BlindAdventure is not null && _blindAdventureService is not null)
+            {
+                try
+                {
+                    targetRoom = await _blindAdventureService.GenerateNextRoomAsync(player, room, direction, ct);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Blind Adventure room generation failed for {RoomId}", simpleTargetId);
+                }
+            }
+
+            if (targetRoom is not null)
+                goto move_room_ready;
             // Generate new room via narrator — pass a clean source room with simple ID
             var sourceForGen = new Room
             {
@@ -816,6 +861,7 @@ public class GameEngine : IGameEngine
             }
         }
 
+move_room_ready:
         // Fix any composite keys that leaked into this room's exits
         RepairExitIds(targetRoom);
 
@@ -856,6 +902,9 @@ public class GameEngine : IGameEngine
             moveSummary += $"\n{loreDiscoveryNotice}";
         if (questUpdate is not null)
             moveSummary += $"\n📜 {questUpdate}";
+
+        if (player.BlindAdventure is not null && BlindAdventureService.ShouldConclude(player))
+            moveSummary += "\nAdventure conclusion is ready. Use `adventure end` to conclude the tale.";
 
         return new ActionResult
         {
@@ -922,7 +971,7 @@ public class GameEngine : IGameEngine
         }
 
         // Look at NPC
-        var npc = FindNamedEntity(room.Npcs, candidate => candidate.Name, action.Target);
+        var npc = FindNpc(room.Npcs, action.Target);
         if (npc is not null)
         {
             var npcDesc = new StringBuilder($"**{npc.Name}**");
@@ -981,12 +1030,20 @@ public class GameEngine : IGameEngine
         if (room is null)
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "You can't attack here." };
 
-        var target = FindNamedEntity(room.Npcs, npc => npc.Name, action.Target);
+        var target = FindNpc(room.Npcs, action.Target);
 
         // Auto-target: if no target specified, pick the first hostile NPC (or any NPC with HP)
         if (target is null && string.IsNullOrWhiteSpace(action.Target))
             target = room.Npcs.FirstOrDefault(n => n.IsHostile && n.Hp.HasValue && n.Hp.Value > 0)
                   ?? room.Npcs.FirstOrDefault(n => n.Hp.HasValue && n.Hp.Value > 0);
+
+        if (target is null && string.IsNullOrWhiteSpace(action.Target))
+            return new ActionResult
+            {
+                ActionId = action.Id,
+                Success = false,
+                MechanicalSummary = "There is nothing here still willing or able to fight."
+            };
 
         if (target is null)
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"Attack target '{action.Target}' was not found in the current room." };
@@ -1173,7 +1230,7 @@ public class GameEngine : IGameEngine
         if (room is null)
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = "You find no one here to answer you." };
 
-        var target = FindNamedEntity(room.Npcs, npc => npc.Name, action.Target);
+        var target = FindNpc(room.Npcs, action.Target);
         if (target is null)
             return new ActionResult { ActionId = action.Id, Success = false, MechanicalSummary = $"Conversation target '{action.Target}' was not found in the current room." };
 
@@ -1201,6 +1258,14 @@ public class GameEngine : IGameEngine
 
         // Get AI narration for the greeting
         var freeForm = await _narrator.ProcessConversationTurnAsync(player, room, target, player.Interaction, action.RawInput, ct);
+        if (mode == InteractionMode.Conversation
+            && !freeForm.CombatInitiated
+            && (freeForm.InteractionUpdate is null || freeForm.InteractionUpdate.Mode == InteractionMode.Explore))
+        {
+            freeForm.InteractionUpdate ??= new InteractionUpdate();
+            freeForm.InteractionUpdate.Mode = InteractionMode.Conversation;
+            freeForm.InteractionUpdate.NpcDisposition ??= target.Disposition;
+        }
 
         // Apply interaction update from AI
         ApplyInteractionUpdate(player, room, target, freeForm);
@@ -2058,6 +2123,34 @@ public class GameEngine : IGameEngine
         var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
         room ??= new Room { Id = player.CurrentRoomId, Name = "Unknown" };
 
+        if (IsBoundaryViolationAction(action.RawInput, room))
+        {
+            var boundaryNpc = ResolveBoundaryTarget(room, action.RawInput);
+            if (boundaryNpc is not null)
+                await OverlayWorldNpcStateAsync(boundaryNpc, player.ActiveWorldId, player.Id, ct);
+
+            var boundaryResult = BuildBoundaryViolationResult(player, room, action, boundaryNpc);
+            player.LastActiveAt = DateTimeOffset.UtcNow;
+            if (boundaryNpc is not null)
+                await PersistWorldNpcStateAsync(boundaryNpc, player.ActiveWorldId, player.Id, ct);
+
+            await _stateManager.SavePlayerAsync(player, ct);
+            await _stateManager.SaveRoomAsync(room, ct);
+            await PersistInteractionStoryEntry(player, action, boundaryResult, ct);
+            return boundaryResult;
+        }
+
+        if (TryFindNpcMentionedByDirectedSpeech(room.Npcs, action.RawInput, out var mentionedNpc))
+        {
+            return await ProcessTalkInternalAsync(player, new GameAction
+            {
+                PlayerId = player.Id,
+                RawInput = action.RawInput,
+                Type = ActionType.Talk,
+                Target = mentionedNpc.Name
+            }, ct);
+        }
+
         var recentStory = await _stateManager.GetRecentStoryForRoomAsync(player.CurrentRoomId, player.ActiveWorldId, 5, ct);
         var freeForm = await _narrator.ProcessFreeFormAsync(player, room, action.RawInput, recentStory, ct);
 
@@ -2241,6 +2334,139 @@ public class GameEngine : IGameEngine
         return result;
     }
 
+    private ActionResult BuildBoundaryViolationResult(PlayerCharacter player, Room room, GameAction action, Npc? targetNpc)
+    {
+        const int dc = 12;
+        var chaMod = player.GetModifier("cha", _rules.EffectiveBaseline);
+        var roll = _dice.RollSkillCheck("boundary", chaMod);
+        roll.TargetNumber = dc;
+        roll.Outcome = ProbabilityEngine.DetermineSkillOutcome(roll, dc);
+
+        var outcome = roll.Outcome switch
+        {
+            RollOutcome.CriticalHit => "backlash defused",
+            RollOutcome.Hit => "backlash contained",
+            RollOutcome.GlancingHit => "sharp warning",
+            RollOutcome.Miss => "public rebuke",
+            _ => "severe backlash"
+        };
+
+        var stateChanges = new List<StateChange>();
+        string narration;
+
+        if (targetNpc is not null)
+        {
+            var oldDisposition = targetNpc.Disposition;
+            var oldHostile = targetNpc.IsHostile;
+            var intensity = roll.Outcome switch
+            {
+                RollOutcome.CriticalHit => 60,
+                RollOutcome.Hit => 70,
+                RollOutcome.GlancingHit => 78,
+                RollOutcome.Miss => 86,
+                _ => 95
+            };
+
+            targetNpc.DispositionState.Emotion = roll.Outcome >= RollOutcome.GlancingHit ? "annoyed" : "angry";
+            targetNpc.DispositionState.Intensity = Math.Clamp(Math.Max(targetNpc.DispositionState.Intensity, intensity), 0, 100);
+            targetNpc.DispositionState.Reason = $"{player.Name} crossed a personal boundary.";
+            targetNpc.DispositionState.LastUpdated = DateTimeOffset.UtcNow;
+            if (!targetNpc.DispositionState.MemoryFlags.Contains("personal-boundary-crossed", StringComparer.OrdinalIgnoreCase))
+                targetNpc.DispositionState.MemoryFlags.Add("personal-boundary-crossed");
+            targetNpc.Disposition = targetNpc.DispositionState.ToFlatDisposition();
+            if (roll.Outcome == RollOutcome.CriticalMiss && targetNpc.Hp.HasValue && targetNpc.Hp > 0)
+                targetNpc.IsHostile = true;
+
+            stateChanges.Add(new StateChange
+            {
+                EntityType = "npc",
+                EntityId = targetNpc.Id,
+                Property = "disposition",
+                OldValue = oldDisposition,
+                NewValue = targetNpc.Disposition
+            });
+
+            if (oldHostile != targetNpc.IsHostile)
+            {
+                stateChanges.Add(new StateChange
+                {
+                    EntityType = "npc",
+                    EntityId = targetNpc.Id,
+                    Property = "isHostile",
+                    OldValue = oldHostile.ToString(),
+                    NewValue = targetNpc.IsHostile.ToString()
+                });
+            }
+
+            narration = BuildBoundaryViolationNarration(player.Name, targetNpc.Name, roll.Outcome);
+        }
+        else
+        {
+            narration = $"{player.Name}, you reach past a personal boundary in {room.Name}, and the room itself seems to recoil. Your attempt — {action.RawInput.Trim()} — dies in a hard silence that leaves no doubt about the consequence.";
+        }
+
+        return new ActionResult
+        {
+            ActionId = action.Id,
+            RawInput = action.RawInput,
+            Success = false,
+            MechanicalSummary = $"[Boundary check: {roll.Total} vs DC {dc} - {outcome}]",
+            Narration = narration,
+            DiceRolls = [roll],
+            StateChanges = stateChanges
+        };
+    }
+
+    private static bool IsBoundaryViolationAction(string rawInput, Room room)
+    {
+        var normalized = NormalizeLookupText(rawInput);
+        if (string.IsNullOrWhiteSpace(normalized))
+            return false;
+
+        var tokens = normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.Ordinal);
+        var hasBoundaryVerb = tokens.Overlaps(["grab", "grope", "fondle", "slap", "touch", "kiss", "lick"]);
+        if (!hasBoundaryVerb)
+            return false;
+
+        var mentionsNamedNpc = room.Npcs.Any(npc => BuildNpcMentionAliases(npc)
+            .Select(NormalizeLookupText)
+            .Any(alias => alias.Length >= 3 && ContainsNormalizedPhrase(normalized, alias)));
+        if (mentionsNamedNpc)
+            return true;
+
+        var usesPersonPronoun = tokens.Overlaps(["her", "him", "them"]);
+        var hasExplicitBodyTarget = tokens.Overlaps(["booty", "butt", "ass", "breast", "chest", "thigh", "hips", "body"]);
+        var hasInherentlyIntimateVerb = tokens.Overlaps(["grope", "fondle", "kiss", "lick", "slap"]);
+        return usesPersonPronoun && (hasExplicitBodyTarget || hasInherentlyIntimateVerb);
+    }
+
+    private static Npc? ResolveBoundaryTarget(Room room, string rawInput)
+    {
+        if (room.Npcs.Count == 0)
+            return null;
+
+        var normalized = NormalizeLookupText(rawInput);
+        foreach (var npc in room.Npcs)
+        {
+            if (BuildNpcMentionAliases(npc)
+                .Select(NormalizeLookupText)
+                .Any(alias => alias.Length >= 3 && ContainsNormalizedPhrase(normalized, alias)))
+                return npc;
+        }
+
+        return room.Npcs.Count == 1 ? room.Npcs[0] : null;
+    }
+
+    private static string BuildBoundaryViolationNarration(string playerName, string npcName, RollOutcome outcome)
+        => outcome switch
+        {
+            RollOutcome.CriticalHit => $"{npcName} catches your wrist before contact and turns the ugly instant into a clean, unmistakable boundary. \"No, {playerName}.\" Your quick recoil keeps the scene from becoming worse.",
+            RollOutcome.Hit => $"{npcName} steps aside before your hand can land, eyes cold and voice low. \"Mind yourself, {playerName}.\" The warning leaves you a narrow path back to basic manners.",
+            RollOutcome.GlancingHit => $"{npcName} knocks your hand away before contact and lets the silence do half the work. The room tightens around you, {playerName}, waiting to see whether shame has any useful weight.",
+            RollOutcome.Miss => $"{npcName} stops you in full view of the room, sharp enough that nearby conversation dies at once. Your attempt fails, and the public anger carries your name, {playerName}.",
+            _ => $"{npcName} catches your arm hard before contact, {playerName}, and the whole room turns hostile in a single breath. Your attempt fails, the insult is remembered, and every friendly exit from the moment narrows."
+        };
+
     private static string SummarizeEntities<T>(IEnumerable<T> entities, Func<T, string?> getName, Func<T, int>? getQuantity = null)
     {
         var counts = new Dictionary<string, (string DisplayName, int Count)>(StringComparer.OrdinalIgnoreCase);
@@ -2411,14 +2637,101 @@ public class GameEngine : IGameEngine
         return $"{label}: {item.Name}{bonuses}";
     }
 
-    private static T? FindNamedEntity<T>(IEnumerable<T> entities, Func<T, string?> getName, string? rawQuery) where T : class
+    private static Npc? FindNpc(IEnumerable<Npc> npcs, string? rawQuery)
+    {
+        return FindNamedEntity(npcs, npc => npc.Name, rawQuery, npc => new[] { npc.Id });
+    }
+
+    private static bool TryFindNpcMentionedByDirectedSpeech(IEnumerable<Npc> npcs, string rawInput, out Npc npc)
+    {
+        npc = null!;
+        var normalizedInput = NormalizeLookupText(rawInput);
+        if (string.IsNullOrWhiteSpace(normalizedInput) || !LooksLikeDirectedNpcSpeech(normalizedInput))
+            return false;
+
+        var match = npcs
+            .SelectMany(candidate => BuildNpcMentionAliases(candidate)
+                .Select(alias => new { Npc = candidate, Alias = NormalizeLookupText(alias) }))
+            .Where(entry => entry.Alias.Length >= 3 && ContainsNormalizedPhrase(normalizedInput, entry.Alias))
+            .OrderByDescending(entry => entry.Alias.Length)
+            .ThenBy(entry => entry.Npc.Name.Length)
+            .FirstOrDefault();
+
+        if (match is null)
+            return false;
+
+        npc = match.Npc;
+        return true;
+    }
+
+    private static bool LooksLikeDirectedNpcSpeech(string normalizedInput)
+    {
+        return normalizedInput.StartsWith("tell ", StringComparison.Ordinal)
+            || normalizedInput.StartsWith("ask ", StringComparison.Ordinal)
+            || normalizedInput.StartsWith("say to ", StringComparison.Ordinal)
+            || normalizedInput.StartsWith("speak to ", StringComparison.Ordinal)
+            || normalizedInput.StartsWith("talk to ", StringComparison.Ordinal);
+    }
+
+    private static IEnumerable<string> BuildNpcMentionAliases(Npc npc)
+    {
+        yield return npc.Name;
+        yield return npc.Id;
+
+        foreach (var part in BuildProminentNpcAliasParts(npc.Name))
+            if (IsUsefulNpcMentionAlias(part))
+                yield return part;
+
+        foreach (var part in BuildProminentNpcAliasParts(npc.Id))
+            if (IsUsefulNpcMentionAlias(part))
+                yield return part;
+    }
+
+    private static IEnumerable<string> BuildProminentNpcAliasParts(string? value)
+    {
+        var parts = NormalizeLookupText(value).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0)
+            yield break;
+
+        yield return parts[0];
+
+        if (parts.Length > 1)
+            yield return parts[^1];
+    }
+
+    private static bool ContainsNormalizedPhrase(string text, string phrase)
+    {
+        return text == phrase
+            || text.StartsWith(phrase + " ", StringComparison.Ordinal)
+            || text.EndsWith(" " + phrase, StringComparison.Ordinal)
+            || text.Contains(" " + phrase + " ", StringComparison.Ordinal);
+    }
+
+    private static bool IsUsefulNpcMentionAlias(string alias)
+    {
+        return alias.Length >= 3
+            && alias is not "and" and not "or" and not "but" and not "for" and not "with" and not "from"
+            && alias is not "guard" and not "guardian" and not "lord" and not "lady" and not "master" and not "void";
+    }
+
+    private static T? FindNamedEntity<T>(
+        IEnumerable<T> entities,
+        Func<T, string?> getName,
+        string? rawQuery,
+        Func<T, IEnumerable<string?>>? getAliases = null) where T : class
     {
         var query = NormalizeLookupText(rawQuery);
         if (string.IsNullOrWhiteSpace(query))
             return null;
 
         return entities
-            .Select(entity => new { Entity = entity, Candidate = NormalizeLookupText(getName(entity)) })
+            .SelectMany(entity =>
+            {
+                var candidates = new List<string?> { getName(entity) };
+                if (getAliases is not null)
+                    candidates.AddRange(getAliases(entity));
+                return candidates.Select(candidate => new { Entity = entity, Candidate = NormalizeLookupText(candidate) });
+            })
             .Where(entry => !string.IsNullOrWhiteSpace(entry.Candidate))
             .Select(entry => new { entry.Entity, Score = GetNameMatchScore(query, entry.Candidate) })
             .Where(entry => entry.Score > 0)
@@ -2717,7 +3030,7 @@ public class GameEngine : IGameEngine
             return null;
         }
 
-        var npc = FindNamedEntity(room.Npcs, n => n.Name, player.Interaction.Target);
+        var npc = FindNpc(room.Npcs, player.Interaction.Target);
         if (npc is null)
         {
             var missingTarget = player.Interaction.Target;
@@ -2832,6 +3145,16 @@ public class GameEngine : IGameEngine
             }
 
             var freeForm = await _narrator.ProcessConversationTurnAsync(player, room, npc, player.Interaction, promptInput, ct);
+
+            // Ordinary conversation turns stay open; only explicit exit handling above may close them.
+            if (!freeForm.CombatInitiated
+                && (freeForm.InteractionUpdate is null || freeForm.InteractionUpdate.Mode == InteractionMode.Explore))
+            {
+                freeForm.InteractionUpdate ??= new InteractionUpdate();
+                freeForm.InteractionUpdate.Mode = InteractionMode.Conversation;
+                freeForm.InteractionUpdate.NpcDisposition ??= npc.Disposition;
+            }
+
             ApplyInteractionUpdate(player, room, npc, freeForm);
 
             // Record NPC response in context for conversation continuity
@@ -2922,7 +3245,7 @@ public class GameEngine : IGameEngine
         var enemies = room.Npcs.Where(n => combat?.TurnOrder.Any(t => !t.IsPlayer && t.Id == n.Id) == true).ToList();
         if (combat is null || enemies.Count == 0)
         {
-            var singleEnemy = FindNamedEntity(room.Npcs, n => n.Name, player.Interaction.Target);
+            var singleEnemy = FindNpc(room.Npcs, player.Interaction.Target);
             if (singleEnemy is null)
             {
                 player.Interaction.Reset();
@@ -3112,9 +3435,8 @@ public class GameEngine : IGameEngine
         }
 
         // ─── Multi-exchange combat ───
-        // Boss arenas use fewer exchanges per turn so bosses don't one-round the player.
-        bool isBossArena = room.EnvironmentTags.Contains("boss_arena");
-        int ExchangesPerTurn = isBossArena ? 1 : 3;
+        // Each command resolves one exchange so players can react before damage snowballs.
+        const int ExchangesPerTurn = 1;
         var allDice = new List<DiceRoll>();
         var allSC = new List<StateChange>();
         var mech = new List<string>();
@@ -3140,7 +3462,7 @@ public class GameEngine : IGameEngine
             // Pick target (first alive enemy)
             Npc? target = null;
             if (!string.IsNullOrWhiteSpace(action.Target))
-                target = FindNamedEntity(enemies.Where(e => e.Hp.HasValue && e.Hp.Value > 0 && room.Npcs.Contains(e)), n => n.Name, action.Target);
+                target = FindNpc(enemies.Where(e => e.Hp.HasValue && e.Hp.Value > 0 && room.Npcs.Contains(e)), action.Target);
             target ??= enemies.FirstOrDefault(e => e.Hp.HasValue && e.Hp.Value > 0 && room.Npcs.Contains(e));
 
             if (target is null) { combatOver = true; break; }
@@ -5006,6 +5328,8 @@ public class GameEngine : IGameEngine
     private static readonly System.Text.RegularExpressions.Regex EffectHpRegex = new(@"[Rr]estores?\s+((?:\d+d\d+(?:[+\-]\d+)?|\d+))\s*(?:HP|hit\s*points?|health)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
     private static readonly System.Text.RegularExpressions.Regex EffectMpRegex = new(@"[Rr]estores?\s+((?:\d+d\d+(?:[+\-]\d+)?|\d+))\s*(?:MP|mana|magic)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
     private static readonly System.Text.RegularExpressions.Regex EffectDamageRegex = new(@"[Dd]eals?\s+((?:\d+d\d+(?:[+\-]\d+)?|\d+))\s*(?:damage|HP\s*damage)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    private static readonly System.Text.RegularExpressions.Regex EffectHealTokenRegex = new(@"(?:^|[;\s])heal:((?:\d+d\d+(?:[+\-]\d+)?|\d+))", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    private static readonly System.Text.RegularExpressions.Regex EffectManaTokenRegex = new(@"(?:^|[;\s])(?:mp|mana):((?:\d+d\d+(?:[+\-]\d+)?|\d+))", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
     /// <summary>
     /// Handles the "use" command mechanically for consumable items.
@@ -5014,7 +5338,8 @@ public class GameEngine : IGameEngine
     /// </summary>
     private async Task<ActionResult> ProcessUseAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
     {
-        var item = FindNamedEntity(player.Inventory, i => i.Name, action.Target);
+        var item = FindBestGenericHealingConsumable(player.Inventory, action.Target)
+            ?? FindNamedEntity(player.Inventory, i => i.Name, action.Target, GetConsumableUseAliases);
 
         // Auto-take from room if the item is on the ground and consumable
         if (item is null)
@@ -5022,7 +5347,8 @@ public class GameEngine : IGameEngine
             var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
             if (room is not null)
             {
-                var roomItem = FindNamedEntity(room.Items, i => i.Name, action.Target);
+                var roomItem = FindBestGenericHealingConsumable(room.Items, action.Target)
+                    ?? FindNamedEntity(room.Items, i => i.Name, action.Target, GetConsumableUseAliases);
                 if (roomItem is not null)
                 {
                     // Transfer from room to inventory
@@ -5121,15 +5447,99 @@ public class GameEngine : IGameEngine
         if (hpMatch.Success)
             hp = ResolveEffectValue(hpMatch.Groups[1].Value);
 
+        var healTokenMatch = EffectHealTokenRegex.Match(effect);
+        if (healTokenMatch.Success)
+            hp = ResolveEffectValue(healTokenMatch.Groups[1].Value);
+
         var mpMatch = EffectMpRegex.Match(effect);
         if (mpMatch.Success)
             mp = ResolveEffectValue(mpMatch.Groups[1].Value);
+
+        var manaTokenMatch = EffectManaTokenRegex.Match(effect);
+        if (manaTokenMatch.Success)
+            mp = ResolveEffectValue(manaTokenMatch.Groups[1].Value);
 
         var dmgMatch = EffectDamageRegex.Match(effect);
         if (dmgMatch.Success)
             hp = -ResolveEffectValue(dmgMatch.Groups[1].Value);
 
         return (hp, mp);
+    }
+
+    private static IEnumerable<string?> GetConsumableUseAliases(InventoryItem item)
+    {
+        if (!item.IsConsumable)
+            yield break;
+
+        var itemText = $"{item.Name} {item.Description} {item.Effect}";
+        var looksHealing = item.Type == ItemType.Potion
+            || itemText.Contains("heal", StringComparison.OrdinalIgnoreCase)
+            || itemText.Contains("health", StringComparison.OrdinalIgnoreCase)
+            || itemText.Contains("hp", StringComparison.OrdinalIgnoreCase);
+
+        if (looksHealing)
+        {
+            yield return "potion";
+            yield return "healing potion";
+            yield return "health potion";
+        }
+
+        var looksMana = itemText.Contains("mana", StringComparison.OrdinalIgnoreCase)
+            || itemText.Contains("magic", StringComparison.OrdinalIgnoreCase)
+            || itemText.Contains("mp", StringComparison.OrdinalIgnoreCase);
+
+        if (looksMana)
+        {
+            yield return "mana potion";
+            yield return "magic potion";
+        }
+    }
+
+    private static InventoryItem? FindBestGenericHealingConsumable(IEnumerable<InventoryItem> items, string? rawQuery)
+    {
+        var query = NormalizeLookupText(rawQuery);
+        if (query is not ("potion" or "healing potion" or "health potion"))
+            return null;
+
+        return items
+            .Where(item => item.IsConsumable && item.Quantity > 0)
+            .Select(item => new { Item = item, Healing = GetExpectedHealingValue(item) })
+            .Where(entry => entry.Healing > 0)
+            .OrderByDescending(entry => entry.Healing)
+            .ThenByDescending(entry => entry.Item.Value)
+            .Select(entry => entry.Item)
+            .FirstOrDefault();
+    }
+
+    private static double GetExpectedHealingValue(InventoryItem item)
+    {
+        if (string.IsNullOrWhiteSpace(item.Effect))
+            return 0;
+
+        var hpMatch = EffectHpRegex.Match(item.Effect);
+        if (hpMatch.Success)
+            return GetExpectedEffectValue(hpMatch.Groups[1].Value);
+
+        var healTokenMatch = EffectHealTokenRegex.Match(item.Effect);
+        if (healTokenMatch.Success)
+            return GetExpectedEffectValue(healTokenMatch.Groups[1].Value);
+
+        return 0;
+    }
+
+    private static double GetExpectedEffectValue(string value)
+    {
+        var trimmed = value.Trim();
+        var diceMatch = System.Text.RegularExpressions.Regex.Match(trimmed, @"^(?<count>\d+)d(?<sides>\d+)(?<mod>[+\-]\d+)?$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (diceMatch.Success)
+        {
+            var count = int.Parse(diceMatch.Groups["count"].Value);
+            var sides = int.Parse(diceMatch.Groups["sides"].Value);
+            var modifier = diceMatch.Groups["mod"].Success ? int.Parse(diceMatch.Groups["mod"].Value) : 0;
+            return count * ((sides + 1) / 2.0) + modifier;
+        }
+
+        return int.TryParse(trimmed, out var flatValue) ? flatValue : 0;
     }
 
     /// <summary>Resolves a value that may be a flat integer or a dice expression like "2d4+2".</summary>
@@ -5499,6 +5909,14 @@ public class GameEngine : IGameEngine
         await OverlayWorldNpcStateAsync(shopkeeper, player.ActiveWorldId, player.Id, ct);
 
         var freeForm = await _narrator.ProcessConversationTurnAsync(player, room, shopkeeper, player.Interaction, action.RawInput, ct);
+        if (!freeForm.CombatInitiated
+            && (freeForm.InteractionUpdate is null || freeForm.InteractionUpdate.Mode == InteractionMode.Explore))
+        {
+            freeForm.InteractionUpdate ??= new InteractionUpdate();
+            freeForm.InteractionUpdate.Mode = InteractionMode.Trading;
+            freeForm.InteractionUpdate.NpcDisposition ??= shopkeeper.Disposition;
+        }
+
         ApplyInteractionUpdate(player, room, shopkeeper, freeForm);
 
         // Process quest updates from shopkeeper conversation (accept, decline, turn-in)
@@ -5779,6 +6197,7 @@ public class GameEngine : IGameEngine
     private static List<string> CheckNpcMorale(List<Npc> enemies, Room room)
     {
         var messages = new List<string>();
+        var isBossArena = room.EnvironmentTags.Contains("boss_arena", StringComparer.OrdinalIgnoreCase);
         for (int i = enemies.Count - 1; i >= 0; i--)
         {
             var npc = enemies[i];
@@ -5788,7 +6207,7 @@ public class GameEngine : IGameEngine
             var ds = npc.DispositionState;
 
             // Non-hostile baseline NPCs surrender when badly wounded
-            if (ds.Baseline >= 50 && hpPct < 0.25)
+            if (!isBossArena && ds.Baseline >= 50 && hpPct < 0.25)
             {
                 npc.IsHostile = false;
                 ds.Emotion = "resigned";
@@ -5798,7 +6217,7 @@ public class GameEngine : IGameEngine
                 enemies.Remove(npc);
             }
             // Scared NPCs flee at half HP
-            else if (ds.Emotion.Equals("scared", StringComparison.OrdinalIgnoreCase) && hpPct < 0.5)
+            else if (!isBossArena && ds.Emotion.Equals("scared", StringComparison.OrdinalIgnoreCase) && hpPct < 0.5)
             {
                 room.Npcs.Remove(npc);
                 enemies.Remove(npc);

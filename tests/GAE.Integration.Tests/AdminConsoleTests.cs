@@ -78,6 +78,50 @@ public class AdminConsoleTests : IClassFixture<GaeWebApplicationFactory>
     }
 
     [Fact]
+    public async Task CreationOptions_ReturnsActiveWorldsAndBlindStorylines()
+    {
+        var response = await _userClient.GetAsync("/api/dashboard/creation-options");
+        response.EnsureSuccessStatusCode();
+
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("default-world", payload.GetProperty("defaultWorldId").GetString());
+        Assert.True(payload.GetProperty("worlds").GetArrayLength() >= 1);
+        Assert.True(payload.GetProperty("blindStorylines").GetArrayLength() >= 2);
+    }
+
+    [Fact]
+    public async Task CreateCharacterEndpoint_SelectedWorld_AssignsWorldIdentity()
+    {
+        var createWorldResponse = await _adminClient.PostAsJsonAsync("/api/dashboard/admin/worlds", new
+        {
+            id = "moon-realm",
+            name = "Moon Realm",
+            description = "A second launch-world option.",
+            spawnRoomId = "spawn",
+            isActive = true
+        });
+        createWorldResponse.EnsureSuccessStatusCode();
+
+        var response = await _userClient.PostAsJsonAsync("/api/dashboard/characters", new
+        {
+            playerId = "dashboard-create-world-1",
+            name = "Selene of Tests",
+            race = "Human",
+            @class = "Cleric",
+            worldId = "moon-realm",
+            statMethod = "StandardArray",
+            backstory = "Spawn me somewhere moonlit."
+        });
+        response.EnsureSuccessStatusCode();
+
+        var result = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var player = result.TryGetProperty("player", out var p) ? p : result;
+        Assert.Equal("moon-realm", player.GetProperty("activeWorldId").GetString());
+        Assert.Equal("moon-realm", player.GetProperty("homeWorldId").GetString());
+        Assert.Equal("spawn", player.GetProperty("currentRoomId").GetString());
+    }
+
+    [Fact]
     public async Task CreateCharacterEndpoint_MissingName_ReturnsBadRequest()
     {
         var response = await _userClient.PostAsJsonAsync("/api/dashboard/characters", new

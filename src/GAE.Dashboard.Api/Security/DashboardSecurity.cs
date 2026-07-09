@@ -41,6 +41,8 @@ public sealed class DashboardAuthOptions
     };
 
     public int SessionHours { get; set; } = 12;
+
+    public bool ShowLoginPasswords { get; set; }
 }
 
 public sealed class DashboardAccountOptions
@@ -52,14 +54,14 @@ public sealed class DashboardAccountOptions
 
 public sealed record DashboardAccount(string Username, string Password, string Role, string DisplayName);
 
-public sealed record DashboardLoginHint(string Username, string Password, string Role, string DisplayName);
+public sealed record DashboardLoginHint(string Username, string? Password, string Role, string DisplayName);
 
 public sealed record DashboardSessionDescriptor(string Username, string Role, string DisplayName, bool IsAdmin);
 
 public interface IDashboardAuthService
 {
     DashboardAccount? ValidateCredentials(string username, string password);
-    IReadOnlyList<DashboardLoginHint> GetLoginHints();
+    IReadOnlyList<DashboardLoginHint> GetLoginHints(bool includePasswords);
     DashboardSessionDescriptor CreateSessionDescriptor(ClaimsPrincipal principal);
     int GetSessionLifetimeHours();
     IReadOnlyList<string> GetStartupWarnings();
@@ -85,10 +87,10 @@ public sealed class DashboardAuthService : IDashboardAuthService
             : null;
     }
 
-    public IReadOnlyList<DashboardLoginHint> GetLoginHints()
+    public IReadOnlyList<DashboardLoginHint> GetLoginHints(bool includePasswords)
     {
         return GetAccounts()
-            .Select(account => new DashboardLoginHint(account.Username, account.Password, account.Role, account.DisplayName))
+            .Select(account => new DashboardLoginHint(account.Username, includePasswords ? account.Password : null, account.Role, account.DisplayName))
             .ToArray();
     }
 

@@ -1,6 +1,6 @@
-# ══════════════════════════════════════════════════════════════════
-# FINAL FANTASY-THEMED DUNGEON ITEM REGISTRY
-# "Phoenix Down: Because death is a minor inconvenience." — O'aka
+﻿# ══════════════════════════════════════════════════════════════════
+# ORIGINAL FANTASY DUNGEON ITEM REGISTRY
+# "Revival Down: Because death is a minor inconvenience." — Pip
 # ══════════════════════════════════════════════════════════════════
 
 items:
@@ -18,7 +18,7 @@ items:
 
   - id: "cracked_mace"
     name: "Cracked Rod"
-    description: "A splintered mage's rod. Still channels a trickle of Mist energy."
+    description: "A splintered mage's rod. Still channels a trickle of Aether energy."
     type: "Weapon"
     damage_dice: "1d6"
     value: 12
@@ -61,7 +61,7 @@ items:
 
   - id: "war_hammer"
     name: "Diamond Mace"
-    description: "A heavy mace with a diamond-hard head. Bangaa-forged."
+    description: "A heavy mace with a diamond-hard head. Drakari-forged."
     type: "Weapon"
     damage_dice: "1d10"
     value: 40
@@ -71,7 +71,7 @@ items:
 
   - id: "crossbow_of_precision"
     name: "Killer Bow"
-    description: "A finely-tuned crossbow with magitek sights. Rarely misses."
+    description: "A finely-tuned crossbow with arcanotech sights. Rarely misses."
     type: "Weapon"
     damage_dice: "1d10"
     damage_stat: "dex"
@@ -92,7 +92,7 @@ items:
 
   - id: "arcane_staff"
     name: "Oak Staff"
-    description: "A gnarled staff humming with latent Mist energy. A Black Mage's bread and butter."
+    description: "A gnarled staff humming with latent Aether energy. An Arcanist's bread and butter."
     type: "Weapon"
     damage_dice: "1d6+2"
     damage_stat: "int"
@@ -105,7 +105,7 @@ items:
 
   - id: "enchanted_blade"
     name: "Rune Blade"
-    description: "Faint runes of power pulse along the edge. Forged with materia infusion."
+    description: "Faint runes of power pulse along the edge. Forged with aetherglass infusion."
     type: "Weapon"
     damage_dice: "2d6+2"
     value: 120
@@ -115,7 +115,7 @@ items:
 
   - id: "flamberge_of_ash"
     name: "Flame Tongue"
-    description: "The blade smolders with Ifrit's residual heat. Burns on contact."
+    description: "The blade smolders with Cindermaw's residual heat. Burns on contact."
     type: "Weapon"
     damage_dice: "2d8"
     value: 150
@@ -135,7 +135,7 @@ items:
     tags: ["dungeon_loot", "tier3", "ice"]
 
   - id: "shadow_dagger"
-    name: "Zwill Crossblade"
+    name: "Nightglass Crossblade"
     description: "A dark blade that moves between shadows. Nearly invisible in dim light."
     type: "Weapon"
     damage_dice: "2d6+1"
@@ -159,7 +159,7 @@ items:
     tags: ["dungeon_loot", "tier4", "holy"]
 
   - id: "soulreaver"
-    name: "Masamune"
+    name: "Stormglass"
     description: "The legendary katana. Its edge exists partially outside reality."
     type: "Weapon"
     damage_dice: "4d6+3"
@@ -194,7 +194,7 @@ items:
 
   - id: "leather_cap"
     name: "Leather Cap"
-    description: "Simple head protection. Better than nothing, kupo."
+    description: "Simple head protection. Better than nothing, aye."
     type: "Helmet"
     armor_value: 1
     value: 8
@@ -350,7 +350,7 @@ items:
 
   - id: "dragonscale_armor"
     name: "Dragon Mail"
-    description: "Armor forged from Bahamut's shed scales. Shimmers with divine fire."
+    description: "Armor forged from Aurelwyrm's shed scales. Shimmers with divine fire."
     type: "Armor"
     armor_value: 7
     value: 350
@@ -369,8 +369,8 @@ items:
     tags: ["dungeon_loot", "tier4", "magical"]
 
   - id: "crown_of_the_damned"
-    name: "Circlet of the Esper"
-    description: "A circlet that pulses with Esper energy. Dramatically increases magical power."
+    name: "Circlet of the Eidolon"
+    description: "A circlet that pulses with Eidolon energy. Dramatically increases magical power."
     type: "Helmet"
     armor_value: 4
     value: 280
@@ -379,7 +379,7 @@ items:
     stat_bonuses:
       int: 3
       cha: 2
-    tags: ["dungeon_loot", "tier4", "esper"]
+    tags: ["dungeon_loot", "tier4", "eidolon"]
 
   - id: "boots_of_the_windwalker"
     name: "Hermes Shoes"
@@ -405,10 +405,10 @@ items:
       con: 4
     tags: ["dungeon_loot", "tier4", "magical"]
 
-  # ── Potions (All Levels) ──────────────────────────────────────────
+  # ── Healing Draughts (All Levels) ──────────────────────────────────────────
 
   - id: "minor_healing_potion"
-    name: "Potion"
+    name: "Healing Draught"
     description: "The adventurer's bread and butter. A small vial of red liquid that heals minor wounds."
     type: "Potion"
     value: 10
@@ -419,8 +419,8 @@ items:
     tags: ["dungeon_loot", "potion", "healing"]
 
   - id: "healing_potion"
-    name: "Hi-Potion"
-    description: "A concentrated healing elixir. Significantly more potent than a basic Potion."
+    name: "Greater Healing Draught"
+    description: "A concentrated healing elixir. Significantly more potent than a basic Healing Draught."
     type: "Potion"
     value: 25
     is_consumable: true
@@ -430,7 +430,7 @@ items:
     tags: ["dungeon_loot", "potion", "healing"]
 
   - id: "greater_healing_potion"
-    name: "X-Potion"
+    name: "X-Healing Draught"
     description: "A deep crimson elixir that heals even grievous wounds. Expensive but worth it."
     type: "Potion"
     value: 60
@@ -464,7 +464,7 @@ items:
 
   - id: "greater_mana_potion"
     name: "Turbo Ether"
-    description: "A swirling azure elixir that surges with concentrated Mist energy."
+    description: "A swirling azure elixir that surges with concentrated Aether energy."
     type: "Potion"
     value: 50
     is_consumable: true
@@ -498,7 +498,7 @@ items:
   # ── FF Signature Items ────────────────────────────────────────────
 
   - id: "phoenix_down"
-    name: "Phoenix Down"
+    name: "Revival Down"
     description: "A golden feather from the legendary Phoenix. Revives a fallen ally from the brink of death. The most precious item in any adventurer's pack."
     type: "Potion"
     value: 100
@@ -519,26 +519,26 @@ items:
     rarity: "epic"
     tags: ["dungeon_loot", "potion", "healing", "mana"]
 
-  - id: "chocobo_feather"
-    name: "Chocobo Feather"
-    description: "A golden feather from a wild chocobo. Grants temporary Haste when used."
+  - id: "dunewing_feather"
+    name: "Dunewing Feather"
+    description: "A golden feather from a wild dunewing. Grants temporary Haste when used."
     type: "Misc"
     value: 15
     is_consumable: true
     effect: "buff:dex:2:3"
     required_level: 1
     rarity: "uncommon"
-    tags: ["dungeon_loot", "chocobo", "buff"]
+    tags: ["dungeon_loot", "dunewing", "buff"]
 
-  - id: "gysahl_green"
-    name: "Gysahl Greens"
-    description: "The preferred food of chocobos everywhere. Can be used to befriend wild chocobos or fed to domesticated ones for bonuses."
+  - id: "sunleaf_green"
+    name: "Sunleaf Greens"
+    description: "The preferred food of dunewings everywhere. Can be used to befriend wild dunewings or fed to domesticated ones for bonuses."
     type: "Misc"
     value: 5
     is_consumable: true
     required_level: 1
     rarity: "common"
-    tags: ["dungeon_loot", "chocobo", "food"]
+    tags: ["dungeon_loot", "dunewing", "food"]
 
   - id: "tent"
     name: "Tent"

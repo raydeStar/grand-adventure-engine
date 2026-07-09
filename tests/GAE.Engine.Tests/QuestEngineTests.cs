@@ -1,4 +1,4 @@
-using GAE.Core.Models;
+﻿using GAE.Core.Models;
 using GAE.Core.Registry;
 using GAE.Engine.Registry;
 using GAE.Engine.State;
@@ -608,7 +608,7 @@ public class QuestEngineTests
             Name = "Faction Quest",
             Description = "Only for the resistance.",
             GiverId = "innkeeper_mara",
-            RequiredFaction = "dalmascan_resistance",
+            RequiredFaction = "valewarden_resistance",
             Stages =
             [
                 new QuestStage
