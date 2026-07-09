@@ -1,11 +1,11 @@
-﻿# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+﻿# ══════════════════════════════════════════════════════════════════
 # ORIGINAL FANTASY SPELL REGISTRY
-# "Fire, Fira, Firaga â€” destruction comes in threes." â€” Vivi
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# "Fire, Fira, Firaga — destruction comes in threes." — Vivi
+# ══════════════════════════════════════════════════════════════════
 
 spells:
 
-  # â”€â”€ EVOCATION (damage dealing) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # ── EVOCATION (damage dealing) ──────────────────────────────
 
   - id: magic_missile
     name: Aero
@@ -22,7 +22,7 @@ spells:
 
   - id: firebolt
     name: Fire
-    description: "A mote of elemental fire streaks toward the target. The most basic â€” and beloved â€” Black Magic spell."
+    description: "A mote of elemental fire streaks toward the target. The most basic — and beloved — Black Magic spell."
     school: evocation
     mana_cost: 1
     damage_dice: "1d10"
@@ -35,7 +35,7 @@ spells:
 
   - id: fireball
     name: Firaga
-    description: "A massive explosion of flame engulfs the area. The pinnacle of fire magic â€” everything burns."
+    description: "A massive explosion of flame engulfs the area. The pinnacle of fire magic — everything burns."
     school: evocation
     mana_cost: 8
     damage_dice: "3d6"
@@ -85,7 +85,7 @@ spells:
     power_level: 3
     tags: [radiant, melee, single-target]
 
-  # â”€â”€ RESTORATION (healing) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # ── RESTORATION (healing) ────────────────────────────────────
 
   - id: cure_wounds
     name: Cure
@@ -123,7 +123,7 @@ spells:
     power_level: 3
     tags: [healing, cleanse, single-target]
 
-  # â”€â”€ ABJURATION (protection) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # ── ABJURATION (protection) ─────────────────────────────────
 
   - id: shield
     name: Protect
@@ -164,7 +164,7 @@ spells:
     power_level: 2
     tags: [buff, party]
 
-  # â”€â”€ ILLUSION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # ── ILLUSION ────────────────────────────────────────────────
 
   - id: minor_illusion
     name: Vanish
@@ -190,7 +190,7 @@ spells:
     power_level: 4
     tags: [stealth, single-target]
 
-  # â”€â”€ CONJURATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # ── CONJURATION ─────────────────────────────────────────────
 
   - id: poison_spray
     name: Bio
@@ -205,7 +205,7 @@ spells:
     power_level: 1
     tags: [poison, single-target, cantrip]
 
-  # â”€â”€ DIVINATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # ── DIVINATION ──────────────────────────────────────────────
 
   - id: detect_magic
     name: Libra
@@ -218,7 +218,7 @@ spells:
     power_level: 1
     tags: [utility, detection]
 
-  # â”€â”€ NECROMANCY â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # ── NECROMANCY ──────────────────────────────────────────────
 
   - id: chill_touch
     name: Blizzard
@@ -247,11 +247,11 @@ spells:
     power_level: 4
     tags: [necrotic, drain, single-target]
 
-  # â”€â”€ TRANSMUTATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # ── TRANSMUTATION ───────────────────────────────────────────
 
   - id: haste
     name: Haste
-    description: "Time warps around the target, doubling their speed. A classic support spell â€” and the reason Eidolon Binders are always welcome in a party."
+    description: "Time warps around the target, doubling their speed. A classic support spell — and the reason Eidolon Binders are always welcome in a party."
     school: transmutation
     mana_cost: 6
     status_effect: "hasted"
@@ -262,7 +262,7 @@ spells:
     power_level: 5
     tags: [buff, single-target]
 
-  # â”€â”€ RANGER SPELLS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # ── RANGER SPELLS ───────────────────────────────────────────
 
   - id: hunters_mark
     name: "Scan"

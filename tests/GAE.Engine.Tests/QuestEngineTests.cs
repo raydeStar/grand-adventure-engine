@@ -18,7 +18,7 @@ public class QuestEngineTests
         _engine = new QuestEngine(_registry, NullLogger<QuestEngine>.Instance);
     }
 
-    // â”€â”€ Accept â”€â”€
+    // ── Accept ──
 
     [Fact]
     public void AcceptQuest_Succeeds_ForEligiblePlayer()
@@ -144,7 +144,7 @@ public class QuestEngineTests
         Assert.NotNull(progress);
     }
 
-    // â”€â”€ Abandon â”€â”€
+    // ── Abandon ──
 
     [Fact]
     public void AbandonQuest_SetsStatusToAbandoned()
@@ -166,7 +166,7 @@ public class QuestEngineTests
         Assert.False(_engine.AbandonQuest(player, "rat_problem"));
     }
 
-    // â”€â”€ Advance Objective â”€â”€
+    // ── Advance Objective ──
 
     [Fact]
     public void AdvanceObjective_IncrementsCount()
@@ -230,7 +230,7 @@ public class QuestEngineTests
 
         _engine.AdvanceObjective(player, "rat_problem", "kill_rats", 3);
 
-        // rat_problem has one stage â†’ final stage â†’ ready to turn in
+        // rat_problem has one stage → final stage → ready to turn in
         Assert.Equal(QuestStatus.ReadyToTurnIn, player.QuestLog[0].Status);
     }
 
@@ -248,7 +248,7 @@ public class QuestEngineTests
         Assert.Equal("report_back", progress.Objectives[0].ObjectiveId);
     }
 
-    // â”€â”€ Custom Objectives â”€â”€
+    // ── Custom Objectives ──
 
     [Fact]
     public void CompleteCustomObjective_MarksObjectiveComplete()
@@ -263,7 +263,7 @@ public class QuestEngineTests
         Assert.True(obj.IsComplete);
     }
 
-    // â”€â”€ Turn In â”€â”€
+    // ── Turn In ──
 
     [Fact]
     public void TurnInQuest_AppliesGoldAndXpRewards()
@@ -307,7 +307,7 @@ public class QuestEngineTests
         Assert.Null(rewards);
     }
 
-    // â”€â”€ GetAvailableQuests â”€â”€
+    // ── GetAvailableQuests ──
 
     [Fact]
     public void GetAvailableQuests_ReturnsQuestsForNpc()
@@ -436,7 +436,7 @@ public class QuestEngineTests
         Assert.Equal(playerTwo.ActiveWorldId, second.WorldId);
     }
 
-    // â”€â”€ Journal Formatting â”€â”€
+    // ── Journal Formatting ──
 
     [Fact]
     public void FormatJournal_ShowsActiveAndCompletedQuests()
@@ -461,7 +461,7 @@ public class QuestEngineTests
         Assert.Contains("empty", journal.ToLowerInvariant());
     }
 
-    // â”€â”€ Helpers â”€â”€
+    // ── Helpers ──
 
     private static PlayerCharacter CreatePlayer(int level = 3) => new()
     {

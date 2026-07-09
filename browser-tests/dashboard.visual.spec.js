@@ -60,6 +60,9 @@ async function resolveAdminPanelLocator(page, panelId, heading) {
 }
 
 async function openVisualHarness(page) {
+  await page.addInitScript(() => {
+    sessionStorage.setItem('gae.booted', '1');
+  });
   await page.goto('/');
   await page.waitForFunction(() => typeof UI !== 'undefined' && typeof GameHub !== 'undefined');
 }

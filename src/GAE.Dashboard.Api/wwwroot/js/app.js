@@ -32,7 +32,7 @@
   };
 
   // C# InteractionMode enum serializes as int — map to lowercase strings
-  const INTERACTION_MODES = ['explore', 'conversation', 'combat', 'trading', 'stealth', 'event'];
+  const INTERACTION_MODES = ['explore', 'conversation', 'combat', 'trading', 'stealth', 'event', 'blindadventure', 'cyoa'];
   function normalizeMode(v) {
     if (typeof v === 'number') return INTERACTION_MODES[v] || 'explore';
     if (typeof v === 'string' && v.length > 0) return v.toLowerCase();
@@ -472,7 +472,7 @@
     openDashboard(state.mode);
 
     try {
-      await refreshAll();
+      await Promise.all([refreshAll(), refreshCreationOptions()]);
     } catch (error) {
       await handleError(error, { logId: 'workflow-log' });
     }
@@ -633,7 +633,6 @@
       refreshSummary(),
       refreshHealth(),
       refreshLlmModels(),
-      refreshCreationOptions(),
       refreshWorlds()
     ]);
 
@@ -869,12 +868,13 @@
       await activatePlayer(player.id, 'user');
 
       if (destinationMode === 'blind' && selectedBlindStorylineId) {
-        const launchResult = await API.sendCommand(player.id, `adventure start ${selectedBlindStorylineId}`);
-        if (launchResult.actionId) state.recentActionIds.add(launchResult.actionId);
-        UI.appendStoryEntry(launchResult, launchResult.success ? 'success' : 'failure');
-        await afterCommand(player.id, launchResult);
-        if (!launchResult.success) {
-          UI.setPortalMessage(launchResult.mechanicalSummary || 'Blind Adventure failed to start.', 'error');
+        try {
+          const launchResult = await API.sendCommand(player.id, `adventure start ${selectedBlindStorylineId}`);
+          if (launchResult.actionId) state.recentActionIds.add(launchResult.actionId);
+          UI.appendStoryEntry(launchResult, launchResult.success ? 'success' : 'failure');
+          await afterCommand(player.id, launchResult);
+        } catch (error) {
+          await handleError(error, { story: true });
         }
       }
     } catch (error) {
@@ -956,12 +956,17 @@
     input.disabled = true;
     UI.$('command-submit').disabled = true;
 
+    // Echo the command and show a living "narrator is writing" indicator so
+    // the screen never sits dead while the LLM composes the response.
+    UI.beginPendingAction(command);
+
     try {
       const result = await API.sendCommand(state.currentPlayerId, command);
       if (result.actionId) state.recentActionIds.add(result.actionId);
       UI.appendStoryEntry(result, result.success ? 'success' : 'failure');
       await afterCommand(state.currentPlayerId, result);
     } catch (error) {
+      UI.endPendingAction();
       await handleError(error, { story: true });
     } finally {
       if (!UI._streamNode) {

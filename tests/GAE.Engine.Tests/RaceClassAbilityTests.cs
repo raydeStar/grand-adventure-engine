@@ -10,16 +10,16 @@ using Moq;
 namespace GAE.Engine.Tests;
 
 /// <summary>
-/// Tests for X06: Race & class-specific abilities â€” trait assignment at creation,
+/// Tests for X06: Race & class-specific abilities — trait assignment at creation,
 /// passive damage resistance in combat, active ability execution, cooldowns, and level gating.
 /// </summary>
 public class RaceClassAbilityTests
 {
     private const string PlayerId = "ability-tester";
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-    //  Character creation â€” trait & ability assignment
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════════════
+    //  Character creation — trait & ability assignment
+    // ═══════════════════════════════════════════════════════════════════
 
     [Fact]
     public async Task CreateCharacter_AssignsRaceTraits()
@@ -65,7 +65,7 @@ public class RaceClassAbilityTests
 
         var player = await engine.CreateCharacterFromConceptAsync(concept);
 
-        // Level 1 â€” only shield_bash (unlock_level=1) should be available
+        // Level 1 — only shield_bash (unlock_level=1) should be available
         Assert.Contains("shield_bash", player.UnlockedAbilities);
         Assert.DoesNotContain("second_wind", player.UnlockedAbilities); // unlock_level=2
         Assert.DoesNotContain("rally", player.UnlockedAbilities);       // unlock_level=4
@@ -78,7 +78,7 @@ public class RaceClassAbilityTests
         var state = new InMemoryStateManager();
         var engine = CreateEngine(state, registry: registry);
 
-        // Elf/Sylvar has "heightened_reflexes" trait â†’ StatBonus dex +1
+        // Elf/Sylvar has "heightened_reflexes" trait → StatBonus dex +1
         var concept = new CharacterConcept
         {
             PlayerDiscordId = PlayerId,
@@ -92,13 +92,13 @@ public class RaceClassAbilityTests
 
         var player = await engine.CreateCharacterFromConceptAsync(concept);
 
-        // FlatValue=10 for all, elf trait gives +1 dex â†’ 11
+        // FlatValue=10 for all, elf trait gives +1 dex → 11
         Assert.Equal(11, player.Dex);
     }
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-    //  CommandParser â€” ability command
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════════════
+    //  CommandParser — ability command
+    // ═══════════════════════════════════════════════════════════════════
 
     [Theory]
     [InlineData("ability shield bash")]
@@ -114,9 +114,9 @@ public class RaceClassAbilityTests
         Assert.False(string.IsNullOrWhiteSpace(action.Target));
     }
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════════════
     //  Active ability execution
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════════════
 
     [Fact]
     public async Task Ability_Heal_RestoresHp()
@@ -210,9 +210,9 @@ public class RaceClassAbilityTests
         Assert.Contains(updated.StatusEffects, se => se.Name == "Rally");
     }
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════════════
     //  Ability validation: cooldowns, MP, level gating
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════════════
 
     [Fact]
     public async Task Ability_OnCooldown_ReturnsFailure()
@@ -300,9 +300,9 @@ public class RaceClassAbilityTests
         Assert.Contains("haven't learned", result.MechanicalSummary, StringComparison.OrdinalIgnoreCase);
     }
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════════════
     //  Cooldown ticking
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════════════
 
     [Fact]
     public void TickAbilityCooldowns_DecrementsAndRemovesExpired()
@@ -317,9 +317,9 @@ public class RaceClassAbilityTests
         Assert.DoesNotContain("second_wind", (IDictionary<string, int>)player.AbilityCooldowns);
     }
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════════════
     //  Passive trait: damage resistance in combat
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════════════
 
     [Fact]
     public void ApplyTraitDamageResistance_ReducesDamage()
@@ -328,7 +328,7 @@ public class RaceClassAbilityTests
         var state = new InMemoryStateManager();
         var engine = CreateEngine(state, registry: registry);
 
-        // Dwarf/Drakari has "armored_hide" â†’ DamageResistance physical 2
+        // Dwarf/Drakari has "armored_hide" → DamageResistance physical 2
         var player = CreatePlayer(race: "dwarf");
         player.ActiveTraits = ["armored_hide"];
 
@@ -377,7 +377,7 @@ public class RaceClassAbilityTests
         var player = CreatePlayer(race: "test_race");
         player.ActiveTraits = ["trait_a", "trait_b"];
 
-        // trait_a = 2 physical, trait_b = 3 physical â†’ total 5 reduction
+        // trait_a = 2 physical, trait_b = 3 physical → total 5 reduction
         int reduced = engine.ApplyTraitDamageResistance(player, 10, "physical");
 
         Assert.Equal(5, reduced); // 10 - 5 = 5
@@ -450,13 +450,13 @@ public class RaceClassAbilityTests
         Assert.NotNull(updated);
         // With 3 exchanges and resistance, player takes (5-2)=3 per hit
         Assert.True(updated.Hp < 20, "Player should have taken damage");
-        // Without resistance: 5 Ã— 3 = 15 â†’ HP 5. With resistance: 3 Ã— 3 = 9 â†’ HP 11.
+        // Without resistance: 5 × 3 = 15 → HP 5. With resistance: 3 × 3 = 9 → HP 11.
         Assert.True(updated.Hp > 5, "Damage resistance should reduce total damage taken");
     }
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-    //  AssignRaceTraits / AssignClassAbilities â€” unit tests
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════════════
+    //  AssignRaceTraits / AssignClassAbilities — unit tests
+    // ═══════════════════════════════════════════════════════════════════
 
     [Fact]
     public void AssignRaceTraits_UnknownRace_NoEffect()
@@ -489,9 +489,9 @@ public class RaceClassAbilityTests
         Assert.Equal(3, player.UnlockedAbilities.Count);
     }
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════════════
     //  Helpers
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════════════
 
     private static PlayerCharacter CreatePlayer(string race = "dwarf", string className = "fighter")
     {

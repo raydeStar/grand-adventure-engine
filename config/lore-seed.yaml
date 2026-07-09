@@ -251,9 +251,9 @@ rooms:
         is_shopkeeper: true
         shop_inventory:
           - id: "healing_potion_1"
-            name: "Greater Healing Healing Draught"
+            name: "Greater Healing Draught"
             description: "A thick crimson liquid in a crystal vial etched with healing runes. Restores a significant amount of health. Tastes like strawberries and magic."
-            type: "Healing Draught"
+            type: "Potion"
             is_consumable: true
             value: 50
             effect: "Restores 30 HP"
@@ -267,7 +267,7 @@ rooms:
           - id: "minor_healing_potion"
             name: "Healing Draught"
             description: "A small vial of red liquid. The most basic healing item, but it's kept many an adventurer alive."
-            type: "Healing Draught"
+            type: "Potion"
             is_consumable: true
             value: 15
             effect: "Restores 2d4+2 HP"
@@ -275,7 +275,7 @@ rooms:
           - id: "antidote_1"
             name: "Antidote"
             description: "A bitter green liquid that neutralizes most common poisons. Essential in the Gloamwood."
-            type: "Healing Draught"
+            type: "Potion"
             is_consumable: true
             value: 10
             effect: "Cures poison"
@@ -327,7 +327,7 @@ rooms:
   
   - id: "back_alley"
     name: "Lowtown"
-    description: "A labyrinth of narrow passages beneath Stonewake's main level. The ceiling is the underside of the bazaar above, dripping condensation. Crates and barrels are stacked haphazardly, and the air smells of damp stone and deidolonation. Refugees, smugglers, and those the Empire forgot call this home. A masked figure leans against the wall, arms folded, watching you with unsettling calm."
+    description: "A labyrinth of narrow passages beneath Stonewake's main level. The ceiling is the underside of the bazaar above, dripping condensation. Crates and barrels are stacked haphazardly, and the air smells of damp stone and desperation. Refugees, smugglers, and those the Empire forgot call this home. A masked figure leans against the wall, arms folded, watching you with unsettling calm."
     exits:
       north: "spawn"
     environment_tags: ["outdoor", "dark", "shady", "alley", "lowtown"]
@@ -685,7 +685,7 @@ rooms:
       - id: "healing_mushroom"
         name: "Elixir Mushroom"
         description: "A luminous mushroom that pulses with warm Aether energy. Eating it restores health and cures all status ailments."
-        type: "Healing Draught"
+        type: "Potion"
         is_consumable: true
         value: 25
         effect: "Restores 20 HP and cures poison"

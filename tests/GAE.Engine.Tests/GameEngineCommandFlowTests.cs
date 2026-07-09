@@ -186,6 +186,28 @@ public class GameEngineCommandFlowTests
         Assert.Equal(result.Narration, entry.Narration);
     }
 
+    [Theory]
+    [InlineData("I grab the chest")]
+    [InlineData("I touch the wall over there")]
+    public async Task ProcessActionAsync_InnocentSubstringMatches_DoNotTriggerBoundaryConsequences(string rawInput)
+    {
+        var stateManager = await CreateStateAsync(room: new Room
+        {
+            Id = "inn",
+            Name = "Crossroads Inn",
+            Description = "A lantern-warmed common room with a locked treasure chest.",
+            Npcs = [new Npc { Id = "mara", Name = "Mara Vale" }]
+        });
+        var engine = CreateEngine(stateManager, new PerpetualFallbackNarrator());
+
+        var result = await engine.ProcessActionAsync(PlayerId, engine.ParseCommand(PlayerId, rawInput));
+
+        Assert.True(result.Success);
+        Assert.DoesNotContain("Boundary check", result.MechanicalSummary, StringComparison.OrdinalIgnoreCase);
+        var room = await stateManager.GetPlayerRoomAsync(PlayerId, "inn");
+        Assert.DoesNotContain("personal-boundary-crossed", Assert.Single(room!.Npcs).DispositionState.MemoryFlags);
+    }
+
     [Fact]
     public async Task ProcessActionAsync_BoundaryViolation_RollsForConsequenceAndPersistsStory()
     {
@@ -225,6 +247,7 @@ public class GameEngineCommandFlowTests
         Assert.Equal(RollOutcome.Miss, roll.Outcome);
         Assert.Contains("Boundary check: 9 vs DC 12", result.MechanicalSummary);
         Assert.Contains("Mara Vale", result.Narration);
+        Assert.Contains("you", result.Narration, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("fails", result.Narration, StringComparison.OrdinalIgnoreCase);
 
         var updatedRoom = await stateManager.GetPlayerRoomAsync(PlayerId, "inn");
@@ -596,7 +619,7 @@ public class GameEngineCommandFlowTests
         });
         player.Inventory.Add(new InventoryItem
         {
-            Name = "Greater Healing Healing Draught",
+            Name = "Greater Healing Draught",
             Description = "A concentrated healing elixir.",
             IsConsumable = true,
             Effect = "Restores 30 HP",
@@ -612,12 +635,12 @@ public class GameEngineCommandFlowTests
         var result = await engine.ProcessActionAsync(PlayerId, action);
 
         Assert.True(result.Success);
-        Assert.Contains("Used Greater Healing Healing Draught", result.MechanicalSummary);
+        Assert.Contains("Used Greater Healing Draught", result.MechanicalSummary);
 
         player = await stateManager.GetPlayerAsync(PlayerId);
         Assert.Equal(20, player!.Hp);
         Assert.Contains(player.Inventory, item => item.Name == "Healing Draught");
-        Assert.DoesNotContain(player.Inventory, item => item.Name == "Greater Healing Healing Draught");
+        Assert.DoesNotContain(player.Inventory, item => item.Name == "Greater Healing Draught");
     }
 
     [Fact]

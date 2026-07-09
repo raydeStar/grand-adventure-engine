@@ -11,7 +11,7 @@ public class InteractionStateMachineTests
 {
     private const string PlayerId = "test-player";
 
-    // â”€â”€ Conversation entry â”€â”€
+    // ── Conversation entry ──
 
     [Fact]
     public async Task TalkTo_EntersConversationMode()
@@ -249,7 +249,7 @@ public class InteractionStateMachineTests
         Assert.Equal(InteractionMode.Explore, player.Interaction.Mode);
     }
 
-    // â”€â”€ Combat entry â”€â”€
+    // ── Combat entry ──
 
     [Fact]
     public async Task Attack_HostileNpc_EntersCombatMode()
@@ -287,7 +287,7 @@ public class InteractionStateMachineTests
         }
     }
 
-    // â”€â”€ InteractionState model tests â”€â”€
+    // ── InteractionState model tests ──
 
     [Fact]
     public void InteractionState_AppendContext_CapsAt20()
@@ -332,7 +332,7 @@ public class InteractionStateMachineTests
         Assert.Null(state.LeaveConsequence);
     }
 
-    // â”€â”€ Helpers â”€â”€
+    // ── Helpers ──
 
     private static GameEngine CreateEngine(IStateManager stateManager, INarratorService narrator, IProbabilityEngine? dice = null)
     {

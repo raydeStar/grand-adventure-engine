@@ -303,7 +303,7 @@ public class QuestTracker
             return false;
 
         var actualTokens = GetQuestTargetTokens($"{actualId} {actualName}");
-        return actualTokens.Count > 0 && expectedTokens.Overlaps(actualTokens);
+        return actualTokens.Count > 0 && expectedTokens.IsSubsetOf(actualTokens);
     }
 
     private static HashSet<string> GetQuestTargetTokens(string? value)

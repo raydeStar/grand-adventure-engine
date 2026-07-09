@@ -1,7 +1,7 @@
-﻿# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+﻿# ══════════════════════════════════════════════════════════════════
 # ORIGINAL FANTASY CLASS REGISTRY
-# "The job system is the soul of every adventure." â€” Garrick
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# "The job system is the soul of every adventure." — Garrick
+# ══════════════════════════════════════════════════════════════════
 
 classes:
 
@@ -52,7 +52,7 @@ classes:
 
   - id: mage
     name: Arcanist
-    description: "A master of destructive elemental magic â€” fire, ice, and lightning answer their command. Devastating at range but fragile up close. The pointy hat is mandatory."
+    description: "A master of destructive elemental magic — fire, ice, and lightning answer their command. Devastating at range but fragile up close. The pointy hat is mandatory."
     hit_die: d6
     primary_stat: int
     secondary_stat: wis
@@ -198,7 +198,7 @@ classes:
 
   - id: sorcerer
     name: Eidolon Binder
-    description: "A spellcaster who draws power from pacts with Eidolons â€” ancient beings of immense elemental might. Their magic is wild, charismatic, and devastatingly unpredictable."
+    description: "A spellcaster who draws power from pacts with Eidolons — ancient beings of immense elemental might. Their magic is wild, charismatic, and devastatingly unpredictable."
     hit_die: d6
     primary_stat: cha
     secondary_stat: int

@@ -198,7 +198,7 @@ public class NarratorServiceTests
     [Fact]
     public async Task NarrateActionAsync_ForFailedMove_StillUsesGeneralNarration()
     {
-        // Failed moves (no exit) should NOT go through arrival â€” they use the general humor prompt
+        // Failed moves (no exit) should NOT go through arrival — they use the general humor prompt
         var handler = new FakeHttpMessageHandler(new HttpRequestException("Connection refused"));
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") };
         var narrator = new NarratorService(httpClient, NullLogger<NarratorService>.Instance);
@@ -377,7 +377,7 @@ public class NarratorServiceTests
     public void TryParseFreeFormResponse_WithBrokenDialogueQuotes_RepairsAndParses()
     {
         // Simulates the exact broken JSON that arrives after CompletionOrThrowAsync
-        // deserializes the outer LM Studio response â€” dialogue quotes are bare/unescaped,
+        // deserializes the outer LM Studio response — dialogue quotes are bare/unescaped,
         // and the LLM returns "narrative" instead of "narration".
         var brokenJson = """{"narrative": ""Rumors?" Mara says, leaning closer. "Don't you start with that nonsense, kid," she mutters.", "success": true, "statChanges": {}, "inventoryChanges": [], "entityChanges": [], "combatInitiated": false, "interactionUpdate": {"mode": "conversation", "npcDisposition": "annoyed"}}""";
 
@@ -418,7 +418,7 @@ public class NarratorServiceTests
     [Fact]
     public void TryParseFreeFormResponse_WithTruncatedJson_ExtractsNarrationOnly()
     {
-        // Simulates a response truncated by context window â€” JSON cuts off mid-field
+        // Simulates a response truncated by context window — JSON cuts off mid-field
         var truncatedJson = """
             {
               "narration": "The guard eyes you warily, hand on his sword hilt.",
@@ -543,7 +543,7 @@ public class NarratorServiceTests
         //
         // The broken inner JSON (what TryParseFreeFormResponse receives):
         var brokenInner = """{"narrative": ""Rumors?" Mara says, leaning closer. "Don't you start with that nonsense, kid," she mutters.", "success": true, "statChanges": {}, "inventoryChanges": [], "entityChanges": [], "combatInitiated": false, "interactionUpdate": {"mode": "conversation", "npcDisposition": "annoyed"}}""";
-        // Wrap it in a proper LM Studio response â€” JsonSerializer.Serialize escapes quotes
+        // Wrap it in a proper LM Studio response — JsonSerializer.Serialize escapes quotes
         // so that after outer deserialization we get the broken inner JSON back.
         var outerJson = "{\"choices\":[{\"message\":{\"content\":" + JsonSerializer.Serialize(brokenInner) + "}}]}";
         var handler = new ResponseHttpMessageHandler(outerJson);
@@ -566,7 +566,7 @@ public class NarratorServiceTests
     [Fact]
     public async Task ProcessConversationTurnAsync_WhenLlmReturnsNarrativeKey_NormalizesToNarration()
     {
-        // LLM returns "narrative" instead of "narration" â€” should still parse
+        // LLM returns "narrative" instead of "narration" — should still parse
         var handler = new ResponseHttpMessageHandler("""
             {
               "choices": [
@@ -770,6 +770,34 @@ public class NarratorServiceTests
         Assert.DoesNotContain("amused, wary", response.Narration, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Theory]
+    [InlineData("I grab the chest")]
+    [InlineData("I touch the wall over there")]
+    public async Task ProcessFreeFormAsync_InnocentSubstringMatches_DoNotUseBoundaryFallback(string rawInput)
+    {
+        var narrator = new NarratorService(
+            new HttpClient(new FakeHttpMessageHandler(new HttpRequestException("Connection refused")))
+            {
+                BaseAddress = new Uri("http://localhost:1234/")
+            },
+            NullLogger<NarratorService>.Instance);
+
+        var response = await narrator.ProcessFreeFormAsync(
+            new PlayerCharacter { Name = "Dante", Race = "Halfling", Class = "Rogue" },
+            new Room
+            {
+                Id = "inn",
+                Name = "Lantern's Rest",
+                Description = "A crowded inn with a locked treasure chest.",
+                Npcs = [new Npc { Id = "mara", Name = "Mara Vale" }]
+            },
+            rawInput,
+            []);
+
+        Assert.DoesNotContain("catches your wrist", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("personal boundary", response.Narration, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public async Task ProcessFreeFormAsync_WhenLlmReturnsBoringNonConsequence_ReplacesItWithFallback()
     {
@@ -806,7 +834,36 @@ public class NarratorServiceTests
         Assert.DoesNotContain("returns their attention", response.Narration, StringComparison.OrdinalIgnoreCase);
     }
 
-    // â”€â”€ Retry logic tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    [Fact]
+    public async Task ProcessFreeFormAsync_WhenBoringNarrationCarriesState_PreservesStructuredChanges()
+    {
+        var handler = new ResponseHttpMessageHandler("""
+            {
+              "choices": [
+                {
+                  "message": {
+                    "content": "{\"narration\":\"The moment passes without any dramatic consequences.\",\"success\":true,\"statChanges\":{\"gold\":3},\"inventoryChanges\":[{\"action\":\"add\",\"itemName\":\"Old Coin\",\"quantity\":1}],\"entityChanges\":[],\"combatInitiated\":false}"
+                  }
+                }
+              ]
+            }
+            """);
+        var narrator = new NarratorService(
+            new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") },
+            NullLogger<NarratorService>.Instance);
+
+        var response = await narrator.ProcessFreeFormAsync(
+            new PlayerCharacter { Name = "Bonk", Race = "Human", Class = "Warrior" },
+            new Room { Id = "inn", Name = "Lantern's Rest", Description = "A crowded inn." },
+            "search beneath the loose floorboard",
+            []);
+
+        Assert.Equal(3, response.StatChanges["gold"]);
+        Assert.Equal("Old Coin", Assert.Single(response.InventoryChanges).ItemName);
+        Assert.DoesNotContain("moment passes", response.Narration, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ── Retry logic tests ─────────────────────────────────────────
 
     [Fact]
     public async Task CompletionRetry_TransientFailureThenSuccess_ReturnsNarration()
@@ -832,7 +889,7 @@ public class NarratorServiceTests
     [Fact]
     public async Task CompletionRetry_AllRetriesExhausted_FallsBackGracefully()
     {
-        // 3 total attempts (retryCount=2), all fail â†’ CompletionAsync catches and returns fallback
+        // 3 total attempts (retryCount=2), all fail → CompletionAsync catches and returns fallback
         var handler = new FakeHttpMessageHandler(new HttpRequestException("Connection refused"));
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") };
         var narrator = new NarratorService(httpClient, NullLogger<NarratorService>.Instance, retryCount: 2, retryDelayMs: 0);
@@ -857,7 +914,7 @@ public class NarratorServiceTests
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") };
         var narrator = new NarratorService(httpClient, NullLogger<NarratorService>.Instance, retryCount: 0, retryDelayMs: 0);
 
-        // With retryCount=0, only 1 attempt â€” it fails, falls through to CompletionAsync fallback
+        // With retryCount=0, only 1 attempt — it fails, falls through to CompletionAsync fallback
         var response = await narrator.ProcessFreeFormAsync(
             new PlayerCharacter { Name = "Test", Race = "Human", Class = "Warrior" },
             new Room { Id = "lab", Name = "QA Lab", Description = "A test room." },
@@ -873,8 +930,8 @@ public class NarratorServiceTests
     {
         // With a pre-cancelled token, the first HTTP call throws OperationCanceledException.
         // The retry filter (ex is not OperationCanceledException || !ct.IsCancellationRequested)
-        // should NOT catch it â€” it should propagate through CompletionOrThrowAsync.
-        // CompletionAsync catches it and returns fallback (which is fine â€” fast exit).
+        // should NOT catch it — it should propagate through CompletionOrThrowAsync.
+        // CompletionAsync catches it and returns fallback (which is fine — fast exit).
         var handler = new TransientFailureHandler(failCount: 99, successBody: "{}");
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") };
         var narrator = new NarratorService(httpClient, NullLogger<NarratorService>.Instance, retryCount: 5, retryDelayMs: 50_000);
@@ -889,13 +946,13 @@ public class NarratorServiceTests
             [],
             ct: cts.Token);
 
-        // Should get fallback quickly â€” cancelled token prevents retry delay from completing,
+        // Should get fallback quickly — cancelled token prevents retry delay from completing,
         // so only the first attempt fires before cancellation kicks in
         Assert.NotNull(response);
         Assert.Equal(1, handler.CallCount);
     }
 
-    // â”€â”€ Test helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Test helpers ──────────────────────────────────────────────
 
     private class FakeHttpMessageHandler : HttpMessageHandler
     {
@@ -1006,7 +1063,7 @@ public class NarratorServiceTests
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            // Skip model-resolution requests (GET /v1/models) â€” always succeed
+            // Skip model-resolution requests (GET /v1/models) — always succeed
             if (request.Method == HttpMethod.Get)
             {
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)

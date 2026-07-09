@@ -1,10 +1,10 @@
-﻿# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+﻿# ══════════════════════════════════════════════════════════════════
 # ORIGINAL FANTASY QUEST SEED
-# "Your next objective is always one more fight away." â€” Garrick
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# "Your next objective is always one more fight away." — Garrick
+# ══════════════════════════════════════════════════════════════════
 
 quests:
-  # â”€â”€ QUEST 1: Mara's Rat Problem â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # ── QUEST 1: Mara's Rat Problem ────────────────────────────
   - id: "waterway_infestation"
     name: "The Waterway Infestation"
     description: "Mara's cellar connects to the Oldwater Tunnels, and something down there is scaring away her barbacks. Clear it out."
@@ -17,7 +17,7 @@ quests:
       - id: "kill_rats"
         name: "Clear the Waterway"
         description: "Descend into the Oldwater Tunnels and deal with the infestation."
-        narrator_hint: "The player is hunting dire rats mutated by Aether energy in the waterway beneath the Lantern's Rest. Make it visceral â€” bioluminescent fungus, dripping pipes, bloated rats with glowing blue teeth."
+        narrator_hint: "The player is hunting dire rats mutated by Aether energy in the waterway beneath the Lantern's Rest. Make it visceral — bioluminescent fungus, dripping pipes, bloated rats with glowing blue teeth."
         objectives:
           - id: "kill_giant_rat"
             type: Kill
@@ -28,7 +28,7 @@ quests:
       - id: "return_to_lebreau"
         name: "Report Back"
         description: "Tell Mara the Waterway is clear."
-        narrator_hint: "Mara is relieved and pours the player a drink on the house. She hints this wasn't the first pest problem â€” the Aether beneath the city is getting worse."
+        narrator_hint: "Mara is relieved and pours the player a drink on the house. She hints this wasn't the first pest problem — the Aether beneath the city is getting worse."
         objectives:
           - id: "talk_lebreau_done"
             type: TalkTo
@@ -41,7 +41,7 @@ quests:
       disposition_shift: 10
       memory_flags: ["helped-with-rats"]
 
-  # â”€â”€ QUEST 2: Perrin's Lucky Charm â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # ── QUEST 2: Perrin's Lucky Charm ─────────────────────────
   - id: "perrin_lucky_charm"
     name: "Perrin's Lucky Charm"
     description: "Perrin lost his lucky bottle somewhere in Lowtown during a bender. Hale gave it to him before shipping out. It's the only thing keeping Perrin sane."
@@ -54,7 +54,7 @@ quests:
       - id: "find_bottle"
         name: "Search Lowtown"
         description: "Look for Perrin's lucky bottle somewhere in Lowtown."
-        narrator_hint: "Perrin is vague about where he lost it because he was blackout drunk. The player finds an empty potion bottle in Lowtown â€” Perrin insists it's his lucky charm from Hale and is pathetically grateful."
+        narrator_hint: "Perrin is vague about where he lost it because he was blackout drunk. The player finds an empty potion bottle in Lowtown — Perrin insists it's his lucky charm from Hale and is pathetically grateful."
         objectives:
           - id: "collect_bottle"
             type: Collect
@@ -65,7 +65,7 @@ quests:
       - id: "return_to_perrin"
         name: "Return to Perrin"
         description: "Bring the bottle back to Perrin."
-        narrator_hint: "Perrin tears up. He'll tell the player a rumor about the Blackspire as thanks â€” something about the cultists smuggling supplies from the bazaar."
+        narrator_hint: "Perrin tears up. He'll tell the player a rumor about the Blackspire as thanks — something about the cultists smuggling supplies from the bazaar."
         objectives:
           - id: "deliver_to_perrin"
             type: Deliver
@@ -79,10 +79,10 @@ quests:
       disposition_shift: 15
       memory_flags: ["helped-perrin"]
 
-  # â”€â”€ QUEST 3: Bram's Patrol â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # ── QUEST 3: Bram's Patrol ─────────────────────────────
   - id: "patrol_resistance"
     name: "Eyes on the Empire"
-    description: "Bram â€” 'the gate guard' â€” wants someone to scout Stonewake's perimeter and report Imperial troop movements."
+    description: "Bram — 'the gate guard' — wants someone to scout Stonewake's perimeter and report Imperial troop movements."
     giver_id: "guard_bram"
     turn_in_npc_id: "guard_bram"
     min_level: 1
@@ -92,7 +92,7 @@ quests:
       - id: "scout_locations"
         name: "Scout the Perimeter"
         description: "Visit key locations around Stonewake to check for Imperial activity."
-        narrator_hint: "The player is doing reconnaissance for Bram. Each location should feel like a recon sweep â€” note any suspicious Imperial presences, supply movements, or resistance sympathizers."
+        narrator_hint: "The player is doing reconnaissance for Bram. Each location should feel like a recon sweep — note any suspicious Imperial presences, supply movements, or resistance sympathizers."
         objectives:
           - id: "visit_gate"
             type: Discover
@@ -122,7 +122,7 @@ quests:
       disposition_shift: 10
       memory_flags: ["resistance-contact"]
 
-  # â”€â”€ QUEST 4: Korga's Masterwork â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # ── QUEST 4: Korga's Masterwork ────────────────────────────
   - id: "watts_masterwork"
     name: "Korga's Masterwork"
     description: "Korga doesn't sell his best mythril to just anyone. Prove you're worthy and he'll forge something special."
@@ -146,7 +146,7 @@ quests:
       - id: "claim_reward"
         name: "Claim Your Prize"
         description: "Talk to Korga to receive the weapon he's forged."
-        narrator_hint: "Korga gives a rare grin â€” all fangs and approval. He reaches under the counter and produces a blade he's been saving. 'This one's earned, not bought.'"
+        narrator_hint: "Korga gives a rare grin — all fangs and approval. He reaches under the counter and produces a blade he's been saving. 'This one's earned, not bought.'"
         objectives:
           - id: "talk_watts_reward"
             type: TalkTo
@@ -161,10 +161,10 @@ quests:
       disposition_shift: 15
       memory_flags: ["watts-approved"]
 
-  # â”€â”€ QUEST 5: Lena's Missing Kin â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # ── QUEST 5: Lena's Missing Kin ──────────────────────────
   - id: "lena_missing_kin"
     name: "Into the Gloamwood"
-    description: "Lena's younger sister Mira ventured into the Gloamwood and hasn't returned. The Sylvar won't ask for help â€” but she'll accept it."
+    description: "Lena's younger sister Mira ventured into the Gloamwood and hasn't returned. The Sylvar won't ask for help — but she'll accept it."
     giver_id: "gate_guard_lena"
     turn_in_npc_id: "gate_guard_lena"
     min_level: 1
@@ -174,7 +174,7 @@ quests:
       - id: "enter_forest"
         name: "Search the Gloamwood"
         description: "Enter the Gloamwood and look for signs of Mira."
-        narrator_hint: "The player is searching for a missing Sylvar in the jungle. The atmosphere should be thick with Aether and foreboding. The jungle feels alive and watchful. Build tension â€” something drove Mira deeper."
+        narrator_hint: "The player is searching for a missing Sylvar in the jungle. The atmosphere should be thick with Aether and foreboding. The jungle feels alive and watchful. Build tension — something drove Mira deeper."
         objectives:
           - id: "reach_forest"
             type: Discover
@@ -186,7 +186,7 @@ quests:
       disposition_shift: 20
       memory_flags: ["lena-trusted", "!gloamwood-explorer"]
 
-  # â”€â”€ QUEST 5B: Thorne Escort â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # ── QUEST 5B: Thorne Escort ─────────────────────────────
   - id: "rangers_retreat"
     name: "Ranger's Retreat"
     description: "Lena has lost contact with Thorne at the jungle edge. Find him, steady him, and bring him back to the gate before the Aether worsens."
@@ -212,7 +212,7 @@ quests:
         next_stage_id: "bring_red_home"
       - id: "bring_red_home"
         name: "Bring Thorne Back"
-        description: "Return to the city gate â€” Thorne follows at your pace, Aether or no Aether."
+        description: "Return to the city gate — Thorne follows at your pace, Aether or no Aether."
         narrator_hint: "Thorne yields only when the danger becomes undeniable. The retreat should feel tense, disciplined, and one step ahead of something hungry in the trees. When the player reaches the gate, Thorne is safe."
         objectives:
           - id: "escort_red"
@@ -225,7 +225,7 @@ quests:
       disposition_shift: 10
       memory_flags: ["helped-red-xiii"]
 
-  # â”€â”€ QUEST 6: Crystal Blessing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # ── QUEST 6: Crystal Blessing ────────────────────────────
   - id: "crystal_blessing"
     name: "The Crystal's Favor"
     description: "Aldric senses the Crystals crying out. He wants to bless a worthy adventurer before the darkness deepens."
@@ -238,7 +238,7 @@ quests:
       - id: "seek_blessing"
         name: "Receive the Blessing"
         description: "Speak with Aldric about the Crystals' warning."
-        narrator_hint: "Aldric is earnest and slightly unhinged. He genuinely believes the Crystals speak to him and that the player is a Lightbound Champion. The blessing ceremony should feel real and weighty â€” crystal light, warmth, a moment of genuine hope despite Aldric's eccentricities."
+        narrator_hint: "Aldric is earnest and slightly unhinged. He genuinely believes the Crystals speak to him and that the player is a Lightbound Champion. The blessing ceremony should feel real and weighty — crystal light, warmth, a moment of genuine hope despite Aldric's eccentricities."
         objectives:
           - id: "listen_aldric"
             type: Custom
@@ -253,11 +253,11 @@ quests:
       disposition_shift: 15
       memory_flags: ["crystal-blessed"]
 
-  # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-  # NEW QUESTS â€” Expanding the world
-  # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  # ═══════════════════════════════════════════════════════════
+  # NEW QUESTS — Expanding the world
+  # ═══════════════════════════════════════════════════════════
 
-  # â”€â”€ QUEST 7: Hunt â€” Needlejack Sighting â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # ── QUEST 7: Hunt — Needlejack Sighting ─────────────────────
   - id: "needlejack_hunt"
     name: "Hunt: Needlejack Sighting"
     description: "The Hunt Board at the Lantern's Rest reports a dangerously quick Needlejack terrorizing travelers near the Gloamwood entrance. 100 gold bounty."
@@ -281,7 +281,7 @@ quests:
       - id: "kill_needlejack"
         name: "Defeat the Needlejack"
         description: "Fight and defeat the rogue Needlejack."
-        narrator_hint: "The Needlejack is small, spiny, and ridiculously fast. Its 'Needle Storm' attack hurts. Make it comedic but tense â€” the thing is a menace."
+        narrator_hint: "The Needlejack is small, spiny, and ridiculously fast. Its 'Needle Storm' attack hurts. Make it comedic but tense — the thing is a menace."
         objectives:
           - id: "slay_needlejack"
             type: Custom
@@ -291,7 +291,7 @@ quests:
       - id: "claim_bounty"
         name: "Claim the Bounty"
         description: "Return to Mara at the Lantern's Rest to collect the hunt reward."
-        narrator_hint: "Mara is impressed â€” Needlejacks are notoriously hard to catch. She pays the full bounty and marks the hunt as complete on the board."
+        narrator_hint: "Mara is impressed — Needlejacks are notoriously hard to catch. She pays the full bounty and marks the hunt as complete on the board."
         objectives:
           - id: "talk_lebreau_bounty"
             type: TalkTo
@@ -303,7 +303,7 @@ quests:
       disposition_shift: 10
       memory_flags: ["needlejack-slayer"]
 
-  # â”€â”€ QUEST 8: Sprig Mail â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # ── QUEST 8: Sprig Mail ─────────────────────────────────
   - id: "sprig_mail"
     name: "Sprig Mail Delivery"
     description: "The sprig mail system has a backlog. Whiskerjack at the Sprig Post needs someone with working legs to deliver three packages around Stonewake."
@@ -316,7 +316,7 @@ quests:
       - id: "deliver_packages"
         name: "Make Deliveries"
         description: "Deliver packages to three locations around Stonewake."
-        narrator_hint: "Whiskerjack is comically bad at explaining the routes. The packages are tiny (sprig-sized) and have little pom-pom ribbons. Each recipient reacts differently â€” Korga grumbles, Pip tries to sell it back, Nessa knows what's inside before opening it."
+        narrator_hint: "Whiskerjack is comically bad at explaining the routes. The packages are tiny (sprig-sized) and have little pom-pom ribbons. Each recipient reacts differently — Korga grumbles, Pip tries to sell it back, Nessa knows what's inside before opening it."
         objectives:
           - id: "deliver_forge"
             type: Discover
@@ -346,10 +346,10 @@ quests:
       disposition_shift: 10
       memory_flags: ["sprig-friend"]
 
-  # â”€â”€ QUEST 9: Garrick's Airship Parts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # ── QUEST 9: Garrick's Airship Parts ────────────────────────
   - id: "garrick_airship_parts"
     name: "Garrick's Airship Dream"
-    description: "Garrick Vane is rebuilding an airship in secret. He needs rare parts from dangerous places â€” and someone crazy enough to fetch them."
+    description: "Garrick Vane is rebuilding an airship in secret. He needs rare parts from dangerous places — and someone crazy enough to fetch them."
     giver_id: "dungeon_master_garrick"
     turn_in_npc_id: "dungeon_master_garrick"
     min_level: 2
@@ -359,7 +359,7 @@ quests:
       - id: "find_mythril_coil"
         name: "Salvage Mythril Coils"
         description: "Garrick needs mythril engine coils from the Blackspire. The Veiled Architects cult stockpiles arcanotech components."
-        narrator_hint: "Garrick is passionate and profane about his airship project. He describes the Blackspire salvage run like a military briefing. The mythril coils are ancient arcanotech â€” valuable and dangerous to extract."
+        narrator_hint: "Garrick is passionate and profane about his airship project. He describes the Blackspire salvage run like a military briefing. The mythril coils are ancient arcanotech — valuable and dangerous to extract."
         objectives:
           - id: "reach_dungeon"
             type: Discover
@@ -381,10 +381,10 @@ quests:
       disposition_shift: 15
       memory_flags: ["garrick-crew"]
 
-  # â”€â”€ QUEST 10: Silas the Grand's Challenge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # ── QUEST 10: Silas the Grand's Challenge ─────────────────────
   - id: "silas_challenge"
     name: "Silas the Grand's Challenge"
-    description: "Silas the Grand claims to be the greatest swordsman across dimensions. He'll prove it â€” by fighting YOU. If you can survive three rounds, he'll open his premium stock."
+    description: "Silas the Grand claims to be the greatest swordsman across dimensions. He'll prove it — by fighting YOU. If you can survive three rounds, he'll open his premium stock."
     giver_id: "fence_silas"
     turn_in_npc_id: "fence_silas"
     min_level: 3
@@ -395,7 +395,7 @@ quests:
       - id: "accept_duel"
         name: "Challenge Silas the Grand"
         description: "Accept Silas the Grand's challenge to a duel in Lowtown."
-        narrator_hint: "Silas the Grand makes an absurdly dramatic entrance speech. He pulls out four swords at once (somehow). The duel is theatrical â€” Silas the Grand is actually dangerous but treats it like performance art. If the player survives, Silas the Grand concedes with zero shame."
+        narrator_hint: "Silas the Grand makes an absurdly dramatic entrance speech. He pulls out four swords at once (somehow). The duel is theatrical — Silas the Grand is actually dangerous but treats it like performance art. If the player survives, Silas the Grand concedes with zero shame."
         objectives:
           - id: "fight_silas"
             type: Survive
@@ -421,10 +421,10 @@ quests:
       disposition_shift: 20
       memory_flags: ["silas-rival"]
 
-  # â”€â”€ QUEST 11: The Eidolon's Call â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # ── QUEST 11: The Eidolon's Call ──────────────────────────
   - id: "eidolon_call"
     name: "The Eidolon's Call"
-    description: "Aldric hears a voice from the Blackspire â€” an Eidolon, chained and suffering. The Cult of the Veiled Architects plans to weaponize it. Someone must stop them."
+    description: "Aldric hears a voice from the Blackspire — an Eidolon, chained and suffering. The Cult of the Veiled Architects plans to weaponize it. Someone must stop them."
     giver_id: "priest_aldric"
     turn_in_npc_id: "priest_aldric"
     min_level: 3
@@ -435,7 +435,7 @@ quests:
       - id: "enter_blackspire"
         name: "Enter the Blackspire"
         description: "Penetrate the Blackspire at Stormreach and find the Cult."
-        narrator_hint: "This is the main storyline's climax. The Blackspire is foreboding â€” ancient black stone, thick Aether, and the hum of imprisoned divine power. The player should feel the weight of approaching destiny."
+        narrator_hint: "This is the main storyline's climax. The Blackspire is foreboding — ancient black stone, thick Aether, and the hum of imprisoned divine power. The player should feel the weight of approaching destiny."
         objectives:
           - id: "reach_shrine"
             type: Discover
@@ -456,7 +456,7 @@ quests:
       - id: "face_aurelion"
         name: "Face Aurelion"
         description: "Ascend to the Blackspire Summit and confront the Eidolon."
-        narrator_hint: "The Eidolon â€” Aurelion, the Bound Seraph â€” is beautiful, ancient, and terrifying. This is the ultimate boss fight. Let the player feel the weight of it. Victory should feel legendary."
+        narrator_hint: "The Eidolon — Aurelion, the Bound Seraph — is beautiful, ancient, and terrifying. This is the ultimate boss fight. Let the player feel the weight of it. Victory should feel legendary."
         objectives:
           - id: "slay_aurelion"
             type: Kill
@@ -467,7 +467,7 @@ quests:
       - id: "return_aldric"
         name: "Return to Aldric"
         description: "Tell Aldric the Eidolon has been freed."
-        narrator_hint: "Aldric weeps with joy. The Crystals sing in response. The player is officially a Lightbound Champion. This should feel like a genuine victory â€” the culmination of the adventure."
+        narrator_hint: "Aldric weeps with joy. The Crystals sing in response. The player is officially a Lightbound Champion. This should feel like a genuine victory — the culmination of the adventure."
         objectives:
           - id: "talk_minwu_finale"
             type: TalkTo
@@ -482,10 +482,10 @@ quests:
       disposition_shift: 25
       memory_flags: ["warrior-of-light", "eidolon-freed"]
 
-  # â”€â”€ QUEST 12: Knife Wight's Grudge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # ── QUEST 12: Knife Wight's Grudge ─────────────────────────
   - id: "knife_wight_grudge"
     name: "Knife Wight's Grudge"
-    description: "Deep in the Blackspire, a Knife Wight stalks the halls with a grudge list longer than its knife. Silas the Grand wants it stopped â€” it's bad for business."
+    description: "Deep in the Blackspire, a Knife Wight stalks the halls with a grudge list longer than its knife. Silas the Grand wants it stopped — it's bad for business."
     giver_id: "fence_silas"
     turn_in_npc_id: "fence_silas"
     min_level: 2
@@ -495,7 +495,7 @@ quests:
       - id: "find_knife_wight"
         name: "Hunt the Knife Wight"
         description: "Enter the Blackspire and track down the Knife Wight."
-        narrator_hint: "The Knife Wight is iconic â€” slow, deliberate, lantern in one hand, knife in the other. It doesn't run. It walks. And it always arrives. The horror is in the patience."
+        narrator_hint: "The Knife Wight is iconic — slow, deliberate, lantern in one hand, knife in the other. It doesn't run. It walks. And it always arrives. The horror is in the patience."
         objectives:
           - id: "reach_cult_room"
             type: Discover
@@ -528,14 +528,14 @@ quests:
       disposition_shift: 15
       memory_flags: ["knife-wight-slayer"]
 
-  # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-  # MAIN QUESTLINE â€” The Crystal Crusade
-  # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  # ═══════════════════════════════════════════════════════════
+  # MAIN QUESTLINE — The Crystal Crusade
+  # ═══════════════════════════════════════════════════════════
 
-  # â”€â”€ QUEST: The Dying Crystal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # ── QUEST: The Dying Crystal ─────────────────────────────
   - id: "crystal_dying"
     name: "The Dying Crystal"
-    description: "Marquis Odran reveals that the four elemental Crystals that once shielded Valeward are fading. Without them, the Void â€” an ancient force of annihilation â€” will consume the kingdom. The Water Crystal's temple lies beneath the Oldwater Tunnels. Someone must retrieve it before the light goes out."
+    description: "Marquis Odran reveals that the four elemental Crystals that once shielded Valeward are fading. Without them, the Void — an ancient force of annihilation — will consume the kingdom. The Water Crystal's temple lies beneath the Oldwater Tunnels. Someone must retrieve it before the light goes out."
     giver_id: "marquis_odran"
     turn_in_npc_id: "marquis_odran"
     min_level: 2
@@ -545,7 +545,7 @@ quests:
       - id: "seek_water_temple"
         name: "Find the Water Temple"
         description: "Descend into the tunnels beneath the Oldwater Tunnels and locate the Water Temple Sanctum."
-        narrator_hint: "The player is delving into ancient flooded tunnels beneath Stonewake in search of the Water Crystal. Build atmosphere â€” dripping stone, eerie blue light, the sense of descending into something sacred and forgotten. The temple predates the city by millennia."
+        narrator_hint: "The player is delving into ancient flooded tunnels beneath Stonewake in search of the Water Crystal. Build atmosphere — dripping stone, eerie blue light, the sense of descending into something sacred and forgotten. The temple predates the city by millennia."
         objectives:
           - id: "discover_water_sanctum"
             type: Discover
@@ -555,7 +555,7 @@ quests:
       - id: "defeat_tidewrought"
         name: "Defeat the Tidal Lord"
         description: "Tidewrought, the ancient guardian of the Water Crystal, will not yield its charge willingly. Defeat it."
-        narrator_hint: "This is the player's first Crystal boss fight. Tidewrought is proud, ancient, and powerful. The battle should feel like a genuine test â€” the sanctum floods, water crashes, and the serpent strikes with the fury of the deep ocean. Victory should feel earned."
+        narrator_hint: "This is the player's first Crystal boss fight. Tidewrought is proud, ancient, and powerful. The battle should feel like a genuine test — the sanctum floods, water crashes, and the serpent strikes with the fury of the deep ocean. Victory should feel earned."
         objectives:
           - id: "kill_tidewrought"
             type: Kill
@@ -566,7 +566,7 @@ quests:
       - id: "return_water_crystal"
         name: "Return the Water Crystal"
         description: "Bring the Water Crystal to Marquis Odran at City Hall."
-        narrator_hint: "Odran is visibly moved when the player returns with the Water Crystal. For the first time, hope breaks through his careful political mask. He explains that three more Crystals remain â€” Fire, Earth, and Wind â€” scattered in temples across the land. The crusade has begun."
+        narrator_hint: "Odran is visibly moved when the player returns with the Water Crystal. For the first time, hope breaks through his careful political mask. He explains that three more Crystals remain — Fire, Earth, and Wind — scattered in temples across the land. The crusade has begun."
         objectives:
           - id: "talk_odran_water"
             type: TalkTo
@@ -579,10 +579,10 @@ quests:
       disposition_shift: 20
       memory_flags: ["water-crystal-recovered", "crystal-crusader"]
 
-  # â”€â”€ QUEST: Trial of Fire â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # ── QUEST: Trial of Fire ─────────────────────────────────
   - id: "crystal_crusade_fire"
     name: "Trial of Fire"
-    description: "The Fire Crystal burns in a volcanic temple east of the Emberwood. Cindermaw, the Infernal Lord, guards it with the fury of a thousand suns. Odran warns that the volcano is active â€” speed and strength in equal measure will be needed."
+    description: "The Fire Crystal burns in a volcanic temple east of the Emberwood. Cindermaw, the Infernal Lord, guards it with the fury of a thousand suns. Odran warns that the volcano is active — speed and strength in equal measure will be needed."
     giver_id: "marquis_odran"
     turn_in_npc_id: "marquis_odran"
     min_level: 3
@@ -593,7 +593,7 @@ quests:
       - id: "enter_fire_temple"
         name: "Reach the Fire Temple Core"
         description: "Travel through the volcanic wasteland east of the Emberwood and penetrate the Fire Temple to its core."
-        narrator_hint: "The journey takes the player from the Aether-choked Emberwood into scorched volcanic terrain â€” a dramatic shift. The obsidian temple is ancient and imposing. Heat is a constant enemy. Build the sense of approaching something primal and dangerous."
+        narrator_hint: "The journey takes the player from the Aether-choked Emberwood into scorched volcanic terrain — a dramatic shift. The obsidian temple is ancient and imposing. Heat is a constant enemy. Build the sense of approaching something primal and dangerous."
         objectives:
           - id: "discover_fire_core"
             type: Discover
@@ -603,7 +603,7 @@ quests:
       - id: "defeat_cindermaw"
         name: "Defeat the Infernal Lord"
         description: "Cindermaw will not relinquish the Fire Crystal without a fight. Survive his flames."
-        narrator_hint: "Cindermaw is rage incarnate. The magma chamber becomes an arena of fire and fury. Cindermaw charges, roars, and unleashes Cinderstorm â€” a wall of flame that fills the entire chamber. This fight is visceral and exhausting. Victory should leave the player singed but triumphant."
+        narrator_hint: "Cindermaw is rage incarnate. The magma chamber becomes an arena of fire and fury. Cindermaw charges, roars, and unleashes Cinderstorm — a wall of flame that fills the entire chamber. This fight is visceral and exhausting. Victory should leave the player singed but triumphant."
         objectives:
           - id: "kill_cindermaw"
             type: Kill
@@ -614,7 +614,7 @@ quests:
       - id: "return_fire_crystal"
         name: "Return the Fire Crystal"
         description: "Bring the Fire Crystal to Marquis Odran."
-        narrator_hint: "Odran accepts the Fire Crystal with quiet gratitude. Two down, two to go. He marks the remaining temples on the player's map and urges haste â€” the Void's influence grows stronger with each passing day."
+        narrator_hint: "Odran accepts the Fire Crystal with quiet gratitude. Two down, two to go. He marks the remaining temples on the player's map and urges haste — the Void's influence grows stronger with each passing day."
         objectives:
           - id: "talk_odran_fire"
             type: TalkTo
@@ -626,7 +626,7 @@ quests:
       disposition_shift: 15
       memory_flags: ["fire-crystal-recovered"]
 
-  # â”€â”€ QUEST: Trial of Earth â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # ── QUEST: Trial of Earth ────────────────────────────────
   - id: "crystal_crusade_earth"
     name: "Trial of Earth"
     description: "The Earth Crystal lies within a mountain temple east of the Blackspire. Stonegrief, the Earthshaker, has guarded it since the mountains were young. Odran warns that the trail is treacherous and the guardian is the most enduring of the four."
@@ -640,7 +640,7 @@ quests:
       - id: "enter_earth_temple"
         name: "Reach the Heart of the Mountain"
         description: "Climb the mountain trail east of the Blackspire and penetrate the Earth Temple to its heart."
-        narrator_hint: "The ascent is punishing â€” thin air, loose scree, and a golem blocking the path. The temple at the peak is ancient and humbling, built by hands that understood stone on a fundamental level. The deeper the player goes, the more they feel the mountain's weight above them."
+        narrator_hint: "The ascent is punishing — thin air, loose scree, and a golem blocking the path. The temple at the peak is ancient and humbling, built by hands that understood stone on a fundamental level. The deeper the player goes, the more they feel the mountain's weight above them."
         objectives:
           - id: "discover_earth_heart"
             type: Discover
@@ -650,7 +650,7 @@ quests:
       - id: "defeat_stonegrief"
         name: "Defeat the Earthshaker"
         description: "Stonegrief awaits in the crystal cavern. His patience is geological. His fists are mountains."
-        narrator_hint: "Stonegrief is the most physically imposing of the four guardians. The cavern shakes with every step he takes. His Earthen Fury attack reshapes the battlefield â€” pillars collapse, the floor cracks, and boulders rain from the ceiling. This is a fight of endurance and timing."
+        narrator_hint: "Stonegrief is the most physically imposing of the four guardians. The cavern shakes with every step he takes. His Earthen Fury attack reshapes the battlefield — pillars collapse, the floor cracks, and boulders rain from the ceiling. This is a fight of endurance and timing."
         objectives:
           - id: "kill_stonegrief"
             type: Kill
@@ -673,10 +673,10 @@ quests:
       disposition_shift: 15
       memory_flags: ["earth-crystal-recovered"]
 
-  # â”€â”€ QUEST: Trial of Wind â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # ── QUEST: Trial of Wind ─────────────────────────────────
   - id: "crystal_crusade_wind"
     name: "Trial of Wind"
-    description: "The Wind Crystal floats in a temple above the clouds, high above Elderbough Village. Stormvein, the Storm Empress, guards it with hurricanes and lightning. Odran warns this is the most treacherous approach â€” one misstep means a very long fall."
+    description: "The Wind Crystal floats in a temple above the clouds, high above Elderbough Village. Stormvein, the Storm Empress, guards it with hurricanes and lightning. Odran warns this is the most treacherous approach — one misstep means a very long fall."
     giver_id: "marquis_odran"
     turn_in_npc_id: "marquis_odran"
     min_level: 3
@@ -687,7 +687,7 @@ quests:
       - id: "enter_wind_temple"
         name: "Reach the Apex of Storms"
         description: "Climb the canopy path above Elderbough Village and reach the floating Wind Temple's apex."
-        narrator_hint: "The journey upward is breathtaking â€” literally and figuratively. The player climbs through the canopy into open sky, arriving at a temple that floats on solidified wind. The architecture is impossibly delicate. The crystal's song can be heard from the entrance. Build wonder and vertigo."
+        narrator_hint: "The journey upward is breathtaking — literally and figuratively. The player climbs through the canopy into open sky, arriving at a temple that floats on solidified wind. The architecture is impossibly delicate. The crystal's song can be heard from the entrance. Build wonder and vertigo."
         objectives:
           - id: "discover_wind_apex"
             type: Discover
@@ -697,7 +697,7 @@ quests:
       - id: "defeat_stormvein"
         name: "Defeat the Storm Empress"
         description: "Stormvein awaits at the temple's peak. She fights with the fury of a hurricane and the speed of lightning."
-        narrator_hint: "Stormvein is the fastest and most agile of the guardians. She fights in three dimensions â€” swooping, diving, and attacking from impossible angles. Her Sky Rend tears the sky apart. The platform is open-air, the fall is infinite, and Stormvein laughs the entire time. This fight is about speed and adaptation."
+        narrator_hint: "Stormvein is the fastest and most agile of the guardians. She fights in three dimensions — swooping, diving, and attacking from impossible angles. Her Sky Rend tears the sky apart. The platform is open-air, the fall is infinite, and Stormvein laughs the entire time. This fight is about speed and adaptation."
         objectives:
           - id: "kill_stormvein"
             type: Kill
@@ -708,7 +708,7 @@ quests:
       - id: "return_wind_crystal"
         name: "Return the Wind Crystal"
         description: "Bring the Wind Crystal to Marquis Odran."
-        narrator_hint: "When the last Crystal is delivered, Odran's composure finally breaks. He smiles â€” genuinely, fully â€” for perhaps the first time in years. All four Crystals are gathered. But he grows grave again quickly: the Crystals' power has revealed the source of the corruption. A rift to the Void has opened beneath the Crystal Sanctum. Someone must enter it and face whatever waits on the other side."
+        narrator_hint: "When the last Crystal is delivered, Odran's composure finally breaks. He smiles — genuinely, fully — for perhaps the first time in years. All four Crystals are gathered. But he grows grave again quickly: the Crystals' power has revealed the source of the corruption. A rift to the Void has opened beneath the Crystal Sanctum. Someone must enter it and face whatever waits on the other side."
         objectives:
           - id: "talk_odran_wind"
             type: TalkTo
@@ -720,10 +720,10 @@ quests:
       disposition_shift: 15
       memory_flags: ["wind-crystal-recovered"]
 
-  # â”€â”€ QUEST: The Void Awaits â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # ── QUEST: The Void Awaits ───────────────────────────────
   - id: "the_void_awaits"
     name: "The Void Awaits"
-    description: "All four Crystals are gathered, and their combined light has revealed the truth: a rift to the Void â€” the dimension of nothingness â€” has opened beneath the Crystal Sanctum. Nullthorn, the ancient Warlock of the Void, draws power from the rift to unmake reality itself. Someone must enter the Void and end him, or everything â€” every memory, every dream, every life â€” will be erased."
+    description: "All four Crystals are gathered, and their combined light has revealed the truth: a rift to the Void — the dimension of nothingness — has opened beneath the Crystal Sanctum. Nullthorn, the ancient Warlock of the Void, draws power from the rift to unmake reality itself. Someone must enter the Void and end him, or everything — every memory, every dream, every life — will be erased."
     giver_id: "marquis_odran"
     turn_in_npc_id: "marquis_odran"
     min_level: 4
@@ -734,7 +734,7 @@ quests:
       - id: "enter_void"
         name: "Enter the Void"
         description: "Descend through the rift beneath the Crystal Sanctum and reach the Throne of Nothingness."
-        narrator_hint: "This is it â€” the final dungeon. The rift beneath the Crystal Sanctum opens into a dimension where reality has been revoked. The player passes through shattered dimensions, fights void-corrupted guardians, and arrives at a throne carved from the absence of existence. Build dread, wonder, and the weight of finality. Everything the player has done has led here."
+        narrator_hint: "This is it — the final dungeon. The rift beneath the Crystal Sanctum opens into a dimension where reality has been revoked. The player passes through shattered dimensions, fights void-corrupted guardians, and arrives at a throne carved from the absence of existence. Build dread, wonder, and the weight of finality. Everything the player has done has led here."
         objectives:
           - id: "discover_void_throne"
             type: Discover
@@ -744,7 +744,7 @@ quests:
       - id: "defeat_nullthorn"
         name: "Defeat Nullthorn"
         description: "Nullthorn, Master of the Void, awaits on his throne of nothingness. End him. End this."
-        narrator_hint: "The final boss fight. Nullthorn is theatrical, powerful, and genuinely terrifying. He monologues about the beauty of oblivion, wields the Void as a weapon, and unleashes Null Crown â€” an attack that warps reality itself. The fight should feel deidolonate, epic, and ultimately triumphant. When Nullthorn falls, the Void begins to collapse. The player must escape. Light returns. Make the player feel like a true Lightbound Champion."
+        narrator_hint: "The final boss fight. Nullthorn is theatrical, powerful, and genuinely terrifying. He monologues about the beauty of oblivion, wields the Void as a weapon, and unleashes Null Crown — an attack that warps reality itself. The fight should feel deidolonate, epic, and ultimately triumphant. When Nullthorn falls, the Void begins to collapse. The player must escape. Light returns. Make the player feel like a true Lightbound Champion."
         objectives:
           - id: "kill_nullthorn"
             type: Kill
@@ -754,8 +754,8 @@ quests:
         next_stage_id: "return_victorious"
       - id: "return_victorious"
         name: "Return Victorious"
-        description: "The Void collapses. Light returns. Report to Marquis Odran â€” the kingdom is saved."
-        narrator_hint: "The return should be a victory lap. The rift seals behind the player. Sunlight pours into the Crystal Sanctum. Citizens cheer in the streets. Odran meets the player with tears in his eyes and declares them the Savior of Valeward. Every NPC the player has helped along the way acknowledges the victory. This is the ending â€” make it legendary."
+        description: "The Void collapses. Light returns. Report to Marquis Odran — the kingdom is saved."
+        narrator_hint: "The return should be a victory lap. The rift seals behind the player. Sunlight pours into the Crystal Sanctum. Citizens cheer in the streets. Odran meets the player with tears in his eyes and declares them the Savior of Valeward. Every NPC the player has helped along the way acknowledges the victory. This is the ending — make it legendary."
         objectives:
           - id: "talk_odran_victory"
             type: TalkTo

@@ -370,6 +370,9 @@ public class DashboardController : ControllerBase
         return Ok(new { player, heroIntro });
     }
 
+    /// <summary>
+    /// Returns active worlds and Blind Adventure templates so character creation can offer valid destinations.
+    /// </summary>
     [HttpGet("creation-options")]
     public async Task<IActionResult> GetCreationOptions(CancellationToken ct)
     {
@@ -745,17 +748,7 @@ public class DashboardController : ControllerBase
             || candidate.Name.Equals(itemLookup, StringComparison.OrdinalIgnoreCase));
 
         if (template is null && itemLookup.Equals("Potion", StringComparison.OrdinalIgnoreCase))
-        {
-            template = templates
-                .Where(candidate => candidate.IsConsumable)
-                .Where(candidate =>
-                    candidate.Type == ItemType.Potion
-                    || candidate.Tags.Contains("potion", StringComparer.OrdinalIgnoreCase)
-                    || candidate.Tags.Contains("healing", StringComparer.OrdinalIgnoreCase))
-                .OrderBy(candidate => candidate.RequiredLevel)
-                .ThenBy(candidate => candidate.Value)
-                .FirstOrDefault();
-        }
+            template = ItemTemplateSelection.ResolveGenericHealingPotion(templates);
 
         return template;
     }

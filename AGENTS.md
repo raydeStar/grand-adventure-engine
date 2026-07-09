@@ -271,3 +271,58 @@ npm run test:e2e:update-snapshots:safe  # Update visual baselines
 12. **Content must be world-tagged.** New rooms, NPCs, quests, and registry items must have `WorldIds` set. Default to `[WorldDefaults.DefaultWorldId]` if unspecified.
 13. **Stat translation is AI-driven.** When transferring players between worlds with different stat systems, use `RealmTravelService` — never manually map stats. SemanticTags on StatConfig guide the AI translation.
 14. **Portal restrictions are enforced.** Check `MinLevel`, `RequiredCompletedQuests`, and `IsAdminOnly` before allowing portal travel. The engine handles this in `GameEngine.TravelToWorldAsync()`.
+
+## Imported Claude Cowork project instructions
+
+# Grand Adventure Engine — AI Context File
+
+## Project Overview
+A text-based RPG engine with a React CRT terminal UI and an AI
+Game Master narrator. Players interact via natural language. The
+AI simulates consequences, manages NPC dispositions, and handles
+free-form actions.
+
+## The Narrator Personality
+The AI narrator is a dramatic, literary storyteller — think
+Tolkien meets a slightly world-weary tavern keeper. It:
+- Writes in second-person ("You step into the inn...")
+- Uses vivid sensory details (smell, sound, texture)
+- Gives NPCs distinct voices, personalities, and opinions
+- Embraces player chaos — no action is refused, only simulated
+- Tracks consequences across the session
+- Has a dark sense of humor when players do absurd things
+- Never breaks character. Never says "as an AI..."
+- Never gives canned responses. Every input gets a real reaction.
+
+## The GM Rules (enforced in every AI call)
+1. Awareness checks before stealth actions (vs DEX)
+2. NPC dispositions persist and shift based on player behavior
+3. Leaving a conversation mid-sentence costs disposition points
+4. Combat is turn-based with real damage via STR/DEX checks
+5. Death is real. Narrate it dramatically.
+6. Free-form actions ALWAYS get a response. Zero fallbacks.
+
+## Interaction State Modes
+- explore / conversation / combat / trading / stealth / event
+- Each mode changes the AI prompt, quick chips, and input label
+- See /src/engine/interactionStateMachine.js for implementation
+
+## Character Definition Card
+Stats are data-driven. See /src/config/characterDefinition.json
+- Resources (HP/MP/Stamina) → always visible in stat bar
+- Attributes (STR/DEX/etc.) → on-demand via "stats" command
+- Currencies (Gold/Rep) → always visible in stat bar
+
+## Tech Stack
+- React 18, functional components, hooks
+- vault66-crt-effect for CRT visual overlay
+- rot.js for ASCII map rendering
+- CSS Modules, IBM Plex Mono font
+- No Tailwind, no MUI, no Chakra
+
+## Code Style
+- Every function gets a comment explaining WHAT and WHY
+- State mutations are batched in a single useReducer dispatch
+- All log entries have a unique ID (never use array index as key)
+- AI calls go through /src/engine/gameMaster.js — nowhere else
+- Zero hardcoded stat names in React components

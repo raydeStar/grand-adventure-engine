@@ -37,6 +37,11 @@ public class PlayerEntity
     public int Cha { get; set; } = 10;
     public int Luck { get; set; } = 10;
 
+    // Story mode state
+    public GameMode GameMode { get; set; } = GameMode.FullRpg;
+    public BlindAdventureSession? BlindAdventure { get; set; }
+    public CyoaState? CyoaState { get; set; }
+
     // JSONB columns for complex nested structures
     public EquipmentLoadout Equipment { get; set; } = new();
     public List<InventoryItem> Inventory { get; set; } = [];
@@ -83,6 +88,9 @@ public class PlayerEntity
         Wis = Wis,
         Cha = Cha,
         Luck = Luck,
+        GameMode = GameMode,
+        BlindAdventure = BlindAdventure,
+        CyoaState = CyoaState,
         Equipment = Equipment,
         Inventory = Inventory,
         StatusEffects = StatusEffects,
@@ -125,6 +133,9 @@ public class PlayerEntity
         Wis = p.Wis,
         Cha = p.Cha,
         Luck = p.Luck,
+        GameMode = p.GameMode,
+        BlindAdventure = p.BlindAdventure,
+        CyoaState = p.CyoaState,
         Equipment = p.Equipment,
         Inventory = p.Inventory,
         StatusEffects = p.StatusEffects,
@@ -166,6 +177,9 @@ public class PlayerEntity
         Wis = p.Wis;
         Cha = p.Cha;
         Luck = p.Luck;
+        GameMode = p.GameMode;
+        BlindAdventure = p.BlindAdventure;
+        CyoaState = p.CyoaState;
         Equipment = p.Equipment;
         Inventory = p.Inventory;
         StatusEffects = p.StatusEffects;

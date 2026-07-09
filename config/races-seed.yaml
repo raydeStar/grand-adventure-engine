@@ -1,7 +1,7 @@
-﻿# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+﻿# ══════════════════════════════════════════════════════════════════
 # ORIGINAL FANTASY RACE REGISTRY
-# "The world is home to many peoples. All of them argue." â€” Nessa
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# "The world is home to many peoples. All of them argue." — Nessa
+# ══════════════════════════════════════════════════════════════════
 
 races:
 
@@ -16,7 +16,7 @@ races:
     trait_effects:
       - id: versatile
         name: Versatile
-        description: "Humans adapt to any situation â€” advantage on CHA-based skill checks."
+        description: "Humans adapt to any situation — advantage on CHA-based skill checks."
         effect: skill_advantage
         target_type: cha
         value: 1
@@ -39,7 +39,7 @@ races:
     trait_effects:
       - id: keen_senses
         name: Keen Senses
-        description: "Sylvar senses are supernaturally sharp â€” advantage on WIS-based perception checks."
+        description: "Sylvar senses are supernaturally sharp — advantage on WIS-based perception checks."
         effect: skill_advantage
         target_type: wis
         value: 1
@@ -60,7 +60,7 @@ races:
 
   - id: dwarf
     name: Drakari
-    description: "Tough, reptilian warriors who value martial prowess above all else. Drakari are renowned smiths and soldiers â€” blunt, proud, and incredibly strong."
+    description: "Tough, reptilian warriors who value martial prowess above all else. Drakari are renowned smiths and soldiers — blunt, proud, and incredibly strong."
     stat_bonuses:
       con: 2
       str: 1
@@ -77,7 +77,7 @@ races:
         effect: narrative
       - id: resilient
         name: Resilient
-        description: "Drakari constitution shrugs off poisons â€” reduce poison damage by 3."
+        description: "Drakari constitution shrugs off poisons — reduce poison damage by 3."
         effect: damage_resistance
         target_type: poison
         value: 3
@@ -94,7 +94,7 @@ races:
     trait_effects:
       - id: lucky
         name: Lucky
-        description: "Sprigs are inexplicably fortunate â€” advantage on LUCK-based checks."
+        description: "Sprigs are inexplicably fortunate — advantage on LUCK-based checks."
         effect: skill_advantage
         target_type: luck
         value: 1
@@ -106,7 +106,7 @@ races:
         effect: narrative
       - id: sprig_charm
         name: Sprig Charm
-        description: "Irresistibly cute â€” advantage on CHA-based social checks."
+        description: "Irresistibly cute — advantage on CHA-based social checks."
         effect: skill_advantage
         target_type: cha
         value: 1
@@ -132,7 +132,7 @@ races:
         value: 1
       - id: mountain_born
         name: Mountain Born
-        description: "Raised in frozen peaks â€” reduce cold damage by 2."
+        description: "Raised in frozen peaks — reduce cold damage by 2."
         effect: damage_resistance
         target_type: cold
         value: 2
@@ -141,7 +141,7 @@ races:
 
   - id: tiefling
     name: Nu Mou
-    description: "Ancient, hunched creatures with long ears and a deep affinity for magic. Nu Mou are scholars, sages, and spellcasters â€” quiet, wise, and perpetually misunderstood."
+    description: "Ancient, hunched creatures with long ears and a deep affinity for magic. Nu Mou are scholars, sages, and spellcasters — quiet, wise, and perpetually misunderstood."
     stat_bonuses:
       cha: 2
       int: 1
@@ -152,13 +152,13 @@ races:
         effect: narrative
       - id: magical_resistance
         name: Magical Resistance
-        description: "Deep attunement to the Aether grants resistance to magical attacks â€” reduce magic damage by 3."
+        description: "Deep attunement to the Aether grants resistance to magical attacks — reduce magic damage by 3."
         effect: damage_resistance
         target_type: magic
         value: 3
       - id: ancient_knowledge
         name: Ancient Knowledge
-        description: "Millennia of accumulated wisdom â€” advantage on INT-based lore checks."
+        description: "Millennia of accumulated wisdom — advantage on INT-based lore checks."
         effect: skill_advantage
         target_type: int
         value: 1
@@ -167,7 +167,7 @@ races:
 
   - id: gnome
     name: Lalafell
-    description: "Tiny, adorable people with oversized heads and an even bigger appetite for commerce and knowledge. Don't let the cute face fool you â€” Lalafell are ruthlessly clever."
+    description: "Tiny, adorable people with oversized heads and an even bigger appetite for commerce and knowledge. Don't let the cute face fool you — Lalafell are ruthlessly clever."
     stat_bonuses:
       int: 2
       dex: 1
@@ -181,7 +181,7 @@ races:
         effect: narrative
       - id: quick_wits
         name: Quick Wits
-        description: "Lalafell minds work at blistering speed â€” advantage on INT-based checks."
+        description: "Lalafell minds work at blistering speed — advantage on INT-based checks."
         effect: skill_advantage
         target_type: int
         value: 1
@@ -201,7 +201,7 @@ races:
         effect: narrative
       - id: draconic_resistance
         name: Draconic Resistance
-        description: "Draconic blood grants immunity to searing heat â€” reduce fire damage by 3."
+        description: "Draconic blood grants immunity to searing heat — reduce fire damage by 3."
         effect: damage_resistance
         target_type: fire
         value: 3
@@ -224,13 +224,13 @@ races:
         effect: narrative
       - id: fairy_magic
         name: Fairy Magic
-        description: "Innate fey magic â€” advantage on CHA-based magical checks."
+        description: "Innate fey magic — advantage on CHA-based magical checks."
         effect: skill_advantage
         target_type: cha
         value: 1
       - id: mist_affinity
         name: Aether Affinity
-        description: "Aether-infused nature grants partial protection â€” reduce magic damage by 2."
+        description: "Aether-infused nature grants partial protection — reduce magic damage by 2."
         effect: damage_resistance
         target_type: magic
         value: 2

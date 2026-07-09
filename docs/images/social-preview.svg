@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
+  <title id="title">Grand Adventure Engine</title>
+  <desc id="desc">A dark phosphor-terminal social card for the self-hosted AI-narrated text adventure RPG.</desc>
+  <defs>
+    <radialGradient id="bg" cx="25%" cy="20%" r="95%">
+      <stop offset="0" stop-color="#14231a"/>
+      <stop offset="0.48" stop-color="#080d09"/>
+      <stop offset="1" stop-color="#020403"/>
+    </radialGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#101a12"/>
+      <stop offset="1" stop-color="#060a07"/>
+    </linearGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#31ff66" stroke-opacity="0.045" stroke-width="1"/>
+    </pattern>
+    <pattern id="scan" width="4" height="4" patternUnits="userSpaceOnUse">
+      <path d="M0 3.5H1280" stroke="#000" stroke-opacity="0.28"/>
+    </pattern>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="softGlow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="12" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <rect width="1280" height="640" fill="url(#grid)"/>
+  <circle cx="1130" cy="62" r="210" fill="#31ff66" opacity="0.035" filter="url(#softGlow)"/>
+  <circle cx="80" cy="610" r="230" fill="#ffaa33" opacity="0.025" filter="url(#softGlow)"/>
+
+  <g font-family="'IBM Plex Mono', 'Cascadia Mono', Consolas, monospace">
+    <g transform="translate(70 66)">
+      <rect x="0" y="0" width="1140" height="508" rx="14" fill="url(#panel)" stroke="#31ff66" stroke-opacity="0.33" stroke-width="2"/>
+      <rect x="1" y="1" width="1138" height="48" rx="13" fill="#132018"/>
+      <path d="M1 49H1139" stroke="#31ff66" stroke-opacity="0.25"/>
+      <circle cx="27" cy="25" r="6" fill="#ff655c" opacity="0.9"/>
+      <circle cx="48" cy="25" r="6" fill="#ffbd44" opacity="0.9"/>
+      <circle cx="69" cy="25" r="6" fill="#31ff66" opacity="0.9"/>
+      <text x="570" y="31" fill="#77917f" font-size="15" text-anchor="middle" letter-spacing="2">GAE://STORY-ENGINE</text>
+
+      <text x="55" y="122" fill="#7d9a85" font-size="17" letter-spacing="4">SELF-HOSTED • RULES-FIRST • LOCAL-LLM READY</text>
+      <text x="55" y="190" fill="#e8fff0" font-size="53" font-weight="700" letter-spacing="-2">GRAND ADVENTURE</text>
+      <text x="55" y="248" fill="#31ff66" font-size="53" font-weight="700" letter-spacing="9" filter="url(#glow)">ENGINE</text>
+      <text x="58" y="300" fill="#a9c8b2" font-size="19">Type anything. Rules decide. The narrator makes it legend.</text>
+
+      <g transform="translate(58 345)" font-size="16">
+        <rect width="218" height="42" rx="5" fill="#31ff66" fill-opacity="0.08" stroke="#31ff66" stroke-opacity="0.38"/>
+        <text x="109" y="27" fill="#bfffd0" text-anchor="middle">REAL DICE &amp; COMBAT</text>
+        <rect x="236" width="210" height="42" rx="5" fill="#31ff66" fill-opacity="0.08" stroke="#31ff66" stroke-opacity="0.38"/>
+        <text x="341" y="27" fill="#bfffd0" text-anchor="middle">PERSISTENT WORLDS</text>
+        <rect x="464" width="212" height="42" rx="5" fill="#31ff66" fill-opacity="0.08" stroke="#31ff66" stroke-opacity="0.38"/>
+        <text x="570" y="27" fill="#bfffd0" text-anchor="middle">DISCORD + WEB</text>
+      </g>
+
+      <g transform="translate(750 92)">
+        <rect width="338" height="298" rx="8" fill="#030604" stroke="#31ff66" stroke-opacity="0.3"/>
+        <text x="20" y="34" fill="#5f7c68" font-size="13">STORY.LOG / LIVE</text>
+        <path d="M20 47H318" stroke="#31ff66" stroke-opacity="0.17"/>
+        <text x="20" y="78" fill="#31ff66" font-size="15">&gt; search the rafters</text>
+        <text x="20" y="111" fill="#bbd8c3" font-size="14">You find the latch where soot</text>
+        <text x="20" y="134" fill="#bbd8c3" font-size="14">and shadow meet. Below, the</text>
+        <text x="20" y="157" fill="#bbd8c3" font-size="14">courier stops pretending to sleep.</text>
+        <rect x="20" y="184" width="298" height="52" rx="4" fill="#0c1510" stroke="#ffaa33" stroke-opacity="0.32"/>
+        <text x="36" y="207" fill="#ffaa33" font-size="13">PERCEPTION • 1d20 + 3</text>
+        <text x="36" y="226" fill="#ffe0a3" font-size="15">17 + 3 = 20  ✓ SUCCESS</text>
+        <text x="20" y="270" fill="#6f8b77" font-size="13">HP 18/24  MP 7/12  LV 3</text>
+        <rect x="273" y="256" width="10" height="18" fill="#31ff66" filter="url(#glow)"/>
+      </g>
+
+      <text x="56" y="461" fill="#6f8b77" font-size="15">OPEN SOURCE • .NET 10 • OLLAMA • LM STUDIO</text>
+      <text x="1086" y="461" fill="#31ff66" font-size="15" text-anchor="end">READY FOR ADVENTURE_</text>
+    </g>
+  </g>
+  <rect width="1280" height="640" fill="url(#scan)" pointer-events="none"/>
+</svg>

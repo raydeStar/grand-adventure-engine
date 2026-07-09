@@ -611,17 +611,7 @@ public class GameEngine : IGameEngine
                 || candidate.Name.Equals(itemLookup, StringComparison.OrdinalIgnoreCase));
 
             if (template is null && itemLookup.Equals("Potion", StringComparison.OrdinalIgnoreCase))
-            {
-                template = templates
-                    .Where(candidate => candidate.IsConsumable)
-                    .Where(candidate =>
-                        candidate.Type == ItemType.Potion
-                        || candidate.Tags.Contains("potion", StringComparer.OrdinalIgnoreCase)
-                        || candidate.Tags.Contains("healing", StringComparer.OrdinalIgnoreCase))
-                    .OrderBy(candidate => candidate.RequiredLevel)
-                    .ThenBy(candidate => candidate.Value)
-                    .FirstOrDefault();
-            }
+                template = ItemTemplateSelection.ResolveGenericHealingPotion(templates);
 
             if (template is not null)
                 return template.ToInventoryItem();
@@ -916,8 +906,6 @@ move_room_ready:
         if (player.BlindAdventure is not null && BlindAdventureService.ShouldConclude(player))
             moveSummary += "\nAdventure conclusion is ready. Use `adventure end` to conclude the tale.";
 
-        await _stateManager.SavePlayerAsync(player, ct);
-
         return new ActionResult
         {
             ActionId = action.Id,
@@ -1211,7 +1199,6 @@ move_room_ready:
             if (questUpdate is not null)
                 result.MechanicalSummary += $"\n📜 {questUpdate}";
 
-            await _stateManager.SavePlayerAsync(player, ct);
             await _stateManager.SaveRoomAsync(room, ct);
         }
         else if (target.Hp.HasValue && target.Hp.Value > 0)
@@ -2136,8 +2123,13 @@ move_room_ready:
         var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
         room ??= new Room { Id = player.CurrentRoomId, Name = "Unknown" };
 
-        if (TryBuildBoundaryViolationResult(player, room, action, out var boundaryResult, out var boundaryNpc))
+        if (IsBoundaryViolationAction(action.RawInput, room))
         {
+            var boundaryNpc = ResolveBoundaryTarget(room, action.RawInput);
+            if (boundaryNpc is not null)
+                await OverlayWorldNpcStateAsync(boundaryNpc, player.ActiveWorldId, player.Id, ct);
+
+            var boundaryResult = BuildBoundaryViolationResult(player, room, action, boundaryNpc);
             player.LastActiveAt = DateTimeOffset.UtcNow;
             if (boundaryNpc is not null)
                 await PersistWorldNpcStateAsync(boundaryNpc, player.ActiveWorldId, player.Id, ct);
@@ -2342,16 +2334,8 @@ move_room_ready:
         return result;
     }
 
-    private bool TryBuildBoundaryViolationResult(PlayerCharacter player, Room room, GameAction action, out ActionResult result, out Npc? targetNpc)
+    private ActionResult BuildBoundaryViolationResult(PlayerCharacter player, Room room, GameAction action, Npc? targetNpc)
     {
-        result = null!;
-        targetNpc = null;
-
-        if (!IsBoundaryViolationAction(action.RawInput))
-            return false;
-
-        targetNpc = ResolveBoundaryTarget(room, action.RawInput);
-
         const int dc = 12;
         var chaMod = player.GetModifier("cha", _rules.EffectiveBaseline);
         var roll = _dice.RollSkillCheck("boundary", chaMod);
@@ -2418,10 +2402,10 @@ move_room_ready:
         }
         else
         {
-            narration = $"{player.Name} reaches for a line the room will not let them cross. The attempt fails before it becomes contact, and the hard silence around it becomes the consequence.";
+            narration = $"{player.Name}, you reach past a personal boundary in {room.Name}, and the room itself seems to recoil. Your attempt — {action.RawInput.Trim()} — dies in a hard silence that leaves no doubt about the consequence.";
         }
 
-        result = new ActionResult
+        return new ActionResult
         {
             ActionId = action.Id,
             RawInput = action.RawInput,
@@ -2431,18 +2415,29 @@ move_room_ready:
             DiceRolls = [roll],
             StateChanges = stateChanges
         };
-
-        return true;
     }
 
-    private static bool IsBoundaryViolationAction(string rawInput)
+    private static bool IsBoundaryViolationAction(string rawInput, Room room)
     {
         var normalized = NormalizeLookupText(rawInput);
         if (string.IsNullOrWhiteSpace(normalized))
             return false;
 
-        return HasAny(normalized, "grab", "grope", "fondle", "slap", "touch", "kiss", "lick")
-            && HasAny(normalized, "booty", "butt", "ass", "breast", "chest", "thigh", "hips", "body", "her", "him", "them");
+        var tokens = normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.Ordinal);
+        var hasBoundaryVerb = tokens.Overlaps(["grab", "grope", "fondle", "slap", "touch", "kiss", "lick"]);
+        if (!hasBoundaryVerb)
+            return false;
+
+        var mentionsNamedNpc = room.Npcs.Any(npc => BuildNpcMentionAliases(npc)
+            .Select(NormalizeLookupText)
+            .Any(alias => alias.Length >= 3 && ContainsNormalizedPhrase(normalized, alias)));
+        if (mentionsNamedNpc)
+            return true;
+
+        var usesPersonPronoun = tokens.Overlaps(["her", "him", "them"]);
+        var hasExplicitBodyTarget = tokens.Overlaps(["booty", "butt", "ass", "breast", "chest", "thigh", "hips", "body"]);
+        var hasInherentlyIntimateVerb = tokens.Overlaps(["grope", "fondle", "kiss", "lick", "slap"]);
+        return usesPersonPronoun && (hasExplicitBodyTarget || hasInherentlyIntimateVerb);
     }
 
     private static Npc? ResolveBoundaryTarget(Room room, string rawInput)
@@ -2453,22 +2448,23 @@ move_room_ready:
         var normalized = NormalizeLookupText(rawInput);
         foreach (var npc in room.Npcs)
         {
-            var npcName = NormalizeLookupText(npc.Name);
-            if (npcName.Length >= 3 && ContainsNormalizedPhrase(normalized, npcName))
+            if (BuildNpcMentionAliases(npc)
+                .Select(NormalizeLookupText)
+                .Any(alias => alias.Length >= 3 && ContainsNormalizedPhrase(normalized, alias)))
                 return npc;
         }
 
-        return room.Npcs.FirstOrDefault();
+        return room.Npcs.Count == 1 ? room.Npcs[0] : null;
     }
 
     private static string BuildBoundaryViolationNarration(string playerName, string npcName, RollOutcome outcome)
         => outcome switch
         {
-            RollOutcome.CriticalHit => $"{npcName} catches {playerName}'s wrist before contact and turns the ugly instant into a clean, unmistakable boundary. The room notices, but {playerName}'s quick recoil keeps the scene from becoming worse.",
-            RollOutcome.Hit => $"{npcName} steps aside before {playerName}'s hand can land, eyes cold and voice low. The warning holds, and the room gives {playerName} a narrow path back to basic manners.",
-            RollOutcome.GlancingHit => $"{npcName} knocks {playerName}'s hand away before contact and lets the silence do half the work. The room tightens around {playerName}, waiting to see whether shame has any useful weight.",
-            RollOutcome.Miss => $"{npcName} stops {playerName} in full view of the room, sharp enough that nearby conversation dies at once. The attempt fails, and what remains is public anger with {playerName}'s name on it.",
-            _ => $"{npcName} catches {playerName}'s arm hard before contact and the whole room turns hostile in a single breath. The attempt fails, the insult is remembered, and every friendly exit from the moment narrows."
+            RollOutcome.CriticalHit => $"{npcName} catches your wrist before contact and turns the ugly instant into a clean, unmistakable boundary. \"No, {playerName}.\" Your quick recoil keeps the scene from becoming worse.",
+            RollOutcome.Hit => $"{npcName} steps aside before your hand can land, eyes cold and voice low. \"Mind yourself, {playerName}.\" The warning leaves you a narrow path back to basic manners.",
+            RollOutcome.GlancingHit => $"{npcName} knocks your hand away before contact and lets the silence do half the work. The room tightens around you, {playerName}, waiting to see whether shame has any useful weight.",
+            RollOutcome.Miss => $"{npcName} stops you in full view of the room, sharp enough that nearby conversation dies at once. Your attempt fails, and the public anger carries your name, {playerName}.",
+            _ => $"{npcName} catches your arm hard before contact, {playerName}, and the whole room turns hostile in a single breath. Your attempt fails, the insult is remembered, and every friendly exit from the moment narrows."
         };
 
     private static string SummarizeEntities<T>(IEnumerable<T> entities, Func<T, string?> getName, Func<T, int>? getQuantity = null)
@@ -5333,7 +5329,7 @@ move_room_ready:
     private static readonly System.Text.RegularExpressions.Regex EffectMpRegex = new(@"[Rr]estores?\s+((?:\d+d\d+(?:[+\-]\d+)?|\d+))\s*(?:MP|mana|magic)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
     private static readonly System.Text.RegularExpressions.Regex EffectDamageRegex = new(@"[Dd]eals?\s+((?:\d+d\d+(?:[+\-]\d+)?|\d+))\s*(?:damage|HP\s*damage)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
     private static readonly System.Text.RegularExpressions.Regex EffectHealTokenRegex = new(@"(?:^|[;\s])heal:((?:\d+d\d+(?:[+\-]\d+)?|\d+))", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-    private static readonly System.Text.RegularExpressions.Regex EffectManaTokenRegex = new(@"(?:^|[;\s])mana:((?:\d+d\d+(?:[+\-]\d+)?|\d+))", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    private static readonly System.Text.RegularExpressions.Regex EffectManaTokenRegex = new(@"(?:^|[;\s])(?:mp|mana):((?:\d+d\d+(?:[+\-]\d+)?|\d+))", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
     /// <summary>
     /// Handles the "use" command mechanically for consumable items.

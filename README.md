@@ -1,44 +1,71 @@
 # Grand Adventure Engine
 
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE) [![.NET 10](https://img.shields.io/badge/.NET-10-512BD4.svg)](https://dotnet.microsoft.com/) [![Docker](https://img.shields.io/badge/Docker-ready-2496ED.svg)](docker-compose.yml)
 
-Grand Adventure Engine is a self-hosted text RPG engine for Discord and the web. Players type natural-language actions; the engine resolves the mechanics; an AI narrator turns the results into short, flavorful prose.
+**A self-hosted, AI-narrated text adventure game you can play in Discord or your browser.** Type what you want to do — in plain English — and an AI narrator tells you what happens, while a real game engine rolls the dice behind the scenes.
 
-It is not a chatbot wearing a cape. It is a game simulation with persistent state, combat rules, quests, NPC disposition, world lore, and a narrator that reacts to what actually happened.
+![Grand Adventure Engine — self-hosted, rules-first, local-LLM-ready text adventure RPG](docs/images/social-preview.png)
 
-## What It Does
+## What makes it different
 
-- **Natural-language play:** players can type commands like `look`, `attack`, and `take sword`, or try messier actions like "search the rafters for a hidden latch."
-- **AI-assisted character creation:** describe a character concept and the engine builds a playable sheet with stats, gear, traits, and backstory.
-- **Rules-first outcomes:** combat, skill checks, inventory, loot, currency, and quest progress are resolved by the engine instead of improvised by the model.
-- **Persistent NPC reactions:** NPCs track disposition and remember how players treated them during the session.
-- **Scoped world knowledge:** NPCs only answer from lore they should plausibly know.
-- **Discord plus dashboard:** play in Discord, or use the web dashboard to inspect state, manage content, and run the game locally.
-- **Multi-world support:** worlds can carry their own rules, content, portals, NPC state, and stat translation behavior.
+Most AI storytelling apps are improv: the AI makes everything up as it goes, and nothing really counts. Grand Adventure Engine is a **game**. Your character has real stats, real inventory, and real quests. Combat is decided by dice rolls, not vibes. Shopkeepers remember if you were rude. The AI's job is to tell the story beautifully — the engine's job is to make it true.
 
-New players should start with the [Player Guide](docs/player-guide.md).
+- **Play in plain English.** Standard commands like `look`, `go north`, and `attack` work, but so does *"search the rafters for a hidden latch"* or *"flex at the bartender."* Every input matters — there are no canned "that didn't work" responses.
+- **Describe a character, get a character.** Tell the game *"a sneaky goblin alchemist"* and it builds a full playable sheet: stats, gear, traits, and backstory.
+- **Dice decide.** Attacks, skill checks, loot, and quest progress are resolved by game rules. Critical hits and fumbles actually happen — and the narrator reacts to what really occurred.
+- **People remember you.** NPCs track how you've treated them and only know the lore they should plausibly know. The innkeeper doesn't know the dragon's weakness — but someone out there does.
+- **Play where your friends are.** Run it as a Discord bot for your server, use the retro terminal-style web dashboard, or both at once.
+- **Many worlds, one engine.** Each world can carry its own rules, lore, quests, portals, and NPC relationships.
+- **Yours, entirely.** Self-hosted, open source, and built to run against local AI models (LM Studio or Ollama) — no required cloud AI subscription, no data leaving your machine.
 
 ## Screens
 
-The project currently ships with dashboard visual-test snapshots under `browser-tests/`. Public-facing screenshots are still pending, so this README avoids fake hero art and stale mockups.
+![Playing Grand Adventure Engine: the story log shows narrated actions with dice rolls, an ASCII room map, and glowing HP/MP/XP gauges](docs/images/gameplay.png)
 
-## How It Works
+| The player console | The amber theme |
+| --- | --- |
+| ![Login screen styled as a glowing green CRT terminal](docs/images/login.png) | ![Gameplay in the alternate amber phosphor theme](docs/images/gameplay-amber.png) |
 
-The AI narrator is responsible for presentation: room descriptions, NPC voice, and consequences written in the tone of the game. The engine is responsible for decisions: whether an attack hits, whether a quest advances, what state changes, and what the player can do next.
+| Booting up | Game master tools |
+| --- | --- |
+| ![Retro power-on boot sequence](docs/images/boot.png) | ![Admin console showing world summary, health checks, and room catalogue](docs/images/admin.png) |
 
-At a high level:
+## How it works
+
+When you type an action, the engine — not the AI — decides the outcome:
 
 ```text
-Player input
-  -> command parser
-  -> game engine mechanics
-  -> narrator prompt with bounded context
-  -> persisted state plus narration
+Your words  →  command parser  →  game rules & dice  →  AI narrator  →  the story
 ```
 
-If a command is not recognized, it routes through the free-form action path instead of returning a canned fallback. The goal is that every player input matters.
+The narrator only describes what actually happened. If the dice say you missed, the story says you missed. If the AI backend is offline, the game keeps working with built-in narration.
 
-## Project Structure
+New player? Start with the **[Player Guide](docs/player-guide.md)**.
+
+## Run it yourself
+
+You'll need [Docker Desktop](https://www.docker.com/products/docker-desktop/), the [.NET 10 SDK](https://dotnet.microsoft.com/download), and a local AI backend ([LM Studio](https://lmstudio.ai/) or [Ollama](https://ollama.com/)). A Discord bot token is optional — only needed for Discord play.
+
+```powershell
+dotnet build GrandAdventureEngine.slnx
+Copy-Item .env.example .env
+notepad .env   # set your passwords and AI backend
+powershell -ExecutionPolicy Bypass -File .\scripts\reset-docker-stack.ps1
+```
+
+Then open the dashboard at `http://localhost:8181` and sign in (`user` / `GAE-User-Local!123` by default — change the defaults before exposing anything beyond your machine).
+
+The full walkthrough, including Discord setup and AI backend configuration, is in the **[Self-Hosting Setup Guide](docs/setup-guide.md)**.
+
+## Documentation
+
+- [Player Guide](docs/player-guide.md) — how to play, all commands
+- [Self-Hosting Setup Guide](docs/setup-guide.md) — full installation walkthrough
+- [Dashboard Operator Guide](docs/dashboard-ops.md) — running and managing a server
+- [Known Gaps](docs/known-gaps.md) — honest list of rough edges
+
+<details>
+<summary><strong>For developers</strong> — project layout and tests</summary>
 
 | Path | Purpose |
 | --- | --- |
@@ -52,75 +79,21 @@ If a command is not recognized, it routes through the free-form action path inst
 | `browser-tests` | Playwright end-to-end and visual tests |
 | `docs` | Player, setup, ops, and design notes |
 
-## Requirements
-
-| Tool | Why |
-| --- | --- |
-| [.NET 10 SDK](https://dotnet.microsoft.com/download) | Builds and runs the app |
-| [Docker Desktop](https://www.docker.com/products/docker-desktop/) | Runs the app and PostgreSQL stack |
-| [LM Studio](https://lmstudio.ai/) or [Ollama](https://ollama.com/) | Local AI narrator backend |
-| [Node.js 20+](https://nodejs.org/) | Browser tests |
-| Discord bot token | Optional, only needed for Discord play |
-
-## Quick Start
-
-For full setup instructions, use the [Self-Hosting Setup Guide](docs/setup-guide.md).
-
-```powershell
-dotnet build GrandAdventureEngine.slnx
-Copy-Item .env.example .env
-notepad .env
-powershell -ExecutionPolicy Bypass -File .\scripts\reset-docker-stack.ps1
-```
-
-Open the dashboard at `http://localhost:8181`, or use the URL printed by the startup script if it picked another port.
-
-Default local logins:
-
-| Role | Username | Password |
-| --- | --- | --- |
-| Player | `user` | `GAE-User-Local!123` |
-| Admin | `admin` | `GAE-Admin-Local!123` |
-
-Change the default dashboard and database passwords before exposing the app outside your local machine.
-
-## Running Tests
+Run the test suites:
 
 ```powershell
 dotnet test
 npm run test:e2e:visual:safe
 ```
 
-Useful targeted commands:
+Browser tests expect a running app; prefer the `:safe` Playwright scripts when updating visual snapshots. Design/scope notes live in [docs/MULTI-WORLD-SCOPE.md](docs/MULTI-WORLD-SCOPE.md) and [docs/DATABASE-MIGRATION-SCOPE.md](docs/DATABASE-MIGRATION-SCOPE.md).
 
-```powershell
-dotnet test tests/GAE.Engine.Tests
-dotnet test tests/GAE.Integration.Tests
-npm run test:e2e:docker
-```
+</details>
 
-Browser tests expect a running app. Prefer the `:safe` Playwright scripts when updating visual snapshots.
+## Good to know
 
-## Documentation
-
-- [Self-Hosting Setup Guide](docs/setup-guide.md)
-- [Player Guide](docs/player-guide.md)
-- [Dashboard Operator Guide](docs/dashboard-ops.md)
-- [Known Gaps](docs/known-gaps.md)
-- [Multi-World Scope](docs/MULTI-WORLD-SCOPE.md)
-- [Database Migration Scope](docs/DATABASE-MIGRATION-SCOPE.md)
-
-## Content Note
-
-The bundled YAML seeds are original demo content intended for local development and public examples. Audit and replace them before running a long-lived public server with your own setting.
-
-## Security Notes
-
-- Do not commit real `.env` files, Discord tokens, production connection strings, cookies, or database dumps.
-- Rotate any token that was ever committed, even if it has since been removed.
-- Treat the default passwords as local-development placeholders only.
-- Production hides dashboard password hints by default. Keep `GAE_DASHBOARD_SHOW_LOGIN_PASSWORDS=false` unless you are running a private local demo.
-- The dashboard includes admin functionality; put it behind proper network controls before internet-facing deployment.
+- **Bundled content:** the included worlds, quests, and items are original demo content. Audit or replace them before running a long-lived public server.
+- **Security:** never commit real `.env` files, Discord tokens, or connection strings — and rotate any token that was ever committed. Default passwords are for local development only. Keep `GAE_DASHBOARD_SHOW_LOGIN_PASSWORDS=false` outside private demos, and put the dashboard behind proper network controls before exposing it to the internet.
 
 ## License
 

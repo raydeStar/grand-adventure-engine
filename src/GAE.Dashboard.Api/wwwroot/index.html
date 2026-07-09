@@ -3,18 +3,36 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Grand Adventure Engine</title>
+  <title>Grand Adventure Engine — AI-Narrated Text Adventure RPG</title>
+  <meta name="description" content="Self-hosted AI-narrated text adventure RPG. Type actions in plain English; real dice, quests, and persistent worlds decide what happens." />
+  <meta name="theme-color" content="#0a0f0a" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Grand Adventure Engine" />
+  <meta property="og:description" content="Self-hosted AI-narrated text adventure RPG for Discord and the web. Real dice, quests, and persistent worlds — powered by your own local LLM." />
+  <meta property="og:image" content="https://raw.githubusercontent.com/raydeStar/grand-adventure-engine/master/docs/images/social-preview.png" />
+  <meta property="og:image:width" content="1280" />
+  <meta property="og:image:height" content="640" />
+  <meta name="twitter:card" content="summary_large_image" />
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=23" />
+  <link rel="stylesheet" href="css/style.css?v=26" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.7/signalr.min.js"
           crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="https://cdn.jsdelivr.net/npm/rot-js@2/dist/rot.min.js"
           crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </head>
 <body data-theme="green">
+  <div id="boot-screen" class="boot-screen" aria-hidden="true">
+    <div class="boot-inner">
+      <div class="boot-logo">Grand Adventure Engine</div>
+      <div class="boot-sub">phosphor terminal interface</div>
+      <pre id="boot-log" class="boot-log"></pre>
+    </div>
+    <div class="boot-skip">press any key to skip</div>
+  </div>
+
   <div id="portal-overlay" class="overlay">
     <div class="overlay-shell">
       <section class="hero-card panel">
@@ -61,6 +79,12 @@
         </div>
 
         <p id="portal-message" class="inline-message hidden"></p>
+
+        <div class="portal-statusline">
+          <span class="ps-item"><span class="ps-dot"></span> Engine online</span>
+          <span class="ps-item">Phosphor-green</span>
+          <span class="ps-item">Awaiting operator<span class="ps-cursor"></span></span>
+        </div>
       </section>
     </div>
   </div>
@@ -203,13 +227,11 @@
             </div>
 
             <div id="stat-bar" class="stat-bar">
-              <span class="stat-label">HP</span> <span class="stat-hp stat-empty">â–‘â–‘â–‘â–‘â–‘â–‘â–‘â–‘â–‘â–‘</span> <span class="stat-hp">0/0</span>
-              <span class="stat-sep"> â”‚ </span>
-              <span class="stat-label">MP</span> <span class="stat-mp stat-empty">â–‘â–‘â–‘â–‘â–‘â–‘â–‘â–‘â–‘â–‘</span> <span class="stat-mp">0/0</span>
-              <span class="stat-sep"> â”‚ </span>
-              <span class="stat-label">XP</span> <span class="stat-xp stat-empty">â–‘â–‘â–‘â–‘â–‘â–‘â–‘â–‘â–‘â–‘</span> <span class="stat-xp">0/100</span>
-              <span class="stat-sep"> â”‚ </span>
-              <span class="stat-gold">Gold:0</span>
+              <span class="hud-gauge hud-hp"><span class="hud-label">HP</span><span class="hud-track"><span class="hud-fill"></span></span><span class="hud-num">0/0</span></span>
+              <span class="hud-gauge hud-mp"><span class="hud-label">MP</span><span class="hud-track"><span class="hud-fill"></span></span><span class="hud-num">0/0</span></span>
+              <span class="hud-gauge hud-xp"><span class="hud-label">XP</span><span class="hud-track"><span class="hud-fill"></span></span><span class="hud-num">0/100</span></span>
+              <span class="hud-chip hud-gold">◈ 0</span>
+              <span class="hud-chip hud-level">LV 1</span>
             </div>
 
             <div class="command-bar">
@@ -246,7 +268,7 @@
           <button class="btn btn-secondary btn-sm" id="btn-seed-demo-admin" type="button">Seed Demo</button>
         </nav>
 
-        <!-- â•â•â• DM CONSOLE TAB â•â•â• -->
+        <!-- ═══ DM CONSOLE TAB ═══ -->
         <div class="admin-tab-content active" data-admin-panel="overview">
           <div class="admin-tab-body">
             <div id="summary-cards" class="summary-cards"></div>
@@ -307,7 +329,7 @@
           </div>
         </div>
 
-        <!-- â•â•â• WORLDS TAB â•â•â• -->
+        <!-- ═══ WORLDS TAB ═══ -->
         <div class="admin-tab-content" data-admin-panel="worlds">
           <div class="admin-tab-body">
 
@@ -448,7 +470,7 @@
           </div>
         </div>
 
-        <!-- â•â•â• LLM TAB â•â•â• -->
+        <!-- ═══ LLM TAB ═══ -->
         <div class="admin-tab-content" data-admin-panel="llm">
           <div class="admin-tab-body">
             <div class="panel">
@@ -472,11 +494,11 @@
           </div>
         </div>
 
-        <!-- â•â•â• TOOLS TAB â•â•â• -->
+        <!-- ═══ TOOLS TAB ═══ -->
         <div class="admin-tab-content" data-admin-panel="tools">
           <div class="admin-tab-body">
 
-            <!-- â”€â”€ Broadcast Message â”€â”€ -->
+            <!-- ── Broadcast Message ── -->
             <div class="panel">
               <h3>Broadcast Message</h3>
               <p class="panel-hint">Send a message to a player's Discord thread, or broadcast to all.</p>
@@ -500,7 +522,7 @@
               </div>
             </div>
 
-            <!-- â”€â”€ Command Harness â”€â”€ -->
+            <!-- ── Command Harness ── -->
             <div class="panel">
               <h3>Command Harness</h3>
               <p class="panel-hint">Run any command as any character. For single-player actions, use the DM Console detail panel instead.</p>
@@ -512,7 +534,7 @@
               <div id="admin-command-log" class="activity-log"></div>
             </div>
 
-            <!-- â”€â”€ Room Fixture â”€â”€ -->
+            <!-- ── Room Fixture ── -->
             <details class="admin-tools-section">
               <summary class="admin-tools-header">Create Room Fixture</summary>
               <form id="room-fixture-form" class="mutation-form" style="margin-top:0.5rem">
@@ -563,7 +585,7 @@
               </form>
             </details>
 
-            <!-- â”€â”€ Bulk Operations â”€â”€ -->
+            <!-- ── Bulk Operations ── -->
             <details class="admin-tools-section">
               <summary class="admin-tools-header">Bulk Operations</summary>
               <div class="world-action-grid" style="margin-top:0.5rem">
@@ -603,7 +625,7 @@
           </div>
         </div>
 
-        <!-- â•â•â• CONTENT REGISTRY TAB â•â•â• -->
+        <!-- ═══ CONTENT REGISTRY TAB ═══ -->
         <div class="admin-tab-content" data-admin-panel="registry">
           <div class="admin-tab-body">
             <div class="registry-browse-layout">
@@ -685,7 +707,7 @@
           </div>
         </div>
 
-        <!-- â•â•â• EVENTS TAB â•â•â• -->
+        <!-- ═══ EVENTS TAB ═══ -->
         <div class="admin-tab-content" data-admin-panel="events">
           <div class="admin-tab-body">
             <div class="panel">
@@ -712,7 +734,7 @@
           </div>
         </div>
 
-        <!-- â•â•â• AI LOGS TAB â•â•â• -->
+        <!-- ═══ AI LOGS TAB ═══ -->
         <div class="admin-tab-content" data-admin-panel="logs">
           <div class="admin-tab-body">
             <div class="panel">
@@ -754,10 +776,11 @@
     </main>
   </div>
 
+  <script src="js/boot.js?v=1"></script>
   <script src="js/api.js?v=8"></script>
   <script src="js/signalr-client.js?v=3"></script>
   <script src="js/room-map.js?v=3"></script>
-  <script src="js/ui.js?v=27"></script>
-  <script src="js/app.js?v=26"></script>
+  <script src="js/ui.js?v=29"></script>
+  <script src="js/app.js?v=27"></script>
 </body>
 </html>

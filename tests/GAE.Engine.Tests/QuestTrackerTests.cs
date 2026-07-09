@@ -92,6 +92,19 @@ public class QuestTrackerTests
     }
 
     [Fact]
+    public async Task OnEnemyKilledAsync_DoesNotMatchOnOneSharedDescriptiveToken()
+    {
+        var player = CreatePlayer();
+        _engine.AcceptQuest(player, "ifrit_quest");
+
+        var summary = await _tracker.OnEnemyKilledAsync(player, "infernal_hound", "Infernal Hound");
+
+        Assert.Null(summary);
+        Assert.Equal(QuestStatus.Active, player.QuestLog[0].Status);
+        Assert.False(player.QuestLog[0].Objectives[0].IsComplete);
+    }
+
+    [Fact]
     public async Task ProcessNarratorQuestUpdatesAsync_FailsQuestWhenRecommended()
     {
         var player = CreatePlayer();
@@ -234,6 +247,7 @@ public class QuestTrackerTests
                             Id = "kill_ifrit",
                             Type = ObjectiveType.Kill,
                             TargetId = "ifrit_guardian",
+                            TargetName = "Ifrit, the Infernal Lord",
                             Description = "Defeat Ifrit, the Infernal Lord"
                         }
                     ]

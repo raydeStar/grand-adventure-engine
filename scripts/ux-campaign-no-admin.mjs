@@ -418,7 +418,7 @@ async function stockUp(page, label, { basics = 0, greaters = 0, gear = false } =
   }
 
   for (let i = 0; i < greaters; i++) {
-    await buyIfAffordable(page, 'Greater Healing Healing Draught', 50, `${label}: buy Greater Healing Draught ${i + 1}`);
+    await buyIfAffordable(page, 'Greater Healing Draught', 50, `${label}: buy Greater Healing Draught ${i + 1}`);
   }
 
   await runCommand(page, 'inventory', `${label}: check inventory`);

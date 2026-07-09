@@ -86,6 +86,43 @@ test.describe('Grand Adventure Engine dashboard', () => {
     await expect(page.locator('#story-log')).not.toContainText('<think');
     await expect(page.locator('#room-desc')).not.toBeEmpty();
 
+    // Guard the gameplay surface itself: readable on desktop and genuinely
+    // usable on a phone, where the header/prompt previously squeezed controls.
+    const gameplayLayout = await page.evaluate(() => {
+      const rect = (selector) => document.querySelector(selector)?.getBoundingClientRect();
+      const header = document.querySelector('.app-header');
+      const storyEntry = rect('#story-log .story-entry');
+      const roomCopy = rect('.room-panel-copy');
+      const commandPrompt = rect('#command-prompt');
+      const commandInput = rect('#command-input');
+      const portalButton = rect('#btn-open-portal');
+
+      return {
+        viewportWidth: window.innerWidth,
+        headerClientWidth: header?.clientWidth || 0,
+        headerScrollWidth: header?.scrollWidth || 0,
+        storyWidth: storyEntry?.width || 0,
+        roomCopyWidth: roomCopy?.width || 0,
+        roomCopyHeight: roomCopy?.height || 0,
+        promptBottom: commandPrompt?.bottom || 0,
+        inputTop: commandInput?.top || 0,
+        inputWidth: commandInput?.width || 0,
+        portalLeft: portalButton?.left || 0,
+        portalRight: portalButton?.right || 0
+      };
+    });
+
+    expect(gameplayLayout.storyWidth).toBeLessThanOrEqual(1041);
+    if (testInfo.project.name === 'mobile-chromium') {
+      expect(gameplayLayout.headerScrollWidth).toBeLessThanOrEqual(gameplayLayout.headerClientWidth + 1);
+      expect(gameplayLayout.portalLeft).toBeGreaterThanOrEqual(0);
+      expect(gameplayLayout.portalRight).toBeLessThanOrEqual(gameplayLayout.viewportWidth + 1);
+      expect(gameplayLayout.inputWidth).toBeGreaterThan(220);
+      expect(gameplayLayout.promptBottom).toBeLessThanOrEqual(gameplayLayout.inputTop + 1);
+      expect(gameplayLayout.roomCopyWidth).toBeGreaterThan(100);
+      expect(gameplayLayout.roomCopyHeight).toBeGreaterThan(20);
+    }
+
     await page.locator('#command-input').fill('stats');
     await page.getByRole('button', { name: 'Send' }).click();
     await expect(page.locator('#command-input')).toBeDisabled({ timeout: 3_000 });
@@ -129,6 +166,42 @@ test.describe('Grand Adventure Engine dashboard', () => {
     await expect(page.locator('#story-log')).toContainText(secondName);
     await expect(page.locator('#story-log')).not.toContainText(firstName);
     await expect(page.locator('#story-log')).not.toContainText('<think');
+  });
+
+  test('story polling preserves locally appended entries and an active pending indicator', async ({ page }) => {
+    await login(page, 'admin');
+
+    const result = await page.evaluate(() => {
+      UI.showDashboard(true);
+      UI.showPortal(false);
+      UI.$('story-log').innerHTML = '';
+      UI._lastStoryCount = 0;
+      UI._lastStorySignature = '';
+      UI._renderedActionIds.clear();
+
+      const first = { id: 'story-first', rawInput: 'look', narration: 'The room waits.' };
+      const second = { id: 'story-second', rawInput: 'listen', narration: 'A floorboard creaks.' };
+      UI.renderStoryLog([first]);
+      const firstNode = UI.$('story-log').querySelector('[data-action-id="story-first"]');
+      UI.appendStoryEntry(second, 'success');
+      UI._cancelStreaming();
+      const secondNode = UI.$('story-log').querySelector('[data-action-id="story-second"]');
+
+      UI.renderStoryLog([second, first]);
+      const entriesPreserved = firstNode === UI.$('story-log').querySelector('[data-action-id="story-first"]')
+        && secondNode === UI.$('story-log').querySelector('[data-action-id="story-second"]');
+
+      UI.beginPendingAction('search the rafters');
+      const pendingNode = UI._pendingNode;
+      UI.renderStoryLog([second, first]);
+      const pendingPreserved = pendingNode === UI._pendingNode && UI.$('story-log').contains(pendingNode);
+      UI.endPendingAction();
+
+      return { entriesPreserved, pendingPreserved };
+    });
+
+    expect(result.entriesPreserved).toBeTruthy();
+    expect(result.pendingPreserved).toBeTruthy();
   });
 
   test('realtime feed join failures fall back to polling', async ({ page }) => {
@@ -265,7 +338,7 @@ test.describe('Grand Adventure Engine dashboard', () => {
       document.dispatchEvent(new CustomEvent('overview-play-player', { detail: { playerId: 'demo-user' } }));
     });
     await expect(page.locator('#room-name')).toContainText('QA Lab');
-    await expect(page.locator('#stat-bar')).toContainText('Gold:15');
+    await expect(page.locator('#stat-bar .hud-gold')).toContainText('15');
 
     const playerSnapshot = await page.evaluate(async () => {
       const player = await API.getPlayer('demo-user');
@@ -335,7 +408,7 @@ test.describe('Grand Adventure Engine dashboard', () => {
     });
 
     expect(renderSnapshot.header).toContain('Shape Walker');
-    expect(renderSnapshot.statBar).toContain('Gold:44');
+    expect(renderSnapshot.statBar).toContain('◈ 44');
     expect(renderSnapshot.stats).toContain('Focus');
     expect(renderSnapshot.details).toContain('Alignment Note:Chaotic useful');
     expect(renderSnapshot.equipment).toContain('Focus Stone:Obsidian Focus');
