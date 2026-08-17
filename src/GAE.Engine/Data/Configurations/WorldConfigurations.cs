@@ -28,12 +28,14 @@ public class WorldConfiguration : IEntityTypeConfiguration<WorldEntity>
         builder.Property(w => w.Tags).HasColumnName("tags").HasColumnType("jsonb")
             .HasConversion(
                 v => System.Text.Json.JsonSerializer.Serialize(v, JsonDefaults.Options),
-                v => System.Text.Json.JsonSerializer.Deserialize<List<string>>(v, JsonDefaults.Options) ?? new List<string>());
+                v => System.Text.Json.JsonSerializer.Deserialize<List<string>>(v, JsonDefaults.Options) ?? new List<string>())
+            .WithJsonValueComparer();
 
         builder.Property(w => w.Portals).HasColumnName("portals").HasColumnType("jsonb")
             .HasConversion(
                 v => System.Text.Json.JsonSerializer.Serialize(v, JsonDefaults.Options),
-                v => System.Text.Json.JsonSerializer.Deserialize<List<WorldPortal>>(v, JsonDefaults.Options) ?? new List<WorldPortal>());
+                v => System.Text.Json.JsonSerializer.Deserialize<List<WorldPortal>>(v, JsonDefaults.Options) ?? new List<WorldPortal>())
+            .WithJsonValueComparer();
 
         builder.Property(w => w.CharacterCreationIntro).HasColumnName("character_creation_intro");
         builder.Property(w => w.DefaultNarratorPresetId).HasColumnName("default_narrator_preset_id");
@@ -41,7 +43,8 @@ public class WorldConfiguration : IEntityTypeConfiguration<WorldEntity>
         builder.Property(w => w.NarratorPresetIds).HasColumnName("narrator_preset_ids").HasColumnType("jsonb")
             .HasConversion(
                 v => System.Text.Json.JsonSerializer.Serialize(v, JsonDefaults.Options),
-                v => System.Text.Json.JsonSerializer.Deserialize<List<string>>(v, JsonDefaults.Options) ?? new List<string>());
+                v => System.Text.Json.JsonSerializer.Deserialize<List<string>>(v, JsonDefaults.Options) ?? new List<string>())
+            .WithJsonValueComparer();
     }
 }
 
@@ -82,7 +85,8 @@ public class WorldStatSnapshotConfiguration : IEntityTypeConfiguration<WorldStat
         builder.Property(s => s.Stats).HasColumnName("stats").HasColumnType("jsonb")
             .HasConversion(
                 v => System.Text.Json.JsonSerializer.Serialize(v, JsonDefaults.Options),
-                v => System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, int>>(v, JsonDefaults.Options) ?? new(StringComparer.OrdinalIgnoreCase));
+                v => System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, int>>(v, JsonDefaults.Options) ?? new(StringComparer.OrdinalIgnoreCase))
+            .WithJsonValueComparer();
 
         builder.HasIndex(s => new { s.PlayerId, s.WorldId }).IsUnique();
     }
@@ -104,7 +108,8 @@ public class StatTranslationHistoryConfiguration : IEntityTypeConfiguration<Stat
         builder.Property(h => h.TranslatedStats).HasColumnName("translated_stats").HasColumnType("jsonb")
             .HasConversion(
                 v => System.Text.Json.JsonSerializer.Serialize(v, JsonDefaults.Options),
-                v => System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, int>>(v, JsonDefaults.Options) ?? new(StringComparer.OrdinalIgnoreCase));
+                v => System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, int>>(v, JsonDefaults.Options) ?? new(StringComparer.OrdinalIgnoreCase))
+            .WithJsonValueComparer();
 
         builder.HasIndex(h => new { h.PlayerId, h.SourceWorldId, h.DestinationWorldId });
     }
@@ -128,7 +133,8 @@ public class WorldNpcStateConfiguration : IEntityTypeConfiguration<WorldNpcState
         builder.Property(s => s.KnowledgeScopeOverrides).HasColumnName("knowledge_scope_overrides").HasColumnType("jsonb")
             .HasConversion(
                 v => System.Text.Json.JsonSerializer.Serialize(v, JsonDefaults.Options),
-                v => System.Text.Json.JsonSerializer.Deserialize<List<string>>(v, JsonDefaults.Options));
+                v => System.Text.Json.JsonSerializer.Deserialize<List<string>>(v, JsonDefaults.Options))
+            .WithJsonValueComparer();
 
         builder.HasIndex(s => new { s.NpcId, s.WorldId, s.PlayerId }).IsUnique();
     }

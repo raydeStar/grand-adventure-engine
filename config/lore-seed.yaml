@@ -330,6 +330,7 @@ rooms:
     description: "A labyrinth of narrow passages beneath Stonewake's main level. The ceiling is the underside of the bazaar above, dripping condensation. Crates and barrels are stacked haphazardly, and the air smells of damp stone and desperation. Refugees, smugglers, and those the Empire forgot call this home. A masked figure leans against the wall, arms folded, watching you with unsettling calm."
     exits:
       north: "spawn"
+      west: "moonfall_gate"
     environment_tags: ["outdoor", "dark", "shady", "alley", "lowtown"]
     npcs:
       - id: "fence_silas"
@@ -608,6 +609,192 @@ rooms:
         description: "A short length of cord cut from the sprig mail pulley. Worn thin but still has some use."
         type: "Misc"
         value: 2
+
+  # -- THE MOONFALL FAIR — OPTIONAL MIDGAME DISTRICT -----------------
+
+  - id: "moonfall_gate"
+    name: "Moonfall Gate"
+    description: "A crooked arch of brass and blue glass has been wedged between Lowtown's leaning tenements. Beyond it, paper moons drift on invisible strings and calliope music plays one note too slowly. A painted sign promises THE MOONFALL FAIR — OPEN UNTIL MIDNIGHT, which would be reassuring if every clock beneath it did not insist midnight happened yesterday. Orla Quill waits beside the ticket booth with a ledger, a lantern, and the expression of a woman auditing a catastrophe."
+    exits:
+      east: "back_alley"
+      north: "moonfall_midway"
+      west: "moonfall_mirror_tent"
+    environment_tags: ["outdoor", "night", "festival", "magical", "moonfall", "safe"]
+    npcs:
+      - id: "orla_quill"
+        name: "Orla Quill"
+        personality: "The Moonfall Fair's relentlessly practical quartermaster. Orla dresses like a ringmaster, thinks like an accountant, and regards supernatural disasters as paperwork with teeth. Dry, observant, and difficult to rattle. She cares fiercely for the fair's performers but disguises concern as inventory control. She knows the fair's bargains, the old moon-clock, and exactly which attractions have begun behaving above their station."
+        faction: "merchants_guild"
+        knowledge_scopes: ["moonfall", "fair", "clockwork", "bargains", "rumors", "lowtown"]
+        quests_offered: ["moonfall_first_bell", "moonfall_mirror_debt", "moonfall_missing_midnight"]
+        quest_giver_priority: 20
+        is_shopkeeper: true
+        shop_inventory:
+          - id: "moon_sugar_tart"
+            name: "Moon-Sugar Tart"
+            description: "A silver-dusted pastry that tastes of blackberry, cinnamon, and a memory you cannot quite place. The paper wrapper sternly denies all prophetic side effects."
+            type: "Potion"
+            is_consumable: true
+            value: 8
+            effect: "Restores 1d6+2 HP"
+            quantity: 5
+          - id: "pocket_comet"
+            name: "Pocket Comet"
+            description: "A glass marble containing a tiny, furious streak of light. Thrown hard, it bursts into dazzling sparks and a smell like singed applause."
+            type: "Misc"
+            is_consumable: true
+            value: 18
+            effect: "Escape combat"
+            quantity: 3
+          - id: "fairground_lantern"
+            name: "Fairground Lantern"
+            description: "A brass lantern whose blue flame leans toward hidden doors, unpaid debts, and unattended desserts."
+            type: "Misc"
+            value: 25
+
+  - id: "moonfall_midway"
+    name: "The Impossible Midway"
+    description: "The midway coils through more space than Lowtown could possibly contain. Game stalls shout challenges in their owners' voices even when the owners are elsewhere, and a brass moon rolls along a wire overhead, shedding cold sparks. At the center stands Barnaby Rook's striped pavilion, surrounded by performers pretending not to notice that the great clock above the stage has lost its final hour."
+    exits:
+      south: "moonfall_gate"
+      east: "moonfall_beast_pavilion"
+      north: "moonfall_crooked_stage"
+      west: "moonfall_prize_arcade"
+    environment_tags: ["outdoor", "night", "festival", "busy", "magical", "moonfall", "hub"]
+    npcs:
+      - id: "barnaby_rook"
+        name: "Barnaby Rook"
+        personality: "A magnificent fraud with a velvet coat, a silver cane, and the survival instincts of a sewer rat. Barnaby founded the fair after winning a haunted moon-clock in a card game he definitely cheated at. Grandiose before a crowd, candid when cornered, and genuinely brave only when someone else is in danger. He knows the attractions, performers, and the embarrassing truth behind the missing midnight."
+        faction: "merchants_guild"
+        knowledge_scopes: ["moonfall", "fair", "performers", "clockwork", "bargains", "lowtown"]
+        quests_offered: ["moonfall_beastly_business"]
+        quest_giver_priority: 15
+      - id: "pipkin_pop"
+        name: "Pipkin Pop"
+        personality: "A sprig acrobat, professional heckler, and self-appointed deputy safety inspector. Pipkin speaks at catastrophic speed and considers any landing survivable if witnesses applaud. He has seen the thing living in the prize counter and refuses to call it a mimic because 'that would be rude before introductions.'"
+        faction: "merchants_guild"
+        knowledge_scopes: ["moonfall", "fair", "sprigs", "rumors", "prizes"]
+    items:
+      - id: "crumpled_fair_map"
+        name: "Crumpled Moonfall Map"
+        description: "A brightly printed map whose paths rearrange when folded. Someone has circled the words DO NOT LET THE CLOCK STRIKE THIRTEEN."
+        type: "Misc"
+        value: 2
+
+  - id: "moonfall_mirror_tent"
+    name: "The Pavilion of Better Decisions"
+    description: "Tall mirrors form a silver maze beneath a sagging indigo tent. None show your present reflection: one displays you crowned, another soaked, a third fleeing from a goose of improbable authority. At the maze's heart, a hand mirror rests on black velvet and whispers apologies in voices borrowed from everyone who ever avoided making one."
+    exits:
+      east: "moonfall_gate"
+    environment_tags: ["indoor", "dim", "magical", "puzzle", "mirrors", "moonfall"]
+    npcs:
+      - id: "madam_vesper"
+        name: "Madam Vesper"
+        personality: "A mirror-reader who cannot see the future but is brutally accurate about the present. Soft-spoken, unsettlingly kind, and allergic to comforting lies. She treats reflections as witnesses rather than tools and knows the fair's oldest bargains. She will help anyone willing to admit one honest regret."
+        faction: "neutral"
+        knowledge_scopes: ["moonfall", "mirrors", "bargains", "ancient_lore", "personal_truths"]
+    items:
+      - id: "silvered_memory"
+        name: "Silvered Memory"
+        description: "A sliver of mirror glass warm from an event that has not happened yet. It reflects the Moonfall clock with all thirteen numerals intact."
+        type: "QuestItem"
+        value: 0
+
+  - id: "moonfall_beast_pavilion"
+    name: "The Menagerie of Dubious Provenance"
+    description: "Painted cages line a pavilion smelling of straw, caramel, and nervous liability waivers. Most contain harmless oddities: a moth the size of an umbrella, a snake that recites legal disclaimers, three chickens sharing one shadow. The largest cage stands open. Inside it sits a red velvet settee that breathes through its upholstery and watches the door with brass-button eyes."
+    exits:
+      west: "moonfall_midway"
+    environment_tags: ["indoor", "festival", "menagerie", "dangerous", "moonfall"]
+    npcs:
+      - id: "velvet_mimic"
+        name: "The Velvet Maw"
+        personality: "A predatory mimic disguised as an expensive settee. It is vain about its upholstery, furious about being sat upon, and hungry enough to consider adventurers a tasting menu. It can be distracted by praise, polish, or sufficiently flamboyant furniture."
+        faction: "neutral"
+        knowledge_scopes: ["moonfall", "menagerie", "mimics"]
+        is_hostile: true
+        level: 3
+        hp: 34
+        max_hp: 34
+        attack_bonus: 4
+        damage_dice: "1d8+2"
+        defense: 13
+        loot:
+          - id: "living_velvet"
+            name: "Living Velvet"
+            description: "A strip of crimson upholstery that purrs when folded and bites when ironed. An eccentric tailor would pay handsomely for it."
+            type: "Misc"
+            value: 65
+
+  - id: "moonfall_prize_arcade"
+    name: "The Arcade of Almost-Won Things"
+    description: "Shelves sag beneath prizes that look uncannily familiar: a childhood toy you lost, the left glove from your best pair, a medal for a victory you narrowly missed. Brass automata run games of rings, darts, and insults beneath a sign reading EVERYONE WINS SOMETHING, though it neglects to specify what. A tiny dragon in a waistcoat guards the redemption counter with bureaucratic malice."
+    exits:
+      east: "moonfall_midway"
+    environment_tags: ["indoor", "lit", "festival", "games", "magical", "moonfall"]
+    npcs:
+      - id: "clerk_cinderbutton"
+        name: "Cinderbutton"
+        personality: "A palm-sized brass dragon who runs the prize counter according to regulations only he can read. Pedantic, acquisitive, and secretly delighted by clever loopholes. He breathes sparks when contradicted and stamps every transaction three times."
+        faction: "merchants_guild"
+        knowledge_scopes: ["moonfall", "prizes", "games", "bargains", "clockwork"]
+        is_shopkeeper: true
+        shop_inventory:
+          - id: "lucky_moon_pin"
+            name: "Lucky Moon Pin"
+            description: "A blue enamel crescent that grows pleasantly warm just before something avoidable goes wrong."
+            type: "Amulet"
+            value: 90
+            is_equippable: true
+            stat_bonuses:
+              luck: 1
+          - id: "applause_in_a_bottle"
+            name: "Applause in a Bottle"
+            description: "Uncorking it releases ten seconds of thunderous approval from an invisible audience with excellent timing."
+            type: "Misc"
+            is_consumable: true
+            value: 15
+            effect: "Bolsters confidence"
+
+  - id: "moonfall_crooked_stage"
+    name: "The Crooked Stage"
+    description: "A circular stage tilts beneath curtains stitched from midnight-blue sailcloth. Empty seats applaud at inappropriate moments. Above the rigging hangs the Moonfall clock: a many-geared monument with a clean, hour-shaped wound where midnight should be. A narrow maintenance ladder climbs into its machinery while every loose prop slowly slides stage left."
+    exits:
+      south: "moonfall_midway"
+      up: "moonfall_clocktower"
+    environment_tags: ["outdoor", "night", "stage", "clockwork", "magical", "moonfall"]
+    npcs:
+      - id: "maestro_nix"
+        name: "Maestro Nix"
+        personality: "The fair's skeletal conductor, animated by contractual obligation and an undying hatred of poor tempo. Elegant, severe, and surprisingly protective of the performers. Communicates in clipped musical metaphors and can hear the stolen midnight moving inside the clock."
+        faction: "neutral"
+        knowledge_scopes: ["moonfall", "music", "clockwork", "performers", "missing_midnight"]
+
+  - id: "moonfall_clocktower"
+    name: "The Thirteenth Belltower"
+    description: "Inside the clock, stairways rotate between gears tall as houses. Stolen moments flicker in the air: a dropped kiss, a missed train, a sword blow that arrived one heartbeat late. At the highest bell crouches a figure sewn from discarded shadows, feeding midnight into its mouth one minute at a time. The bell above it trembles, eager to announce an hour the world was never meant to hear."
+    exits:
+      down: "moonfall_crooked_stage"
+    environment_tags: ["indoor", "clockwork", "dark", "dangerous", "boss", "moonfall"]
+    npcs:
+      - id: "midnight_monger"
+        name: "The Midnight Monger"
+        personality: "A collector of wasted time wrapped in a ringmaster's shadow. It speaks with the voices of abandoned plans and offers bargains that sound like second chances. Patient, theatrical, and ravenously possessive. It stole the fair's midnight so the celebration could never end—and so nobody inside could ever truly leave."
+        faction: "architect_cult"
+        knowledge_scopes: ["moonfall", "missing_midnight", "bargains", "void", "ancient_lore"]
+        is_hostile: true
+        level: 5
+        hp: 58
+        max_hp: 58
+        attack_bonus: 7
+        damage_dice: "2d8+3"
+        defense: 15
+        loot:
+          - id: "thirteenth_bell_clapper"
+            name: "Clapper of the Thirteenth Bell"
+            description: "A black-silver bell clapper heavy with all the things people meant to do tomorrow. It becomes lighter when a promise is kept."
+            type: "QuestItem"
+            value: 0
 
   # -- GLOAMWOOD - WILDERNESS ROOMS -----------------------
 

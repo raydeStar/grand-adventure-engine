@@ -16,6 +16,7 @@ using GAE.Narrator;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
+using System.Diagnostics;
 using System.Net.Http.Headers;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
@@ -126,6 +127,10 @@ var lmRetryCount = int.TryParse(builder.Configuration["LmStudio:RetryCount"], ou
 var lmRetryDelayMs = int.TryParse(builder.Configuration["LmStudio:RetryDelayMs"], out var rd) ? rd : 2000;
 var lmContextLength = int.TryParse(builder.Configuration["LmStudio:ContextLength"], out var cl) ? cl : (int?)null;
 var lmThink = bool.TryParse(builder.Configuration["LmStudio:Think"], out var think) ? think : (bool?)null;
+var codexExecutable = builder.Configuration["LmStudio:CodexExecutable"] ?? "codex";
+var codexReasoningEffort = builder.Configuration["LmStudio:CodexReasoningEffort"] ?? "max";
+var codexTimeoutSeconds = int.TryParse(builder.Configuration["LmStudio:CodexTimeoutSeconds"], out var cts) ? cts : 300;
+var codexWorkingDirectory = builder.Configuration["LmStudio:CodexWorkingDirectory"];
 builder.Services.AddHttpClient("LmStudio", client =>
 {
     client.BaseAddress = new Uri(lmStudioEndpoint + "/");
@@ -142,7 +147,7 @@ builder.Services.AddSingleton<INarratorService>(sp =>
     var registry = sp.GetRequiredService<IContentRegistryService>();
     var worldContext = sp.GetService<IWorldContext>();
     var worldRepository = sp.GetService<IWorldRepository>();
-    return new NarratorService(httpClient, logger, lmStudioModel, knowledge, conversationLogger, registry, worldContext, worldRepository, lmRetryCount, lmRetryDelayMs, lmProvider, lmContextLength, lmThink);
+    return new NarratorService(httpClient, logger, lmStudioModel, knowledge, conversationLogger, registry, worldContext, worldRepository, lmRetryCount, lmRetryDelayMs, lmProvider, lmContextLength, lmThink, codexExecutable, codexReasoningEffort, codexTimeoutSeconds, codexWorkingDirectory);
 });
 
 builder.Services.AddSingleton<IRealmTravelService>(sp =>
@@ -224,6 +229,16 @@ builder.Services.AddHttpClient();
 var app = builder.Build();
 
 var authService = app.Services.GetRequiredService<IDashboardAuthService>();
+var authErrors = authService.GetStartupErrors(app.Environment.IsProduction());
+if (authErrors.Count > 0)
+{
+    foreach (var error in authErrors)
+        app.Logger.LogCritical("Dashboard authentication configuration rejected: {Error}", error);
+
+    throw new InvalidOperationException(
+        $"Unsafe dashboard authentication configuration. The gate remains barred: {string.Join(" ", authErrors)}");
+}
+
 foreach (var warning in authService.GetStartupWarnings())
 {
     app.Logger.LogWarning("{Warning}", warning);
@@ -256,15 +271,23 @@ foreach (var warning in authService.GetStartupWarnings())
 // Probe external services and log degraded mode warnings
 try
 {
-    using var probeClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
-    ApplyNarratorApiKey(probeClient, lmApiKey);
-    var lmResponse = await probeClient.GetAsync(lmStudioEndpoint + GetNarratorModelsPath(lmProvider));
-    if (!lmResponse.IsSuccessStatusCode)
-        app.Logger.LogWarning("LM Studio not responding at {Endpoint} — narration will use fallback text", lmStudioEndpoint);
+    if (IsCodexCliProvider(lmProvider))
+    {
+        var codexVersion = await ProbeCodexCliAsync(codexExecutable);
+        app.Logger.LogInformation("Codex CLI narrator available: {Version}. Expect deliberate latency; the butler is thinking very hard.", codexVersion);
+    }
+    else
+    {
+        using var probeClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+        ApplyNarratorApiKey(probeClient, lmApiKey);
+        var lmResponse = await probeClient.GetAsync(lmStudioEndpoint + GetNarratorModelsPath(lmProvider));
+        if (!lmResponse.IsSuccessStatusCode)
+            app.Logger.LogWarning("Narrator provider {Provider} is not responding at {Endpoint} — narration will use fallback text", lmProvider, lmStudioEndpoint);
+    }
 }
-catch
+catch (Exception ex)
 {
-    app.Logger.LogWarning("LM Studio unreachable at {Endpoint} — narration will use fallback text", lmStudioEndpoint);
+    app.Logger.LogWarning(ex, "Narrator provider {Provider} is unavailable — narration will use fallback text", lmProvider);
 }
 
 // ── Load content registries ──────────────────────────────────────────
@@ -285,21 +308,18 @@ gameRules.Death = dbRules.Death;
 gameRules.Loot = dbRules.Loot;
 gameRules.Leveling = dbRules.Leveling;
 
-// Seed world from lore-seed.yaml if spawn room is not already present
+// Additively seed missing curated room templates. Existing rooms are preserved so live state and
+// admin edits survive content expansions.
 using (var seedScope = app.Services.CreateScope())
 {
     var stateManager = seedScope.ServiceProvider.GetRequiredService<IStateManager>();
-    var startRoom = await stateManager.GetRoomAsync("spawn");
-    if (startRoom is null)
+    var lorePath = Path.Combine(configDir, "lore-seed.yaml");
+    if (File.Exists(lorePath))
     {
-        var lorePath = Path.Combine(configDir, "lore-seed.yaml");
-        if (File.Exists(lorePath))
-        {
-            var loreYaml = await File.ReadAllTextAsync(lorePath);
-            var lore = yamlDeserializer.Deserialize<LoreSeed>(loreYaml);
-            var seeded = await SeedWorldFromLore(lore, stateManager);
-            app.Logger.LogInformation("Seeded {Count} rooms from lore-seed.yaml", seeded);
-        }
+        var loreYaml = await File.ReadAllTextAsync(lorePath);
+        var lore = yamlDeserializer.Deserialize<LoreSeed>(loreYaml);
+        var seeded = await SeedMissingWorldRoomsFromLore(lore, stateManager);
+        app.Logger.LogInformation("Added {Count} missing rooms from lore-seed.yaml", seeded);
     }
 } // end seedScope
 
@@ -371,11 +391,19 @@ app.MapGet("/health/narrator", async (HttpClient httpClient) =>
 
     try
     {
-        ApplyNarratorApiKey(httpClient, lmApiKey);
-        var response = await httpClient.GetAsync(lmStudioEndpoint + GetNarratorModelsPath(lmProvider));
-        narratorHealthCache = response.IsSuccessStatusCode
-            ? Results.Ok(new { status = "healthy", service = lmProvider })
-            : Results.Json(new { status = "degraded", service = lmProvider, note = "Narration will use fallback text" }, statusCode: 503);
+        if (IsCodexCliProvider(lmProvider))
+        {
+            var version = await ProbeCodexCliAsync(codexExecutable);
+            narratorHealthCache = Results.Ok(new { status = "healthy", service = lmProvider, model = lmStudioModel, version });
+        }
+        else
+        {
+            ApplyNarratorApiKey(httpClient, lmApiKey);
+            var response = await httpClient.GetAsync(lmStudioEndpoint + GetNarratorModelsPath(lmProvider));
+            narratorHealthCache = response.IsSuccessStatusCode
+                ? Results.Ok(new { status = "healthy", service = lmProvider })
+                : Results.Json(new { status = "degraded", service = lmProvider, note = "Narration will use fallback text" }, statusCode: 503);
+        }
     }
     catch (Exception ex)
     {
@@ -395,6 +423,26 @@ static string GetNarratorModelsPath(string provider)
         ? "/api/tags"
         : "/v1/models";
 
+static bool IsCodexCliProvider(string provider)
+    => string.Equals(provider, "CodexCli", StringComparison.OrdinalIgnoreCase);
+
+static async Task<string> ProbeCodexCliAsync(string executable, CancellationToken ct = default)
+{
+    var startInfo = CodexCliLocator.CreateStartInfo(executable);
+    startInfo.ArgumentList.Add("--version");
+
+    using var process = Process.Start(startInfo)
+        ?? throw new InvalidOperationException("Codex CLI health probe did not start. The wand appears to be decorative.");
+    var stdoutTask = process.StandardOutput.ReadToEndAsync(ct);
+    var stderrTask = process.StandardError.ReadToEndAsync(ct);
+    await process.WaitForExitAsync(ct);
+    var stdout = (await stdoutTask).Trim();
+    var stderr = (await stderrTask).Trim();
+    if (process.ExitCode != 0)
+        throw new InvalidOperationException($"Codex CLI health probe exited with code {process.ExitCode}: {stderr}");
+    return string.IsNullOrWhiteSpace(stdout) ? "version unavailable" : stdout;
+}
+
 static void ApplyNarratorApiKey(HttpClient client, string? apiKey)
 {
     if (string.IsNullOrWhiteSpace(apiKey))
@@ -403,7 +451,7 @@ static void ApplyNarratorApiKey(HttpClient client, string? apiKey)
     client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey.Trim());
 }
 
-static async Task<int> SeedWorldFromLore(LoreSeed? lore, IStateManager stateManager)
+static async Task<int> SeedMissingWorldRoomsFromLore(LoreSeed? lore, IStateManager stateManager)
 {
     if (lore is null) return 0;
 
@@ -414,10 +462,12 @@ static async Task<int> SeedWorldFromLore(LoreSeed? lore, IStateManager stateMana
         allLoreRooms.AddRange(lore.Rooms);
 
     var count = 0;
-    foreach (var loreRoom in allLoreRooms)
+    foreach (var loreRoom in allLoreRooms.Where(room => !string.IsNullOrWhiteSpace(room.Id)))
     {
-        var room = ConvertLoreRoom(loreRoom);
-        await stateManager.SaveRoomAsync(room);
+        if (await stateManager.GetRoomAsync(loreRoom.Id!) is not null)
+            continue;
+
+        await stateManager.SaveRoomAsync(ConvertLoreRoom(loreRoom));
         count++;
     }
 
@@ -431,6 +481,7 @@ static GAE.Core.Models.Room ConvertLoreRoom(LoreRoom lr)
         Id = lr.Id ?? Guid.NewGuid().ToString("N"),
         Name = lr.Name ?? "Unknown Room",
         Description = lr.Description ?? "An unremarkable room.",
+        WorldIds = lr.WorldIds is { Count: > 0 } ? lr.WorldIds : [GAE.Core.Models.WorldDefaults.DefaultWorldId],
         IsDiscovered = true,
         DiscoveredAt = DateTimeOffset.UtcNow
     };
@@ -458,6 +509,7 @@ static GAE.Core.Models.Npc ConvertLoreNpc(LoreNpc n)
         Id = n.Id ?? Guid.NewGuid().ToString("N"),
         Name = n.Name ?? "Unknown",
         Personality = n.Personality ?? "",
+        WorldIds = n.WorldIds is { Count: > 0 } ? n.WorldIds : [GAE.Core.Models.WorldDefaults.DefaultWorldId],
         Faction = n.Faction ?? "neutral",
         IsHostile = n.IsHostile,
         IsShopkeeper = n.IsShopkeeper,
@@ -466,7 +518,8 @@ static GAE.Core.Models.Npc ConvertLoreNpc(LoreNpc n)
         MaxHp = n.MaxHp,
         AttackBonus = n.AttackBonus,
         DamageDice = n.DamageDice,
-        Defense = n.Defense
+        Defense = n.Defense,
+        QuestGiverPriority = n.QuestGiverPriority
     };
 
     if (n.KnowledgeScopes is not null)
@@ -557,6 +610,7 @@ public class LoreNpc
     public bool IsShopkeeper { get; set; }
     public List<LoreItem>? ShopInventory { get; set; }
     public List<string>? QuestsOffered { get; set; }
+    public int QuestGiverPriority { get; set; }
     public List<string>? WorldIds { get; set; }
 }
 public class LoreItem

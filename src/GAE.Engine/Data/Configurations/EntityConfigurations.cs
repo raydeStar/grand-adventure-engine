@@ -1,6 +1,7 @@
 using System.Text.Json;
 using GAE.Core.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace GAE.Engine.Data.Configurations;
@@ -14,6 +15,35 @@ internal static class JsonDefaults
         PropertyNameCaseInsensitive = true,
         Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
     };
+}
+
+/// <summary>
+/// Adds structural comparison and deep snapshots to JSON-converted reference properties so EF Core
+/// detects in-place mutations instead of merely comparing the collection or object reference.
+/// </summary>
+internal static class JsonPropertyBuilderExtensions
+{
+    public static PropertyBuilder<TProperty> WithJsonValueComparer<TProperty>(this PropertyBuilder<TProperty> builder)
+    {
+        builder.Metadata.SetValueComparer(new ValueComparer<TProperty>(
+            (left, right) => Serialize(left) == Serialize(right),
+            value => Serialize(value).GetHashCode(),
+            value => Snapshot(value)));
+
+        return builder;
+    }
+
+    private static string Serialize<TProperty>(TProperty value)
+        => JsonSerializer.Serialize(value, JsonDefaults.Options);
+
+    private static TProperty Snapshot<TProperty>(TProperty value)
+    {
+        if (value is null)
+            return value;
+
+        return JsonSerializer.Deserialize<TProperty>(Serialize(value), JsonDefaults.Options)
+            ?? throw new InvalidOperationException($"Could not snapshot JSON property of type {typeof(TProperty).Name}. The vault rejected the duplicate key.");
+    }
 }
 
 public class PlayerConfiguration : IEntityTypeConfiguration<PlayerEntity>
@@ -79,22 +109,26 @@ public class PlayerConfiguration : IEntityTypeConfiguration<PlayerEntity>
         builder.Property(p => p.Inventory).HasColumnName("inventory").HasColumnType("jsonb")
             .HasConversion(
                 v => JsonSerializer.Serialize(v, JsonDefaults.Options),
-                v => JsonSerializer.Deserialize<List<InventoryItem>>(v, JsonDefaults.Options) ?? new List<InventoryItem>());
+                v => JsonSerializer.Deserialize<List<InventoryItem>>(v, JsonDefaults.Options) ?? new List<InventoryItem>())
+            .WithJsonValueComparer();
 
         builder.Property(p => p.StatusEffects).HasColumnName("status_effects").HasColumnType("jsonb")
             .HasConversion(
                 v => JsonSerializer.Serialize(v, JsonDefaults.Options),
-                v => JsonSerializer.Deserialize<List<StatusEffect>>(v, JsonDefaults.Options) ?? new List<StatusEffect>());
+                v => JsonSerializer.Deserialize<List<StatusEffect>>(v, JsonDefaults.Options) ?? new List<StatusEffect>())
+            .WithJsonValueComparer();
 
         builder.Property(p => p.Spellbook).HasColumnName("spellbook").HasColumnType("jsonb")
             .HasConversion(
                 v => JsonSerializer.Serialize(v, JsonDefaults.Options),
-                v => JsonSerializer.Deserialize<List<LearnedSpell>>(v, JsonDefaults.Options) ?? new List<LearnedSpell>());
+                v => JsonSerializer.Deserialize<List<LearnedSpell>>(v, JsonDefaults.Options) ?? new List<LearnedSpell>())
+            .WithJsonValueComparer();
 
         builder.Property(p => p.QuestLog).HasColumnName("quest_log").HasColumnType("jsonb")
             .HasConversion(
                 v => JsonSerializer.Serialize(v, JsonDefaults.Options),
-                v => JsonSerializer.Deserialize<List<QuestProgress>>(v, JsonDefaults.Options) ?? new List<QuestProgress>());
+                v => JsonSerializer.Deserialize<List<QuestProgress>>(v, JsonDefaults.Options) ?? new List<QuestProgress>())
+            .WithJsonValueComparer();
 
         builder.Property(p => p.Interaction).HasColumnName("interaction").HasColumnType("jsonb")
             .HasConversion(
@@ -105,7 +139,8 @@ public class PlayerConfiguration : IEntityTypeConfiguration<PlayerEntity>
         builder.Property(p => p.DiscoveredLore).HasColumnName("discovered_lore").HasColumnType("jsonb")
             .HasConversion(
                 v => JsonSerializer.Serialize(v, JsonDefaults.Options),
-                v => JsonSerializer.Deserialize<List<string>>(v, JsonDefaults.Options) ?? new List<string>());
+                v => JsonSerializer.Deserialize<List<string>>(v, JsonDefaults.Options) ?? new List<string>())
+            .WithJsonValueComparer();
         builder.Property(p => p.NarratorPresetId).HasColumnName("narrator_preset_id");
 
         // Indexes
@@ -133,27 +168,32 @@ public class RoomConfiguration : IEntityTypeConfiguration<RoomEntity>
             .HasConversion(
                 v => JsonSerializer.Serialize(v, JsonDefaults.Options),
                 v => JsonSerializer.Deserialize<List<string>>(v, JsonDefaults.Options) ?? new List<string> { WorldDefaults.DefaultWorldId })
+            .WithJsonValueComparer()
             .HasDefaultValueSql("'[\"default-world\"]'::jsonb");
 
         builder.Property(r => r.Exits).HasColumnName("exits").HasColumnType("jsonb")
             .HasConversion(
                 v => JsonSerializer.Serialize(v, JsonDefaults.Options),
-                v => JsonSerializer.Deserialize<Dictionary<string, string>>(v, JsonDefaults.Options) ?? new Dictionary<string, string>());
+                v => JsonSerializer.Deserialize<Dictionary<string, string>>(v, JsonDefaults.Options) ?? new Dictionary<string, string>())
+            .WithJsonValueComparer();
 
         builder.Property(r => r.Npcs).HasColumnName("npcs").HasColumnType("jsonb")
             .HasConversion(
                 v => JsonSerializer.Serialize(v, JsonDefaults.Options),
-                v => JsonSerializer.Deserialize<List<Npc>>(v, JsonDefaults.Options) ?? new List<Npc>());
+                v => JsonSerializer.Deserialize<List<Npc>>(v, JsonDefaults.Options) ?? new List<Npc>())
+            .WithJsonValueComparer();
 
         builder.Property(r => r.Items).HasColumnName("items").HasColumnType("jsonb")
             .HasConversion(
                 v => JsonSerializer.Serialize(v, JsonDefaults.Options),
-                v => JsonSerializer.Deserialize<List<InventoryItem>>(v, JsonDefaults.Options) ?? new List<InventoryItem>());
+                v => JsonSerializer.Deserialize<List<InventoryItem>>(v, JsonDefaults.Options) ?? new List<InventoryItem>())
+            .WithJsonValueComparer();
 
         builder.Property(r => r.EnvironmentTags).HasColumnName("environment_tags").HasColumnType("jsonb")
             .HasConversion(
                 v => JsonSerializer.Serialize(v, JsonDefaults.Options),
-                v => JsonSerializer.Deserialize<List<string>>(v, JsonDefaults.Options) ?? new List<string>());
+                v => JsonSerializer.Deserialize<List<string>>(v, JsonDefaults.Options) ?? new List<string>())
+            .WithJsonValueComparer();
 
         builder.HasIndex(r => r.IsTemplate).HasDatabaseName("ix_rooms_is_template")
             .HasFilter("is_template = true");
@@ -181,22 +221,26 @@ public class PlayerRoomConfiguration : IEntityTypeConfiguration<PlayerRoomEntity
         builder.Property(pr => pr.Exits).HasColumnName("exits").HasColumnType("jsonb")
             .HasConversion(
                 v => JsonSerializer.Serialize(v, JsonDefaults.Options),
-                v => JsonSerializer.Deserialize<Dictionary<string, string>>(v, JsonDefaults.Options) ?? new Dictionary<string, string>());
+                v => JsonSerializer.Deserialize<Dictionary<string, string>>(v, JsonDefaults.Options) ?? new Dictionary<string, string>())
+            .WithJsonValueComparer();
 
         builder.Property(pr => pr.Npcs).HasColumnName("npcs").HasColumnType("jsonb")
             .HasConversion(
                 v => JsonSerializer.Serialize(v, JsonDefaults.Options),
-                v => JsonSerializer.Deserialize<List<Npc>>(v, JsonDefaults.Options) ?? new List<Npc>());
+                v => JsonSerializer.Deserialize<List<Npc>>(v, JsonDefaults.Options) ?? new List<Npc>())
+            .WithJsonValueComparer();
 
         builder.Property(pr => pr.Items).HasColumnName("items").HasColumnType("jsonb")
             .HasConversion(
                 v => JsonSerializer.Serialize(v, JsonDefaults.Options),
-                v => JsonSerializer.Deserialize<List<InventoryItem>>(v, JsonDefaults.Options) ?? new List<InventoryItem>());
+                v => JsonSerializer.Deserialize<List<InventoryItem>>(v, JsonDefaults.Options) ?? new List<InventoryItem>())
+            .WithJsonValueComparer();
 
         builder.Property(pr => pr.EnvironmentTags).HasColumnName("environment_tags").HasColumnType("jsonb")
             .HasConversion(
                 v => JsonSerializer.Serialize(v, JsonDefaults.Options),
-                v => JsonSerializer.Deserialize<List<string>>(v, JsonDefaults.Options) ?? new List<string>());
+                v => JsonSerializer.Deserialize<List<string>>(v, JsonDefaults.Options) ?? new List<string>())
+            .WithJsonValueComparer();
 
         builder.HasIndex(pr => pr.PlayerId).HasDatabaseName("ix_player_rooms_player_id");
         builder.HasIndex(pr => new { pr.PlayerId, pr.RoomId, pr.WorldId }).IsUnique()
@@ -286,7 +330,8 @@ public class GameEventConfiguration : IEntityTypeConfiguration<GameEventEntity>
         builder.Property(e => e.Data).HasColumnName("data").HasColumnType("jsonb")
             .HasConversion(
                 v => JsonSerializer.Serialize(v, JsonDefaults.Options),
-                v => JsonSerializer.Deserialize<Dictionary<string, object?>>(v, JsonDefaults.Options) ?? new());
+                v => JsonSerializer.Deserialize<Dictionary<string, object?>>(v, JsonDefaults.Options) ?? new())
+            .WithJsonValueComparer();
 
         builder.HasIndex(e => e.Type).HasDatabaseName("ix_game_events_type");
         builder.HasIndex(e => e.PlayerId).HasDatabaseName("ix_game_events_player_id");

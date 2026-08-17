@@ -71,6 +71,23 @@ If you use Ollama's OpenAI-compatible `/v1/chat/completions` endpoint instead of
 
 For Dockerized Unsloth Studio, use `OpenAICompatible`, set `LM_STUDIO_ENDPOINT=http://host.docker.internal:8000`, and set `LM_STUDIO_API_KEY` to a Studio API key. Context length is chosen when the model is loaded in Studio; `LM_STUDIO_THINK=false` sends Studio's `enable_thinking=false` request extension.
 
+### Codex CLI / Luna playtest option
+
+`CodexCli` is an opt-in local playtest provider for running the narrator through an authenticated Codex CLI model. It launches one ephemeral, read-only `codex exec` turn per narrator request in an isolated temporary directory. The adapter does not grant write access and instructs the model not to inspect files or call tools.
+
+Run the API directly on the host rather than inside the standard Docker image—the container does not contain your Codex CLI installation or authentication. Confirm `codex --version` works, then configure:
+
+```env
+LmStudio__Provider=CodexCli
+LmStudio__Model=gpt-5.6-luna
+LmStudio__CodexExecutable=codex
+LmStudio__CodexReasoningEffort=max
+LmStudio__CodexTimeoutSeconds=300
+LmStudio__RetryCount=0
+```
+
+Luna at `max` is intentionally not the default. Codex guidance recommends the lowest reasoning effort that reliably handles a task; Max is meant for the hardest work where depth matters more than speed or usage. A minimal local availability probe consumed roughly 15K input tokens before its two-word response, so measure a bounded play session before considering this path for routine narration. The OpenAI-compatible and Ollama providers remain the sensible everyday choices.
+
 ---
 
 ## 3. Configure Environment Variables
@@ -100,11 +117,11 @@ LM_STUDIO_THINK=
 DISCORD_TOKEN=your_discord_bot_token_here
 DISCORD_CHANNEL_ID=your_channel_id_here
 
-# ── Dashboard Credentials (optional — defaults shown) ──
+# ── Dashboard Credentials (required for the Production Docker stack) ──
 GAE_DASHBOARD_USER_USERNAME=user
-GAE_DASHBOARD_USER_PASSWORD=GAE-User-Local!123
+GAE_DASHBOARD_USER_PASSWORD=replace-with-a-unique-player-secret
 GAE_DASHBOARD_ADMIN_USERNAME=admin
-GAE_DASHBOARD_ADMIN_PASSWORD=GAE-Admin-Local!123
+GAE_DASHBOARD_ADMIN_PASSWORD=replace-with-a-different-admin-secret
 
 # ── Ports (optional — defaults shown) ──
 GAE_HOST_PORT=8181
@@ -114,7 +131,9 @@ POSTGRES_HOST_PORT=5432
 GAE_DB_PASSWORD=gae_dev_password
 ```
 
-> **Security note:** For any internet-facing deployment, change all default passwords and use strong, unique values.
+> **Security note:** Production startup rejects missing, short, shared, or bundled demo passwords. Use unique values of
+> at least 12 characters. Production also rejects anonymous password hints. The defaults remain available only when
+> running directly in Development or Test.
 
 ---
 
@@ -138,10 +157,10 @@ This script:
 
 Open your browser to **http://localhost:8181** (or the URL printed by the script).
 
-| Login | Username | Password |
-|-------|----------|----------|
-| Player | `user` | `GAE-User-Local!123` |
-| Admin | `admin` | `GAE-Admin-Local!123` |
+| Login | Default username | Password |
+|-------|------------------|----------|
+| Player | `user` | Your `GAE_DASHBOARD_USER_PASSWORD` value |
+| Admin | `admin` | Your `GAE_DASHBOARD_ADMIN_PASSWORD` value |
 
 The admin view has additional panels for managing players, editing lore, and inspecting game state.
 
@@ -177,6 +196,10 @@ DISCORD_CHANNEL_ID=your_channel_id
 4. Restart the stack: `powershell -ExecutionPolicy Bypass -File .\scripts\reset-docker-stack.ps1`
 
 The bot will appear online in your server and respond to commands in the configured channel.
+
+Before a release, complete the bounded human-client checklist in
+[discord-release-playtest.md](discord-release-playtest.md). A bot cannot honestly verify its own inbound user flow;
+the checklist records both the visible Discord result and the corresponding server evidence.
 
 ---
 
@@ -218,20 +241,24 @@ All settings can be overridden via environment variables using the `__` (double 
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `LmStudio:Provider` | `OpenAICompatible` | Narrator backend mode: `OpenAICompatible` for LM Studio or `Ollama` for native Ollama `/api/chat` |
+| `LmStudio:Provider` | `OpenAICompatible` | Narrator backend mode: `OpenAICompatible`, native `Ollama`, or opt-in local `CodexCli` |
 | `LmStudio:Endpoint` | `http://localhost:1234` | Narrator API URL. Use `http://host.docker.internal:8000` for Dockerized Unsloth Studio |
 | `LmStudio:Model` | `default` | Model name (or `default` for auto-detect) |
 | `LmStudio:ApiKey` | *(empty)* | Optional bearer token for protected OpenAI-compatible backends such as Unsloth Studio |
 | `LmStudio:ContextLength` | *(empty)* | Optional context length. In native Ollama mode this is sent as `options.num_ctx`; use `16384` for 16K. For OpenAI-compatible Unsloth Studio, set context length when loading the model in Studio |
 | `LmStudio:Think` | *(empty)* | Optional thinking control. In native Ollama mode this is sent as `think`; in OpenAI-compatible mode this sends `enable_thinking=false` and `reasoning_effort=none` when set to `false` |
+| `LmStudio:CodexExecutable` | `codex` | Codex CLI executable used only by the `CodexCli` provider |
+| `LmStudio:CodexReasoningEffort` | `max` | Codex reasoning effort for the opt-in playtest provider |
+| `LmStudio:CodexTimeoutSeconds` | `300` | Hard timeout for one Codex narration turn |
+| `LmStudio:CodexWorkingDirectory` | system temp | Isolated directory exposed read-only to Codex narration turns |
 | `LmStudio:RetryCount` | `1` | Retries on transient LM Studio failures |
 | `LmStudio:RetryDelayMs` | `2000` | Delay between retries (ms) |
 | `Discord:Token` | *(empty)* | Discord bot token |
 | `Discord:ChannelId` | *(empty)* | Discord channel for the game |
 | `DashboardAuth:User:Username` | `user` | Player dashboard login |
-| `DashboardAuth:User:Password` | `GAE-User-Local!123` | Player dashboard password |
+| `DashboardAuth:User:Password` | local demo value | Player dashboard password; Production requires a unique value of at least 12 characters |
 | `DashboardAuth:Admin:Username` | `admin` | Admin dashboard login |
-| `DashboardAuth:Admin:Password` | `GAE-Admin-Local!123` | Admin dashboard password |
+| `DashboardAuth:Admin:Password` | local demo value | Admin dashboard password; Production requires a different unique value of at least 12 characters |
 | `DashboardAuth:SessionHours` | `12` | Login session duration |
 | `DashboardAuth:ShowLoginPasswords` | `false` | Include passwords in anonymous login hints; only enable for private local demos |
 | `ConnectionStrings:GameDatabase` | *(see appsettings.json)* | PostgreSQL connection string |

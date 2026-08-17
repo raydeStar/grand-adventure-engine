@@ -613,3 +613,47 @@ lore_entries:
     narrator_hint: "The Void is the endgame. It should feel existentially threatening — not just dangerous, but wrong on a fundamental level. Nullthorn is the final boss and a genuine philosophical threat. The theme is nothingness versus existence, despair versus hope."
     linked_entity_ids: ["void_rift", "void_corridor", "void_throne"]
     tags: ["location", "dungeon", "void", "final-dungeon", "nullthorn", "endgame"]
+
+  - id: "lore-moonfall-fair"
+    name: "The Moonfall Fair"
+    lore_scope: "location"
+    parent_lore_id: "lore-stonewake"
+    cascade_down: false
+    discovery_trigger: "explore"
+    discovery_source_id: "moonfall_gate"
+    description: "A nocturnal fair hidden behind Lowtown, famous for impossible games and bargains that take metaphors literally."
+    content: >
+      The Moonfall Fair arrives wherever a city has enough regrets to light its lanterns.
+      Barnaby Rook brought it to Stonewake years ago after winning its moon-clock in a
+      crooked card game. By daylight the entrance is an ordinary bricked arch; after dusk,
+      brass gates open onto a midway larger than the district containing it. Performers,
+      sprigs, minor spirits, and several attractions of disputed legality make their homes
+      there. The fair is mischievous rather than cruel, provided its clock completes each
+      night and every bargain is honored precisely. Its oldest rule is painted beneath the
+      ticket booth where only staff can see it: midnight must arrive, and midnight must be
+      allowed to leave.
+    teaser: "Blue lanterns burn behind a brass arch that only appears after dusk..."
+    narrator_hint: "Moonfall balances wonder, dry comedy, and creeping supernatural danger. Begin charming; reveal the cost beneath the spectacle one precise detail at a time."
+    linked_entity_ids: ["moonfall_gate", "moonfall_midway", "moonfall_mirror_tent", "moonfall_beast_pavilion", "moonfall_prize_arcade", "moonfall_crooked_stage", "moonfall_clocktower", "orla_quill", "barnaby_rook"]
+    tags: ["location", "stonewake", "moonfall", "fair", "festival", "clockwork", "bargains"]
+
+  - id: "lore-missing-midnight"
+    name: "The Missing Midnight"
+    lore_scope: "event"
+    parent_lore_id: "lore-moonfall-fair"
+    cascade_down: false
+    discovery_trigger: "quest"
+    discovery_source_id: "moonfall_mirror_debt"
+    description: "The Moonfall clock has lost its final hour, trapping the fair on the edge of tomorrow."
+    content: >
+      The figure called the Midnight Monger was born from promises repeatedly postponed:
+      journeys begun tomorrow, apologies saved for later, courage deferred until conditions
+      improved. It climbed into the Moonfall clock and stole midnight, believing an endless
+      festival would spare everyone the pain of time passing. The bargain is poisoned. Without
+      midnight the fair cannot close, its people cannot truly leave, and its attractions grow
+      hungrier as the same evening repeats. If the impossible thirteenth bell rings before the
+      stolen hour is returned, Moonfall will fold away from Stonewake with everyone inside.
+    teaser: "Every clock at the fair is missing the same hour..."
+    narrator_hint: "Treat the Midnight Monger as tempting and tragic but dangerous. It offers relief from consequence; the story answers that tomorrow is worth its costs."
+    linked_entity_ids: ["moonfall_clocktower", "midnight_monger", "thirteenth_bell_clapper", "moonfall_missing_midnight"]
+    tags: ["event", "moonfall", "missing-midnight", "boss", "bargains", "time"]

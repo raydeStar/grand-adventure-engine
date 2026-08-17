@@ -26,10 +26,14 @@ public class NarratorService : INarratorService
     private readonly string _provider;
     private readonly int? _contextLength;
     private readonly bool? _think;
+    private readonly string _codexExecutable;
+    private readonly string _codexReasoningEffort;
+    private readonly int _codexTimeoutSeconds;
+    private readonly string _codexWorkingDirectory;
     private string _model;
     private bool _modelResolved;
 
-    public NarratorService(HttpClient httpClient, ILogger<NarratorService> logger, string model = "default", WorldKnowledgeBuilder? knowledge = null, IConversationLogger? conversationLogger = null, IContentRegistryService? registry = null, IWorldContext? worldContext = null, IWorldRepository? worldRepository = null, int retryCount = 1, int retryDelayMs = 2000, string provider = "OpenAICompatible", int? contextLength = null, bool? think = null)
+    public NarratorService(HttpClient httpClient, ILogger<NarratorService> logger, string model = "default", WorldKnowledgeBuilder? knowledge = null, IConversationLogger? conversationLogger = null, IContentRegistryService? registry = null, IWorldContext? worldContext = null, IWorldRepository? worldRepository = null, int retryCount = 1, int retryDelayMs = 2000, string provider = "OpenAICompatible", int? contextLength = null, bool? think = null, string codexExecutable = "codex", string codexReasoningEffort = "max", int codexTimeoutSeconds = 300, string? codexWorkingDirectory = null)
     {
         _httpClient = httpClient;
         _logger = logger;
@@ -43,8 +47,18 @@ public class NarratorService : INarratorService
         _provider = string.IsNullOrWhiteSpace(provider) ? "OpenAICompatible" : provider;
         _contextLength = contextLength is > 0 ? contextLength : null;
         _think = think;
-        _model = model;
+        _codexExecutable = string.IsNullOrWhiteSpace(codexExecutable) ? "codex" : codexExecutable.Trim();
+        _codexReasoningEffort = NormalizeCodexReasoningEffort(codexReasoningEffort);
+        _codexTimeoutSeconds = Math.Clamp(codexTimeoutSeconds, 30, 900);
+        _codexWorkingDirectory = string.IsNullOrWhiteSpace(codexWorkingDirectory)
+            ? Path.Combine(Path.GetTempPath(), "gae-codex-narrator")
+            : Path.GetFullPath(codexWorkingDirectory);
+        _model = IsCodexCliProvider() && string.Equals(model, "default", StringComparison.OrdinalIgnoreCase)
+            ? "gpt-5.6-luna"
+            : model;
         _modelResolved = !string.Equals(model, "default", StringComparison.OrdinalIgnoreCase);
+        if (IsCodexCliProvider())
+            _modelResolved = true;
     }
 
     public async Task<string> NarrateActionAsync(NarratorContext context, CancellationToken ct = default)
@@ -2242,15 +2256,20 @@ public class NarratorService : INarratorService
 
     public void SetActiveModel(string model)
     {
-        _model = model;
-        _modelResolved = !string.Equals(model, "default", StringComparison.OrdinalIgnoreCase);
-        _logger.LogInformation("Active LM Studio model set to \"{Model}\" (resolved={Resolved})", _model, _modelResolved);
+        _model = IsCodexCliProvider() && string.Equals(model, "default", StringComparison.OrdinalIgnoreCase)
+            ? "gpt-5.6-luna"
+            : model;
+        _modelResolved = IsCodexCliProvider() || !string.Equals(model, "default", StringComparison.OrdinalIgnoreCase);
+        _logger.LogInformation("Active narrator model set to \"{Model}\" for {Provider} (resolved={Resolved}). The orchestra has changed conductors.", _model, _provider, _modelResolved);
     }
 
     public async Task<IReadOnlyList<string>> ListAvailableModelsAsync(CancellationToken ct = default)
     {
         try
         {
+            if (IsCodexCliProvider())
+                return [_model];
+
             return IsOllamaProvider()
                 ? await ListOllamaModelsAsync(ct)
                 : await ListOpenAiCompatibleModelsAsync(ct);
@@ -2359,9 +2378,127 @@ public class NarratorService : INarratorService
     }
 
     private async Task<string> SendCompletionRequestAsync(string systemPrompt, string userPrompt, CancellationToken ct, string operation, bool logPayload, int maxTokens)
-        => IsOllamaProvider()
+        => IsCodexCliProvider()
+            ? await SendCodexCliCompletionRequestAsync(systemPrompt, userPrompt, ct, operation, logPayload, maxTokens)
+            : IsOllamaProvider()
             ? await SendOllamaCompletionRequestAsync(systemPrompt, userPrompt, ct, operation, logPayload, maxTokens)
             : await SendOpenAiCompatibleCompletionRequestAsync(systemPrompt, userPrompt, ct, operation, logPayload, maxTokens);
+
+    /// <summary>
+    /// Runs one ephemeral, read-only Codex turn as a narration transport. This adapter exists for
+    /// deliberate local playtests of Codex models; its latency and token overhead make it unsuitable
+    /// as the default high-volume narrator path.
+    /// </summary>
+    private async Task<string> SendCodexCliCompletionRequestAsync(string systemPrompt, string userPrompt, CancellationToken ct, string operation, bool logPayload, int maxTokens)
+    {
+        Directory.CreateDirectory(_codexWorkingDirectory);
+
+        var requestPrompt = $"""
+            You are acting only as the text-adventure narrator described below.
+            Do not inspect files, run commands, call tools, discuss software development, or mention Codex.
+            Follow the supplied narration contract and return only the requested in-game text or JSON.
+            Keep the response within approximately {maxTokens} tokens.
+
+            <narrator_system_instructions>
+            {systemPrompt}
+            </narrator_system_instructions>
+
+            <game_turn>
+            {userPrompt}
+            </game_turn>
+            """;
+
+        if (logPayload)
+            _logger.LogInformation("Codex CLI {Operation} request prepared for {Model} at {ReasoningEffort} effort", operation, _model, _codexReasoningEffort);
+
+        var startInfo = CodexCliLocator.CreateStartInfo(_codexExecutable, _codexWorkingDirectory);
+
+        foreach (var argument in BuildCodexCliArguments())
+            startInfo.ArgumentList.Add(argument);
+
+        using var process = new Process { StartInfo = startInfo };
+        if (!process.Start())
+            throw new InvalidOperationException("Codex CLI narrator process did not start. Even the footmen found that suspicious.");
+
+        await process.StandardInput.WriteAsync(requestPrompt.AsMemory(), ct);
+        process.StandardInput.Close();
+
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(ct);
+        var stderrTask = process.StandardError.ReadToEndAsync(ct);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(_codexTimeoutSeconds));
+
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            TryKillProcessTree(process);
+            throw new TimeoutException($"Codex CLI {operation} exceeded the {_codexTimeoutSeconds}-second timeout.");
+        }
+        catch (OperationCanceledException)
+        {
+            TryKillProcessTree(process);
+            throw;
+        }
+
+        var stdout = (await stdoutTask).Trim();
+        var stderr = (await stderrTask).Trim();
+        if (process.ExitCode != 0)
+        {
+            var detail = string.IsNullOrWhiteSpace(stderr) ? "No diagnostic output was returned." : TruncateForLog(stderr, 1200);
+            throw new InvalidOperationException($"Codex CLI {operation} exited with code {process.ExitCode}: {detail}");
+        }
+
+        if (string.IsNullOrWhiteSpace(stdout))
+            throw new InvalidOperationException($"Codex CLI {operation} returned an empty final response.");
+
+        if (logPayload)
+            _logger.LogInformation("Codex CLI {Operation} completed with {Length} response characters. A costly little triumph.", operation, stdout.Length);
+
+        return stdout;
+    }
+
+    /// <summary>Builds a deterministic, least-privilege Codex invocation for one isolated narration turn.</summary>
+    private IReadOnlyList<string> BuildCodexCliArguments()
+        =>
+        [
+            "exec",
+            "--ephemeral",
+            "--ignore-user-config",
+            "--ignore-rules",
+            "--model", _model,
+            "-c", $"model_reasoning_effort=\"{_codexReasoningEffort}\"",
+            "--sandbox", "read-only",
+            "--skip-git-repo-check",
+            "--color", "never",
+            "-"
+        ];
+
+    private static string NormalizeCodexReasoningEffort(string? effort)
+    {
+        var normalized = string.IsNullOrWhiteSpace(effort) ? "max" : effort.Trim().ToLowerInvariant();
+        return normalized is "low" or "medium" or "high" or "xhigh" or "max" or "ultra"
+            ? normalized
+            : "max";
+    }
+
+    private static void TryKillProcessTree(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+                process.Kill(entireProcessTree: true);
+        }
+        catch (InvalidOperationException)
+        {
+            // The process won the race to exit. For once, haste is welcome.
+        }
+    }
+
+    private static string TruncateForLog(string value, int maxLength)
+        => value.Length <= maxLength ? value : value[..maxLength] + "...";
 
     private async Task<string> SendOpenAiCompatibleCompletionRequestAsync(string systemPrompt, string userPrompt, CancellationToken ct, string operation, bool logPayload, int maxTokens)
     {
@@ -2544,6 +2681,9 @@ public class NarratorService : INarratorService
 
     private bool IsOllamaProvider()
         => string.Equals(_provider, "Ollama", StringComparison.OrdinalIgnoreCase);
+
+    private bool IsCodexCliProvider()
+        => string.Equals(_provider, "CodexCli", StringComparison.OrdinalIgnoreCase);
 
     private async Task LogConversationAsync(string operation, string systemPrompt, string userPrompt,
         string response, int maxTokens, long latencyMs, bool success,

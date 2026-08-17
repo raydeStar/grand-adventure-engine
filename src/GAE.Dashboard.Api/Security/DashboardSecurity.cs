@@ -65,6 +65,7 @@ public interface IDashboardAuthService
     DashboardSessionDescriptor CreateSessionDescriptor(ClaimsPrincipal principal);
     int GetSessionLifetimeHours();
     IReadOnlyList<string> GetStartupWarnings();
+    IReadOnlyList<string> GetStartupErrors(bool isProduction);
 }
 
 public sealed class DashboardAuthService : IDashboardAuthService
@@ -126,6 +127,35 @@ public sealed class DashboardAuthService : IDashboardAuthService
         return warnings;
     }
 
+    /// <summary>
+    /// Rejects unsafe production credentials before the HTTP listener opens. Local development may
+    /// retain the documented demo accounts, but a shared deployment must make an explicit choice.
+    /// </summary>
+    public IReadOnlyList<string> GetStartupErrors(bool isProduction)
+    {
+        if (!isProduction)
+            return [];
+
+        var options = CurrentOptions;
+        var errors = new List<string>();
+        ValidateProductionAccount(options.User, DefaultOptions.User, "user", errors);
+        ValidateProductionAccount(options.Admin, DefaultOptions.Admin, "admin", errors);
+
+        if (options.ShowLoginPasswords)
+            errors.Add("DashboardAuth:ShowLoginPasswords must be false in Production.");
+
+        if (string.Equals(options.User.Username?.Trim(), options.Admin.Username?.Trim(), StringComparison.OrdinalIgnoreCase))
+            errors.Add("Dashboard user and admin usernames must be different in Production.");
+
+        if (!string.IsNullOrEmpty(options.User.Password)
+            && string.Equals(options.User.Password, options.Admin.Password, StringComparison.Ordinal))
+        {
+            errors.Add("Dashboard user and admin passwords must be different in Production.");
+        }
+
+        return errors;
+    }
+
     private DashboardAuthOptions CurrentOptions => _optionsMonitor.CurrentValue;
 
     private IReadOnlyList<DashboardAccount> GetAccounts()
@@ -141,6 +171,21 @@ public sealed class DashboardAuthService : IDashboardAuthService
     private static string NormalizeUsername(string configured, string fallback)
     {
         return string.IsNullOrWhiteSpace(configured) ? fallback : configured.Trim();
+    }
+
+    private static void ValidateProductionAccount(
+        DashboardAccountOptions configured,
+        DashboardAccountOptions defaults,
+        string accountName,
+        ICollection<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(configured.Username))
+            errors.Add($"Dashboard {accountName} username is required in Production.");
+
+        if (string.IsNullOrWhiteSpace(configured.Password) || configured.Password.Length < 12)
+            errors.Add($"Dashboard {accountName} password must contain at least 12 characters in Production.");
+        else if (string.Equals(configured.Password, defaults.Password, StringComparison.Ordinal))
+            errors.Add($"Dashboard {accountName} password still uses the local default. Set a unique production secret.");
     }
 }
 

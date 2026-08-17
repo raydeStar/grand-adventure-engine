@@ -769,3 +769,179 @@ quests:
           quantity: 1
       disposition_shift: 50
       memory_flags: ["void-defeated", "savior-of-valeward", "lightbound-champion-true"]
+
+  # ═══════════════════════════════════════════════════════════
+  # MOONFALL FAIR — Optional midgame story arc
+  # ═══════════════════════════════════════════════════════════
+
+  - id: "moonfall_first_bell"
+    name: "First Bell at Moonfall"
+    description: "Orla Quill needs an outsider to walk the Moonfall Fair and confirm which attractions have become independently haunted. Apparently there is a meaningful distinction."
+    giver_id: "orla_quill"
+    turn_in_npc_id: "orla_quill"
+    min_level: 1
+    is_one_time: true
+    tags: ["side", "exploration", "moonfall", "starter"]
+    offer_hint: "Orla presents the supernatural inspection as routine work, because panic is inefficient and bad for ticket sales."
+    completion_hint: "Orla checks three boxes, crosses out the word 'minor,' and finally admits the fair has misplaced midnight."
+    stages:
+      - id: "survey_midway"
+        name: "Inspect the Midway"
+        description: "Walk the Impossible Midway and find Barnaby Rook, the fair's magnificently unreliable proprietor."
+        narrator_hint: "Introduce the fair as playful wonder with a hairline crack of menace. Every attraction should be delightful until examined for one second too long."
+        objectives:
+          - id: "discover_moonfall_midway"
+            type: Discover
+            target_id: "moonfall_midway"
+            description: "Enter the Impossible Midway"
+          - id: "speak_to_barnaby"
+            type: TalkTo
+            target_id: "barnaby_rook"
+            description: "Question Barnaby Rook about the disturbances"
+        next_stage_id: "report_to_orla"
+      - id: "report_to_orla"
+        name: "File the Alarming Report"
+        description: "Return to Orla with the bad news, preferably alphabetized."
+        narrator_hint: "Orla is unsurprised by every detail except Barnaby admitting fault. That part genuinely alarms her."
+        objectives:
+          - id: "report_moonfall_survey"
+            type: TalkTo
+            target_id: "orla_quill"
+            description: "Report back to Orla"
+    rewards:
+      xp: 35
+      gold: 18
+      unlocks_quest: "moonfall_mirror_debt"
+      disposition_shift: 8
+      memory_flags: ["moonfall-inspector"]
+
+  - id: "moonfall_mirror_debt"
+    name: "A Debt in the Glass"
+    description: "The Pavilion of Better Decisions holds a reflection of the fair's missing hour. Orla wants the evidence before the mirrors decide to rewrite it."
+    giver_id: "orla_quill"
+    turn_in_npc_id: "orla_quill"
+    min_level: 1
+    prerequisites: ["moonfall_first_bell"]
+    is_one_time: true
+    tags: ["side", "exploration", "fetch", "moonfall"]
+    offer_hint: "Orla warns that the mirrors do not lie. They editorialize, which is arguably worse."
+    completion_hint: "The silvered shard shows Orla a thirteenth numeral on the clock. Her professional composure survives, but only on a technicality."
+    stages:
+      - id: "retrieve_silvered_memory"
+        name: "Face the Better Decisions"
+        description: "Enter the mirror maze and recover the shard that remembers midnight."
+        narrator_hint: "The mirrors show plausible lives shaped by choices the player did not make. Keep it personal and strange without dictating the player's feelings or history. Madam Vesper offers clarity, never comfort."
+        objectives:
+          - id: "collect_silvered_memory"
+            type: Collect
+            target_id: "silvered_memory"
+            required_count: 1
+            description: "Recover the Silvered Memory"
+        next_stage_id: "deliver_silvered_memory"
+      - id: "deliver_silvered_memory"
+        name: "Return the Reflection"
+        description: "Bring the Silvered Memory to Orla at the fair gate."
+        narrator_hint: "In the shard, the clock's missing hour is visible inside the belltower like an animal caught in a trap."
+        objectives:
+          - id: "deliver_memory_to_orla"
+            type: Deliver
+            target_id: "orla_quill"
+            required_item_id: "silvered_memory"
+            required_count: 1
+            description: "Give the Silvered Memory to Orla"
+    rewards:
+      xp: 55
+      gold: 25
+      unlocks_quest: "moonfall_missing_midnight"
+      disposition_shift: 12
+      memory_flags: ["faced-better-decisions"]
+
+  - id: "moonfall_beastly_business"
+    name: "A Beastly Piece of Furniture"
+    description: "Barnaby's prize settee has escaped into the menagerie, eaten two waiver forms, and developed strong opinions about interior design. Resolve the upholstery."
+    giver_id: "barnaby_rook"
+    turn_in_npc_id: "barnaby_rook"
+    min_level: 2
+    is_one_time: true
+    tags: ["side", "combat", "comedy", "moonfall"]
+    offer_hint: "Barnaby insists the Velvet Maw is not his fault, then supplies enough detail to prove that it is entirely his fault."
+    completion_hint: "Barnaby mourns the settee for exactly four seconds before asking whether the player recovered the expensive fabric."
+    stages:
+      - id: "deal_with_velvet_maw"
+        name: "Resolve the Upholstery"
+        description: "Defeat the Velvet Maw in the Menagerie of Dubious Provenance."
+        narrator_hint: "The fight should be dangerous but gleefully absurd: snapping cushions, strangling tassels, and offended furniture. Honor the combat mechanics beneath the comedy."
+        objectives:
+          - id: "kill_velvet_mimic"
+            type: Kill
+            target_id: "velvet_mimic"
+            required_count: 1
+            description: "Defeat the Velvet Maw"
+        next_stage_id: "invoice_barnaby"
+      - id: "invoice_barnaby"
+        name: "Collect Damages"
+        description: "Return to Barnaby and demand the reward he suddenly cannot find in his ledger."
+        narrator_hint: "Barnaby pays with theatrical anguish. Pipkin keeps an independent count of every coin."
+        objectives:
+          - id: "report_velvet_mimic"
+            type: TalkTo
+            target_id: "barnaby_rook"
+            description: "Report back to Barnaby"
+    rewards:
+      xp: 70
+      gold: 45
+      disposition_shift: 15
+      memory_flags: ["survived-the-settee"]
+
+  - id: "moonfall_missing_midnight"
+    name: "The Midnight That Went Missing"
+    description: "Something in the Thirteenth Belltower has stolen the fair's midnight. If the impossible bell rings, Moonfall will become a celebration nobody can leave."
+    giver_id: "orla_quill"
+    turn_in_npc_id: "orla_quill"
+    min_level: 3
+    prerequisites: ["moonfall_mirror_debt", "moonfall_beastly_business"]
+    is_one_time: true
+    tags: ["side", "story", "combat", "boss", "moonfall"]
+    offer_hint: "Orla finally drops the language of maintenance and asks the player to save her people. She hates needing a hero; she is profoundly relieved one arrived."
+    completion_hint: "When the clapper leaves the belltower, every clock in the fair advances at once. Midnight arrives cleanly, the performers cheer, and tomorrow becomes possible again."
+    stages:
+      - id: "climb_thirteenth_belltower"
+        name: "Climb into the Missing Hour"
+        description: "Cross the Crooked Stage and climb through the Moonfall clock to its highest bell."
+        narrator_hint: "The clock contains discarded moments from across Stonewake. Use brief, vivid glimpses to make the ascent feel costly and uncanny."
+        objectives:
+          - id: "discover_moonfall_clocktower"
+            type: Discover
+            target_id: "moonfall_clocktower"
+            description: "Reach the Thirteenth Belltower"
+        next_stage_id: "defeat_midnight_monger"
+      - id: "defeat_midnight_monger"
+        name: "Make Tomorrow Possible"
+        description: "Defeat the Midnight Monger and take the clapper from the impossible bell."
+        narrator_hint: "The Midnight Monger tempts the player with more time, undone regrets, and victories without cost. It is a real threat, not merely a comic villain. Never invent acceptance of its bargain."
+        objectives:
+          - id: "kill_midnight_monger"
+            type: Kill
+            target_id: "midnight_monger"
+            required_count: 1
+            description: "Defeat the Midnight Monger"
+        next_stage_id: "return_midnight"
+      - id: "return_midnight"
+        name: "Return Midnight"
+        description: "Bring the Clapper of the Thirteenth Bell to Orla."
+        narrator_hint: "The fair is frozen on the brink of an impossible chime. Orla waits at the gate, lantern raised like a beacon."
+        objectives:
+          - id: "deliver_thirteenth_clapper"
+            type: Deliver
+            target_id: "orla_quill"
+            required_item_id: "thirteenth_bell_clapper"
+            required_count: 1
+            description: "Give the bell clapper to Orla"
+    rewards:
+      xp: 140
+      gold: 90
+      items:
+        - item_id: "lucky_moon_pin"
+          quantity: 1
+      disposition_shift: 25
+      memory_flags: ["!returned-midnight", "moonfall-hero"]

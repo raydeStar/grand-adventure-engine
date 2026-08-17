@@ -99,7 +99,7 @@ public interface INarratorService
     /// <summary>Sets the active model at runtime. Pass "default" to re-resolve on next call.</summary>
     void SetActiveModel(string model);
 
-    /// <summary>Lists available models from the LM Studio /v1/models endpoint.</summary>
+    /// <summary>Lists models exposed by the configured narrator provider.</summary>
     Task<IReadOnlyList<string>> ListAvailableModelsAsync(CancellationToken ct = default);
 
     /// <summary>

@@ -17,6 +17,9 @@ namespace GAE.Engine.Data;
 /// </summary>
 public class ContentSeedService
 {
+    private const string CurrentSeedRevision = "2026-08-moonfall";
+    private const string SeedRevisionConfigId = "content_seed_revision";
+
     private readonly IDbContextFactory<GaeDbContext> _dbFactory;
     private readonly ILogger<ContentSeedService> _logger;
 
@@ -34,8 +37,8 @@ public class ContentSeedService
     }
 
     /// <summary>
-    /// Seeds the content_registry table from YAML files if it's empty,
-    /// then loads everything from DB into the in-memory registries.
+    /// Seeds the content registry from YAML on first run and additively backfills newly shipped
+    /// seed IDs once per content revision. Existing rows are never overwritten, preserving admin edits.
     /// </summary>
     public async Task SeedAndLoadAsync(
         ContentRegistryService registryService,
@@ -45,10 +48,29 @@ public class ContentSeedService
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
         var hasContent = await db.ContentRegistry.AnyAsync(ct);
-        if (!hasContent)
+        var revisionMarker = JsonSerializer.Serialize(CurrentSeedRevision);
+        var appliedRevision = await db.GameConfig.FindAsync(new object[] { SeedRevisionConfigId }, ct);
+        if (!hasContent || appliedRevision?.Data != revisionMarker)
         {
-            _logger.LogInformation("Content registry DB is empty — seeding from YAML files");
+            _logger.LogInformation("Applying additive content seed revision {Revision}", CurrentSeedRevision);
             await SeedFromYamlAsync(db, configDir, ct);
+
+            if (appliedRevision is null)
+            {
+                db.GameConfig.Add(new GameConfigEntity
+                {
+                    Id = SeedRevisionConfigId,
+                    Data = revisionMarker,
+                    UpdatedAt = DateTimeOffset.UtcNow
+                });
+            }
+            else
+            {
+                appliedRevision.Data = revisionMarker;
+                appliedRevision.UpdatedAt = DateTimeOffset.UtcNow;
+            }
+
+            await db.SaveChangesAsync(ct);
         }
         else
         {
@@ -316,9 +338,28 @@ public class ContentSeedService
 
         if (entities.Count > 0)
         {
-            db.ContentRegistry.AddRange(entities);
+            var existingKeys = (await db.ContentRegistry
+                .AsNoTracking()
+                .Select(entity => new { entity.ContentType, entity.Id })
+                .ToListAsync(ct))
+                .Select(entity => $"{entity.ContentType}\u001f{entity.Id}")
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var missingEntities = entities
+                .GroupBy(entity => $"{entity.ContentType}\u001f{entity.Id}", StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.First())
+                .Where(entity => !existingKeys.Contains($"{entity.ContentType}\u001f{entity.Id}"))
+                .ToList();
+
+            if (missingEntities.Count == 0)
+            {
+                _logger.LogInformation("Content seed revision {Revision} introduced no missing registry entries", CurrentSeedRevision);
+                return;
+            }
+
+            db.ContentRegistry.AddRange(missingEntities);
             await db.SaveChangesAsync(ct);
-            _logger.LogInformation("Seeded {Count} total content entries into DB", entities.Count);
+            _logger.LogInformation("Added {Count} missing content entries for seed revision {Revision}", missingEntities.Count, CurrentSeedRevision);
         }
     }
 
