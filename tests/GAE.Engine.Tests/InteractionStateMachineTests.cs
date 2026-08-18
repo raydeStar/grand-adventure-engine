@@ -182,6 +182,134 @@ public class InteractionStateMachineTests
     }
 
     [Fact]
+    public async Task Conversation_WalkingToDifferentNpc_FreelySwitchesTarget()
+    {
+        var mara = new Npc { Id = "mara", Name = "Mara", Disposition = "friendly" };
+        var pete = new Npc { Id = "stumbling_pete", Name = "Stumbling Pete", Disposition = "neutral" };
+        var room = new Room
+        {
+            Id = "tavern",
+            Name = "Tavern",
+            Description = "A warm tavern.",
+            Npcs = [mara, pete]
+        };
+        var stateManager = await CreateStateAsync(room: room);
+        var narrator = CreateConversationNarrator(mara);
+        var engine = CreateEngine(stateManager, narrator.Object);
+
+        await engine.ProcessActionAsync(PlayerId, engine.ParseCommand(PlayerId, "talk to Mara"));
+        const string switchInput = "I walk over to Pete and offer to buy him a drink";
+        var result = await engine.ProcessActionAsync(PlayerId, engine.ParseCommand(PlayerId, switchInput));
+
+        Assert.True(result.Success);
+        Assert.Contains("Stumbling Pete responds", result.Narration);
+
+        var player = await stateManager.GetPlayerAsync(PlayerId);
+        Assert.NotNull(player);
+        Assert.Equal(InteractionMode.Conversation, player.Interaction.Mode);
+        Assert.Equal("Stumbling Pete", player.Interaction.Target);
+        narrator.Verify(service => service.ProcessConversationTurnAsync(
+            It.IsAny<PlayerCharacter>(),
+            It.IsAny<Room>(),
+            It.Is<Npc>(npc => npc.Name == "Stumbling Pete"),
+            It.IsAny<InteractionState>(),
+            switchInput,
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Conversation_MentioningDifferentNpc_DoesNotSwitchTarget()
+    {
+        var mara = new Npc { Id = "mara", Name = "Mara", Disposition = "friendly" };
+        var pete = new Npc { Id = "stumbling_pete", Name = "Stumbling Pete", Disposition = "neutral" };
+        var room = new Room
+        {
+            Id = "tavern",
+            Name = "Tavern",
+            Description = "A warm tavern.",
+            Npcs = [mara, pete]
+        };
+        var stateManager = await CreateStateAsync(room: room);
+        var narrator = CreateConversationNarrator(mara);
+        var engine = CreateEngine(stateManager, narrator.Object);
+
+        await engine.ProcessActionAsync(PlayerId, engine.ParseCommand(PlayerId, "talk to Mara"));
+        const string question = "What's wrong with Stumbling Pete?";
+        var result = await engine.ProcessActionAsync(PlayerId, engine.ParseCommand(PlayerId, question));
+
+        Assert.True(result.Success);
+        Assert.Contains("[Conversation with Mara, turn 1]", result.MechanicalSummary);
+
+        var player = await stateManager.GetPlayerAsync(PlayerId);
+        Assert.NotNull(player);
+        Assert.Equal(InteractionMode.Conversation, player.Interaction.Mode);
+        Assert.Equal("Mara", player.Interaction.Target);
+        narrator.Verify(service => service.ProcessConversationTurnAsync(
+            It.IsAny<PlayerCharacter>(),
+            It.IsAny<Room>(),
+            It.Is<Npc>(npc => npc.Name == "Mara"),
+            It.IsAny<InteractionState>(),
+            question,
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Conversation_WalkingElsewhere_FreelyReturnsToWorldSimulation()
+    {
+        var mara = new Npc { Id = "mara", Name = "Mara", Disposition = "friendly" };
+        var stateManager = await CreateStateAsync(npc: mara);
+        var narrator = CreateConversationNarrator(mara);
+        narrator
+            .Setup(service => service.ProcessFreeFormAsync(
+                It.IsAny<PlayerCharacter>(),
+                It.IsAny<Room>(),
+                It.Is<string>(input => input == "I walk over to the notice board"),
+                It.IsAny<IReadOnlyList<StoryEntry>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new FreeFormResponse
+            {
+                Success = true,
+                Narration = "You leave the bar and study the notice board."
+            });
+        var engine = CreateEngine(stateManager, narrator.Object);
+
+        await engine.ProcessActionAsync(PlayerId, engine.ParseCommand(PlayerId, "talk to Mara"));
+        var result = await engine.ProcessActionAsync(
+            PlayerId,
+            engine.ParseCommand(PlayerId, "I walk over to the notice board"));
+
+        Assert.True(result.Success);
+        Assert.Contains("[Free action:", result.MechanicalSummary);
+        Assert.Contains("notice board", result.Narration);
+
+        var player = await stateManager.GetPlayerAsync(PlayerId);
+        Assert.NotNull(player);
+        Assert.Equal(InteractionMode.Explore, player.Interaction.Mode);
+        Assert.Null(player.Interaction.Target);
+    }
+
+    [Fact]
+    public async Task Conversation_FigurativeWalking_RemainsWithCurrentNpc()
+    {
+        var mara = new Npc { Id = "mara", Name = "Mara", Disposition = "friendly" };
+        var stateManager = await CreateStateAsync(npc: mara);
+        var narrator = CreateConversationNarrator(mara);
+        var engine = CreateEngine(stateManager, narrator.Object);
+
+        await engine.ProcessActionAsync(PlayerId, engine.ParseCommand(PlayerId, "talk to Mara"));
+        const string dialogue = "Walk me through what Pete saw last night";
+        var result = await engine.ProcessActionAsync(PlayerId, engine.ParseCommand(PlayerId, dialogue));
+
+        Assert.True(result.Success);
+        Assert.Contains("[Conversation with Mara, turn 1]", result.MechanicalSummary);
+
+        var player = await stateManager.GetPlayerAsync(PlayerId);
+        Assert.NotNull(player);
+        Assert.Equal(InteractionMode.Conversation, player.Interaction.Mode);
+        Assert.Equal("Mara", player.Interaction.Target);
+    }
+
+    [Fact]
     public async Task Conversation_Goodbye_ExitsToExploreMode()
     {
         var npc = new Npc { Id = "mara", Name = "Mara", Disposition = "friendly" };

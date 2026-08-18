@@ -2664,6 +2664,86 @@ move_room_ready:
         return true;
     }
 
+    // Recognizes deliberate movement or speech toward a different NPC without treating a mere
+    // mention ("what is wrong with Pete?") as a target switch.
+    private static bool TryFindNpcMentionedByConversationSwitch(
+        IEnumerable<Npc> npcs,
+        Npc currentNpc,
+        string rawInput,
+        out Npc npc)
+    {
+        npc = null!;
+        var normalizedInput = NormalizeLookupText(rawInput);
+        if (string.IsNullOrWhiteSpace(normalizedInput))
+            return false;
+
+        var match = npcs
+            .Where(candidate => !string.Equals(candidate.Id, currentNpc.Id, StringComparison.OrdinalIgnoreCase))
+            .SelectMany(candidate => BuildNpcMentionAliases(candidate)
+                .Select(alias => new { Npc = candidate, Alias = NormalizeLookupText(alias) }))
+            .Where(entry => entry.Alias.Length >= 3
+                && LooksLikeConversationTargetSwitch(normalizedInput, entry.Alias))
+            .OrderByDescending(entry => entry.Alias.Length)
+            .ThenBy(entry => entry.Npc.Name.Length)
+            .FirstOrDefault();
+
+        if (match is null)
+            return false;
+
+        npc = match.Npc;
+        return true;
+    }
+
+    // Limits automatic switching to explicit approach/address language so NPC names remain safe
+    // to discuss during an existing conversation.
+    private static bool LooksLikeConversationTargetSwitch(string normalizedInput, string npcAlias)
+    {
+        string[] switchPhrases =
+        [
+            $"walk over to {npcAlias}",
+            $"walk to {npcAlias}",
+            $"go over to {npcAlias}",
+            $"go to {npcAlias}",
+            $"head over to {npcAlias}",
+            $"step over to {npcAlias}",
+            $"move over to {npcAlias}",
+            $"approach {npcAlias}",
+            $"turn to {npcAlias}",
+            $"talk to {npcAlias}",
+            $"speak to {npcAlias}",
+            $"say to {npcAlias}",
+            $"ask {npcAlias}",
+            $"tell {npcAlias}",
+            $"address {npcAlias}"
+        ];
+
+        return switchPhrases.Any(phrase => ContainsNormalizedPhrase(normalizedInput, phrase));
+    }
+
+    // Identifies explicit physical departure language while avoiding figurative uses of movement
+    // verbs inside otherwise ordinary dialogue.
+    private static bool LooksLikeConversationDisengagement(string rawInput)
+    {
+        var normalizedInput = NormalizeLookupText(rawInput);
+        string[] movementPhrases =
+        [
+            "walk away", "walk over", "walk to", "walk toward", "walk towards", "walk across", "walk around", "walk past",
+            "go over", "go to", "go toward", "go towards",
+            "head over", "head to", "head toward", "head towards",
+            "step away", "step over", "step to", "step toward", "step towards",
+            "move away", "move over", "move to", "move toward", "move towards",
+            "turn away", "approach"
+        ];
+
+        return movementPhrases.Any(phrase =>
+            normalizedInput.StartsWith(phrase + " ", StringComparison.Ordinal)
+            || normalizedInput.Equals(phrase, StringComparison.Ordinal)
+            || normalizedInput.StartsWith("i " + phrase + " ", StringComparison.Ordinal)
+            || normalizedInput.Equals("i " + phrase, StringComparison.Ordinal)
+            || normalizedInput.StartsWith("then " + phrase + " ", StringComparison.Ordinal)
+            || normalizedInput.StartsWith("i then " + phrase + " ", StringComparison.Ordinal));
+    }
+
     private static bool LooksLikeDirectedNpcSpeech(string normalizedInput)
     {
         return normalizedInput.StartsWith("tell ", StringComparison.Ordinal)
@@ -3048,6 +3128,46 @@ move_room_ready:
 
         // Load world-scoped NPC state for this conversation
         await OverlayWorldNpcStateAsync(npc, player.ActiveWorldId, player.Id, ct);
+
+        // Explicitly approaching or addressing another NPC switches conversations before the
+        // current target can absorb the action as dialogue. Conversation is context, not custody.
+        if (TryFindNpcMentionedByConversationSwitch(room.Npcs, npc, action.RawInput, out var nextNpc))
+        {
+            _logger.LogInformation(
+                "Player {PlayerId} freely switched conversation target from {CurrentNpc} to {NextNpc}",
+                player.Id,
+                npc.Name,
+                nextNpc.Name);
+
+            await PersistWorldNpcStateAsync(npc, player.ActiveWorldId, player.Id, ct);
+            player.Interaction.Reset();
+            await _stateManager.SavePlayerAsync(player, ct);
+
+            return await ProcessTalkInternalAsync(player, new GameAction
+            {
+                Id = action.Id,
+                PlayerId = player.Id,
+                RawInput = action.RawInput,
+                Type = ActionType.Talk,
+                Target = nextNpc.Name,
+                Timestamp = action.Timestamp
+            }, ct);
+        }
+
+        // Physical movement that does not name another NPC exits conversation and resumes ordinary
+        // world simulation. Figurative speech such as "walk me through it" does not match.
+        if (LooksLikeConversationDisengagement(action.RawInput))
+        {
+            _logger.LogInformation(
+                "Player {PlayerId} freely disengaged from conversation with {NpcName}",
+                player.Id,
+                npc.Name);
+
+            await PersistWorldNpcStateAsync(npc, player.ActiveWorldId, player.Id, ct);
+            player.Interaction.Reset();
+            await _stateManager.SavePlayerAsync(player, ct);
+            return null;
+        }
 
         // "leave" / "exit" typed mid-conversation should end the conversation, not move
         // The parser maps "leave" to ActionType.Move with direction "auto", so check before move handling
