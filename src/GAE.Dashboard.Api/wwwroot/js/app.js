@@ -222,7 +222,7 @@
         try {
           if (messages) messages.innerHTML += `<div class="dm-ai-msg system">${UI.esc(playerId)} &gt; ${UI.esc(command)}</div>`;
           const result = await API.sendCommand(playerId, command);
-          if (result.actionId) state.recentActionIds.add(result.actionId);
+          if (result.actionId) UI.rememberBoundedId(state.recentActionIds, result.actionId);
           const summary = result.mechanicalSummary || 'OK';
           if (messages) messages.innerHTML += `<div class="dm-ai-msg ai">${UI.esc(summary)}</div>`;
           if (playerId === state.currentPlayerId) UI.appendStoryEntry(result, result.success ? 'success' : 'failure');
@@ -339,7 +339,7 @@
       if (!playerId || !command || !ensureAdmin()) return;
       try {
         const result = await API.sendCommand(playerId, command);
-        if (result.actionId) state.recentActionIds.add(result.actionId);
+        if (result.actionId) UI.rememberBoundedId(state.recentActionIds, result.actionId);
         appendOverviewMessage(`${playerId} > ${command}`);
         appendOverviewMessage(result.mechanicalSummary || 'OK');
         if (playerId === state.currentPlayerId) UI.appendStoryEntry(result, result.success ? 'success' : 'failure');
@@ -721,8 +721,9 @@
 
     list.innerHTML = state.llmModels.map((id) => {
       const isActive = id === state.llmActive;
-      return `<div class="llm-model-card${isActive ? ' active' : ''}" data-llm-model="${id}">
-        <span class="model-id">${id}</span>
+      const safeId = UI.esc(id);
+      return `<div class="llm-model-card${isActive ? ' active' : ''}" data-llm-model="${safeId}">
+        <span class="model-id">${safeId}</span>
         ${isActive ? '<span class="model-badge">Active</span>' : '<button class="btn btn-primary btn-sm">Use This Model</button>'}
       </div>`;
     }).join('');
@@ -872,7 +873,7 @@
       if (destinationMode === 'blind' && selectedBlindStorylineId) {
         try {
           const launchResult = await API.sendCommand(player.id, `adventure start ${selectedBlindStorylineId}`);
-          if (launchResult.actionId) state.recentActionIds.add(launchResult.actionId);
+          if (launchResult.actionId) UI.rememberBoundedId(state.recentActionIds, launchResult.actionId);
           UI.appendStoryEntry(launchResult, launchResult.success ? 'success' : 'failure');
           await afterCommand(player.id, launchResult);
         } catch (error) {
@@ -1017,7 +1018,7 @@
 
     try {
       const result = await API.sendCommand(state.currentPlayerId, command);
-      if (result.actionId) state.recentActionIds.add(result.actionId);
+      if (result.actionId) UI.rememberBoundedId(state.recentActionIds, result.actionId);
       UI.appendStoryEntry(result, result.success ? 'success' : 'failure');
       await afterCommand(state.currentPlayerId, result);
     } catch (error) {
@@ -1046,7 +1047,7 @@
 
     try {
       const result = await API.sendCommand(playerId, command);
-      if (result.actionId) state.recentActionIds.add(result.actionId);
+      if (result.actionId) UI.rememberBoundedId(state.recentActionIds, result.actionId);
       UI.appendActivity('admin-command-log', result.mechanicalSummary || 'No response summary.', result.success ? 'success' : 'failure');
       if (playerId === state.currentPlayerId) {
         UI.appendStoryEntry(result, result.success ? 'success' : 'failure');
@@ -1072,7 +1073,7 @@
     for (const command of commands) {
       try {
         const result = await API.sendCommand(playerId, command);
-        if (result.actionId) state.recentActionIds.add(result.actionId);
+        if (result.actionId) UI.rememberBoundedId(state.recentActionIds, result.actionId);
         UI.appendActivity('workflow-log', `${playerId} > ${command}`, 'info');
         UI.appendActivity('workflow-log', result.mechanicalSummary || 'No response summary.', result.success ? 'success' : 'failure');
 

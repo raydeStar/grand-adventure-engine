@@ -517,7 +517,7 @@ const UI = {
     // Deduplicate: skip if this entry was already rendered
     const id = entry.actionId || entry.id;
     if (id && this._renderedActionIds.has(id)) return;
-    if (id) this._renderedActionIds.add(id);
+    if (id) this.rememberBoundedId(this._renderedActionIds, id);
 
     this._appendStoryNode(entry, tone, true);
 
@@ -734,13 +734,40 @@ const UI = {
 
     this._streamNode = parentNode;
 
+    // finishStream must run at most once per stream. It can be reached four ways — natural
+    // completion, click-to-skip, _cancelStreaming() when the next command is sent, and the
+    // reduced-motion shortcut — and a second run would append trailingHtml (mechanical summary
+    // and dice rolls) to the entry a second time and unlock the input mid-stream of a newer
+    // command. `settled` makes every later call a no-op.
+    let settled = false;
+
+    // Declared up front so finishStream can detach it; assigned below.
+    let skipHandler = null;
+
     const finishStream = () => {
+      if (settled) return;
+      settled = true;
+
       if (this._streamTimer) {
         clearTimeout(this._streamTimer);
         this._streamTimer = null;
       }
-      this._streamNode = null;
-      this._finishStreaming = null;
+
+      // Only surrender the shared stream slot if it still belongs to this stream. A stale
+      // finish must not null out a newer stream's node or re-enable its input.
+      const isCurrentStream = this._finishStreaming === finishStream;
+      if (isCurrentStream) {
+        this._streamNode = null;
+        this._finishStreaming = null;
+      }
+
+      // Retire the click-to-skip affordance — the entry is complete, so further clicks
+      // have nothing left to skip.
+      if (skipHandler) {
+        parentNode.removeEventListener('click', skipHandler);
+        skipHandler = null;
+      }
+      parentNode.style.cursor = '';
 
       // Show full text with formatting
       textSpan.innerHTML = UI.formatNarration(text);
@@ -756,6 +783,8 @@ const UI = {
         }
       }
 
+      if (!isCurrentStream) return;
+
       // Re-enable input
       if (input) {
         input.disabled = false;
@@ -767,10 +796,7 @@ const UI = {
     this._finishStreaming = finishStream;
 
     // Click-to-skip on the narration node
-    const skipHandler = () => {
-      finishStream();
-      parentNode.removeEventListener('click', skipHandler);
-    };
+    skipHandler = () => finishStream();
     parentNode.addEventListener('click', skipHandler);
     parentNode.style.cursor = 'pointer';
 
@@ -785,8 +811,6 @@ const UI = {
         this._streamTimer = setTimeout(tick, 22);
       } else {
         finishStream();
-        parentNode.removeEventListener('click', skipHandler);
-        parentNode.style.cursor = '';
       }
     };
 
@@ -2062,6 +2086,20 @@ const UI = {
       .replace(/\b\w/g, (char) => char.toUpperCase());
   },
 
+  // Records an id in a Set while keeping it bounded. These sets exist only to de-duplicate the
+  // most recent turns, but entries are removed lazily (or never, if the matching SignalR echo
+  // never arrives), so an unbounded Set grows for the whole session. Sets iterate in insertion
+  // order, which makes the oldest entry the first one out.
+  rememberBoundedId(set, id, limit = 200) {
+    if (!set || !id) return;
+    set.add(id);
+    while (set.size > limit) {
+      const oldest = set.values().next();
+      if (oldest.done) break;
+      set.delete(oldest.value);
+    }
+  },
+
   esc(value) {
     if (value === null || value === undefined) return '';
     return String(value)
@@ -2080,12 +2118,14 @@ const UI = {
 
   _summarizeCounts(entities) {
     if (!entities.length) return '';
-    const counts = {};
+    // A Map, not a plain object: entity names come from the narrator, and one that collides with
+    // an Object.prototype key ("constructor", "__proto__") would corrupt or silently drop the tally.
+    const counts = new Map();
     for (const ent of entities) {
       const name = typeof ent === 'string' ? ent : (ent.name || ent.title || ent.label || 'Unknown');
-      counts[name] = (counts[name] || 0) + (ent.quantity || 1);
+      counts.set(name, (counts.get(name) || 0) + (ent.quantity || 1));
     }
-    return Object.entries(counts)
+    return Array.from(counts)
       .map(([name, count]) => count > 1 ? `${this.esc(name)} (x${count})` : this.esc(name))
       .join(', ');
   },
@@ -2111,12 +2151,34 @@ const UI = {
     const mode = this._interactionMode || 'explore';
 
     if (mode === 'conversation') {
+      // Offer the other people in the room as one-click targets. Working out that you can simply
+      // address someone else is the hardest part of leaving a conversation, so make it visible
+      // rather than something the player has to guess at.
+      const others = (room?.npcs || [])
+        .map((npc) => (typeof npc === 'string' ? npc : npc?.name))
+        .filter((name) => name && name !== this._interactionTarget)
+        .slice(0, 3);
+
       container.innerHTML = [
         ['ask about rumors', 'ask about rumors'],
         ['flirt', 'flirt'],
         ['threaten', 'threaten'],
         ['trade', 'trade'],
+        ...others.map((name) => [`talk to ${name}`, `talk to ${name}`]),
         ['goodbye', 'goodbye']
+      ].map(([label, cmd]) =>
+        `<button class="btn btn-secondary btn-sm exit-chip interaction-chip" data-interaction-cmd="${this.esc(cmd)}" type="button">${this.esc(label)}</button>`
+      ).join('');
+      return;
+    }
+
+    if (mode === 'trading') {
+      // Trading previously fell through to the explore branch, so a player at a counter saw
+      // movement chips and nothing that would close the shop.
+      container.innerHTML = [
+        ['browse', 'shop'],
+        ['inventory', 'inventory'],
+        ['done', 'done']
       ].map(([label, cmd]) =>
         `<button class="btn btn-secondary btn-sm exit-chip interaction-chip" data-interaction-cmd="${this.esc(cmd)}" type="button">${this.esc(label)}</button>`
       ).join('');
