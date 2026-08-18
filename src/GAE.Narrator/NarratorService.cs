@@ -2529,7 +2529,7 @@ public class NarratorService : INarratorService
 
         // Use streaming to avoid stalls with models that freeze on non-streamed requests (e.g. Gemma 3).
         // SSE streaming forces token-by-token generation and gives us early stall detection.
-        var httpRequest = new HttpRequestMessage(HttpMethod.Post, "v1/chat/completions")
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, "v1/chat/completions")
         {
             Content = JsonContent.Create(request, options: _jsonOptions)
         };
@@ -2630,7 +2630,7 @@ public class NarratorService : INarratorService
             _logger.LogInformation("Ollama {Operation} request payload: {Payload}", operation, JsonSerializer.Serialize(request, _jsonOptions));
         }
 
-        var httpRequest = new HttpRequestMessage(HttpMethod.Post, "api/chat")
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, "api/chat")
         {
             Content = JsonContent.Create(request, options: _jsonOptions)
         };

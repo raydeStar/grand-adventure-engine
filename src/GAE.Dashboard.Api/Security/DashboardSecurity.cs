@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.Extensions.Options;
@@ -71,6 +73,10 @@ public interface IDashboardAuthService
 public sealed class DashboardAuthService : IDashboardAuthService
 {
     private static readonly DashboardAuthOptions DefaultOptions = new();
+
+    // Stand-in compared against when the submitted username matches no account. Never a valid
+    // credential — it only exists to keep the failure path's timing identical to the success path.
+    private const string DecoyPassword = "gae-unknown-account-decoy-not-a-credential";
     private readonly IOptionsMonitor<DashboardAuthOptions> _optionsMonitor;
 
     public DashboardAuthService(IOptionsMonitor<DashboardAuthOptions> optionsMonitor)
@@ -78,14 +84,32 @@ public sealed class DashboardAuthService : IDashboardAuthService
         _optionsMonitor = optionsMonitor;
     }
 
+    /// <summary>
+    /// Validates a login. The password comparison is fixed-time and still runs when the username
+    /// is unknown, so response timing does not reveal which usernames exist.
+    /// </summary>
     public DashboardAccount? ValidateCredentials(string username, string password)
     {
         var account = GetAccounts().FirstOrDefault(candidate =>
             string.Equals(candidate.Username, username?.Trim(), StringComparison.OrdinalIgnoreCase));
 
-        return account is not null && string.Equals(account.Password, password, StringComparison.Ordinal)
-            ? account
-            : null;
+        // Compare against a decoy of the same shape when the account is missing, so both the
+        // found and not-found paths do the same work.
+        var expected = account?.Password ?? DecoyPassword;
+        var matches = FixedTimeEquals(expected, password);
+
+        return account is not null && matches ? account : null;
+    }
+
+    /// <summary>
+    /// Ordinal equality that does not short-circuit on the first differing byte. Hashing both
+    /// sides first keeps the comparison length-independent as well.
+    /// </summary>
+    private static bool FixedTimeEquals(string expected, string? candidate)
+    {
+        var expectedHash = SHA256.HashData(Encoding.UTF8.GetBytes(expected));
+        var candidateHash = SHA256.HashData(Encoding.UTF8.GetBytes(candidate ?? string.Empty));
+        return CryptographicOperations.FixedTimeEquals(expectedHash, candidateHash);
     }
 
     public IReadOnlyList<DashboardLoginHint> GetLoginHints(bool includePasswords)

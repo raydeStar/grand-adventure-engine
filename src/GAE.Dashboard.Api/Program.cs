@@ -40,10 +40,16 @@ var configDir = Path.Combine(builder.Environment.ContentRootPath, "..", "..", "c
 if (builder.Environment.IsProduction() && Directory.Exists("/app/config"))
     configDir = "/app/config";
 
+// Appending sources puts them above everything CreateBuilder already registered, so the
+// command line has to be re-added last to keep the conventional precedence:
+// command line > environment variables > appsettings.{Environment}.json > appsettings.json.
+// Without the final AddCommandLine, config/appsettings.json silently outranks any
+// --Key=Value override an operator passes on the command line.
 builder.Configuration
     .AddJsonFile(Path.Combine(configDir, "appsettings.json"), optional: true, reloadOnChange: true)
     .AddJsonFile(Path.Combine(configDir, $"appsettings.{builder.Environment.EnvironmentName}.json"), optional: true, reloadOnChange: true)
-    .AddEnvironmentVariables();
+    .AddEnvironmentVariables()
+    .AddCommandLine(args);
 
 // Load game rules from YAML
 var rulesPath = Path.Combine(configDir, "game-rules.yaml");
