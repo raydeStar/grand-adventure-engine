@@ -4,6 +4,13 @@
  * Decoupled from app state: it's just a self-removing overlay.
  */
 (function () {
+  console.info(
+    '%c GRAND ADVENTURE ENGINE %c rules-first AI adventure ',
+    'background:#33ff66;color:#050505;font-weight:700;padding:4px 8px;',
+    'border:1px solid #33ff66;color:#88cc88;padding:3px 8px;'
+  );
+  console.info('%cSir Thaddeus: The wards are sealed. Your decisions, regrettably, remain your own.', 'color:#ccaa33');
+
   var screen = document.getElementById('boot-screen');
   if (!screen) return;
   var log = document.getElementById('boot-log');
@@ -25,9 +32,11 @@
   var lines = [
     'power-on self test',
     'loading world registry',
+    'checking dice for signs of treachery',
     'waking the narrator',
     'restoring persistent state',
-    'establishing realtime link'
+    'establishing realtime link',
+    'polishing improbable consequences'
   ];
 
   var i = 0;

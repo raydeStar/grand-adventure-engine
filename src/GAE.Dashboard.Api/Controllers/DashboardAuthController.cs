@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace GAE.Dashboard.Api.Controllers;
 
@@ -46,6 +47,7 @@ public class DashboardAuthController : ControllerBase
     }
 
     [AllowAnonymous]
+    [EnableRateLimiting("dashboard-login")]
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] DashboardLoginRequest request)
     {

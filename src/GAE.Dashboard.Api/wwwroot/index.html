@@ -5,7 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Grand Adventure Engine — AI-Narrated Text Adventure RPG</title>
   <meta name="description" content="Self-hosted AI-narrated text adventure RPG. Type actions in plain English; real dice, quests, and persistent worlds decide what happens." />
+  <meta name="robots" content="noindex, nofollow" />
   <meta name="theme-color" content="#0a0f0a" />
+  <meta name="color-scheme" content="dark" />
   <meta property="og:type" content="website" />
   <meta property="og:title" content="Grand Adventure Engine" />
   <meta property="og:description" content="Self-hosted AI-narrated text adventure RPG for Discord and the web. Real dice, quests, and persistent worlds — powered by your own local LLM." />
@@ -14,14 +16,9 @@
   <meta property="og:image:height" content="640" />
   <meta name="twitter:card" content="summary_large_image" />
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=26" />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.7/signalr.min.js"
-          crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script src="https://cdn.jsdelivr.net/npm/rot-js@2/dist/rot.min.js"
-          crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <link rel="stylesheet" href="css/style.css?v=29" />
+  <script src="vendor/signalr-10.0.11.min.js?v=10.0.11"></script>
+  <script src="vendor/rot-2.2.1.min.js?v=2.2.1"></script>
 </head>
 <body data-theme="green">
   <div id="boot-screen" class="boot-screen" aria-hidden="true">
@@ -242,6 +239,7 @@
               </form>
               <div id="exit-chips" class="exit-chips"></div>
               <div class="quick-commands">
+                <button class="btn btn-spark btn-sm" id="btn-adventure-spark" type="button" title="Suggest a dramatic action without sending it">✦ spark</button>
                 <button class="btn btn-secondary btn-sm qcmd" data-cmd="look" type="button">look</button>
                 <button class="btn btn-secondary btn-sm qcmd" data-cmd="inventory" type="button">inventory</button>
                 <button class="btn btn-secondary btn-sm qcmd" data-cmd="journal" type="button">journal</button>
@@ -776,11 +774,11 @@
     </main>
   </div>
 
-  <script src="js/boot.js?v=1"></script>
+  <script src="js/boot.js?v=2"></script>
   <script src="js/api.js?v=8"></script>
   <script src="js/signalr-client.js?v=3"></script>
   <script src="js/room-map.js?v=3"></script>
-  <script src="js/ui.js?v=29"></script>
-  <script src="js/app.js?v=27"></script>
+  <script src="js/ui.js?v=31"></script>
+  <script src="js/app.js?v=28"></script>
 </body>
 </html>

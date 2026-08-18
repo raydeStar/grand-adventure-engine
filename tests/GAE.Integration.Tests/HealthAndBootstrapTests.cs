@@ -30,6 +30,19 @@ public class HealthAndBootstrapTests : IClassFixture<GaeWebApplicationFactory>
     }
 
     [Fact]
+    public async Task Responses_IncludeBrowserSecurityHeaders()
+    {
+        var response = await _anonymousClient.GetAsync("/");
+        response.EnsureSuccessStatusCode();
+
+        Assert.Equal("nosniff", response.Headers.GetValues("X-Content-Type-Options").Single());
+        Assert.Equal("DENY", response.Headers.GetValues("X-Frame-Options").Single());
+        Assert.Equal("no-referrer", response.Headers.GetValues("Referrer-Policy").Single());
+        Assert.Contains("default-src 'self'", response.Headers.GetValues("Content-Security-Policy").Single());
+        Assert.Contains("frame-ancestors 'none'", response.Headers.GetValues("Content-Security-Policy").Single());
+    }
+
+    [Fact]
     public async Task HealthLive_ReturnsAlive()
     {
         var response = await _anonymousClient.GetAsync("/health/live");

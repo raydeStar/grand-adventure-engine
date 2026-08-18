@@ -1,0 +1,58 @@
+name: Production Gate
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out the engine
+        uses: actions/checkout@v4
+
+      - name: Install .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Restore pinned browser dependencies
+        run: npm ci
+
+      - name: Verify vendored offline assets
+        run: |
+          npm run vendor:web
+          git diff --exit-code
+
+      - name: Audit JavaScript dependencies
+        run: npm audit --audit-level=high
+
+      - name: Restore, build, and test .NET
+        run: |
+          dotnet restore GrandAdventureEngine.slnx
+          dotnet build GrandAdventureEngine.slnx --configuration Release --no-restore
+          dotnet test GrandAdventureEngine.slnx --configuration Release --no-build --logger "console;verbosity=normal"
+
+      - name: Audit .NET dependencies
+        shell: pwsh
+        run: |
+          $output = dotnet list GrandAdventureEngine.slnx package --vulnerable --include-transitive
+          $output
+          if ($output -match 'has the following vulnerable packages') {
+            throw 'Vulnerable NuGet packages crossed the production gate.'
+          }
+
+      - name: Build the production image
+        run: docker build --tag grand-adventure-engine:ci .

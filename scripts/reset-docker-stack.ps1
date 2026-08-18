@@ -13,17 +13,35 @@ param(
 Assert-Tool -Name 'docker'
 $projectRoot = Get-ProjectRoot -ScriptRoot $PSScriptRoot
 
+Write-GaeBanner
+
+# Validate the effective Production configuration before stopping anything.
+# Missing or unsafe secrets leave the current stack untouched.
+$composeConfig = Get-ComposeResolvedConfig -ProjectRoot $projectRoot
+Assert-ProductionDashboardSecrets -ComposeConfig $composeConfig
+
 # Tear down first — this frees our own ports before we probe availability.
 Write-Host 'Stopping docker compose stack while preserving data volumes...'
 Invoke-Compose -ProjectRoot $projectRoot -Arguments @('down', '--remove-orphans')
 
-# Always use 8181 unless explicitly overridden via -GaePort.
-# Do NOT read GAE_HOST_PORT from the environment — a previous run may have
-# polluted it with an auto-resolved port like 8182.
-$resolvedGaePort = if ($PSBoundParameters.ContainsKey('GaePort')) { $GaePort } else { 8181 }
+# Prefer 8181 unless explicitly overridden via -GaePort. Do not inherit a stale
+# GAE_HOST_PORT from an earlier run; choose a nearby free port when needed.
+$preferredGaePort = if ($PSBoundParameters.ContainsKey('GaePort')) { $GaePort } else { 8181 }
 
 # Brief pause to let the OS release the port after docker down
 Start-Sleep -Seconds 2
+
+if ($PSBoundParameters.ContainsKey('GaePort') -and (Test-TcpPortListening -Port $preferredGaePort)) {
+    $owner = Get-TcpPortOwnerSummary -Port $preferredGaePort
+    throw "Requested GAE host port $preferredGaePort is already in use by $owner."
+}
+
+$resolvedGaePort = if ($PSBoundParameters.ContainsKey('GaePort')) {
+    $preferredGaePort
+}
+else {
+    Resolve-AvailableTcpPort -PreferredPort $preferredGaePort -ServiceName 'GAE dashboard'
+}
 
 $BaseUrl = Resolve-BaseUrl -BaseUrl $BaseUrl -FallbackUrl "http://localhost:$resolvedGaePort"
 
@@ -73,8 +91,8 @@ if (-not $SkipWait) {
 if ($ReseedContent) {
     Write-Host 'Re-seeding rooms via reset-world...'
     try {
-        $adminUser = Get-DefaultValue -Value $env:GAE_DASHBOARD_ADMIN_USERNAME -Fallback 'admin'
-        $adminPass = Get-DefaultValue -Value $env:GAE_DASHBOARD_ADMIN_PASSWORD -Fallback 'GAE-Admin-Local!123'
+        $adminUser = Get-ComposeServiceEnvironmentValue -ComposeConfig $composeConfig -ServiceName 'gae' -VariableName 'DashboardAuth__Admin__Username'
+        $adminPass = Get-ComposeServiceEnvironmentValue -ComposeConfig $composeConfig -ServiceName 'gae' -VariableName 'DashboardAuth__Admin__Password'
         $session = New-DashboardSession -BaseUrl $BaseUrl -Username $adminUser -Password $adminPass
 
         $null = Invoke-RestMethod `

@@ -20,11 +20,12 @@ services:
       LmStudio__ContextLength: "${LM_STUDIO_CONTEXT_LENGTH:-}"
       LmStudio__Think: "${LM_STUDIO_THINK:-}"
       DashboardAuth__User__Username: "${GAE_DASHBOARD_USER_USERNAME:-user}"
-      DashboardAuth__User__Password: "${GAE_DASHBOARD_USER_PASSWORD:-}"
+      DashboardAuth__User__Password: "${GAE_DASHBOARD_USER_PASSWORD:?Set GAE_DASHBOARD_USER_PASSWORD in .env}"
       DashboardAuth__Admin__Username: "${GAE_DASHBOARD_ADMIN_USERNAME:-admin}"
-      DashboardAuth__Admin__Password: "${GAE_DASHBOARD_ADMIN_PASSWORD:-}"
+      DashboardAuth__Admin__Password: "${GAE_DASHBOARD_ADMIN_PASSWORD:?Set GAE_DASHBOARD_ADMIN_PASSWORD in .env}"
       DashboardAuth__ShowLoginPasswords: "${GAE_DASHBOARD_SHOW_LOGIN_PASSWORDS:-false}"
-      ConnectionStrings__GameDatabase: "Host=postgres;Port=5432;Database=gae;Username=gae_app;Password=${GAE_DB_PASSWORD:-gae_dev_password}"
+      DashboardAuth__LoginRateLimitPerMinute: "${GAE_AUTH_RATE_LIMIT_PER_MINUTE:-10}"
+      ConnectionStrings__GameDatabase: "Host=postgres;Port=5432;Database=gae;Username=gae_app;Password=${GAE_DB_PASSWORD:?Set GAE_DB_PASSWORD in .env}"
     volumes:
       - gae_data:/app/data
       - ./config:/app/config:ro
@@ -32,15 +33,17 @@ services:
       postgres:
         condition: service_healthy
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
 
   postgres:
     image: postgres:17
     environment:
       POSTGRES_DB: gae
       POSTGRES_USER: gae_app
-      POSTGRES_PASSWORD: ${GAE_DB_PASSWORD:-gae_dev_password}
+      POSTGRES_PASSWORD: "${GAE_DB_PASSWORD:?Set GAE_DB_PASSWORD in .env}"
     ports:
-      - "${POSTGRES_HOST_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -49,6 +52,8 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
 
 volumes:
   gae_data:

@@ -1,8 +1,8 @@
-# Grand Adventure Engine
+# Grand Adventure Engine — Self-Hosted AI Game Master & Discord Text RPG
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE) [![.NET 10](https://img.shields.io/badge/.NET-10-512BD4.svg)](https://dotnet.microsoft.com/) [![Docker](https://img.shields.io/badge/Docker-ready-2496ED.svg)](docker-compose.yml)
 
-**A self-hosted, AI-narrated text adventure game you can play in Discord or your browser.** Type what you want to do — in plain English — and an AI narrator tells you what happens, while a real game engine rolls the dice behind the scenes.
+**A self-hosted AI game master, Discord RPG bot, and browser text adventure engine.** Type what you want to do—in plain English—and a dramatic narrator tells you what happens while a rules-first game engine rolls the dice, tracks the world, and makes every consequence stick.
 
 ![Grand Adventure Engine — self-hosted, rules-first, local-LLM-ready text adventure RPG](docs/images/social-preview.png)
 
@@ -16,7 +16,13 @@ Most AI storytelling apps are improv: the AI makes everything up as it goes, and
 - **People remember you.** NPCs track how you've treated them and only know the lore they should plausibly know. The innkeeper doesn't know the dragon's weakness — but someone out there does.
 - **Play where your friends are.** Run it as a Discord bot for your server, use the retro terminal-style web dashboard, or both at once.
 - **Many worlds, one engine.** Each world can carry its own rules, lore, quests, portals, and NPC relationships.
-- **Yours, entirely.** Self-hosted, open source, and built to run against local AI models (LM Studio or Ollama) — no required cloud AI subscription, no data leaving your machine.
+- **Yours, entirely.** Self-hosted, open source, and built for local AI models through LM Studio or Ollama. With a local narrator, gameplay prompts stay on your machine; Codex CLI narration is available as an explicit opt-in provider.
+
+## The included adventure: Moonfall
+
+This is not an empty engine wearing a handsome terminal. The bundled fantasy campaign spans **40 authored rooms and 22 quests**, from Stonewake's uneasy streets to elemental temples, the Void Throne, and Moonfall—a crooked midnight carnival full of games, bargains, monsters, and people who know more than they ought.
+
+A curious player can reasonably spend **3–6 hours** following quest chains, exploring optional locations, talking to NPCs, trading, fighting multi-enemy encounters, and trying free-form solutions the quest writer did not anticipate. That is a design estimate, not a speedrun guarantee; clever players remain a threat to all schedules.
 
 ## Screens
 
@@ -44,16 +50,15 @@ New player? Start with the **[Player Guide](docs/player-guide.md)**.
 
 ## Run it yourself
 
-You'll need [Docker Desktop](https://www.docker.com/products/docker-desktop/), the [.NET 10 SDK](https://dotnet.microsoft.com/download), and a local AI backend ([LM Studio](https://lmstudio.ai/) or [Ollama](https://ollama.com/)). A Discord bot token is optional — only needed for Discord play.
+You'll need [Docker Desktop](https://www.docker.com/products/docker-desktop/) and a local AI backend such as [LM Studio](https://lmstudio.ai/) or [Ollama](https://ollama.com/). The [.NET 10 SDK](https://dotnet.microsoft.com/download) is only required for source builds. A Discord bot token is optional—only needed for Discord play.
 
 ```powershell
-dotnet build GrandAdventureEngine.slnx
 Copy-Item .env.example .env
-notepad .env   # set your passwords and AI backend
+notepad .env   # set unique dashboard + database passwords and your AI backend
 powershell -ExecutionPolicy Bypass -File .\scripts\reset-docker-stack.ps1
 ```
 
-Then open the dashboard at `http://localhost:8181` and sign in (`user` / `GAE-User-Local!123` by default — change the defaults before exposing anything beyond your machine).
+Then open the dashboard at `http://localhost:8181` and sign in with the credentials you placed in `.env`. The Production stack refuses blank, short, shared, or published demo dashboard passwords before it stops any running containers.
 
 The full walkthrough, including Discord setup and AI backend configuration, is in the **[Self-Hosting Setup Guide](docs/setup-guide.md)**.
 
@@ -71,7 +76,7 @@ The full walkthrough, including Discord setup and AI backend configuration, is i
 | --- | --- |
 | `src/GAE.Core` | Models and shared interfaces |
 | `src/GAE.Engine` | Game rules, command parsing, quests, combat, persistence |
-| `src/GAE.Narrator` | LM Studio, Ollama, and OpenAI-compatible narrator integration |
+| `src/GAE.Narrator` | LM Studio, Ollama, OpenAI-compatible, and opt-in Codex CLI narration |
 | `src/GAE.Dashboard.Api` | ASP.NET Core API, SignalR hub, and static dashboard |
 | `src/GAE.Discord` | Discord bot service |
 | `config` | Rules, lore, quests, monsters, classes, races, and item seeds |
@@ -92,8 +97,9 @@ Browser tests expect a running app; prefer the `:safe` Playwright scripts when u
 
 ## Good to know
 
-- **Bundled content:** the included worlds, quests, and items are original demo content. Audit or replace them before running a long-lived public server.
-- **Security:** never commit real `.env` files, Discord tokens, or connection strings — and rotate any token that was ever committed. Default passwords are for local development only. Keep `GAE_DASHBOARD_SHOW_LOGIN_PASSWORDS=false` outside private demos, and put the dashboard behind proper network controls before exposing it to the internet.
+- **Release boundary:** the current security model is intended for a solo player or a trusted group. A signed-in player account may resume any character by ID; this is not yet a hostile public multi-tenant service.
+- **Security:** never commit `.env`, Discord tokens, or connection strings—and rotate any secret that was ever committed. Keep `GAE_DASHBOARD_SHOW_LOGIN_PASSWORDS=false`, terminate TLS at a trusted reverse proxy, and review [Known Gaps](docs/known-gaps.md) before exposing the game to the public internet.
+- **Offline dashboard:** fonts, the SignalR client, and the map renderer are vendored locally. Run `npm ci && npm run vendor:web` when refreshing those pinned browser dependencies.
 
 ## License
 

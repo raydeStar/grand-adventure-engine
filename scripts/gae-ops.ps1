@@ -1,6 +1,15 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+function Write-GaeBanner {
+    Write-Host '  ____                     _      _       _                 ' -ForegroundColor Green
+    Write-Host ' / ___|_ __ __ _ _ __   __| |    / \   __| |_   _____ _ __ ' -ForegroundColor Green
+    Write-Host '| |  _| ''__/ _` | ''_ \ / _` |   / _ \ / _` \ \ / / _ \ ''__|' -ForegroundColor Green
+    Write-Host '| |_| | | | (_| | | | | (_| |  / ___ \ (_| |\ V /  __/ |   ' -ForegroundColor Green
+    Write-Host ' \____|_|  \__,_|_| |_|\__,_| /_/   \_\__,_| \_/ \___|_|   ' -ForegroundColor Green
+    Write-Host 'Sir Thaddeus: Checking the wards before anyone touches the dramatic lever.' -ForegroundColor DarkYellow
+}
+
 function Get-ProjectRoot {
     param(
         [Parameter(Mandatory)]
@@ -249,4 +258,77 @@ function Clear-DirectoryContents {
     }
 
     Get-ChildItem -LiteralPath $Path -Force | Remove-Item -Recurse -Force
+}
+
+function Get-ComposeResolvedConfig {
+    param(
+        [Parameter(Mandatory)]
+        [string]$ProjectRoot
+    )
+
+    Push-Location $ProjectRoot
+    try {
+        $json = & docker compose config --format json
+        if ($LASTEXITCODE -ne 0) {
+            throw "docker compose config failed with exit code $LASTEXITCODE. No containers were changed."
+        }
+
+        return ($json | ConvertFrom-Json)
+    }
+    finally {
+        Pop-Location
+    }
+}
+
+function Get-ComposeServiceEnvironmentValue {
+    param(
+        [Parameter(Mandatory)]
+        [object]$ComposeConfig,
+
+        [Parameter(Mandatory)]
+        [string]$ServiceName,
+
+        [Parameter(Mandatory)]
+        [string]$VariableName
+    )
+
+    $service = $ComposeConfig.services.PSObject.Properties[$ServiceName].Value
+    if ($null -eq $service) {
+        throw "Compose service '$ServiceName' was not found."
+    }
+
+    $property = $service.environment.PSObject.Properties[$VariableName]
+    if ($null -eq $property) {
+        return $null
+    }
+
+    return [string]$property.Value
+}
+
+function Assert-ProductionDashboardSecrets {
+    param(
+        [Parameter(Mandatory)]
+        [object]$ComposeConfig
+    )
+
+    $userPassword = Get-ComposeServiceEnvironmentValue -ComposeConfig $ComposeConfig -ServiceName 'gae' -VariableName 'DashboardAuth__User__Password'
+    $adminPassword = Get-ComposeServiceEnvironmentValue -ComposeConfig $ComposeConfig -ServiceName 'gae' -VariableName 'DashboardAuth__Admin__Password'
+    $knownDefaults = @('GAE-User-Local!123', 'GAE-Admin-Local!123')
+
+    foreach ($credential in @(
+        @{ Name = 'GAE_DASHBOARD_USER_PASSWORD'; Value = $userPassword },
+        @{ Name = 'GAE_DASHBOARD_ADMIN_PASSWORD'; Value = $adminPassword }
+    )) {
+        if ([string]::IsNullOrWhiteSpace($credential.Value) -or $credential.Value.Length -lt 12) {
+            throw "$($credential.Name) must be a unique password of at least 12 characters. No containers were changed."
+        }
+
+        if ($knownDefaults -contains $credential.Value) {
+            throw "$($credential.Name) still uses a published demo password. No containers were changed."
+        }
+    }
+
+    if ($userPassword -ceq $adminPassword) {
+        throw 'Dashboard user and admin passwords must differ. No containers were changed.'
+    }
 }

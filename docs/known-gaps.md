@@ -1,87 +1,36 @@
-# Known Gaps & Future Work
+# Known Gaps & Production Boundary
 
-Identified during the Thornwall demo world playthrough. None are blockers for the demo, but all would improve the experience for a real release.
+Grand Adventure Engine is production-ready for a **single self-hosted instance used by a solo player or trusted group**. It is not yet a hostile public multi-tenant platform. This page records that boundary plainly so operators can make an informed choice instead of discovering it during a goblin-related incident.
 
----
+## Before exposing it to the public internet
 
-## 1. No Buy/Sell System (IMPLEMENTED)
+### Character ownership is shared
 
-**Current behavior:** Items sit on the ground in shops. Players `take` them for free. NPCs like Korga and Pip have personality text about being merchants, but there's no mechanical transaction.
+The regular dashboard account can resume any character when given its player ID. The engine does not yet bind characters to separate human accounts. Treat every signed-in regular user as a trusted member of the same table.
 
-**Impact:** Low for demo (everything is OP loot anyway). High for a real game — economy matters.
+**Needed for public multi-tenancy:** individual user accounts, player-to-owner records, ownership checks on player APIs and SignalR subscriptions, recovery flows, and an audit trail for ownership changes.
 
-**What's needed:**
-- `ProcessBuyAsync` / `ProcessSellAsync` action handlers in GameEngine
-- NPC `IsShopkeeper` flag with a `ShopInventory` separate from room items (so loot doesn't vanish when someone takes it)
-- Gold deduction on buy, gold gain on sell (probably at reduced value)
-- Price display when looking at shop items
-- Haggle mechanic — CHA persuade check to lower prices (already have the social check infrastructure)
-- Pip's "shameless haggler" personality should make haggling harder, Korga's "will give discounts to people who impress her" should make it easier
+### One application instance is the supported topology
 
----
+PostgreSQL persists game state, but SignalR delivery and several runtime coordinators are process-local. Running multiple application replicas without a backplane and distributed coordination can produce incomplete live updates or competing background work.
 
-## 2. Potions Are Narrator-Driven (IMPLEMENTED)
+**Needed for high availability:** a SignalR backplane, distributed locks for seed/bootstrap work, cross-instance cache invalidation, and load tests against the chosen deployment topology.
 
-**Current behavior:** `use potion` falls through to free-form AI processing. The narrator *should* read the item's `Effect` field ("Restores 30 HP") and return `statChanges: { "hp": 30 }`, but this depends entirely on the LLM understanding the item's effect string and doing the right thing. Small models frequently get this wrong.
+### TLS terminates outside the application
 
-**Impact:** Medium. Players may use a potion and not get healed, or get healed for the wrong amount. Especially bad mid-combat.
+The provided Docker stack serves HTTP. Put it behind a trusted HTTPS reverse proxy before allowing remote access. Keep the database port firewalled from untrusted networks even when its password is strong.
 
-**What's needed:**
-- Dedicated `ProcessUseAsync` handler that intercepts consumable items
-- Parse the `Effect` field mechanically (regex patterns like `Restores (\d+) HP`)
-- Apply HP/MP changes directly in the engine, not through the narrator
-- Remove the item from inventory (decrement quantity)
-- Pass the mechanical result to the narrator for flavor text only
-- Fallback: if the effect string can't be parsed, fall through to narrator as today
+### Public Discord servers need moderation policy
 
----
+The engine simulates free-form player input and sends it to the configured narrator. It does not provide a complete public-community moderation, abuse reporting, or per-user quota system. Discord permissions, narrator safety settings, retention policy, and acceptable-use rules remain operator responsibilities.
 
-## 3. Combat Is 1v1 Only (IMPLEMENTED)
+## Operational realities
 
-**Current behavior:** `attack <target>` targets one NPC. If a room has Vex AND a Cultist, you fight them one at a time. The other hostile NPCs just... wait their turn politely.
+- Narration quality and latency depend heavily on the selected model, context size, and hardware. The deterministic game continues with contextual local fallbacks when the narrator is unavailable, but prose quality will differ.
+- Back up both the PostgreSQL volume and `/app/data` before upgrades. Restore tests are an operator responsibility; an untested backup is merely an optimistic file.
+- The bundled campaign is authored and playable, but AI narration makes the exact route and duration variable. Test your chosen model before inviting a crowd.
+- Codex CLI narration is intentionally opt-in and may incur cloud usage, cost, and substantially higher latency than a local backend.
 
-**Impact:** Medium. Breaks immersion in multi-enemy rooms. The cultist shrine fight should feel like a dangerous ambush, not a queue.
+## Closed gaps
 
-**What's needed:**
-- Initiative system using existing `CombatState` model (already has `TurnOrder` list and `CombatParticipant`)
-- All hostile NPCs in the room join combat when any one is attacked
-- Turn-based combat: player turn, then each enemy turn (using `CurrentTurnIndex` cycling)
-- Enemy AI: each NPC attacks the player on their turn using their own `AttackBonus` / `DamageDice`
-- Player can choose which enemy to target each turn
-- When an enemy dies, remove from turn order and continue
-- Fleeing should still work (escape the whole encounter)
-
-**Existing infrastructure:** `CombatState`, `CombatParticipant`, `CombatPhase`, and `InitiativeFormula` are all defined in models and game-rules.yaml — just not wired up.
-
----
-
-## 4. Take + Equip Is Two Commands (IMPLEMENTED)
-
-**Current behavior:** `take thunderstrike blade` adds to inventory. `equip thunderstrike blade` equips from inventory. Two separate actions.
-
-**Impact:** Low. Standard RPG flow, just slightly clunky for a text adventure where typing speed matters.
-
-**What's needed:**
-- Option A: Auto-equip on take if the slot is empty and the item is equippable (IMPLEMENTED)
-- Option B: Support compound command `take and equip thunderstrike blade`
-- Option C: `CommandParser` recognizes `grab` / `wield` / `don` as take-and-equip variants
-- Probably Option A is best — auto-equip when the slot is empty, prompt "You found X. Equip it? (currently using Y)" when the slot is occupied
-
----
-
-## 5. Shield/Helmet Defense (FIXED)
-
-**Was:** Defense formula only included Armor, ignoring Shield and Helmet `ArmorValue`.
-
-**Status:** Fixed in commit `61e9b89`. Defense now includes all three equipment slots.
-
----
-
-## Priority Order
-
-| Gap | Effort | Impact | Priority |
-|-----|--------|--------|----------|
-| Mechanical potion use | Small | High (combat reliability) | **P1** — DONE |
-| Multi-enemy combat | Large | High (immersion) | **P2** — DONE |
-| Buy/sell system | Medium | Medium (economy) | **P3** — DONE |
-| Auto-equip on take | Small | Low (QoL) | **P4** — DONE |
+The earlier demo audit identified mechanical item use, multi-enemy combat, trading, and auto-equip. All four are implemented and covered by the current engine tests. They remain here only as a modest reminder that old gap lists should not become archaeology exhibits.

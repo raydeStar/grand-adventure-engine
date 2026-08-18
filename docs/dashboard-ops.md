@@ -3,10 +3,10 @@
 ## Local access
 
 - Browser URL: `http://localhost:8181` by default. `reset-docker-stack.ps1` automatically falls forward to another free port and prints the actual URL when `8181` is already in use.
-- User account: `user`
-- User password: `GAE-User-Local!123`
-- Admin account: `admin`
-- Admin password: `GAE-Admin-Local!123`
+- User account: the `GAE_DASHBOARD_USER_USERNAME` value from `.env` (`user` is the suggested name)
+- User password: the unique `GAE_DASHBOARD_USER_PASSWORD` value from `.env`
+- Admin account: the `GAE_DASHBOARD_ADMIN_USERNAME` value from `.env` (`admin` is the suggested name)
+- Admin password: the distinct `GAE_DASHBOARD_ADMIN_PASSWORD` value from `.env`
 
 Override any of those through Docker environment variables or configuration keys:
 
@@ -31,6 +31,10 @@ if ([string]::IsNullOrWhiteSpace($base)) {
 }
 
 $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+$adminPassword = $env:GAE_DASHBOARD_ADMIN_PASSWORD
+if ([string]::IsNullOrWhiteSpace($adminPassword)) {
+  throw 'Set GAE_DASHBOARD_ADMIN_PASSWORD before running this example.'
+}
 
 Invoke-RestMethod "$base/api/dashboard/auth/login" `
   -Method Post `
@@ -38,7 +42,7 @@ Invoke-RestMethod "$base/api/dashboard/auth/login" `
   -ContentType 'application/json' `
   -Body (@{
     username = 'admin'
-    password = 'GAE-Admin-Local!123'
+    password = $adminPassword
   } | ConvertTo-Json)
 
 Invoke-RestMethod "$base/api/dashboard/admin/summary" -WebSession $session

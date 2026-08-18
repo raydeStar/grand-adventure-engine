@@ -75,6 +75,11 @@ test.describe('Grand Adventure Engine dashboard', () => {
     // Room name is theme-dependent; just verify the player spawned in a real room.
     await expect(page.locator('#room-name')).not.toBeEmpty();
 
+    const storyCountBeforeSpark = await page.locator('#story-log .story-entry').count();
+    await page.locator('#btn-adventure-spark').click();
+    await expect(page.locator('#command-input')).not.toHaveValue('');
+    await expect(page.locator('#story-log .story-entry')).toHaveCount(storyCountBeforeSpark);
+
     await page.locator('#command-input').fill('look');
     await page.getByRole('button', { name: 'Send' }).click();
     await expect(page.locator('#command-input')).toBeDisabled({ timeout: 3_000 });
@@ -229,6 +234,35 @@ test.describe('Grand Adventure Engine dashboard', () => {
     expect(result.joined).toBeFalsy();
     expect(result.realtimeEnabled).toBeFalsy();
     expect(result.statusEvents).toContain('polling');
+  });
+
+  test('admin event log treats player IDs and summaries as text, never markup', async ({ page }) => {
+    await login(page, 'admin');
+
+    await page.evaluate(() => {
+      UI.renderEventLog([{
+        typeName: 'SystemMessage',
+        timestamp: new Date().toISOString(),
+        playerId: '\"><img src=x onerror="window.__eventLogXss=true">',
+        summary: '<svg onload="window.__eventLogXss=true">untrusted summary</svg>'
+      }], '');
+      UI.renderRegistryList('items', [{
+        id: '\"><img src=x onerror="window.__registryXss=true">',
+        name: 'Untrusted Trinket',
+        tags: []
+      }]);
+    });
+
+    await expect(page.locator('#event-log-list img, #event-log-list svg')).toHaveCount(0);
+    await expect(page.locator('#event-log-list')).toContainText('<img src=x');
+    await expect(page.locator('#event-log-list')).toContainText('<svg onload=');
+    await expect(page.locator('#registry-list img, #registry-list svg')).toHaveCount(0);
+    await expect(page.locator('#registry-list .registry-entry')).toHaveAttribute(
+      'data-registry-id',
+      '\"><img src=x onerror="window.__registryXss=true">'
+    );
+    expect(await page.evaluate(() => window.__eventLogXss === true)).toBeFalsy();
+    expect(await page.evaluate(() => window.__registryXss === true)).toBeFalsy();
   });
 
   test('user can accept, review, and abandon a seeded quest through the dashboard', async ({ page }, testInfo) => {

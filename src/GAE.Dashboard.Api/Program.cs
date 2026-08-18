@@ -16,8 +16,10 @@ using GAE.Narrator;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.RateLimiting;
 using System.Diagnostics;
 using System.Net.Http.Headers;
+using System.Threading.RateLimiting;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
@@ -212,6 +214,32 @@ builder.Services.AddAuthorization(options =>
         policy.RequireAuthenticatedUser().RequireRole(DashboardRoles.Admin));
 });
 
+var configuredLoginAttemptLimit = builder.Configuration.GetValue<int?>("DashboardAuth:LoginRateLimitPerMinute");
+var loginAttemptLimit = builder.Environment.IsEnvironment("Test")
+    ? 1_000
+    : Math.Clamp(configuredLoginAttemptLimit ?? 10, 1, 10_000);
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("dashboard-login", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                AutoReplenishment = true,
+                PermitLimit = loginAttemptLimit,
+                QueueLimit = 0,
+                Window = TimeSpan.FromMinutes(1)
+            }));
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        context.HttpContext.Response.ContentType = "application/json";
+        await context.HttpContext.Response.WriteAsJsonAsync(
+            new { error = "Too many login attempts. Even the most suspicious portcullis needs a minute." },
+            cancellationToken);
+    };
+});
+
 // CORS for dashboard client
 builder.Services.AddCors(options =>
 {
@@ -326,15 +354,53 @@ using (var seedScope = app.Services.CreateScope())
 var worldBootstrap = app.Services.GetRequiredService<WorldBootstrapService>();
 await worldBootstrap.EnsureDefaultWorldAsync(gameRules);
 
+if (app.Environment.IsProduction())
+{
+    app.UseExceptionHandler(errorApp =>
+    {
+        errorApp.Run(async context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            context.Response.ContentType = "application/problem+json";
+            await context.Response.WriteAsJsonAsync(new
+            {
+                type = "about:blank",
+                title = "The engine encountered an unexpected fault.",
+                status = StatusCodes.Status500InternalServerError,
+                detail = "The incident was recorded without exposing the machinery behind the curtain."
+            });
+        });
+    });
+}
+
+app.Use(async (context, next) =>
+{
+    var headers = context.Response.Headers;
+    headers.XContentTypeOptions = "nosniff";
+    headers.XFrameOptions = "DENY";
+    headers["Referrer-Policy"] = "no-referrer";
+    headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
+    headers.ContentSecurityPolicy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' ws: wss:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'";
+    await next();
+});
+
 app.UseDefaultFiles();
 app.UseStaticFiles(new StaticFileOptions
 {
     OnPrepareResponse = ctx =>
     {
-        ctx.Context.Response.Headers.CacheControl = "no-cache, no-store";
+        var request = ctx.Context.Request;
+        var immutableAsset = request.Query.ContainsKey("v")
+            || request.Path.StartsWithSegments("/fonts")
+            || request.Path.StartsWithSegments("/vendor");
+        ctx.Context.Response.Headers.CacheControl = immutableAsset
+            ? "public, max-age=31536000, immutable"
+            : "no-cache, no-store";
     }
 });
+app.UseRouting();
 app.UseCors();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseMiddleware<WorldContextMiddleware>();
 app.UseAuthorization();
@@ -356,7 +422,8 @@ app.MapGet("/health/ready", async (IStateManager sm) =>
     }
     catch (Exception ex)
     {
-        return Results.Json(new { status = "not-ready", error = ex.Message }, statusCode: 503);
+        var error = app.Environment.IsDevelopment() ? ex.Message : "Dependency check failed.";
+        return Results.Json(new { status = "not-ready", error }, statusCode: 503);
     }
 });
 
@@ -377,7 +444,8 @@ app.MapGet("/health/db", async (IServiceProvider sp) =>
     }
     catch (Exception ex)
     {
-        return Results.Json(new { status = "unhealthy", service = "postgres", error = ex.Message }, statusCode: 503);
+        var error = app.Environment.IsDevelopment() ? ex.Message : "Dependency check failed.";
+        return Results.Json(new { status = "unhealthy", service = "postgres", error }, statusCode: 503);
     }
 });
 
@@ -407,12 +475,16 @@ app.MapGet("/health/narrator", async (HttpClient httpClient) =>
     }
     catch (Exception ex)
     {
-        narratorHealthCache = Results.Json(new { status = "degraded", service = lmProvider, error = ex.Message, note = "Narration will use fallback text" }, statusCode: 503);
+        var error = app.Environment.IsDevelopment() ? ex.Message : "Narrator health check failed.";
+        narratorHealthCache = Results.Json(new { status = "degraded", service = lmProvider, error, note = "Narration will use fallback text" }, statusCode: 503);
     }
 
     narratorHealthCacheExpiry = DateTimeOffset.UtcNow.AddSeconds(60);
     return narratorHealthCache;
 });
+
+app.Lifetime.ApplicationStarted.Register(() =>
+    app.Logger.LogInformation("Grand Adventure Engine is ready. The dice are awake, the wards are sealed, and poor decisions may now commence."));
 
 app.Run();
 

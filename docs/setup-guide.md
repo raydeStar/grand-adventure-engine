@@ -127,8 +127,8 @@ GAE_DASHBOARD_ADMIN_PASSWORD=replace-with-a-different-admin-secret
 GAE_HOST_PORT=8181
 POSTGRES_HOST_PORT=5432
 
-# ── Database (optional — default works for local dev) ──
-GAE_DB_PASSWORD=gae_dev_password
+# ── Database (required by the Production Docker stack) ──
+GAE_DB_PASSWORD=replace-with-a-third-unique-secret
 ```
 
 > **Security note:** Production startup rejects missing, short, shared, or bundled demo passwords. Use unique values of
@@ -144,12 +144,13 @@ powershell -ExecutionPolicy Bypass -File .\scripts\reset-docker-stack.ps1
 ```
 
 This script:
-1. Stops any existing containers (preserves data volumes).
-2. Rebuilds the `gae` application image.
-3. Starts PostgreSQL and waits for it to be healthy.
-4. Starts the game engine container.
-5. Waits for the health endpoint to respond.
-6. Prints the dashboard URL.
+1. Resolves the Compose configuration and rejects missing or unsafe secrets without changing running containers.
+2. Stops any existing project containers while preserving data volumes.
+3. Rebuilds the `gae` application image.
+4. Starts PostgreSQL and waits for it to be healthy.
+5. Starts the game engine container.
+6. Waits for the health endpoint to respond.
+7. Prints the dashboard URL.
 
 **First run note:** The first build takes a few minutes to download base images and compile. Subsequent runs are much faster thanks to Docker layer caching.
 

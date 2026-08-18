@@ -2064,9 +2064,12 @@ const UI = {
 
   esc(value) {
     if (value === null || value === undefined) return '';
-    const div = document.createElement('div');
-    div.textContent = String(value);
-    return div.innerHTML;
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   },
 
   formatNarration(text) {
@@ -3031,16 +3034,24 @@ const UI = {
     const timeStr = ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     const icon = this._eventTypeIcons[entry.typeName] || '📌';
 
-    div.innerHTML =
-      `<span class="event-log-time">${timeStr}</span>` +
-      `<span class="event-log-icon">${icon}</span>` +
-      `<span class="event-log-player" title="${entry.playerId}">${entry.playerId || '—'}</span>` +
-      `<span class="event-log-summary" title="${this._escapeHtml(entry.summary)}">${this._escapeHtml(entry.summary)}</span>`;
+    const appendText = (className, value, title) => {
+      const span = document.createElement('span');
+      span.className = className;
+      span.textContent = value;
+      if (title) span.title = title;
+      div.appendChild(span);
+    };
+
+    const playerId = entry.playerId || '—';
+    const summary = entry.summary || '';
+    appendText('event-log-time', timeStr);
+    appendText('event-log-icon', icon);
+    appendText('event-log-player', playerId, entry.playerId || '');
+    appendText('event-log-summary', summary, summary);
     return div;
   },
 
   _escapeHtml(text) {
-    if (!text) return '';
-    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    return this.esc(text);
   }
 };

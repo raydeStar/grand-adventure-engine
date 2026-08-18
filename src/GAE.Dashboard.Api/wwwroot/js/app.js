@@ -28,7 +28,8 @@
     selectedWorld: null,
     selectedWorldPlayers: [],
     eventLog: [],
-    eventLogFilter: ''
+    eventLogFilter: '',
+    adventureSparkIndex: 0
   };
 
   // C# InteractionMode enum serializes as int — map to lowercase strings
@@ -142,6 +143,7 @@
     bind('create-form', 'submit', handleCreateCharacter);
     bind('command-input', 'keydown', handleCommandKeydown);
     bind('command-form', 'submit', handleUserCommand);
+    bindOptional('btn-adventure-spark', 'click', suggestAdventureSpark);
     bind('admin-command-form', 'submit', handleAdminCommand);
     bindOptional('room-fixture-form', 'submit', handleRoomFixtureMutation);
     bindOptional('btn-send-msg', 'click', () => void handleSendMessage());
@@ -936,6 +938,59 @@
   async function handleUserCommand(event) {
     event.preventDefault();
     await executeUserCommand();
+  }
+
+  // Offers a context-aware nudge without auto-submitting; chaos should remain consensual.
+  function suggestAdventureSpark() {
+    const input = UI.$('command-input');
+    const button = UI.$('btn-adventure-spark');
+    if (!input || input.disabled || !state.currentPlayerId) return;
+
+    const target = state.interactionTarget?.trim();
+    const room = state.currentRoom || {};
+    const npc = (room.npcs || []).find(candidate => candidate?.name)?.name;
+    const item = (room.items || []).find(candidate => candidate?.name)?.name;
+    const exit = Object.keys(room.exits || {})[0];
+    const optionsByMode = {
+      conversation: [
+        `ask ${target || 'them'} what everyone here is afraid to say aloud`,
+        `tell ${target || 'them'} one uncomfortable truth and watch their reaction`,
+        `ask ${target || 'them'} what bargain they would make if no one else could hear`
+      ],
+      combat: [
+        `feint high, use the room against ${target || 'my opponent'}, and strike when they overcommit`,
+        `study ${target || 'my opponent'} for a weakness before committing to the next blow`,
+        'turn the nearest object into an improvised advantage'
+      ],
+      trading: [
+        'ask what item has a story its owner would rather forget',
+        'offer a favor instead of coin and negotiate the dangerous details',
+        'inspect the strangest thing for sale and ask why it has not sold'
+      ],
+      stealth: [
+        'pause, listen for a breathing pattern, then move between the sounds',
+        'create a small distraction somewhere I do not intend to go',
+        'study the shadows for the route nobody is watching'
+      ]
+    };
+
+    const exploreOptions = [
+      npc ? `ask ${npc} what everyone here is afraid to say aloud` : 'search for the detail everyone else missed',
+      item ? `inspect ${item} for a hidden history` : 'listen for something that does not belong here',
+      exit ? `listen at the ${exit} passage before moving` : 'look for a way forward that is not an obvious door',
+      'do something kind, reckless, and unexpectedly useful'
+    ];
+    const options = optionsByMode[state.interactionMode] || exploreOptions;
+    const suggestion = options[state.adventureSparkIndex % options.length];
+    state.adventureSparkIndex++;
+
+    input.value = suggestion;
+    input.focus();
+    input.setSelectionRange(suggestion.length, suggestion.length);
+    if (button) {
+      button.textContent = '✦ sparked';
+      window.setTimeout(() => { button.textContent = '✦ spark'; }, 900);
+    }
   }
 
   async function executeUserCommand() {
