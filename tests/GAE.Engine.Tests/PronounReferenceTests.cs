@@ -143,6 +143,33 @@ public class PronounReferenceTests
         Assert.DoesNotContain(player.Inventory, i => i.Name.Contains("Torch", StringComparison.OrdinalIgnoreCase));
     }
 
+    /// <summary>
+    /// The referent must be written to storage, not merely mutated in memory.
+    ///
+    /// The first version of this feature passed every other test here and still failed in the real
+    /// game: action handlers save the player before the referent is recorded, so the change was lost.
+    /// InMemoryStateManager hands back the same object reference, which hid the bug — this test
+    /// re-reads through the state manager and compares against a detached copy to catch it.
+    /// </summary>
+    [Fact]
+    public async Task TheReferentIsPersisted_NotJustHeldInMemory()
+    {
+        var stateManager = await SeedAsync();
+        var engine = CreateEngine(stateManager, CreateNarrator().Object);
+
+        await engine.ProcessActionAsync(PlayerId, engine.ParseCommand(PlayerId, "examine the discarded torch"));
+
+        // Round-trip through serialisation, the way the real store does, so an in-memory-only
+        // mutation cannot masquerade as a saved one.
+        var stored = await stateManager.GetPlayerAsync(PlayerId);
+        var roundTripped = System.Text.Json.JsonSerializer.Deserialize<PlayerCharacter>(
+            System.Text.Json.JsonSerializer.Serialize(stored));
+
+        Assert.False(string.IsNullOrWhiteSpace(roundTripped!.Interaction.LastReferent),
+            "The referent did not survive serialisation, so it would be lost by a real state manager.");
+        Assert.Contains("torch", roundTripped.Interaction.LastReferent!, StringComparison.OrdinalIgnoreCase);
+    }
+
     // ── Harness ──
 
     private static async Task<InMemoryStateManager> SeedAsync()

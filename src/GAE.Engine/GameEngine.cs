@@ -112,8 +112,19 @@ public class GameEngine : IGameEngine
 
         // Remember what was named so the next turn can refer back to it. Only on success: a target
         // the engine could not find is a poor thing to resolve future pronouns to.
+        //
+        // This has to be written back explicitly. The action handlers have already saved the player
+        // by this point, so mutating the in-memory copy here would be lost — which it was, silently,
+        // because the in-memory state manager used by tests hands back the same object reference
+        // while the real store does not.
         if (result.Success)
+        {
+            var previousReferent = player.Interaction.LastReferent;
             player.Interaction.RememberReferent(action.Target);
+
+            if (!string.Equals(previousReferent, player.Interaction.LastReferent, StringComparison.Ordinal))
+                await _stateManager.SavePlayerAsync(player, ct);
+        }
 
         // Attach drained notifications to the result
         if (drainedNotifications is not null)
