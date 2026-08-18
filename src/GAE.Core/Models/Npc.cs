@@ -45,6 +45,12 @@ public class NpcDispositionState
     public List<string> MemoryFlags { get; set; } = [];
 
     /// <summary>
+    /// What this NPC remembers about this player. Serialised with the rest of the disposition state,
+    /// so it persists across conversations and sessions without a schema change.
+    /// </summary>
+    public NpcMemoryLedger Memory { get; set; } = new();
+
+    /// <summary>
     /// Drifts intensity toward baseline over elapsed time.
     /// Half-life is ~1 hour: after 1 hour, half the excess intensity has faded.
     /// Memory flags can lock a minimum/maximum intensity floor.
@@ -91,6 +97,77 @@ public class NpcDispositionState
         };
 
         return $"{intensityWord} {Emotion}";
+    }
+
+    /// <summary>
+    /// Folds a flat disposition word from the narrator back into this rich state.
+    ///
+    /// The conversation prompt asks the model for a plain word ("annoyed", "flirtatious"), and for a
+    /// long time that word was written only to <see cref="Npc.Disposition"/> — an in-memory field
+    /// that is never persisted per player. The rich state, which *is* persisted, therefore never
+    /// moved: a player could offend an NPC, walk out, come back, and be greeted as a stranger.
+    /// Mapping the word onto emotion and intensity is what makes a mood outlast the conversation.
+    /// </summary>
+    public void ApplyFlatDisposition(string? flat)
+    {
+        if (string.IsNullOrWhiteSpace(flat))
+            return;
+
+        var text = flat.Trim().ToLowerInvariant();
+
+        // Strip any leading adverb, keeping how strongly it was meant. The adverb describes the
+        // force of the emotion, not a warmth level: "overwhelmingly angry" is colder than
+        // "slightly annoyed", so it has to push further from neutral rather than higher up the scale.
+        double? adverbStrength = null;
+        foreach (var (word, strength) in new[]
+                 {
+                     ("overwhelmingly", 1.0), ("deeply", 1.0), ("very", 0.75), ("quite", 0.65),
+                     ("somewhat", 0.5), ("slightly", 0.25), ("mildly", 0.25), ("barely", 0.15)
+                 })
+        {
+            if (text.StartsWith(word + " ", StringComparison.Ordinal))
+            {
+                adverbStrength = strength;
+                text = text[(word.Length + 1)..];
+                break;
+            }
+        }
+
+        var emotion = text.Trim();
+        if (emotion.Length == 0)
+            return;
+
+        // Where each mood sits on the 0-100 scale when the narrator gives no adverb.
+        var target = emotion switch
+        {
+            "hostile" => 5,
+            "angry" => 20,
+            "contemptuous" or "disgusted" => 25,
+            "annoyed" or "suspicious" => 35,
+            "scared" or "sad" or "resigned" => 40,
+            "neutral" => 55,
+            "wary" => 45,
+            "intrigued" or "amused" or "impressed" or "flustered" => 68,
+            "friendly" or "grateful" => 72,
+            "flirtatious" => 78,
+            _ => Intensity
+        };
+
+        Emotion = emotion;
+
+        // "somewhat" is treated as the emotion's natural strength, so a stronger adverb scales the
+        // distance from neutral outward and a weaker one pulls it back toward neutral.
+        const int neutralWarmth = 55;
+        var desired = target;
+        if (adverbStrength is { } force)
+        {
+            var offset = (target - neutralWarmth) * (force / 0.5);
+            desired = (int)Math.Round(neutralWarmth + offset);
+        }
+
+        // Move decisively but not instantly, so one word cannot erase an established relationship.
+        Intensity = Math.Clamp((int)Math.Round(Intensity * 0.35 + desired * 0.65), 0, 100);
+        LastUpdated = DateTimeOffset.UtcNow;
     }
 
     /// <summary>

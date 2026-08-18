@@ -1052,6 +1052,13 @@ public class NarratorService : INarratorService
             ? string.Join(", ", npc.DispositionState.MemoryFlags)
             : "none";
 
+        // What this NPC carries from previous conversations with this player. Rendered compactly —
+        // a handful of lines rather than transcripts — because it is prompt budget on a local model.
+        var priorMemory = npc.DispositionState.Memory.BuildPromptBlock(player.Name);
+        var memoryBlock = priorMemory is null
+            ? "You have never spoken with this person before. Treat them as a stranger."
+            : priorMemory;
+
         var narratorVoice = ResolveNarratorVoice(player);
         var systemPrompt = $$"""
             You are now voicing {{npc.Name}} in direct conversation with the player.
@@ -1127,6 +1134,13 @@ public class NarratorService : INarratorService
             - Faction: {{npc.Faction}}
             - Current Disposition: {{interaction.NpcDisposition ?? npc.Disposition}}
             The personality above contains FACTS about this NPC — names they know, events they lived through, skills they have. When the player asks about these topics, the NPC should draw from these details and share them naturally in dialogue.
+
+            WHAT THIS NPC REMEMBERS ABOUT THIS PLAYER:
+            {{memoryBlock}}
+            This history is binding. Do not greet a returning player as a stranger, do not re-offer
+            something already promised, and do not present as fresh news anything already discussed.
+            If you owe them something, pay it off when they ask rather than deflecting again.
+            Hearsay is hazy: reference it as something heard, never as something witnessed.
 
             NARRATOR ASIDES:
             You may include brief narrator observations as italicized asides to give the player insight
@@ -1429,6 +1443,13 @@ public class NarratorService : INarratorService
                 : $"{name} laughs under their breath and waves the moment onward. \"You are strange company, {playerName}, but strange company often survives. Say the next thing plainly and I will answer plainly.\"";
         }
 
+        // Ground the reply in who this NPC actually is before falling back to generic wisdom. These
+        // lines are what players see whenever the narrator is unreachable, so a town drunk must not
+        // sound like a travelling oracle.
+        var grounded = BuildPersonalityGroundedFallback(npc, playerName, rawInput);
+        if (grounded is not null)
+            return grounded;
+
         var pick = Math.Abs(HashCode.Combine(name, rawInput));
         return (pick % 4) switch
         {
@@ -1437,6 +1458,60 @@ public class NarratorService : INarratorService
             2 => $"{name} shifts their stance, still engaged. \"You are circling something real, {playerName}. Name the piece you care about most and I will give you the angle I trust.\"",
             _ => $"{name} lets out a small, dry sound. \"Fine, {playerName}, here is my read: trust actions over titles, debts over promises, and anyone who looks too relaxed in a bad place least of all.\"",
         };
+    }
+
+    /// <summary>
+    /// Builds an offline reply that uses the NPC's own personality and their memory of this player.
+    ///
+    /// Returns null when there is nothing distinctive to work with, letting the caller fall through
+    /// to the generic pool. This is not a canned response in the forbidden sense: it is assembled
+    /// from this specific NPC's authored traits, outstanding debts, and shared history.
+    /// </summary>
+    private static string? BuildPersonalityGroundedFallback(Npc npc, string playerName, string rawInput)
+    {
+        var memory = npc.DispositionState.Memory;
+
+        // An unpaid debt outranks everything else the NPC could say.
+        var owed = memory.OpenPromises.FirstOrDefault();
+        if (owed is not null)
+        {
+            return $"{npc.Name} catches themselves mid-sentence, remembering what is owed. \"I know, {playerName}, I know — I said I would come good on that. Ask me straight and I will not dodge it twice.\"";
+        }
+
+        var traits = ExtractPersonalityTraits(npc.Personality);
+        if (traits.Count == 0)
+            return null;
+
+        var trait = traits[Math.Abs(HashCode.Combine(npc.Id, rawInput)) % traits.Count];
+        var recalled = memory.Entries
+            .OrderByDescending(e => e.IsCore)
+            .ThenByDescending(e => e.Weight)
+            .FirstOrDefault();
+
+        if (recalled is not null && memory.EncounterCount > 0)
+        {
+            return $"{npc.Name} looks at you like someone already placed. \"We have done this before, {playerName}. {trait} Say what you actually came to say.\"";
+        }
+
+        return $"{npc.Name} answers in the manner of someone who cannot help being themselves. \"{trait} That is the shape of it, {playerName}. Push on whichever part interests you.\"";
+    }
+
+    /// <summary>
+    /// Splits an authored personality blurb into usable sentence-sized traits. The seeded
+    /// personalities are written as short declarative sentences, which makes them directly quotable
+    /// as an NPC's own outlook.
+    /// </summary>
+    private static List<string> ExtractPersonalityTraits(string? personality)
+    {
+        if (string.IsNullOrWhiteSpace(personality))
+            return [];
+
+        return personality
+            .Split(['.', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(part => part.Length is >= 12 and <= 120)
+            .Select(part => part.EndsWith('.') ? part : part + ".")
+            .Take(5)
+            .ToList();
     }
 
     private static bool ShouldUseTopicAwareOpening(string rawInput)

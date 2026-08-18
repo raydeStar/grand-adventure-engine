@@ -3307,8 +3307,7 @@ move_room_ready:
                 npc.Name,
                 nextNpc.Name);
 
-            await PersistWorldNpcStateAsync(npc, player.ActiveWorldId, player.Id, ct);
-            player.Interaction.Reset();
+            await ConcludeConversationAsync(player, npc, ct);
             await _stateManager.SavePlayerAsync(player, ct);
 
             return await ProcessTalkInternalAsync(player, new GameAction
@@ -3331,8 +3330,7 @@ move_room_ready:
                 player.Id,
                 npc.Name);
 
-            await PersistWorldNpcStateAsync(npc, player.ActiveWorldId, player.Id, ct);
-            player.Interaction.Reset();
+            await ConcludeConversationAsync(player, npc, ct);
             await _stateManager.SavePlayerAsync(player, ct);
             return null;
         }
@@ -3346,8 +3344,7 @@ move_room_ready:
         // Movement mid-conversation: exit cleanly (no disposition penalty for walking away)
         else if (action.Type == ActionType.Move)
         {
-            player.Interaction.Reset();
-            await PersistWorldNpcStateAsync(npc, player.ActiveWorldId, player.Id, ct);
+            await ConcludeConversationAsync(player, npc, ct);
             await _stateManager.SavePlayerAsync(player, ct);
             return null; // Let the movement continue through normal processing
         }
@@ -3380,8 +3377,7 @@ move_room_ready:
             var freeForm = await _narrator.ProcessConversationTurnAsync(player, room, npc, player.Interaction, action.RawInput, ct);
             ApplyInteractionUpdate(player, room, npc, freeForm);
 
-            player.Interaction.Reset();
-            await PersistWorldNpcStateAsync(npc, player.ActiveWorldId, player.Id, ct);
+            await ConcludeConversationAsync(player, npc, ct);
             await _stateManager.SavePlayerAsync(player, ct);
             await _stateManager.SaveRoomAsync(room, ct);
 
@@ -4123,6 +4119,10 @@ move_room_ready:
         else if (update.NpcDisposition is not null)
         {
             npc.Disposition = update.NpcDisposition;
+            // Fold the word into the rich state too. Without this the mood exists only on the
+            // in-memory flat field, which is never persisted per player, so every hard-won
+            // reaction was forgotten the moment the player walked away.
+            npc.DispositionState.ApplyFlatDisposition(update.NpcDisposition);
         }
 
         // Apply memory flags from the LLM (additive —  never remove via this path)
@@ -4150,6 +4150,96 @@ move_room_ready:
 
         foreach (var contextEntry in update.Context)
             player.Interaction.AppendContext(contextEntry);
+
+        RecordConversationMemory(player, room, npc, update);
+    }
+
+    /// <summary>
+    /// Turns a conversation turn into memory the NPC keeps. Memory flags become permanent core
+    /// recollections; ordinary turns contribute topics so an NPC does not re-announce old news.
+    /// Significant moments also leak to nearby and same-faction NPCs as hazier hearsay.
+    /// </summary>
+    private static void RecordConversationMemory(PlayerCharacter player, Room room, Npc npc, InteractionUpdate update)
+    {
+        var memory = npc.DispositionState.Memory;
+
+        foreach (var flag in update.MemoryFlags.Where(f => !string.IsNullOrWhiteSpace(f)))
+        {
+            var normalized = flag.Trim().TrimStart('!').ToLowerInvariant();
+            var (summary, isCore, weight) = DescribeMemoryFlag(normalized, player.Name);
+            memory.Remember(new NpcMemoryEntry
+            {
+                Summary = summary,
+                Weight = weight,
+                IsCore = isCore,
+                Source = NpcMemorySource.Direct
+            });
+
+            if (isCore)
+                SpreadGossip(room, npc, player, normalized);
+        }
+
+        // Context lines the narrator returns describe what just happened; the first is the most
+        // useful as a topic marker.
+        foreach (var line in update.Context.Take(2))
+            memory.NoteTopic(ExtractTopic(line));
+    }
+
+    /// <summary>Maps a memory flag to how the NPC would recall it, and how permanently.</summary>
+    private static (string Summary, bool IsCore, int Weight) DescribeMemoryFlag(string flag, string playerName) => flag switch
+    {
+        "romance" => ($"{playerName} and I became close — there is something between us.", true, 95),
+        "friendship" => ($"{playerName} earned my trust; I count them a friend.", true, 85),
+        "betrayal" => ($"{playerName} betrayed me. I have not forgotten it.", true, 95),
+        "crime-witnessed" => ($"I saw {playerName} commit a crime with my own eyes.", true, 90),
+        "helped-in-battle" => ($"{playerName} stood beside me when it turned violent.", true, 85),
+        "insulted" => ($"{playerName} insulted me to my face.", false, 60),
+        "flirted" => ($"{playerName} made their interest in me plain.", false, 55),
+        _ => ($"Something passed between {playerName} and me: {flag}.", false, 40)
+    };
+
+    /// <summary>
+    /// Leaks a significant act to NPCs who share the room or the faction, at reduced weight and
+    /// explicitly marked as hearsay. Insult the barkeep and the regular grows wary without knowing
+    /// the details; the town feels connected without pretending to simulate every conversation.
+    /// </summary>
+    private static void SpreadGossip(Room room, Npc source, PlayerCharacter player, string flag)
+    {
+        var (summary, _, weight) = DescribeMemoryFlag(flag, player.Name);
+
+        var listeners = room.Npcs.Where(n =>
+            n.Id != source.Id
+            && (!string.IsNullOrWhiteSpace(source.Faction)
+                && source.Faction != "neutral"
+                && string.Equals(n.Faction, source.Faction, StringComparison.OrdinalIgnoreCase)
+                || room.Npcs.Contains(n)));
+
+        foreach (var listener in listeners)
+        {
+            listener.DispositionState.Memory.Remember(new NpcMemoryEntry
+            {
+                // Hearsay is attributed, never presented as first-hand knowledge.
+                Summary = $"Word from {source.Name}: {summary}",
+                Weight = Math.Max(15, weight / 3),
+                IsCore = false,
+                Source = NpcMemorySource.Gossip
+            });
+        }
+    }
+
+    /// <summary>Reduces a narrator context line to a short topic marker.</summary>
+    private static string? ExtractTopic(string? line)
+    {
+        if (string.IsNullOrWhiteSpace(line)) return null;
+
+        var text = line.Trim();
+        // Context lines often arrive as "Turn 3: player asked about the mine." — keep the tail.
+        var colon = text.IndexOf(':');
+        if (colon >= 0 && colon < text.Length - 1)
+            text = text[(colon + 1)..].Trim();
+
+        var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return words.Length <= 8 ? text.TrimEnd('.') : string.Join(' ', words.Take(8)).TrimEnd('.');
     }
 
     /// <summary>
@@ -4164,9 +4254,94 @@ move_room_ready:
         if (worldState is null) return;
 
         npc.DispositionState = worldState.DispositionState;
+
+        // Time passing softens what was not seared in. Mood drifts toward baseline and ordinary
+        // recollections fade, while core memories — love, betrayal, a crime seen — do not.
+        var elapsed = DateTimeOffset.UtcNow - npc.DispositionState.LastUpdated;
+        npc.DispositionState.DecayTowardBaseline(elapsed);
+        npc.DispositionState.Memory.Forget(elapsed);
+
         npc.Disposition = npc.DispositionState.ToFlatDisposition();
         if (worldState.KnowledgeScopeOverrides is { Count: > 0 })
             npc.KnowledgeScopes = worldState.KnowledgeScopeOverrides;
+    }
+
+    /// <summary>
+    /// Closes out a conversation: distils what happened into lasting memory, saves the NPC's state
+    /// for this player and world, then clears the live interaction.
+    ///
+    /// This exists because <see cref="InteractionState.Reset"/> clears the context list, so ending a
+    /// conversation used to throw away everything that was said. Distilling first is what lets an
+    /// NPC greet a returning player as someone they know.
+    /// </summary>
+    private async Task ConcludeConversationAsync(PlayerCharacter player, Npc npc, CancellationToken ct)
+    {
+        DistillConversationIntoMemory(player, npc);
+        await PersistWorldNpcStateAsync(npc, player.ActiveWorldId, player.Id, ct);
+        player.Interaction.Reset();
+    }
+
+    /// <summary>
+    /// Rule-based distillation of a finished conversation. Runs instantly and always, so memory
+    /// survives even with the narrator offline; the narrator can later rewrite these lines into
+    /// something more natural without this ever having blocked the player.
+    /// </summary>
+    private static void DistillConversationIntoMemory(PlayerCharacter player, Npc npc)
+    {
+        var interaction = player.Interaction;
+        if (interaction.Mode != InteractionMode.Conversation)
+            return;
+
+        var memory = npc.DispositionState.Memory;
+        memory.EncounterCount++;
+        memory.LastSpokeAt = DateTimeOffset.UtcNow;
+
+        // How the exchange left them is the single most useful thing to carry forward.
+        var mood = npc.DispositionState.ToFlatDisposition();
+        var turns = Math.Max(1, interaction.PlayerTurnCount);
+        var reason = string.IsNullOrWhiteSpace(npc.DispositionState.Reason)
+            ? null
+            : $" ({npc.DispositionState.Reason!.Trim()})";
+
+        memory.Remember(new NpcMemoryEntry
+        {
+            Summary = turns <= 1
+                ? $"{player.Name} exchanged a few words with me; I was left {mood}{reason}."
+                : $"{player.Name} and I talked for {turns} exchanges; I was left {mood}{reason}.",
+            // A longer conversation is a more memorable one, but none of this is permanent.
+            Weight = Math.Clamp(30 + turns * 5, 30, 70),
+            IsCore = false,
+            Source = NpcMemorySource.Direct
+        });
+
+        // An offer the NPC made and did not honour becomes a debt they remember owing.
+        foreach (var line in interaction.Context)
+        {
+            if (LooksLikeUnkeptOffer(line))
+                memory.PromiseSomething(SummarizeOffer(line, player.Name));
+        }
+    }
+
+    /// <summary>
+    /// Detects an NPC offering something in exchange — the "buy me a drink and I'll talk" shape —
+    /// so the engine can hold them to it next time.
+    /// </summary>
+    private static bool LooksLikeUnkeptOffer(string? contextLine)
+    {
+        if (string.IsNullOrWhiteSpace(contextLine)) return false;
+
+        var text = contextLine.ToLowerInvariant();
+        string[] offerCues = ["i'll tell", "ill tell", "i will tell", "buy me", "promised", "in exchange",
+                              "if you bring", "if you buy", "owe you", "tell you somethin", "tell you something"];
+        return offerCues.Any(cue => text.Contains(cue, StringComparison.Ordinal));
+    }
+
+    private static string SummarizeOffer(string contextLine, string playerName)
+    {
+        var trimmed = contextLine.Trim();
+        if (trimmed.Length > 120)
+            trimmed = trimmed[..120].TrimEnd() + "...";
+        return $"Something I offered {playerName} and have not delivered: {trimmed}";
     }
 
     /// <summary>
