@@ -597,6 +597,50 @@ const UI = {
     }).join('|');
   },
 
+  /* ── Deferred narration ───────────────────────────────────────────────
+     A slow narrator returns the mechanical result immediately with a placeholder,
+     and the prose follows over SignalR. Swapping it into the existing entry keeps
+     the story log reading as one moment rather than splitting it in two. */
+  replaceDeferredNarration(actionId, narration) {
+    if (!actionId || !narration) return false;
+
+    const log = this.$('story-log');
+    if (!log) return false;
+
+    const node = log.querySelector(`.story-entry[data-action-id="${CSS.escape(String(actionId))}"]`);
+    if (!node) return false;
+
+    const cleaned = this._stripRoomMetadata(narration);
+    if (!cleaned) return false;
+
+    let target = node.querySelector('.story-narration');
+    if (!target) {
+      // The entry landed with no prose at all; give it somewhere to go, ahead of the
+      // mechanical summary so the paragraph reads first.
+      target = document.createElement('div');
+      target.className = 'story-narration';
+      const commandLine = node.querySelector('.story-command-line');
+      if (commandLine && commandLine.nextSibling) {
+        node.insertBefore(target, commandLine.nextSibling);
+      } else if (commandLine) {
+        node.appendChild(target);
+      } else {
+        node.insertBefore(target, node.firstChild);
+      }
+    }
+
+    target.innerHTML = this.formatNarration(cleaned);
+    target.classList.remove('narration-pending');
+    target.classList.add('narration-arrived');
+
+    // Only chase the bottom if the player is already reading there; yanking the view
+    // while they are scrolled up would be worse than a late paragraph.
+    const nearBottom = log.scrollHeight - (log.scrollTop + log.clientHeight) < 120;
+    if (nearBottom) log.scrollTop = log.scrollHeight;
+
+    return true;
+  },
+
   _appendStoryNode(entry, tone, animate) {
     const log = this.$('story-log');
     const node = document.createElement('div');

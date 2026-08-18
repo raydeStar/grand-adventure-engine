@@ -89,7 +89,13 @@ builder.Services.AddSingleton<IWorldRepository, EfCoreWorldRepository>();
 // Deferred narration: mechanics are delivered immediately and prose is backfilled by a worker, so a
 // slow narrator costs the player a wait they can play through rather than a stalled turn.
 builder.Services.AddSingleton<INarrationQueue, EfCoreNarrationQueue>();
+builder.Services.AddSingleton<INarrationDelivery, NarrationDelivery>();
 builder.Services.AddHostedService<NarrationBackfillService>();
+
+// How long an action waits for prose before the mechanical result is returned with a placeholder.
+// Zero disables deferral entirely and restores the old blocking behaviour.
+var narrationForegroundBudget = TimeSpan.FromSeconds(
+    Math.Clamp(builder.Configuration.GetValue<double?>("Narration:ForegroundBudgetSeconds") ?? 8, 0, 120));
 builder.Services.AddSingleton<ContentSeedService>();
 
 // File-based services — only used by DataMigrationService for one-time file→DB import
@@ -159,6 +165,23 @@ builder.Services.AddHttpClient("LmStudio", client =>
 builder.Services.AddSingleton<WorldKnowledgeBuilder>();
 builder.Services.AddSingleton<INarratorService>(sp =>
 {
+    var inner = BuildNarrator(sp);
+
+    // Deferral needs the queue, which needs the database. With no budget configured the narrator is
+    // used directly, so tests and simple setups behave exactly as before.
+    if (narrationForegroundBudget <= TimeSpan.Zero)
+        return inner;
+
+    return new DeferringNarratorService(
+        inner,
+        sp.GetRequiredService<INarrationQueue>(),
+        sp.GetRequiredService<INarrationDelivery>(),
+        sp.GetRequiredService<ILogger<DeferringNarratorService>>(),
+        narrationForegroundBudget);
+});
+
+INarratorService BuildNarrator(IServiceProvider sp)
+{
     var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("LmStudio");
     var logger = sp.GetRequiredService<ILogger<NarratorService>>();
     var knowledge = sp.GetRequiredService<WorldKnowledgeBuilder>();
@@ -167,7 +190,7 @@ builder.Services.AddSingleton<INarratorService>(sp =>
     var worldContext = sp.GetService<IWorldContext>();
     var worldRepository = sp.GetService<IWorldRepository>();
     return new NarratorService(httpClient, logger, lmStudioModel, knowledge, conversationLogger, registry, worldContext, worldRepository, lmRetryCount, lmRetryDelayMs, lmProvider, lmContextLength, lmThink, codexExecutable, codexReasoningEffort, codexTimeoutSeconds, codexWorkingDirectory, lmFallbackProviders);
-});
+}
 
 builder.Services.AddSingleton<IRealmTravelService>(sp =>
 {

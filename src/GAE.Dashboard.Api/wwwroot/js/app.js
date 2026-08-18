@@ -1909,6 +1909,18 @@
 
   function handleRealtimeGameEvent(event) {
     if (!state.currentPlayerId) return;
+
+    // Prose that was too slow to include in the response arrives later as its own event. Replace the
+    // placeholder for that action in place rather than appending a second entry, so the story log
+    // reads as one moment instead of two.
+    const deferred = event?.data?.deferredNarration || event?.data?.DeferredNarration;
+    const actionId = event?.actionId || event?.data?.actionId || event?.data?.ActionId;
+    const narration = event?.narration || event?.data?.narration || event?.data?.Narration;
+    if (deferred && actionId && narration) {
+      UI.replaceDeferredNarration(actionId, narration);
+      return;
+    }
+
     void refreshCurrentPlayer().catch((error) => handleError(error, { story: true }));
   }
 
