@@ -69,8 +69,9 @@ public partial class CommandParser
             return action;
         }
 
-        // Look / examine
-        if (LookRegex().IsMatch(input))
+        // Look / examine. RoomLookAliasRegex is also checked here because orientation questions
+        // ("where am i", "exits") do not start with a look verb but mean exactly the same thing.
+        if (LookRegex().IsMatch(input) || RoomLookAliasRegex().IsMatch(input))
         {
             action.Type = ActionType.Look;
             if (RoomLookAliasRegex().IsMatch(input))
@@ -420,6 +421,14 @@ public partial class CommandParser
             return action;
         }
 
+        // Magic words. Checked last so a homage can never shadow a real command, but before the
+        // Unknown fallthrough so these resolve instantly instead of going to the narrator.
+        if (EasterEggs.IsMagicWord(input))
+        {
+            action.Type = ActionType.MagicWord;
+            return action;
+        }
+
         action.Type = ActionType.Unknown;
         _logger.LogDebug("Could not parse command: {Input}", input);
         return action;
@@ -458,7 +467,7 @@ public partial class CommandParser
     [GeneratedRegex(@"^(?:look|l|examine|inspect|search)(?:\s|$)", RegexOptions.IgnoreCase)]
     private static partial Regex LookRegex();
 
-    [GeneratedRegex(@"^(?:l|look|look\s+around|look\s+at\s+(?:the\s+)?room|look\s+here|look\s+surroundings|examine\s+(?:the\s+)?room|inspect\s+(?:the\s+)?room|search|search\s+(?:the\s+)?room)$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^(?:l|look|look\s+around|look\s+about|look\s+at\s+(?:the\s+)?room|look\s+here|look\s+surroundings|examine\s+(?:the\s+)?room|inspect\s+(?:the\s+)?room|search|search\s+(?:the\s+)?room|where\s+am\s+i|exits?|list\s+exits|show\s+exits|where\s+can\s+i\s+go|which\s+way|what\s+is\s+here|whats\s+here|what\s+s\s+here)$", RegexOptions.IgnoreCase)]
     private static partial Regex RoomLookAliasRegex();
 
     [GeneratedRegex(@"^(?:room|the\s+room|around|here|surroundings)$", RegexOptions.IgnoreCase)]
@@ -476,7 +485,7 @@ public partial class CommandParser
     [GeneratedRegex(@"^(?:aimed?\s+(?:strike|attack|shot)|focus\s+(?:attack|strike)|precise\s+(?:strike|attack|hit))(?:\s+(?<target>.+))?$", RegexOptions.IgnoreCase)]
     private static partial Regex AimedStrikeRegex();
 
-    [GeneratedRegex(@"^(?:flee|run|escape|run\s+away|retreat|bail)$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^(?:flee|run|escape|run\s+away|running|retreat|bail|withdraw|disengage|surrender|give\s+up|yield|stop\s+fighting|stop\s+the\s+fight|end\s+(?:the\s+)?fight|back\s+off|get\s+out|get\s+away|run\s+for\s+it)$", RegexOptions.IgnoreCase)]
     private static partial Regex FleeRegex();
 
     [GeneratedRegex(@"^(?:attack|hit|strike|fight|slash)$", RegexOptions.IgnoreCase)]
@@ -503,7 +512,7 @@ public partial class CommandParser
     [GeneratedRegex(@"^(?:ability|activate|technique|skill)\s+(?<ability>.+)$", RegexOptions.IgnoreCase)]
     private static partial Regex AbilityRegex();
 
-    [GeneratedRegex(@"^(?:shop|browse|wares|merchandise|what(?:'s| is) for sale|show me (?:your |the )?(?:wares|goods|inventory|merchandise|stock|shop))$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^(?:shop|browse|wares|merchandise|goods|stock|what(?:'s| is) for sale|what do you (?:have|sell|got)|what have you got|what are you selling|show me (?:your |the )?(?:wares|goods|inventory|merchandise|stock|shop)|let me see (?:your )?(?:wares|goods|stock)|list wares)$", RegexOptions.IgnoreCase)]
     private static partial Regex ShopRegex();
 
     [GeneratedRegex(@"^(?:buy|purchase)\s+(?<target>.+)$", RegexOptions.IgnoreCase)]
@@ -527,10 +536,10 @@ public partial class CommandParser
     [GeneratedRegex(@"^rest$", RegexOptions.IgnoreCase)]
     private static partial Regex RestRegex();
 
-    [GeneratedRegex(@"^(?:inventory|inv|i|bag|backpack)$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^(?:inventory|inv|i|bag|backpack|items|gear|pack|belongings|carrying|what\s+am\s+i\s+carrying|what\s+do\s+i\s+have)$", RegexOptions.IgnoreCase)]
     private static partial Regex InventoryRegex();
 
-    [GeneratedRegex(@"^(?:stats|status|character|char|me|whoami|who\s+am\s+i)$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^(?:stats|status|character|char|me|myself|whoami|who\s+am\s+i|sheet|character\s+sheet|my\s+stats|my\s+character)$", RegexOptions.IgnoreCase)]
     private static partial Regex StatsRegex();
 
     [GeneratedRegex(@"^(?:cast|channel|invoke|conjure)\s+(?<spell>.+?)(?:\s+(?:at|on|toward|against)\s+(?<target>.+))?$", RegexOptions.IgnoreCase)]
@@ -545,7 +554,7 @@ public partial class CommandParser
     [GeneratedRegex(@"^(?:journal|quests|quest\s+log|my\s+quests|quest\s+journal|log)$", RegexOptions.IgnoreCase)]
     private static partial Regex JournalRegex();
 
-    [GeneratedRegex(@"^(?:completed|done|finished|completed\s+quests)$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^(?:completed|finished|completed\s+quests|finished\s+quests|quest\s+log)$", RegexOptions.IgnoreCase)]
     private static partial Regex CompletedQuestsRegex();
 
     [GeneratedRegex(@"^(?:quest\s+info|check\s+quest|quest)\s+(?<quest>.+)$", RegexOptions.IgnoreCase)]
@@ -560,7 +569,7 @@ public partial class CommandParser
     [GeneratedRegex(@"^(?:abandon\s+(?:quest\s+)?|drop\s+quest\s+|cancel\s+(?:quest\s+)?)(?<quest>.+)$", RegexOptions.IgnoreCase)]
     private static partial Regex AbandonQuestRegex();
 
-    [GeneratedRegex(@"^(?:help|h|\?)$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^(?:help|h|\?|\?\?|commands|command\s+list|what\s+can\s+i\s+do|what\s+do\s+i\s+do|how\s+do\s+i\s+play|what\s+are\s+my\s+options|options|controls)$", RegexOptions.IgnoreCase)]
     private static partial Regex HelpRegex();
 
     [GeneratedRegex(@"^(?:lorebook|lore\s*book|knowledge|discoveries|discovered\s+lore)$", RegexOptions.IgnoreCase)]

@@ -58,5 +58,6 @@ public enum ActionType
     CyoaEnd,
     CyoaSaveList,
     CyoaLoad,
+    MagicWord,
     Unknown
 }

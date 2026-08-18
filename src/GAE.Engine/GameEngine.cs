@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text;
 using GAE.Core.Interfaces;
 using GAE.Core.Models;
@@ -59,7 +60,37 @@ public class GameEngine : IGameEngine
     public GameAction ParseCommand(string playerId, string rawInput)
         => _parser.Parse(playerId, rawInput);
 
+    // One turn at a time per player. Every turn is a read-modify-write over the whole
+    // PlayerCharacter, so two overlapping turns each load their own copy and the second save
+    // silently discards the first player's changes — a real hazard because one player can drive the
+    // engine from the dashboard and their Discord thread at the same time, and impatient
+    // double-sends are normal. Keyed locks serialize per player without making unrelated players
+    // queue behind each other. The dictionary is bounded by the player roster, so entries are kept
+    // rather than pruned (removing a semaphore another turn is waiting on would reintroduce races).
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _playerTurnLocks =
+        new(StringComparer.OrdinalIgnoreCase);
+
     public async Task<ActionResult> ProcessActionAsync(string playerId, GameAction action, CancellationToken ct = default)
+    {
+        playerId ??= string.Empty;
+
+        var turnLock = _playerTurnLocks.GetOrAdd(playerId, _ => new SemaphoreSlim(1, 1));
+        await turnLock.WaitAsync(ct);
+        try
+        {
+            return await ProcessPlayerTurnAsync(playerId, action, ct);
+        }
+        finally
+        {
+            turnLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Runs a single player turn. Callers must hold that player's turn lock; use
+    /// <see cref="ProcessActionAsync"/> rather than calling this directly.
+    /// </summary>
+    private async Task<ActionResult> ProcessPlayerTurnAsync(string playerId, GameAction action, CancellationToken ct)
     {
         var player = await _stateManager.GetPlayerAsync(playerId, ct);
         if (player is null)
@@ -194,6 +225,7 @@ public class GameEngine : IGameEngine
             ActionType.Cast => await ProcessCastAsync(player, action, ct),
             ActionType.Spellbook => ProcessSpellbook(player, action),
             ActionType.Help => ProcessHelp(action),
+            ActionType.MagicWord => ProcessMagicWord(action),
             ActionType.Map => await ProcessMapAsync(player, action, ct),
             ActionType.Journal => ProcessJournal(player, action),
             ActionType.CompletedQuests => ProcessCompletedQuests(player, action),
@@ -2682,7 +2714,7 @@ move_room_ready:
             .SelectMany(candidate => BuildNpcMentionAliases(candidate)
                 .Select(alias => new { Npc = candidate, Alias = NormalizeLookupText(alias) }))
             .Where(entry => entry.Alias.Length >= 3
-                && LooksLikeConversationTargetSwitch(normalizedInput, entry.Alias))
+                && LooksLikeConversationTargetSwitch(normalizedInput, entry.Alias, rawInput))
             .OrderByDescending(entry => entry.Alias.Length)
             .ThenBy(entry => entry.Npc.Name.Length)
             .FirstOrDefault();
@@ -2696,28 +2728,127 @@ move_room_ready:
 
     // Limits automatic switching to explicit approach/address language so NPC names remain safe
     // to discuss during an existing conversation.
-    private static bool LooksLikeConversationTargetSwitch(string normalizedInput, string npcAlias)
+    // Verbs that direct an action AT someone. Their presence just before the target's name — or a
+    // few words before a linking preposition — is what separates "say hi to Pete" (address Pete)
+    // from "ask Mara about Pete" (still talking to Mara).
+    private static readonly HashSet<string> NpcAddressVerbs = new(StringComparer.Ordinal)
     {
-        string[] switchPhrases =
-        [
-            $"walk over to {npcAlias}",
-            $"walk to {npcAlias}",
-            $"go over to {npcAlias}",
-            $"go to {npcAlias}",
-            $"head over to {npcAlias}",
-            $"step over to {npcAlias}",
-            $"move over to {npcAlias}",
-            $"approach {npcAlias}",
-            $"turn to {npcAlias}",
-            $"talk to {npcAlias}",
-            $"speak to {npcAlias}",
-            $"say to {npcAlias}",
-            $"ask {npcAlias}",
-            $"tell {npcAlias}",
-            $"address {npcAlias}"
-        ];
+        "talk", "speak", "say", "tell", "ask", "greet", "hail", "address", "call", "chat",
+        "whisper", "shout", "yell", "wave", "nod", "bow", "smile", "gesture", "signal",
+        "turn", "approach", "walk", "go", "head", "step", "move", "sidle", "lean",
+        "sit", "stand", "slide", "scoot", "stroll", "wander", "squeeze", "settle",
+        "buy", "offer", "give", "hand", "show", "pass", "introduce", "thank", "warn", "invite",
+        "apologize", "congratulate", "compliment", "insult", "threaten", "beckon"
+    };
 
-        return switchPhrases.Any(phrase => ContainsNormalizedPhrase(normalizedInput, phrase));
+    // Prepositions that can link an address verb to its target.
+    private static readonly HashSet<string> NpcAddressPrepositions = new(StringComparer.Ordinal)
+    {
+        "to", "at", "toward", "towards", "with", "over", "near", "beside"
+    };
+
+    // Words that make a bare name a form of address rather than a topic.
+    private static readonly HashSet<string> NpcVocativeGreetings = new(StringComparer.Ordinal)
+    {
+        "hey", "hi", "hello", "yo", "greetings", "hiya", "oi", "psst", "excuse", "pardon"
+    };
+
+    // Allows a few words between the verb and the target: "say hi to Pete", "walk on over to Pete".
+    private const int MaxWordsBetweenAddressVerbAndTarget = 4;
+
+    /// <summary>
+    /// Decides whether the player is addressing <paramref name="npcAlias"/> rather than merely
+    /// mentioning them to the current conversation partner.
+    ///
+    /// Matches on sentence structure rather than a fixed phrase list, because the previous
+    /// literal-phrase approach missed everything players actually type — "say hi to Pete",
+    /// "greet Pete" and "buy Pete a drink" all fell through and were absorbed as dialogue by the
+    /// NPC the player was trying to leave.
+    /// </summary>
+    private static bool LooksLikeConversationTargetSwitch(string normalizedInput, string npcAlias, string rawInput)
+    {
+        var words = normalizedInput.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var aliasWords = npcAlias.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length == 0 || aliasWords.Length == 0)
+            return false;
+
+        // The entire turn is the NPC's name — there is nothing else it could mean.
+        if (string.Equals(normalizedInput, npcAlias, StringComparison.Ordinal))
+            return true;
+
+        // Vocative address: "Pete, what did you see?" — normalization discards the punctuation
+        // that carries this meaning, so this check reads the original text.
+        if (StartsWithVocativeAddress(rawInput, npcAlias))
+            return true;
+
+        for (var index = IndexOfAliasStart(words, aliasWords, 0);
+             index >= 0;
+             index = IndexOfAliasStart(words, aliasWords, index + 1))
+        {
+            // A leading name is either vocative (handled above) or a topic ("Pete is a liar").
+            if (index == 0)
+                continue;
+
+            var preceding = words[index - 1];
+
+            // Direct object of an address verb: "greet Pete", "ask Pete about the door",
+            // "buy Pete a drink".
+            if (NpcAddressVerbs.Contains(preceding) || NpcVocativeGreetings.Contains(preceding))
+                return true;
+
+            // Otherwise require a linking preposition plus an address verb shortly before it, so
+            // "what is wrong with Pete" and "what do you think of Pete" stay with the current NPC.
+            if (!NpcAddressPrepositions.Contains(preceding))
+                continue;
+
+            var earliestVerbIndex = Math.Max(0, index - 1 - MaxWordsBetweenAddressVerbAndTarget);
+            for (var back = index - 2; back >= earliestVerbIndex; back--)
+            {
+                if (NpcAddressVerbs.Contains(words[back]))
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// True when the raw input opens by naming the NPC and then breaks — "Pete, ..." or "Pete!" —
+    /// which is how players address someone directly.
+    /// </summary>
+    private static bool StartsWithVocativeAddress(string? rawInput, string npcAlias)
+    {
+        var trimmed = (rawInput ?? string.Empty).TrimStart();
+        if (!trimmed.StartsWith(npcAlias, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var remainder = trimmed[npcAlias.Length..].TrimStart();
+        return remainder.Length > 0 && remainder[0] is ',' or '!' or '?' or ':' or ';' or '-' or '—';
+    }
+
+    /// <summary>
+    /// Returns the index in <paramref name="words"/> where <paramref name="aliasWords"/> appears as
+    /// consecutive whole words at or after <paramref name="startIndex"/>, or -1.
+    /// </summary>
+    private static int IndexOfAliasStart(string[] words, string[] aliasWords, int startIndex)
+    {
+        for (var index = Math.Max(0, startIndex); index + aliasWords.Length <= words.Length; index++)
+        {
+            var matches = true;
+            for (var offset = 0; offset < aliasWords.Length; offset++)
+            {
+                if (!string.Equals(words[index + offset], aliasWords[offset], StringComparison.Ordinal))
+                {
+                    matches = false;
+                    break;
+                }
+            }
+
+            if (matches)
+                return index;
+        }
+
+        return -1;
     }
 
     // Identifies explicit physical departure language while avoiding figurative uses of movement
@@ -2979,24 +3110,47 @@ move_room_ready:
 
     // --- Interaction state machine ---
 
-    private static readonly HashSet<string> ConversationExitPhrases = new(StringComparer.OrdinalIgnoreCase)
+    // Short, ambiguous farewells. These end the exchange only when they are the entire message:
+    // "nothing" is a perfectly good answer to an NPC's question, and "done" appears mid-sentence.
+    private static readonly HashSet<string> ExactConversationExitPhrases = new(StringComparer.OrdinalIgnoreCase)
     {
-        "goodbye", "bye", "farewell", "leave", "walk away", "end conversation", "nevermind", "never mind",
-        "leave conversation", "stop talking", "done talking", "go away", "i'm done", "im done"
+        "goodbye", "bye", "farewell", "leave", "nevermind", "never mind", "go away",
+        "done", "nothing", "nothing else", "no thanks", "no thank you", "later", "see you",
+        "cya", "forget it", "that's all", "thats all", "that is all", "i'm done", "im done",
+        "step away", "back away", "walk away", "enough"
     };
 
+    // Phrases specific enough to recognise even with trailing words ("stop talking and follow me").
+    private static readonly string[] ConversationExitPrefixes =
+    [
+        "end conversation", "leave conversation", "stop talking", "done talking", "quit talking",
+        "stop shopping", "done shopping", "end trade", "close shop", "exit shop", "leave shop",
+        "stop trading", "thanks bye", "thank you bye"
+    ];
+
+    /// <summary>
+    /// Recognises an intent to end the current exchange.
+    ///
+    /// Matching is deliberately split: unambiguous multi-word phrases match as a prefix, while short
+    /// words must be the whole message. Prefix-matching everything meant "leave the sword on the
+    /// table" ended the conversation because it began with "leave".
+    /// </summary>
     private static bool IsExitPhrase(string input)
     {
-        var trimmed = input.Trim();
-        // Exact match first
-        if (ConversationExitPhrases.Contains(trimmed))
+        // Trailing punctuation is noise here — "goodbye!" is still goodbye.
+        var trimmed = (input ?? string.Empty).Trim().TrimEnd('.', '!', '?', ',', ';', ':');
+        if (trimmed.Length == 0)
+            return false;
+
+        if (ExactConversationExitPhrases.Contains(trimmed))
             return true;
-        // Also check if the input starts with any exit phrase (e.g. "leave conversation with")
-        foreach (var phrase in ConversationExitPhrases)
+
+        foreach (var phrase in ConversationExitPrefixes)
         {
             if (trimmed.StartsWith(phrase, StringComparison.OrdinalIgnoreCase))
                 return true;
         }
+
         return false;
     }
 
@@ -3086,13 +3240,27 @@ move_room_ready:
         ActionType.Journal, ActionType.CompletedQuests, ActionType.QuestInfo, ActionType.Map,
         ActionType.Lorebook, ActionType.LoreInfo,
         ActionType.Narrator, ActionType.SetNarrator,
-        ActionType.AcceptQuest, ActionType.TurnInQuest, ActionType.AbandonQuest
+        ActionType.AcceptQuest, ActionType.TurnInQuest, ActionType.AbandonQuest,
+        ActionType.MagicWord
+    };
+
+    // Reading your own character sheet is not an action the world gets to react to. Checking your
+    // inventory for a potion mid-fight used to consume the round and let every enemy hit you, which
+    // punished players for the exact thing a panicking player does first. These lookups are free in
+    // every mode; they consume no turn and provoke no attacks.
+    private static readonly HashSet<ActionType> FreeInfoLookups = new()
+    {
+        ActionType.Inventory, ActionType.Stats, ActionType.Spellbook, ActionType.Help,
+        ActionType.Journal, ActionType.CompletedQuests, ActionType.QuestInfo, ActionType.Map,
+        ActionType.Lorebook, ActionType.LoreInfo,
+        ActionType.Narrator, ActionType.SetNarrator,
+        ActionType.Look, ActionType.MagicWord
     };
 
     private async Task<ActionResult?> ProcessConversationTurnAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
     {
         // Let info commands pass through to normal processing without breaking conversation
-        if (PassthroughInConversation.Contains(action.Type))
+        if (PassthroughInConversation.Contains(action.Type) && !IsExitPhrase(action.RawInput))
             return null;
 
         // "talk to X" while in conversation: switch to new target (or re-greet same one)
@@ -3358,6 +3526,11 @@ move_room_ready:
 
     private async Task<ActionResult?> ProcessCombatTurnAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
     {
+        // Free lookups resolve without spending the round. Returning null keeps the player in
+        // Combat mode and lets normal processing answer the question.
+        if (FreeInfoLookups.Contains(action.Type) && !IsExitPhrase(action.RawInput))
+            return null;
+
         var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
         if (room is null) { player.Interaction.Reset(); return null; }
 
@@ -3378,7 +3551,11 @@ move_room_ready:
         }
 
         // ─── Flee ───
-        if (action.Type == ActionType.Flee)
+        // Movement counts as a flee attempt. Typing "go north" or "leave" mid-fight used to be
+        // swallowed as an unrecognised combat action: the player took a round of hits and stayed
+        // exactly where they were, with nothing explaining why. Walking out of a fight *is*
+        // fleeing, so it resolves as one — including the opportunity-attack cost.
+        if (action.Type == ActionType.Flee || action.Type == ActionType.Move)
         {
             int totalOppDamage = 0; var diceRolls = new List<DiceRoll>();
             foreach (var enemy in enemies.Where(e => e.Hp.HasValue && e.Hp.Value > 0))
@@ -3386,12 +3563,26 @@ move_room_ready:
                 { var r = _dice.Roll(enemy.DamageDice, $"{enemy.Name} opportunity attack"); totalOppDamage += Math.Max(1, r.Total); diceRolls.Add(r); }
             player.Hp = Math.Max(0, player.Hp - totalOppDamage);
             player.Interaction.Reset();
-            var escDir = room.Exits.Keys.FirstOrDefault();
+
+            // Escape through the exit the player named if they named one ("go north"), otherwise
+            // take whatever exit exists. A room with no exits leaves them cornered but out of combat.
+            var escDir = !string.IsNullOrWhiteSpace(action.Direction)
+                    && action.Direction != "auto"
+                    && room.Exits.ContainsKey(action.Direction)
+                ? action.Direction
+                : room.Exits.Keys.FirstOrDefault();
             if (escDir is not null) player.CurrentRoomId = room.Exits[escDir];
             if (combat is not null) await _stateManager.RemoveCombatStateAsync(room.Id, player.ActiveWorldId, ct);
             await _stateManager.SavePlayerAsync(player, ct);
+            var fleeSummary = totalOppDamage > 0
+                ? $"You flee! Enemies strike for {totalOppDamage} as you escape."
+                : "You flee from combat!";
+
+            // The minstrels are always watching.
+            fleeSummary += "\n" + BuildMinstrelRetreatTaunt(player.Name, action.Id);
+
             var fleeResult = new ActionResult { ActionId = action.Id, RawInput = action.RawInput, Success = true,
-                MechanicalSummary = totalOppDamage > 0 ? $"You flee! Enemies strike for {totalOppDamage} as you escape." : "You flee from combat!",
+                MechanicalSummary = fleeSummary,
                 DiceRolls = diceRolls, InteractionUpdate = new InteractionUpdate { Mode = InteractionMode.Explore, CombatStatus = "fled" } };
             await PersistInteractionStoryEntry(player, action, fleeResult, ct);
             return fleeResult;
@@ -3707,6 +3898,14 @@ move_room_ready:
                 mech.AddRange(moraleMessages);
                 if (!enemies.Any(e => e.Hp.HasValue && e.Hp.Value > 0 && room.Npcs.Contains(e)))
                     combatOver = true;
+
+                // A badly wounded enemy may refuse to acknowledge it.
+                foreach (var survivor in enemies.Where(e => e.Hp.HasValue && e.Hp.Value > 0 && room.Npcs.Contains(e)))
+                {
+                    var bravado = EasterEggs.TryBuildDefiantWoundedTaunt(
+                        survivor.Name, survivor.Hp!.Value, survivor.MaxHp ?? survivor.Hp.Value, flavorSeed + survivor.Id.Length);
+                    if (bravado is not null) mech.Add(bravado);
+                }
             }
         }
 
@@ -3740,6 +3939,9 @@ move_room_ready:
             if (rewards.Count > 0) mech.Add($"\n**Rewards:** {string.Join(" | ", rewards)}");
             var lvlUp = CheckAndApplyLevelUp(player);
             if (lvlUp is not null) mech.Add(lvlUp);
+
+            var flourish = EasterEggs.TryBuildVictoryFlourish(action.Id.GetHashCode(StringComparison.Ordinal));
+            if (flourish is not null) mech.Add(flourish);
 
             // Safety-net quest tracking for all killed enemies in case in-loop tracking was missed
             if (_questTracker is not null)
@@ -3843,7 +4045,9 @@ move_room_ready:
         var summary = $"You have been defeated by {defeatedBy}! Everything goes dark...\n" +
             $"You awaken in {spawnRoomName}, battered but alive. A kindly stranger must have dragged you to safety.\n" +
             $"\u2764\uFE0F {player.Hp}/{player.MaxHp}  \u2728 {player.Mp}/{player.MaxMp}  \U0001F4B0 {player.Gold}g\n" +
-            $"Your gear and experience are intact — but that foe still lurks out there...";
+            $"Your gear and experience are intact — but that foe still lurks out there...\n" +
+            // The dungeon keeps records, and has opinions about them.
+            EasterEggs.BuildDeathEpitaph(player.Id.GetHashCode(StringComparison.Ordinal) + player.Level);
 
         await _stateManager.SavePlayerAsync(player, ct);
         await _stateManager.SaveRoomAsync(room, ct);
@@ -5354,6 +5558,23 @@ move_room_ready:
         return sb.ToString().TrimEnd();
     }
 
+    /// <summary>
+    /// Answers a recognised magic word. These are genuine commands with real responses, not the
+    /// canned fallback the free-form path is forbidden from producing — the input is matched
+    /// exactly and the reply is written for it.
+    /// </summary>
+    private static ActionResult ProcessMagicWord(GameAction action)
+    {
+        EasterEggs.TryGetMagicWordResponse(action.RawInput, action.Id, out var response);
+        return new ActionResult
+        {
+            ActionId = action.Id,
+            RawInput = action.RawInput,
+            Success = true,
+            MechanicalSummary = response
+        };
+    }
+
     private static ActionResult ProcessHelp(GameAction action)
     {
         return new ActionResult
@@ -5361,6 +5582,14 @@ move_room_ready:
             ActionId = action.Id,
             Success = true,
             MechanicalSummary = """
+                **Feeling stuck? Start here:**
+                `goodbye` / `done` -- Leave a conversation or a shop
+                `talk to <someone else>` -- Switch who you are talking to
+                `flee` / `run` / `give up` -- Get out of a fight (enemies get a free parting hit)
+                `look` / `where am i` -- Re-orient: the room, its exits, and who is here
+                `inventory`, `stats`, `help` and the other lookups below are free -- they never cost
+                you a turn, even mid-fight.
+
                 **Available Commands:**
                 `go <direction>` -- Move north/south/east/west/up/down
                 `look` / `look at <target>` -- Examine surroundings or a specific thing
@@ -5398,6 +5627,9 @@ move_room_ready:
                 `help` -- Show this help message
 
                 You can also type anything in natural language and the narrator will try to interpret it!
+
+                Certain old words still work in certain old places. The dungeon remembers where it
+                came from, and rewards anyone who remembers with it.
                 """
         };
     }
@@ -5982,6 +6214,11 @@ move_room_ready:
     /// </summary>
     private async Task<ActionResult?> ProcessTradingTurnAsync(PlayerCharacter player, GameAction action, CancellationToken ct)
     {
+        // Checking your own gold and inventory is the whole point of standing at a counter, so these
+        // resolve normally instead of being handed to the shopkeeper as small talk.
+        if (FreeInfoLookups.Contains(action.Type) && !IsExitPhrase(action.RawInput))
+            return null;
+
         // Exit trading on farewell
         if (IsExitPhrase(action.RawInput))
         {
@@ -6001,11 +6238,14 @@ move_room_ready:
             return result;
         }
 
-        // Buy and sell still work in trading mode
+        // Buy, sell and re-listing the wares still work in trading mode. Asking "what do you have"
+        // at a counter should reprint the stock rather than be handed to the AI as small talk.
         if (action.Type == ActionType.Buy)
             return await ProcessBuyAsync(player, action, ct);
         if (action.Type == ActionType.Sell)
             return await ProcessSellAsync(player, action, ct);
+        if (action.Type == ActionType.Shop)
+            return await ProcessShopAsync(player, action, ct);
 
         // Movement exits trading
         if (action.Type == ActionType.Move)
@@ -6146,6 +6386,43 @@ move_room_ready:
             sb.AppendLine(string.Join(", ", room.Exits.Keys));
         }
         return sb.ToString().TrimEnd();
+    }
+
+    // ─── Retreat minstrels (easter egg) ─────────────────────────────────
+    //
+    // Unseen minstrels commemorate every retreat, in the grand tradition of a certain cowardly
+    // knight of Camelot. The first line is the requested homage; the rest are original so repeat
+    // fleeing keeps producing new mockery instead of the same refrain.
+    //
+    // "{0}" is the player's name. "Sir" is fixed comedic address here, applied to every character
+    // alike — it is the joke, not an assumption about anyone.
+    private static readonly string[] MinstrelRetreatTaunts = [
+        "\"Bravely bold Sir {0}, Sir {0} ran away!\"",
+        "\"Sir {0} gallantly withdrew, as brave folk sometimes do!\"",
+        "\"Sir {0} thought it best to leave — the exits were so near!\"",
+        "\"Sir {0} showed the enemy both heels, and showed them very well!\"",
+        "\"Sir {0} lived to flee another day, and fled it straight away!\"",
+        "\"Sir {0} chose discretion, valour having prior plans!\"",
+        "\"Sir {0} departed at a pace no minstrel could keep up with!\"",
+        "\"Sir {0} left the field entirely, and left it rather fast!\""
+    ];
+
+    /// <summary>
+    /// Returns the minstrel line that accompanies a retreat. The seed comes from the action id, so
+    /// the taunt is stable for a given action (replays and tests stay deterministic) while varying
+    /// between one flight and the next.
+    /// </summary>
+    private static string BuildMinstrelRetreatTaunt(string playerName, string actionId)
+    {
+        var name = string.IsNullOrWhiteSpace(playerName) ? "Knight" : playerName.Trim();
+
+        // Characters already styled "Sir Reginald" should not become "Sir Sir Reginald".
+        if (name.StartsWith("sir ", StringComparison.OrdinalIgnoreCase))
+            name = name[4..].TrimStart();
+
+        var seed = actionId is null ? 0 : actionId.GetHashCode(StringComparison.Ordinal);
+        var taunt = string.Format(PickFlavor(MinstrelRetreatTaunts, seed), name);
+        return $"🎵 {taunt}";
     }
 
     // ─── Combat Flavor (no damage numbers — HP bars tell the story) ─────
