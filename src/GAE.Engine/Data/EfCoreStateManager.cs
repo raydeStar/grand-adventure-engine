@@ -267,6 +267,24 @@ public class EfCoreStateManager : IStateManager
         await db.SaveChangesAsync(ct);
     }
 
+    /// <inheritdoc />
+    public async Task<bool> UpdateStoryNarrationAsync(string actionId, string narration, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(actionId)) return false;
+
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var entry = await db.StoryEntries
+            .Where(e => e.ActionId == actionId)
+            .OrderByDescending(e => e.Timestamp)
+            .FirstOrDefaultAsync(ct);
+
+        if (entry is null) return false;
+
+        entry.Narration = narration;
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
     public async Task<IReadOnlyList<StoryEntry>> GetStoryEntriesAsync(string? playerId = null, int limit = 50, CancellationToken ct = default)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);

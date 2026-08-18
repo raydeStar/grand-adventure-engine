@@ -137,6 +137,28 @@ public class InMemoryStateManager : IStateManager
         return Task.CompletedTask;
     }
 
+    /// <inheritdoc />
+    public Task<bool> UpdateStoryNarrationAsync(string actionId, string narration, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(actionId))
+            return Task.FromResult(false);
+
+        lock (_storyLock)
+        {
+            // Newest matching entry wins, matching the persistent implementation.
+            for (var index = _storyEntries.Count - 1; index >= 0; index--)
+            {
+                if (string.Equals(_storyEntries[index].ActionId, actionId, StringComparison.Ordinal))
+                {
+                    _storyEntries[index].Narration = narration;
+                    return Task.FromResult(true);
+                }
+            }
+        }
+
+        return Task.FromResult(false);
+    }
+
     public Task<IReadOnlyList<StoryEntry>> GetStoryEntriesAsync(string? playerId = null, int limit = 50, CancellationToken ct = default)
     {
         lock (_storyLock)

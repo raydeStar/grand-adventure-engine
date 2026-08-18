@@ -30,6 +30,14 @@ public interface IStateManager
 
     // Story operations
     Task AddStoryEntryAsync(StoryEntry entry, CancellationToken ct = default);
+
+    /// <summary>
+    /// Replaces the narration on an already-recorded story entry.
+    ///
+    /// Used when prose was deferred: the mechanical result and a placeholder were written straight
+    /// away, and the finished narration arrives later. Returns true when an entry was updated.
+    /// </summary>
+    Task<bool> UpdateStoryNarrationAsync(string actionId, string narration, CancellationToken ct = default);
     Task<IReadOnlyList<StoryEntry>> GetStoryEntriesAsync(string? playerId = null, int limit = 50, CancellationToken ct = default);
     Task<IReadOnlyList<StoryEntry>> GetRecentStoryForRoomAsync(string roomId, string worldId, int limit = 10, CancellationToken ct = default);
 

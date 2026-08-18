@@ -33,6 +33,10 @@ public class GaeDbContext : DbContext
     public DbSet<ContentRegistryEntity> ContentRegistry => Set<ContentRegistryEntity>();
     public DbSet<GameConfigEntity> GameConfig => Set<GameConfigEntity>();
 
+    /// <summary>Narration owed to players whose mechanical result has already been delivered.</summary>
+    public DbSet<GAE.Engine.Data.Configurations.PendingNarrationEntity> PendingNarrations
+        => Set<GAE.Engine.Data.Configurations.PendingNarrationEntity>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(GaeDbContext).Assembly);

@@ -111,6 +111,10 @@ public class JournaledStateManager : IStateManager
         }, ct);
     }
 
+    /// <inheritdoc />
+    public Task<bool> UpdateStoryNarrationAsync(string actionId, string narration, CancellationToken ct = default)
+        => _inner.UpdateStoryNarrationAsync(actionId, narration, ct);
+
     public async Task SaveCombatStateAsync(CombatState combat, CancellationToken ct = default)
     {
         await _inner.SaveCombatStateAsync(combat, ct);

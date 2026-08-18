@@ -85,6 +85,11 @@ builder.Services.AddDbContextFactory<GaeDbContext>((sp, options) =>
 builder.Services.AddSingleton<IStateManager, EfCoreStateManager>();
 builder.Services.AddSingleton<IConversationLogger, EfCoreConversationLogger>();
 builder.Services.AddSingleton<IWorldRepository, EfCoreWorldRepository>();
+
+// Deferred narration: mechanics are delivered immediately and prose is backfilled by a worker, so a
+// slow narrator costs the player a wait they can play through rather than a stalled turn.
+builder.Services.AddSingleton<INarrationQueue, EfCoreNarrationQueue>();
+builder.Services.AddHostedService<NarrationBackfillService>();
 builder.Services.AddSingleton<ContentSeedService>();
 
 // File-based services — only used by DataMigrationService for one-time file→DB import
