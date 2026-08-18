@@ -7,23 +7,21 @@ using GAE.Engine.State;
 namespace GAE.Dashboard.Api.Services;
 
 /// <summary>
-/// Drains the deferred-narration queue and delivers prose to players after the fact.
+/// Drains the deferred-narration queue and delivers prose that this process did not finish itself.
 ///
-/// A narrator can be slow by design — a local Codex turn at maximum reasoning effort takes tens of
-/// seconds — so the engine sends the mechanical result immediately with a placeholder and records
-/// that prose is owed. This service writes that prose and pushes it out, which is what turns a
-/// thirty-second stall into a thirty-second wait the player can play through.
+/// In the normal case the request path keeps hold of its own slow narrator call and settles the queue
+/// row when it lands, so this service has nothing to do. It exists for the cases that path cannot
+/// cover: a process that died mid-narration, and a narrator that failed and needs retrying with
+/// backoff.
 /// </summary>
 public class NarrationBackfillService : BackgroundService
 {
     private readonly INarrationQueue _queue;
     private readonly INarratorService _narrator;
-    private readonly IStateManager _stateManager;
-    private readonly IGameEventBroadcaster _broadcaster;
-    private readonly IDiscordNotifier? _discord;
+    private readonly INarrationDelivery _delivery;
     private readonly ILogger<NarrationBackfillService> _logger;
 
-    /// <summary>How long to wait when the queue is empty. Short enough to feel prompt, idle enough to be free.</summary>
+    /// <summary>How long to wait when the queue is empty. Prompt enough to feel responsive, idle enough to be free.</summary>
     private static readonly TimeSpan IdleDelay = TimeSpan.FromSeconds(2);
 
     /// <summary>An item claimed but never finished is presumed stranded after this long.</summary>
@@ -32,17 +30,13 @@ public class NarrationBackfillService : BackgroundService
     public NarrationBackfillService(
         INarrationQueue queue,
         INarratorService narrator,
-        IStateManager stateManager,
-        IGameEventBroadcaster broadcaster,
-        ILogger<NarrationBackfillService> logger,
-        IDiscordNotifier? discord = null)
+        INarrationDelivery delivery,
+        ILogger<NarrationBackfillService> logger)
     {
         _queue = queue;
         _narrator = narrator;
-        _stateManager = stateManager;
-        _broadcaster = broadcaster;
+        _delivery = delivery;
         _logger = logger;
-        _discord = discord;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -57,7 +51,7 @@ public class NarrationBackfillService : BackgroundService
             _logger.LogWarning(ex, "Could not recover stranded narrations at startup");
         }
 
-        _logger.LogInformation("Narration backfill service started; deferred prose will be delivered as it arrives");
+        _logger.LogInformation("Narration backfill service started; unfinished prose will be retried and delivered");
 
         var lastStaleSweep = DateTimeOffset.UtcNow;
 
@@ -114,7 +108,7 @@ public class NarrationBackfillService : BackgroundService
             }
 
             await _queue.CompleteAsync(pending, narration, ct);
-            await DeliverAsync(pending, narration, ct);
+            await _delivery.DeliverAsync(pending.ActionId, pending.PlayerId, pending.RoomId, narration, ct);
 
             _logger.LogInformation(
                 "Delivered deferred narration for action {ActionId} after {Elapsed:0.0}s",
@@ -128,57 +122,6 @@ public class NarrationBackfillService : BackgroundService
         catch (Exception ex)
         {
             await _queue.FailAsync(pending, ex.Message, CancellationToken.None);
-        }
-    }
-
-    /// <summary>
-    /// Pushes finished prose to wherever the player is. The story entry is updated first so a
-    /// reload shows the real text, then the live channels are nudged.
-    /// </summary>
-    private async Task DeliverAsync(PendingNarration pending, string narration, CancellationToken ct)
-    {
-        try
-        {
-            await _stateManager.UpdateStoryNarrationAsync(pending.ActionId, narration, ct);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Could not update the stored story entry for action {ActionId}", pending.ActionId);
-        }
-
-        try
-        {
-            await _broadcaster.BroadcastEventAsync(new GameEvent
-            {
-                Type = GameEventType.StoryAdvanced,
-                ActionId = pending.ActionId,
-                PlayerId = pending.PlayerId,
-                RoomId = pending.RoomId,
-                Summary = "Narration completed.",
-                Narration = narration,
-                Data = new Dictionary<string, object?>
-                {
-                    // Lets the client replace the placeholder in place rather than appending a new entry.
-                    ["actionId"] = pending.ActionId,
-                    ["deferredNarration"] = true
-                }
-            }, ct);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Could not broadcast deferred narration for action {ActionId}", pending.ActionId);
-        }
-
-        if (_discord is not null)
-        {
-            try
-            {
-                await _discord.PostToPlayerThreadAsync(pending.PlayerId, $"*{narration}*", ct);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Could not post deferred narration to Discord for player {PlayerId}", pending.PlayerId);
-            }
         }
     }
 }
