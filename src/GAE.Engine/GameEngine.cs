@@ -4355,11 +4355,24 @@ move_room_ready:
             Source = NpcMemorySource.Direct
         });
 
-        // An offer the NPC made and did not honour becomes a debt they remember owing.
-        foreach (var line in interaction.Context)
+        // An offer the NPC made and did not honour becomes a debt they remember owing. Pinned turns are
+        // checked first and always: a commitment made twenty exchanges ago has aged out of the verbatim
+        // window, and that is precisely the promise most likely to be forgotten.
+        foreach (var line in interaction.PinnedContext.Concat(interaction.Context))
         {
             if (LooksLikeUnkeptOffer(line))
                 memory.PromiseSomething(SummarizeOffer(line, player.Name));
+        }
+
+        // Carry a trace of a long conversation, so the NPC recalls that it was substantial.
+        if (!string.IsNullOrWhiteSpace(interaction.RunningSummary))
+        {
+            memory.Remember(new NpcMemoryEntry
+            {
+                Summary = $"A long talk with {player.Name} covered: {Truncate(interaction.RunningSummary!, 160)}",
+                Weight = 55,
+                Source = NpcMemorySource.Direct
+            });
         }
     }
 
@@ -4375,6 +4388,17 @@ move_room_ready:
         string[] offerCues = ["i'll tell", "ill tell", "i will tell", "buy me", "promised", "in exchange",
                               "if you bring", "if you buy", "owe you", "tell you somethin", "tell you something"];
         return offerCues.Any(cue => text.Contains(cue, StringComparison.Ordinal));
+    }
+
+    /// <summary>Shortens text on a word boundary for storage in memory.</summary>
+    private static string Truncate(string text, int maxLength)
+    {
+        var trimmed = text.Trim();
+        if (trimmed.Length <= maxLength) return trimmed;
+
+        var cut = trimmed[..maxLength];
+        var lastSpace = cut.LastIndexOf(' ');
+        return (lastSpace > maxLength / 2 ? cut[..lastSpace] : cut).TrimEnd() + "...";
     }
 
     private static string SummarizeOffer(string contextLine, string playerName)

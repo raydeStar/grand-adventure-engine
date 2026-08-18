@@ -1086,6 +1086,11 @@ public class NarratorService : INarratorService
 
         // What this NPC carries from previous conversations with this player. Rendered compactly —
         // a handful of lines rather than transcripts — because it is prompt budget on a local model.
+        // Conversation so far. The verbatim window is short, so commitments and an account of the
+        // aged-out turns are surfaced separately; otherwise a long conversation loses its own opening,
+        // which is exactly where offers and agreed prices are made.
+        var historyBlock = BuildConversationHistoryBlock(interaction);
+
         var priorMemory = npc.DispositionState.Memory.BuildPromptBlock(player.Name);
         var memoryBlock = priorMemory is null
             ? "You have never spoken with this person before. Treat them as a stranger."
@@ -1217,7 +1222,7 @@ public class NarratorService : INarratorService
             {{Prompts.QuestPrompts.QuestOfferNarratorHint}}
 
             Conversation history:
-            {{string.Join("\n", interaction.Context.TakeLast(15))}}
+            {{historyBlock}}
 
             Respond with ONLY valid JSON (no markdown, no code fences):
             {
@@ -1310,6 +1315,42 @@ public class NarratorService : INarratorService
     /// Generates a personality-driven deterministic fallback when the LLM fails to produce a conversation response.
     /// When <paramref name="isOngoing"/> is true, returns a topic-aware reply instead of a greeting.
     /// </summary>
+    /// <summary>
+    /// Renders the conversation so far: what has aged out, what must not be forgotten, and the recent
+    /// verbatim turns.
+    ///
+    /// Commitments are listed separately and explicitly, because the failure this addresses is an NPC
+    /// offering something early in a long conversation and then behaving as though it never happened.
+    /// </summary>
+    private static string BuildConversationHistoryBlock(InteractionState interaction)
+    {
+        var sections = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(interaction.RunningSummary))
+            sections.Add($"Earlier in this conversation: {interaction.RunningSummary}");
+
+        if (interaction.PinnedContext.Count > 0)
+        {
+            sections.Add("Commitments already made in this conversation — honour these, do not restate them as new offers:");
+            foreach (var pinned in interaction.PinnedContext)
+                sections.Add($"  - {pinned}");
+        }
+
+        var recent = interaction.Context.TakeLast(15).ToList();
+        if (recent.Count > 0)
+        {
+            if (sections.Count > 0)
+                sections.Add("Most recent exchanges:");
+            sections.AddRange(recent);
+        }
+
+        return sections.Count == 0 ? "(this is the first exchange)" : string.Join(NewLine, sections);
+    }
+
+    /// <summary>Line separator for assembled prompt blocks.</summary>
+    private static readonly string NewLine = "\n";
+
+
     private static string GenerateConversationFallback(Npc npc, string playerName, string rawInput, bool isOngoing = false)
     {
         var name = npc.Name;
