@@ -91,4 +91,57 @@ public class ProbabilityEngineTests
 
         Assert.Equal(roll1.Total, roll2.Total);
     }
+
+    // ── Untrusted dice expressions ──────────────────────────────────────
+    // Damage dice reach the engine from AI-generated content, YAML seeds and admin imports, so a
+    // malformed expression must degrade to a zero roll rather than throw or exhaust memory.
+
+    [Theory]
+    [InlineData("1d6 + 3")]
+    [InlineData("2d6 +4")]
+    [InlineData("1d8- 2")]
+    public void Roll_ModifierWithWhitespace_ParsesInsteadOfThrowing(string expression)
+    {
+        var roll = _dice.Roll(expression, "test");
+
+        Assert.NotEmpty(roll.IndividualRolls);
+        Assert.NotEqual(0, roll.Modifier);
+    }
+
+    [Fact]
+    public void Roll_ModifierWithWhitespace_MatchesCompactSpelling()
+    {
+        var spaced = _dice.Roll("1d6 + 3", "test");
+        var compact = _dice.Roll("1d6+3", "test");
+
+        Assert.Equal(compact.Modifier, spaced.Modifier);
+    }
+
+    [Theory]
+    [InlineData("99999999999d6")]   // count overflows an int
+    [InlineData("1d99999999999")]   // sides overflows an int
+    [InlineData("2000000000d6")]    // count would size a multi-gigabyte array
+    [InlineData("1d0")]             // a zero-sided die is not a die
+    [InlineData("1d6+99999999999")] // modifier overflows an int
+    public void Roll_OutOfRangeExpression_ReturnsZeroRollWithoutThrowing(string expression)
+    {
+        var roll = _dice.Roll(expression, "test");
+
+        Assert.Equal(0, roll.Total);
+        Assert.Empty(roll.IndividualRolls);
+        Assert.Equal(expression, roll.Expression);
+    }
+
+    [Fact]
+    public void Roll_ConcurrentCalls_StayInRange()
+    {
+        // The engine is registered as a singleton and hit by concurrent requests, so the
+        // underlying generator must be thread-safe.
+        var unseeded = new ProbabilityEngine(NullLogger<ProbabilityEngine>.Instance);
+
+        var totals = new int[2000];
+        Parallel.For(0, totals.Length, i => totals[i] = unseeded.Roll("1d20", "concurrent").Total);
+
+        Assert.All(totals, total => Assert.InRange(total, 1, 20));
+    }
 }

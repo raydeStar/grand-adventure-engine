@@ -7,17 +7,45 @@ namespace GAE.Engine;
 
 public partial class ProbabilityEngine : IProbabilityEngine
 {
-    private readonly Random _random;
+    // Dice expressions arrive from AI-generated content, YAML seeds and admin imports, so the
+    // parser treats every numeric field as untrusted. These ceilings are far above anything the
+    // game rules use (the largest live expression is a level-scaled 1d110) while keeping a
+    // malformed string from sizing a multi-gigabyte array.
+    private const int MaxDiceCount = 100;
+    private const int MaxDiceSides = 1000;
+    private const int MaxDiceModifier = 10_000;
+
+    // Only set when an explicit seed is supplied (deterministic tests). Production runs on
+    // Random.Shared, which is thread-safe — a plain Random instance is not, and this service is
+    // registered as a singleton hit by concurrent requests.
+    private readonly Random? _seededRandom;
+    private readonly object _seededRandomLock = new();
     private readonly ILogger<ProbabilityEngine> _logger;
 
     public ProbabilityEngine(ILogger<ProbabilityEngine> logger, int? seed = null)
     {
-        _random = seed.HasValue ? new Random(seed.Value) : new Random();
+        _seededRandom = seed.HasValue ? new Random(seed.Value) : null;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// Returns a die result in [1, sides]. Uses the shared thread-safe generator unless this
+    /// instance was constructed with an explicit seed, in which case the seeded sequence is
+    /// preserved under a lock so deterministic tests stay deterministic.
+    /// </summary>
+    private int NextDie(int sides)
+    {
+        if (_seededRandom is null)
+            return Random.Shared.Next(1, sides + 1);
+
+        lock (_seededRandomLock)
+            return _seededRandom.Next(1, sides + 1);
     }
 
     public DiceRoll Roll(string expression, string purpose = "")
     {
+        expression ??= string.Empty;
+
         var match = DiceRegex().Match(expression.Trim());
         if (!match.Success)
         {
@@ -25,19 +53,17 @@ public partial class ProbabilityEngine : IProbabilityEngine
             return new DiceRoll { Expression = expression, Purpose = purpose, Total = 0 };
         }
 
-        int count = match.Groups["count"].Success ? int.Parse(match.Groups["count"].Value) : 1;
-        int sides = int.Parse(match.Groups["sides"].Value);
-        int modifier = 0;
-
-        if (match.Groups["mod"].Success)
+        if (!TryReadCount(match.Groups["count"], out int count)
+            || !TryReadSides(match.Groups["sides"], out int sides)
+            || !TryReadModifier(match.Groups["mod"], out int modifier))
         {
-            string modStr = match.Groups["mod"].Value;
-            modifier = int.Parse(modStr);
+            _logger.LogWarning("Dice expression out of supported range: {Expression}", expression);
+            return new DiceRoll { Expression = expression, Purpose = purpose, Total = 0 };
         }
 
         var rolls = new int[count];
         for (int i = 0; i < count; i++)
-            rolls[i] = _random.Next(1, sides + 1);
+            rolls[i] = NextDie(sides);
 
         int total = rolls.Sum() + modifier;
 
@@ -61,7 +87,7 @@ public partial class ProbabilityEngine : IProbabilityEngine
     public int RollStat()
     {
         // 4d6 drop lowest
-        var rolls = Enumerable.Range(0, 4).Select(_ => _random.Next(1, 7)).OrderDescending().ToArray();
+        var rolls = Enumerable.Range(0, 4).Select(_ => NextDie(6)).OrderDescending().ToArray();
         return rolls.Take(3).Sum();
     }
 
@@ -152,6 +178,42 @@ public partial class ProbabilityEngine : IProbabilityEngine
             return RollOutcome.CriticalHit;
 
         return RollOutcome.Hit;
+    }
+
+    /// <summary>
+    /// Reads the dice count, defaulting to 1 when omitted ("d20"). Rejects values that overflow
+    /// an int or exceed <see cref="MaxDiceCount"/> so the roll array stays a sane size.
+    /// </summary>
+    private static bool TryReadCount(Group group, out int count)
+    {
+        if (!group.Success)
+        {
+            count = 1;
+            return true;
+        }
+
+        return int.TryParse(group.Value, out count) && count >= 1 && count <= MaxDiceCount;
+    }
+
+    /// <summary>Reads the die size. A zero-sided die is not a die, so it is rejected.</summary>
+    private static bool TryReadSides(Group group, out int sides)
+        => int.TryParse(group.Value, out sides) && sides >= 1 && sides <= MaxDiceSides;
+
+    /// <summary>
+    /// Reads the trailing modifier. The regex tolerates whitespace around the sign so that the
+    /// natural spellings LLMs and content authors produce ("1d6 + 3") parse instead of throwing;
+    /// that whitespace is stripped before the numeric conversion.
+    /// </summary>
+    private static bool TryReadModifier(Group group, out int modifier)
+    {
+        if (!group.Success)
+        {
+            modifier = 0;
+            return true;
+        }
+
+        var compact = group.Value.Replace(" ", string.Empty).Replace("\t", string.Empty);
+        return int.TryParse(compact, out modifier) && Math.Abs(modifier) <= MaxDiceModifier;
     }
 
     [GeneratedRegex(@"^(?<count>\d+)?d(?<sides>\d+)(?:\s*(?<mod>[+-]\s*\d+))?$", RegexOptions.IgnoreCase)]

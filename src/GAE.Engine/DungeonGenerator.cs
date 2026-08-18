@@ -13,7 +13,9 @@ namespace GAE.Engine;
 /// </summary>
 public class DungeonGenerator
 {
-    private static readonly Random Rng = new();
+    // Random.Shared is thread-safe; a shared static Random instance is not, and dungeon
+    // generation can run for several players at once.
+    private static Random Rng => Random.Shared;
 
     private readonly IContentRegistryService _registry;
     private readonly ILogger _logger;
@@ -478,9 +480,11 @@ public class DungeonGenerator
         string name;
         if (isBoss)
         {
-            var bossPrefix = Pick(MonsterPrefixes);
+            // Bosses get a proper name plus an epithet ("Vulgrim the Unyielding"). Using the
+            // adjective list here instead produced ungrammatical names like "Venomous of Ruin".
+            var bossFirstName = Pick(BossFirstNames);
             var bossTitle = Pick(BossTitles);
-            name = $"{bossPrefix} {bossTitle}";
+            name = $"{bossFirstName} {bossTitle}";
         }
         else
         {
