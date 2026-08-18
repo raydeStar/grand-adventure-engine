@@ -1863,13 +1863,19 @@
   }
 
   async function afterCommand(playerId, result) {
-    // Track interaction mode from result
+    // Adopt the new mode immediately so the prompt and chips react without waiting for a round trip.
+    //
+    // The target deliberately is NOT taken from interactionUpdate: that payload carries no target
+    // field, so reading one always yielded undefined and fell back to the previous value. Switching
+    // who you were talking to left the prompt naming the previous NPC forever, even though the
+    // server had moved on. refreshCurrentPlayer below syncs the target from the player record, which
+    // is the only authoritative source.
     if (result.interactionUpdate) {
       state.interactionMode = normalizeMode(result.interactionUpdate.mode);
-      state.interactionTarget = result.interactionUpdate.target || state.interactionTarget;
     }
 
     await Promise.all([
+      refreshCurrentPlayer(),
       refreshPlayers(),
       refreshRooms(),
       refreshSummary(),
