@@ -33,7 +33,24 @@ public class NarratorService : INarratorService
     private string _model;
     private bool _modelResolved;
 
-    public NarratorService(HttpClient httpClient, ILogger<NarratorService> logger, string model = "default", WorldKnowledgeBuilder? knowledge = null, IConversationLogger? conversationLogger = null, IContentRegistryService? registry = null, IWorldContext? worldContext = null, IWorldRepository? worldRepository = null, int retryCount = 1, int retryDelayMs = 2000, string provider = "OpenAICompatible", int? contextLength = null, bool? think = null, string codexExecutable = "codex", string codexReasoningEffort = "max", int codexTimeoutSeconds = 300, string? codexWorkingDirectory = null)
+    /// <summary>
+    /// Providers to try, in order, when the primary fails. Lets a cheap preferred narrator lead while
+    /// a locally hosted model stands behind it.
+    /// </summary>
+    private readonly List<string> _providerChain;
+
+    /// <summary>
+    /// When a provider may next be attempted. A failing provider is skipped for a cooldown rather than
+    /// retried every turn — the Codex adapter can burn its full multi-minute timeout before failing,
+    /// and paying that on every single action makes the game unplayable while it is down.
+    /// </summary>
+    private readonly Dictionary<string, DateTimeOffset> _providerCooldownUntil = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _cooldownLock = new();
+
+    /// <summary>How long a provider sits out after a failure.</summary>
+    private static readonly TimeSpan ProviderCooldown = TimeSpan.FromMinutes(2);
+
+    public NarratorService(HttpClient httpClient, ILogger<NarratorService> logger, string model = "default", WorldKnowledgeBuilder? knowledge = null, IConversationLogger? conversationLogger = null, IContentRegistryService? registry = null, IWorldContext? worldContext = null, IWorldRepository? worldRepository = null, int retryCount = 1, int retryDelayMs = 2000, string provider = "OpenAICompatible", int? contextLength = null, bool? think = null, string codexExecutable = "codex", string codexReasoningEffort = "max", int codexTimeoutSeconds = 300, string? codexWorkingDirectory = null, IEnumerable<string>? fallbackProviders = null)
     {
         _httpClient = httpClient;
         _logger = logger;
@@ -59,6 +76,21 @@ public class NarratorService : INarratorService
         _modelResolved = !string.Equals(model, "default", StringComparison.OrdinalIgnoreCase);
         if (IsCodexCliProvider())
             _modelResolved = true;
+
+        // Primary first, then any distinct fallbacks in the order given.
+        _providerChain = [_provider];
+        foreach (var candidate in fallbackProviders ?? [])
+        {
+            var trimmed = candidate?.Trim();
+            if (!string.IsNullOrWhiteSpace(trimmed)
+                && !_providerChain.Contains(trimmed, StringComparer.OrdinalIgnoreCase))
+            {
+                _providerChain.Add(trimmed);
+            }
+        }
+
+        if (_providerChain.Count > 1)
+            _logger.LogInformation("Narrator provider chain: {Chain}", string.Join(" -> ", _providerChain));
     }
 
     public async Task<string> NarrateActionAsync(NarratorContext context, CancellationToken ct = default)
@@ -2406,12 +2438,87 @@ public class NarratorService : INarratorService
         throw lastException!;
     }
 
+    /// <summary>
+    /// Sends a completion through the provider chain, trying each in turn until one succeeds.
+    ///
+    /// A provider that fails is put on a short cooldown so the next turn does not pay its timeout
+    /// again. If every provider is cooling down, the least-recently-failed one is tried anyway rather
+    /// than giving up without an attempt.
+    /// </summary>
     private async Task<string> SendCompletionRequestAsync(string systemPrompt, string userPrompt, CancellationToken ct, string operation, bool logPayload, int maxTokens)
-        => IsCodexCliProvider()
-            ? await SendCodexCliCompletionRequestAsync(systemPrompt, userPrompt, ct, operation, logPayload, maxTokens)
-            : IsOllamaProvider()
-            ? await SendOllamaCompletionRequestAsync(systemPrompt, userPrompt, ct, operation, logPayload, maxTokens)
-            : await SendOpenAiCompatibleCompletionRequestAsync(systemPrompt, userPrompt, ct, operation, logPayload, maxTokens);
+    {
+        var available = _providerChain.Where(IsProviderReady).ToList();
+        if (available.Count == 0)
+            available = [_providerChain.OrderBy(GetCooldownExpiry).First()];
+
+        Exception? lastException = null;
+
+        foreach (var provider in available)
+        {
+            try
+            {
+                var completion = await SendCompletionForProviderAsync(
+                    provider, systemPrompt, userPrompt, ct, operation, logPayload, maxTokens);
+
+                ClearCooldown(provider);
+                if (!string.Equals(provider, _provider, StringComparison.OrdinalIgnoreCase))
+                    _logger.LogInformation("Narration for {Operation} served by fallback provider {Provider}", operation, provider);
+
+                return completion;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                lastException = ex;
+                MarkProviderFailed(provider);
+                _logger.LogWarning(ex, "Narrator provider {Provider} failed for {Operation}; trying the next in the chain", provider, operation);
+            }
+        }
+
+        throw lastException ?? new InvalidOperationException("No narrator provider was available.");
+    }
+
+    /// <summary>Routes one completion to a specific provider's transport.</summary>
+    private async Task<string> SendCompletionForProviderAsync(string provider, string systemPrompt, string userPrompt, CancellationToken ct, string operation, bool logPayload, int maxTokens)
+    {
+        if (string.Equals(provider, "CodexCli", StringComparison.OrdinalIgnoreCase))
+            return await SendCodexCliCompletionRequestAsync(systemPrompt, userPrompt, ct, operation, logPayload, maxTokens);
+
+        if (string.Equals(provider, "Ollama", StringComparison.OrdinalIgnoreCase))
+            return await SendOllamaCompletionRequestAsync(systemPrompt, userPrompt, ct, operation, logPayload, maxTokens);
+
+        return await SendOpenAiCompatibleCompletionRequestAsync(systemPrompt, userPrompt, ct, operation, logPayload, maxTokens);
+    }
+
+    private bool IsProviderReady(string provider)
+    {
+        lock (_cooldownLock)
+            return !_providerCooldownUntil.TryGetValue(provider, out var until) || DateTimeOffset.UtcNow >= until;
+    }
+
+    private DateTimeOffset GetCooldownExpiry(string provider)
+    {
+        lock (_cooldownLock)
+            return _providerCooldownUntil.TryGetValue(provider, out var until) ? until : DateTimeOffset.MinValue;
+    }
+
+    private void MarkProviderFailed(string provider)
+    {
+        lock (_cooldownLock)
+            _providerCooldownUntil[provider] = DateTimeOffset.UtcNow + ProviderCooldown;
+    }
+
+    private void ClearCooldown(string provider)
+    {
+        lock (_cooldownLock)
+            _providerCooldownUntil.Remove(provider);
+    }
+
+    /// <summary>The providers this narrator will attempt, in order. Exposed for health reporting.</summary>
+    public IReadOnlyList<string> ProviderChain => _providerChain;
 
     /// <summary>
     /// Runs one ephemeral, read-only Codex turn as a narration transport. This adapter exists for

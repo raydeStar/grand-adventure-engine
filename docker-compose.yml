@@ -10,6 +10,7 @@ services:
       Discord__Token: "${DISCORD_TOKEN:-}"
       Discord__ChannelId: "${DISCORD_CHANNEL_ID:-}"
       LmStudio__Provider: "${LM_STUDIO_PROVIDER:-OpenAICompatible}"
+      LmStudio__FallbackProviders: "${LM_STUDIO_FALLBACK_PROVIDERS:-}"
       LmStudio__Endpoint: "${LM_STUDIO_ENDPOINT:-http://host.docker.internal:1234}"
       LmStudio__Model: "${LM_STUDIO_MODEL:-default}"
       LmStudio__CodexExecutable: "${CODEX_EXECUTABLE:-codex}"

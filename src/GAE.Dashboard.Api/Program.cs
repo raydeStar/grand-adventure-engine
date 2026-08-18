@@ -139,6 +139,12 @@ var codexExecutable = builder.Configuration["LmStudio:CodexExecutable"] ?? "code
 var codexReasoningEffort = builder.Configuration["LmStudio:CodexReasoningEffort"] ?? "max";
 var codexTimeoutSeconds = int.TryParse(builder.Configuration["LmStudio:CodexTimeoutSeconds"], out var cts) ? cts : 300;
 var codexWorkingDirectory = builder.Configuration["LmStudio:CodexWorkingDirectory"];
+
+// Ordered fallbacks tried when the primary narrator fails, so a cheap preferred provider can lead
+// while a locally hosted model stands behind it. Comma-separated, e.g. "OpenAICompatible,Ollama".
+var lmFallbackProviders = (builder.Configuration["LmStudio:FallbackProviders"] ?? string.Empty)
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+    .ToArray();
 builder.Services.AddHttpClient("LmStudio", client =>
 {
     client.BaseAddress = new Uri(lmStudioEndpoint + "/");
@@ -155,7 +161,7 @@ builder.Services.AddSingleton<INarratorService>(sp =>
     var registry = sp.GetRequiredService<IContentRegistryService>();
     var worldContext = sp.GetService<IWorldContext>();
     var worldRepository = sp.GetService<IWorldRepository>();
-    return new NarratorService(httpClient, logger, lmStudioModel, knowledge, conversationLogger, registry, worldContext, worldRepository, lmRetryCount, lmRetryDelayMs, lmProvider, lmContextLength, lmThink, codexExecutable, codexReasoningEffort, codexTimeoutSeconds, codexWorkingDirectory);
+    return new NarratorService(httpClient, logger, lmStudioModel, knowledge, conversationLogger, registry, worldContext, worldRepository, lmRetryCount, lmRetryDelayMs, lmProvider, lmContextLength, lmThink, codexExecutable, codexReasoningEffort, codexTimeoutSeconds, codexWorkingDirectory, lmFallbackProviders);
 });
 
 builder.Services.AddSingleton<IRealmTravelService>(sp =>
@@ -462,6 +468,47 @@ app.MapGet("/health/narrator", async (HttpClient httpClient) =>
 {
     if (narratorHealthCache is not null && DateTimeOffset.UtcNow < narratorHealthCacheExpiry)
         return narratorHealthCache;
+
+    // Report every provider in the chain, so a degraded primary with a healthy fallback is visible
+    // rather than looking like a total outage.
+    var chain = new[] { lmProvider }.Concat(lmFallbackProviders)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+    if (chain.Length > 1)
+    {
+        var reports = new List<object>();
+        var anyHealthy = false;
+        foreach (var provider in chain)
+        {
+            try
+            {
+                if (IsCodexCliProvider(provider))
+                {
+                    var version = await ProbeCodexCliAsync(codexExecutable);
+                    reports.Add(new { provider, status = "healthy", version });
+                    anyHealthy = true;
+                }
+                else
+                {
+                    ApplyNarratorApiKey(httpClient, lmApiKey);
+                    var probe = await httpClient.GetAsync(lmStudioEndpoint + GetNarratorModelsPath(provider));
+                    reports.Add(new { provider, status = probe.IsSuccessStatusCode ? "healthy" : "unreachable" });
+                    anyHealthy |= probe.IsSuccessStatusCode;
+                }
+            }
+            catch (Exception ex)
+            {
+                var detail = app.Environment.IsDevelopment() ? ex.Message : "probe failed";
+                reports.Add(new { provider, status = "unreachable", error = detail });
+            }
+        }
+
+        narratorHealthCache = anyHealthy
+            ? Results.Ok(new { status = "healthy", chain = reports })
+            : Results.Json(new { status = "degraded", chain = reports, note = "Narration will use fallback text" }, statusCode: 503);
+        narratorHealthCacheExpiry = DateTimeOffset.UtcNow.AddSeconds(60);
+        return narratorHealthCache;
+    }
 
     try
     {
