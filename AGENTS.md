@@ -161,6 +161,12 @@ Vanilla JS, no framework. Key files:
 - `signalr-client.js` — SignalR hub connection and event dispatch
 - `room-map.js` — ASCII room map renderer using rot.js
 
+**Asset cache-busting (easy to forget):**
+Static files requested with a `?v=` query string are served `Cache-Control: public, max-age=31536000, immutable`
+(see the `OnPrepareResponse` hook in `Program.cs`). `index.html` pins every script that way — `js/ui.js?v=32`,
+`js/app.js?v=29`. **Editing a JS or CSS file without bumping its `?v=` in `index.html` means returning browsers
+keep the old copy for up to a year.** Bump the number in the same commit as the asset change.
+
 **Story log rules:**
 - Only narration, player commands, and system messages (stat changes) appear in the log
 - Room metadata (exits, NPC lists, item lists) is stripped by `_stripRoomMetadata()` before rendering
@@ -190,7 +196,7 @@ World (id, name, rules, portals, tags)
 **Key classes:**
 - `World` / `WorldPortal` — [src/GAE.Engine/Worlds/WorldModels.cs](src/GAE.Engine/Worlds/WorldModels.cs)
 - `IWorldRepository` / `InMemoryWorldRepository` — CRUD for worlds, portals, NPC state
-- `IWorldContext` / `WorldContextMiddleware` — scoped service resolving current world from `?worldId=`, `X-World-Id` header, or `player.ActiveWorldId`
+- `IWorldContext` / `WorldContextMiddleware` — resolves the current world from `?worldId=`, the `X-World-Id` header, or `player.ActiveWorldId`. `WorldContext` is registered as a singleton but stores the world in a static `AsyncLocal`, so the value is per-request even though the instance is shared. Background services (the Discord bot) never set it and fall back to the default world.
 - `RealmTravelService` — stat translation, snapshot save/restore, portal travel
 - `WorldBootstrapService` — ensures default world exists, backfills existing content
 
@@ -238,15 +244,15 @@ npm run test:e2e:update-snapshots:safe  # Update visual baselines
 
 **Test philosophy:**
 - Unit tests mock INarratorService and IProbabilityEngine via Moq
-- Integration tests use WebApplicationFactory with a real in-memory state manager
-- Never mock the database (there isn't one) — use InMemoryStateManager directly
+- Integration tests use `WebApplicationFactory` against a real PostgreSQL instance started per factory via Testcontainers (`GaeWebApplicationFactory`); Docker must be running
+- Never mock the database — exercise the real EF Core path. `InMemoryStateManager` survives only for the file→DB migration import, not as a test double
 - Browser tests use Playwright; always use the `:safe` variants to avoid oversized payloads
 
 ---
 
 ## Code Style
 
-- C# 12+, .NET 9, nullable reference types enabled, implicit usings
+- C# 12+, .NET 10, nullable reference types enabled, implicit usings
 - Async all the way down. CancellationToken on every async method.
 - Every public method gets an XML doc comment explaining WHAT and WHY, not HOW.
 - State mutations are batched — save player and room once after all changes, not per-change.

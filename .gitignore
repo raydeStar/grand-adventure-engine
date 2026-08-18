@@ -40,6 +40,9 @@ cookies.txt
 src/GAE.Dashboard.Api/artifacts/
 ux-scout-dashboard.png
 
+## Remote-agent session attachments (local only)
+.codex-remote-attachments/
+
 ## Temporary test/playtest scripts
 tmp_*.py
 

@@ -1,0 +1,46 @@
+# Line endings are normalised in the repository so a checkout is byte-identical regardless of each
+# contributor's core.autocrlf setting. Without this file, whether a commit shows a two-line change
+# or a rewritten file depends on local Git configuration.
+
+# Default: detect text, store LF, check out with the platform's native ending.
+* text=auto
+
+# Source and config — always LF in the repository.
+*.cs        text eol=lf diff=csharp
+*.csproj    text eol=lf
+*.slnx      text eol=lf
+*.props     text eol=lf
+*.js        text eol=lf
+*.mjs       text eol=lf
+*.json      text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.html      text eol=lf
+*.css       text eol=lf
+*.md        text eol=lf
+*.sh        text eol=lf
+Dockerfile  text eol=lf
+.editorconfig text eol=lf
+.gitignore  text eol=lf
+.gitattributes text eol=lf
+
+# Windows-only scripts need CRLF to stay runnable.
+*.ps1       text eol=crlf
+*.cmd       text eol=crlf
+*.bat       text eol=crlf
+
+# Binary assets — never touched, never diffed as text.
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.ico       binary
+*.woff      binary
+*.woff2     binary
+*.ttf       binary
+*.otf       binary
+*.pdf       binary
+*.zip       binary
+
+# Minified vendor bundles are generated; keep them out of diffs and language stats.
+src/GAE.Dashboard.Api/wwwroot/vendor/** linguist-vendored -diff
