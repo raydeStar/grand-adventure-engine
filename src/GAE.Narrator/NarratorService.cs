@@ -1443,10 +1443,10 @@ public class NarratorService : INarratorService
                 : $"{name} laughs under their breath and waves the moment onward. \"You are strange company, {playerName}, but strange company often survives. Say the next thing plainly and I will answer plainly.\"";
         }
 
-        // Ground the reply in who this NPC actually is before falling back to generic wisdom. These
-        // lines are what players see whenever the narrator is unreachable, so a town drunk must not
-        // sound like a travelling oracle.
-        var grounded = BuildPersonalityGroundedFallback(npc, playerName, rawInput);
+        // No topic matched. A reply grounded in this NPC's own traits and debts beats a generic
+        // aphorism, but it must not pre-empt the topic-aware branches above: answering the actual
+        // subject is better still.
+        var grounded = NpcVoice.TryBuildGroundedReply(npc, playerName, rawInput);
         if (grounded is not null)
             return grounded;
 
@@ -1460,59 +1460,6 @@ public class NarratorService : INarratorService
         };
     }
 
-    /// <summary>
-    /// Builds an offline reply that uses the NPC's own personality and their memory of this player.
-    ///
-    /// Returns null when there is nothing distinctive to work with, letting the caller fall through
-    /// to the generic pool. This is not a canned response in the forbidden sense: it is assembled
-    /// from this specific NPC's authored traits, outstanding debts, and shared history.
-    /// </summary>
-    private static string? BuildPersonalityGroundedFallback(Npc npc, string playerName, string rawInput)
-    {
-        var memory = npc.DispositionState.Memory;
-
-        // An unpaid debt outranks everything else the NPC could say.
-        var owed = memory.OpenPromises.FirstOrDefault();
-        if (owed is not null)
-        {
-            return $"{npc.Name} catches themselves mid-sentence, remembering what is owed. \"I know, {playerName}, I know — I said I would come good on that. Ask me straight and I will not dodge it twice.\"";
-        }
-
-        var traits = ExtractPersonalityTraits(npc.Personality);
-        if (traits.Count == 0)
-            return null;
-
-        var trait = traits[Math.Abs(HashCode.Combine(npc.Id, rawInput)) % traits.Count];
-        var recalled = memory.Entries
-            .OrderByDescending(e => e.IsCore)
-            .ThenByDescending(e => e.Weight)
-            .FirstOrDefault();
-
-        if (recalled is not null && memory.EncounterCount > 0)
-        {
-            return $"{npc.Name} looks at you like someone already placed. \"We have done this before, {playerName}. {trait} Say what you actually came to say.\"";
-        }
-
-        return $"{npc.Name} answers in the manner of someone who cannot help being themselves. \"{trait} That is the shape of it, {playerName}. Push on whichever part interests you.\"";
-    }
-
-    /// <summary>
-    /// Splits an authored personality blurb into usable sentence-sized traits. The seeded
-    /// personalities are written as short declarative sentences, which makes them directly quotable
-    /// as an NPC's own outlook.
-    /// </summary>
-    private static List<string> ExtractPersonalityTraits(string? personality)
-    {
-        if (string.IsNullOrWhiteSpace(personality))
-            return [];
-
-        return personality
-            .Split(['.', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(part => part.Length is >= 12 and <= 120)
-            .Select(part => part.EndsWith('.') ? part : part + ".")
-            .Take(5)
-            .ToList();
-    }
 
     private static bool ShouldUseTopicAwareOpening(string rawInput)
     {
@@ -2094,6 +2041,13 @@ public class NarratorService : INarratorService
         {
             return $"{npc.Name} points at {player.Name} with the nearest available rag, utensil, or accusing finger. \"Then lead with the endearment, not the brick. Try again with a little polish and I may downgrade you from menace to customer.\"";
         }
+
+        // Below this point the pools are generic; they produced "turn that into a sentence with a
+        // purpose" for a plain hello. A reply grounded in this NPC's own traits and history is better,
+        // while the specific branches above still take precedence.
+        var grounded = NpcVoice.TryBuildGroundedReply(npc, player.Name, actionPhrase);
+        if (grounded is not null)
+            return grounded;
 
         if (ContainsAny(normalized, "sup", "nerd", "hey", "yo", "hello", "hi"))
         {

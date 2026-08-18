@@ -708,10 +708,12 @@ public class NarratorServiceTests
         Assert.True(response.Success);
         Assert.Contains("Mara Vale", response.Narration);
         Assert.Contains("Bonk", response.Narration);
-        Assert.True(
-            new[] { "state your business", "pick a lane", "sentence with a purpose", "go on" }
-                .Any(phrase => response.Narration.Contains(phrase, StringComparison.OrdinalIgnoreCase)),
-            response.Narration);
+        // Previously this pinned the exact stock phrases the old pool emitted ("state your business",
+        // "pick a lane", "sentence with a purpose"). Those replies were the reported problem: every
+        // character deflected identically regardless of who they were. The contract is now that an
+        // offline reply must be grounded in this NPC's authored personality, not that it matches a
+        // fixed phrase.
+        Assert.Contains("Gruff but attentive innkeeper", response.Narration, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("moment passes", response.Narration, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("without any dramatic consequences", response.Narration, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("try using", response.Narration, StringComparison.OrdinalIgnoreCase);
