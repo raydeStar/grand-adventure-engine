@@ -4227,20 +4227,61 @@ move_room_ready:
         }
     }
 
-    /// <summary>Reduces a narrator context line to a short topic marker.</summary>
+    /// <summary>
+    /// Reduces a narrator context line to a short, readable topic marker.
+    ///
+    /// Context lines are messy: they carry engine annotations like "[Social check: ...]", newlines,
+    /// turn prefixes, and boilerplate about the NPC responding. All of that is stripped, because
+    /// these markers are rendered into later prompts and half a bracketed dice roll truncated
+    /// mid-word is worse than no topic at all.
+    /// </summary>
     private static string? ExtractTopic(string? line)
     {
         if (string.IsNullOrWhiteSpace(line)) return null;
 
-        var text = line.Trim();
-        // Context lines often arrive as "Turn 3: player asked about the mine." — keep the tail.
-        var colon = text.IndexOf(':');
-        if (colon >= 0 && colon < text.Length - 1)
-            text = text[(colon + 1)..].Trim();
+        var text = line.Replace((char)10, ' ').Replace((char)13, ' ');
 
+        // Drop engine annotations wholesale — they describe mechanics, not subject matter.
+        while (true)
+        {
+            var open = text.IndexOf('[');
+            if (open < 0) break;
+            var close = text.IndexOf(']', open);
+            text = close < 0 ? text[..open] : text.Remove(open, close - open + 1);
+        }
+
+        // "Turn 3: ..." or "Player asked: ..." — keep what follows the first prefix colon.
+        var colon = text.IndexOf(':');
+        if (colon > 0 && colon < 24 && colon < text.Length - 1)
+            text = text[(colon + 1)..];
+
+        text = string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
+        // Strip boilerplate about the NPC merely having replied; it carries no subject.
+        foreach (var noise in ResponseBoilerplate)
+        {
+            var at = text.IndexOf(noise, StringComparison.OrdinalIgnoreCase);
+            if (at >= 0)
+                text = text[..at];
+        }
+
+        text = text.Trim().Trim('.', ',', ';', '-', ' ');
+        if (text.Length < 6)
+            return null;
+
+        // Cut on a word boundary so a topic never ends mid-word.
         var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        return words.Length <= 8 ? text.TrimEnd('.') : string.Join(' ', words.Take(8)).TrimEnd('.');
+        if (words.Length > 7)
+            text = string.Join(' ', words.Take(7));
+
+        return text.TrimEnd('.', ',');
     }
+
+    /// <summary>Phrases that mean "the NPC said something" and carry no subject matter.</summary>
+    private static readonly string[] ResponseBoilerplate =
+    [
+        " gave a guarded response", " gave a", " responded", " answers", " replied", " said nothing"
+    ];
 
     /// <summary>
     /// Overlays world-scoped NPC state onto the canonical NPC before a conversation.
