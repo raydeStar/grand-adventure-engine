@@ -104,13 +104,45 @@ public class GameEngine : IGameEngine
             player.PendingNotifications.Clear();
         }
 
+        // "pick that up" after "examine the torch" should act on the torch. Resolve the stand-in
+        // before the action is dispatched, so every handler sees a concrete target.
+        ResolvePronounTarget(player, action);
+
         var result = await ProcessActionCoreAsync(player, action, ct);
+
+        // Remember what was named so the next turn can refer back to it. Only on success: a target
+        // the engine could not find is a poor thing to resolve future pronouns to.
+        if (result.Success)
+            player.Interaction.RememberReferent(action.Target);
 
         // Attach drained notifications to the result
         if (drainedNotifications is not null)
             result.Notifications.AddRange(drainedNotifications);
 
         return result;
+    }
+
+    /// <summary>
+    /// Replaces a pronoun target with the thing the player last named.
+    ///
+    /// Players do not repeat nouns. "examine the discarded torch" followed by "ok i pick that up as
+    /// well" previously failed, because the second command carried the target "that", which matches
+    /// nothing in the room. The failure read as the game not following the conversation.
+    /// </summary>
+    private void ResolvePronounTarget(PlayerCharacter player, GameAction action)
+    {
+        if (!InteractionState.IsPronounTarget(action.Target))
+            return;
+
+        var referent = player.Interaction.LastReferent;
+        if (string.IsNullOrWhiteSpace(referent))
+            return;
+
+        _logger.LogDebug(
+            "Resolved pronoun target \"{Pronoun}\" to \"{Referent}\" for player {PlayerId}",
+            action.Target, referent, player.Id);
+
+        action.Target = referent;
     }
 
     private async Task<ActionResult> ProcessActionCoreAsync(PlayerCharacter player, GameAction action, CancellationToken ct)

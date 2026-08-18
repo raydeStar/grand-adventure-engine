@@ -24,6 +24,18 @@ public class InteractionState
     /// hour-long conversation still has a beginning rather than starting fresh every twenty turns.
     /// </summary>
     public string? RunningSummary { get; set; }
+    /// <summary>
+    /// The last thing the player referred to by name, so a follow-up can say "it" or "that".
+    ///
+    /// Players examine something and then act on it without repeating the noun — "examine the
+    /// discarded torch" then "ok i pick that up as well". Without a remembered referent the second
+    /// command has no target and fails, which reads as the game not paying attention.
+    ///
+    /// Deliberately NOT cleared by <see cref="Reset"/>: what you were just looking at does not stop
+    /// being the obvious referent because a conversation ended.
+    /// </summary>
+    public string? LastReferent { get; set; }
+
     public int TurnCount { get; set; }
     /// <summary>Counts completed player turns separately from raw context entries.</summary>
     public int PlayerTurnCount { get; set; }
@@ -122,6 +134,37 @@ public class InteractionState
     public void AdvancePlayerTurn()
     {
         PlayerTurnCount++;
+    }
+
+    /// <summary>Words that stand in for the thing most recently referred to.</summary>
+    private static readonly HashSet<string> PronounTargets = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "it", "that", "this", "them", "those", "these", "him", "her", "they",
+        "that one", "this one", "the same", "same", "one"
+    };
+
+    /// <summary>True when a target is a stand-in rather than a name.</summary>
+    public static bool IsPronounTarget(string? target)
+    {
+        if (string.IsNullOrWhiteSpace(target)) return false;
+
+        var cleaned = target.Trim().TrimEnd('.', '!', '?').ToLowerInvariant();
+        foreach (var lead in new[] { "the ", "that ", "this " })
+        {
+            if (cleaned.StartsWith(lead, StringComparison.Ordinal) && PronounTargets.Contains(cleaned[lead.Length..]))
+                return true;
+        }
+
+        return PronounTargets.Contains(cleaned);
+    }
+
+    /// <summary>Records a concrete thing the player named, so later pronouns can resolve to it.</summary>
+    public void RememberReferent(string? target)
+    {
+        if (string.IsNullOrWhiteSpace(target) || IsPronounTarget(target))
+            return;
+
+        LastReferent = target.Trim();
     }
 
     public void Reset()

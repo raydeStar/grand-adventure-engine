@@ -15,12 +15,14 @@ public partial class CommandParser
 
     public GameAction Parse(string playerId, string rawInput)
     {
-        var input = rawInput.Trim();
         var action = new GameAction
         {
             PlayerId = playerId,
-            RawInput = input
+            // The narrator sees exactly what the player typed; only matching works on the trimmed form.
+            RawInput = rawInput.Trim()
         };
+
+        var input = StripConversationalFraming(rawInput);
 
         if (string.IsNullOrWhiteSpace(input))
         {
@@ -464,6 +466,100 @@ public partial class CommandParser
         _ => dir.ToLowerInvariant()
     };
 
+    /// <summary>
+    /// Removes conversational framing so an ordinary sentence still reaches the command matchers.
+    ///
+    /// Players do not type bare commands. "ok i pick that up as well" carries a filler opener, a
+    /// first-person subject and a trailing aside, none of which the matchers expect, so the whole
+    /// thing fell through to Unknown and was handed to the narrator as a free-form action. The
+    /// original text is preserved on the action for narration; only matching sees the trimmed form.
+    /// </summary>
+    private static string StripConversationalFraming(string? rawInput)
+    {
+        var text = (rawInput ?? string.Empty).Trim();
+        if (text.Length == 0) return text;
+
+        // Quoted speech is dialogue, not a command; leave it exactly as written.
+        if (text.StartsWith('"') || text.StartsWith('\''))
+            return text;
+
+        string[] openers = ["ok", "okay", "alright", "right", "well", "so", "then", "and", "also", "now", "hmm", "uh", "um"];
+        string[] subjects = ["i", "i'll", "ill", "i will", "lets", "let's", "let me", "im going to", "i'm going to", "i am going to", "i want to", "i'd like to", "id like to"];
+        string[] trailers = ["as well", "too", "also", "please", "now", "then", "i guess", "i think"];
+
+        bool changed;
+        do
+        {
+            changed = false;
+
+            foreach (var opener in openers)
+            {
+                if (StartsWithWord(text, opener))
+                {
+                    text = text[opener.Length..].TrimStart(',', ' ');
+                    changed = true;
+                    break;
+                }
+            }
+
+            // First-person subjects are only stripped when the object is a stand-in like "that" or
+            // "it". "I grab the chest" names a thing and is roleplay the free-form narrator should
+            // handle; turning it into a mechanical Take made it fail outright when no chest existed.
+            // "ok i pick that up as well" refers back to something already established, and has no
+            // narrative reading beyond the command.
+            foreach (var subject in subjects)
+            {
+                if (StartsWithWord(text, subject))
+                {
+                    var remainder = text[subject.Length..].TrimStart(',', ' ');
+                    if (!ReferencesAStandIn(remainder))
+                        continue;
+
+                    text = remainder;
+                    changed = true;
+                    break;
+                }
+            }
+
+            foreach (var trailer in trailers)
+            {
+                if (EndsWithWord(text, trailer))
+                {
+                    text = text[..^trailer.Length].TrimEnd(',', ' ', '.');
+                    changed = true;
+                    break;
+                }
+            }
+        }
+        while (changed && text.Length > 0);
+
+        // If stripping consumed everything, the original was pure filler — keep it for the narrator.
+        return text.Length == 0 ? (rawInput ?? string.Empty).Trim() : text;
+    }
+
+    /// <summary>
+    /// True when the text acts on a stand-in ("that", "it") rather than naming something, which is
+    /// what distinguishes a follow-up command from roleplay prose.
+    /// </summary>
+    private static bool ReferencesAStandIn(string text)
+    {
+        var words = text.ToLowerInvariant()
+            .Split([' ', ',', '.', '!', '?'], StringSplitOptions.RemoveEmptyEntries);
+
+        return words.Any(w => w is "it" or "that" or "this" or "them" or "those" or "these");
+    }
+
+    private static bool StartsWithWord(string text, string word)
+        => text.StartsWith(word, StringComparison.OrdinalIgnoreCase)
+           && (text.Length == word.Length || text[word.Length] is ' ' or ',');
+
+    private static bool EndsWithWord(string text, string word)
+    {
+        var trimmed = text.TrimEnd('.', '!', ' ');
+        return trimmed.EndsWith(word, StringComparison.OrdinalIgnoreCase)
+               && (trimmed.Length == word.Length || trimmed[^(word.Length + 1)] is ' ' or ',');
+    }
+
     [GeneratedRegex(@"^(?:look|l|examine|inspect|search)(?:\s|$)", RegexOptions.IgnoreCase)]
     private static partial Regex LookRegex();
 
@@ -497,7 +593,7 @@ public partial class CommandParser
     [GeneratedRegex(@"^(?:talk|speak|chat)\s+(?:to\s+|with\s+)?(?<target>.+)$", RegexOptions.IgnoreCase)]
     private static partial Regex TalkRegex();
 
-    [GeneratedRegex(@"^(?:take|pick\s+up|grab|get)\s+(?<target>.+)$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^(?:take|pick\s+up|scoop\s+up|pick|grab|get|collect|retrieve|snag|scoop)\s+(?<target>.+?)(?:\s+up)?$", RegexOptions.IgnoreCase)]
     private static partial Regex TakeRegex();
 
     [GeneratedRegex(@"^(?:drop|discard|throw\s+away)\s+(?<target>.+)$", RegexOptions.IgnoreCase)]
