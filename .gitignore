@@ -33,6 +33,8 @@ Thumbs.db
 config/appsettings.Development.json
 config/appsettings.Production.json
 .env
+.env.backup*
+.env.local
 cookies.txt
 
 ## Local runtime data and build artifacts
