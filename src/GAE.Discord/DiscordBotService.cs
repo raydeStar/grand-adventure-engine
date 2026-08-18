@@ -1646,6 +1646,13 @@ public class DiscordBotService : IHostedService, IDiscordNotifier
     {
         try
         {
+            // Hold the typing indicator for the whole turn. A single TriggerTypingAsync lapses after
+            // about ten seconds, and a narrator turn can run far longer than that — so the player was
+            // left looking at silence with no sign anything was happening. EnterTypingState keeps
+            // re-triggering until it is disposed, which is the closest thing Discord offers to
+            // streaming: the bot is visibly still writing.
+            using var typing = thread.EnterTypingState();
+
             await _narratorLock.WaitAsync();
             ActionResult result;
             try

@@ -3933,3 +3933,41 @@ body::after { animation: scanDrift 8s linear infinite; will-change: transform; }
     line-height: 1.65;
   }
 }
+
+/* ── Awaiting deferred narration ──────────────────────────────────────
+   The turn's mechanics have landed but the prose is still being written. The entry
+   pulses gently so the player can see the narrator is still working rather than
+   assuming the moment simply had nothing to say. */
+.story-entry.awaiting-narration .story-narration {
+  opacity: 0.72;
+  font-style: italic;
+  animation: narration-waiting 1.8s ease-in-out infinite;
+}
+
+.story-entry.awaiting-narration .story-narration::after {
+  content: ' 6';
+  animation: narration-waiting 1.2s ease-in-out infinite;
+}
+
+.story-narration.narration-arrived {
+  animation: narration-settle 0.5s ease-out;
+}
+
+@keyframes narration-waiting {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 0.95; }
+}
+
+@keyframes narration-settle {
+  from { opacity: 0.4; }
+  to   { opacity: 1; }
+}
+
+/* Respect a reduced-motion preference: keep the cue, drop the pulsing. */
+@media (prefers-reduced-motion: reduce) {
+  .story-entry.awaiting-narration .story-narration,
+  .story-entry.awaiting-narration .story-narration::after,
+  .story-narration.narration-arrived {
+    animation: none;
+  }
+}

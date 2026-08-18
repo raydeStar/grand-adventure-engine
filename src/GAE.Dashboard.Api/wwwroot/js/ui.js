@@ -601,6 +601,15 @@ const UI = {
      A slow narrator returns the mechanical result immediately with a placeholder,
      and the prose follows over SignalR. Swapping it into the existing entry keeps
      the story log reading as one moment rather than splitting it in two. */
+  /* The exact placeholder the server returns when prose was too slow for the request.
+     Matching on it lets the entry keep signalling that something is still coming, instead of
+     looking like a finished turn that simply had nothing to say. */
+  _deferredPlaceholderMarker: 'still composing this moment',
+
+  isDeferredPlaceholder(text) {
+    return !!text && String(text).includes(this._deferredPlaceholderMarker);
+  },
+
   replaceDeferredNarration(actionId, narration) {
     if (!actionId || !narration) return false;
 
@@ -632,6 +641,7 @@ const UI = {
     target.innerHTML = this.formatNarration(cleaned);
     target.classList.remove('narration-pending');
     target.classList.add('narration-arrived');
+    node.classList.remove('awaiting-narration');
 
     // Only chase the bottom if the player is already reading there; yanking the view
     // while they are scrolled up would be worse than a late paragraph.
@@ -679,7 +689,12 @@ const UI = {
     }
 
     // Narration: stream newest entry, render older ones statically
-    const streamNarration = animate && cleanedNarration;
+    // A deferral placeholder is not real prose: streaming it letter by letter would dress up a
+    // holding message as the narrator's work, and the entry needs to keep showing that more is coming.
+    const awaitingNarration = this.isDeferredPlaceholder(cleanedNarration);
+    if (awaitingNarration) node.classList.add('awaiting-narration');
+
+    const streamNarration = animate && cleanedNarration && !awaitingNarration;
     if (cleanedNarration && !streamNarration) {
       html += `<div class="story-narration">${this.formatNarration(cleanedNarration)}</div>`;
     }
