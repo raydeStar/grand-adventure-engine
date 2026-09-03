@@ -13,7 +13,7 @@ const API = {
   },
 
   async getSession() {
-    const res = await fetch(`${this.base}/auth/session`, { credentials: 'same-origin' });
+    const res = await fetch(`${this.base}/auth/session`, { credentials: 'same-origin', cache: 'no-store' });
     if (!res.ok) throw this.createHttpError(res, await this.readError(res));
     const session = await res.json();
     return session || null;
@@ -341,13 +341,13 @@ const API = {
   },
 
   async getJson(url, options = {}) {
-    const res = await fetch(url, { credentials: 'same-origin', signal: options.signal });
+    const res = await fetch(url, { credentials: 'same-origin', cache: 'no-store', signal: options.signal });
     if (!res.ok) throw this.createHttpError(res, await this.readError(res));
     return res.json();
   },
 
   async getOptionalJson(url, options = {}) {
-    const res = await fetch(url, { credentials: 'same-origin', signal: options.signal });
+    const res = await fetch(url, { credentials: 'same-origin', cache: 'no-store', signal: options.signal });
     if (res.status === 404) return null;
     if (!res.ok) throw this.createHttpError(res, await this.readError(res));
     return res.json();

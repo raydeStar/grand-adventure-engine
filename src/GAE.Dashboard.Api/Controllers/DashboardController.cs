@@ -6,6 +6,8 @@ using GAE.Engine.Configuration;
 using GAE.Engine.Data;
 using GAE.Engine.Data.Configurations;
 using GAE.Engine.Worlds;
+using GAE.Narrator;
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Security.Claims;
 using System.Text;
@@ -204,20 +206,37 @@ public class DashboardController : ControllerBase
         }
         else
         {
+            var narratorProvider = _configuration["LmStudio:Provider"] ?? "OpenAICompatible";
             var narratorEndpoint = (_configuration["LmStudio:Endpoint"] ?? "http://localhost:1234").TrimEnd('/');
 
             try
             {
-                var httpClient = _httpClientFactory.CreateClient();
-                httpClient.Timeout = TimeSpan.FromSeconds(5);
-                using var response = await httpClient.GetAsync($"{narratorEndpoint}/v1/models", ct);
-                _narratorCachedResult = response.IsSuccessStatusCode
-                    ? new { ok = true, status = "healthy", service = "lm-studio" }
-                    : new { ok = false, status = "degraded", service = "lm-studio", note = "Narration will use fallback text" };
+                if (string.Equals(narratorProvider, "CodexCli", StringComparison.OrdinalIgnoreCase))
+                {
+                    var executable = _configuration["LmStudio:CodexExecutable"] ?? "codex";
+                    var version = await ProbeCodexCliAsync(executable, ct);
+                    _narratorCachedResult = new
+                    {
+                        ok = true,
+                        status = "healthy",
+                        service = narratorProvider,
+                        model = _configuration["LmStudio:Model"] ?? "default",
+                        version
+                    };
+                }
+                else
+                {
+                    var httpClient = _httpClientFactory.CreateClient();
+                    httpClient.Timeout = TimeSpan.FromSeconds(5);
+                    using var response = await httpClient.GetAsync($"{narratorEndpoint}/v1/models", ct);
+                    _narratorCachedResult = response.IsSuccessStatusCode
+                        ? new { ok = true, status = "healthy", service = narratorProvider }
+                        : new { ok = false, status = "degraded", service = narratorProvider, note = "Narration will use fallback text" };
+                }
             }
             catch (Exception ex)
             {
-                _narratorCachedResult = new { ok = false, status = "degraded", service = "lm-studio", error = ex.Message, note = "Narration will use fallback text" };
+                _narratorCachedResult = new { ok = false, status = "degraded", service = narratorProvider, error = ex.Message, note = "Narration will use fallback text" };
             }
 
             _narratorCacheExpiry = DateTimeOffset.UtcNow + NarratorCacheDuration;
@@ -225,6 +244,24 @@ public class DashboardController : ControllerBase
         }
 
         return Ok(checks);
+    }
+
+    /// <summary>Verifies the configured Codex executable used by the dashboard narrator.</summary>
+    private static async Task<string> ProbeCodexCliAsync(string executable, CancellationToken ct)
+    {
+        var startInfo = CodexCliLocator.CreateStartInfo(executable);
+        startInfo.ArgumentList.Add("--version");
+
+        using var process = Process.Start(startInfo)
+            ?? throw new InvalidOperationException("Codex CLI health probe did not start. The wand appears to be decorative.");
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(ct);
+        var stderrTask = process.StandardError.ReadToEndAsync(ct);
+        await process.WaitForExitAsync(ct);
+        var stdout = (await stdoutTask).Trim();
+        var stderr = (await stderrTask).Trim();
+        if (process.ExitCode != 0)
+            throw new InvalidOperationException($"Codex CLI health probe exited with code {process.ExitCode}: {stderr}");
+        return string.IsNullOrWhiteSpace(stdout) ? "version unavailable" : stdout;
     }
 
     // ── LLM / Narrator model management ──

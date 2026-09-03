@@ -24,6 +24,7 @@
     context: null,
     selectedEntity: null,
     entityIndex: new Map(),
+    approvalInFlight: null,
     activity: readStoredArray(STORAGE.activity, MAX_ACTIVITY),
     proposals: readStoredArray(STORAGE.proposals, MAX_PROPOSALS),
     diagnostics: {
@@ -395,7 +396,16 @@
     document.getElementById('co-dm-proposals')?.addEventListener('click', (event) => {
       const approve = event.target.closest('[data-co-dm-approve]');
       const reject = event.target.closest('[data-co-dm-reject]');
-      if (approve) void service.approveProposal(approve.dataset.coDmApprove);
+      if (approve) {
+        const pending = service.approveProposal(approve.dataset.coDmApprove).catch((error) => {
+          service.recordActivity(`Approval failed before completion: ${error.message}`, 'failure');
+          return null;
+        });
+        state.approvalInFlight = pending;
+        void pending.finally(() => {
+          if (state.approvalInFlight === pending) state.approvalInFlight = null;
+        });
+      }
       if (reject) void service.rejectProposal(reject.dataset.coDmReject);
     });
   }
@@ -621,6 +631,7 @@
 
     async getContext(input = {}, options = {}) {
       if (Object.keys(input).length) throw new Error('Context input must be empty; player scope comes from the visible selection.');
+      if (state.approvalInFlight) await state.approvalInFlight;
       const context = await this.refreshContext({ storyLimit: 8, record: false, signal: options.signal });
       this.recordActivity(`Agent inspected ${context.player.name}'s current scene.`, 'info');
       return context;
@@ -768,6 +779,7 @@
       if (!proposal) throw new Error(`Proposal '${proposalId}' was not found.`);
       if (proposal.status !== 'pending') throw new Error(`Proposal '${proposalId}' is already ${proposal.status}.`);
       if (!proposal.approvalToken) throw new Error('This proposal cannot be approved after its local approval secret was lost. Reject it and create a fresh proposal.');
+      proposal.status = 'processing';
       proposal.result = 'Approval in progress…';
       renderProposals();
       try {
