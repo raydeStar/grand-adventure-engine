@@ -641,9 +641,12 @@ public class DashboardController : ControllerBase
         var createdCount = 0;
         var seededPlayers = new List<PlayerCharacter>();
 
-        // Demo personas belong to the shared demo user account so the documented Player Flow walkthrough can resume them.
-        var demoOwner = _configuration["DashboardAuth:User:Username"]?.Trim();
-        if (string.IsNullOrWhiteSpace(demoOwner)) demoOwner = DashboardRoles.User;
+        // Keep the public walkthrough persona on the shared user account while the
+        // operator fixture remains admin-only. Even demo actors deserve proper keys.
+        var demoUserOwner = _configuration["DashboardAuth:User:Username"]?.Trim();
+        if (string.IsNullOrWhiteSpace(demoUserOwner)) demoUserOwner = DashboardRoles.User;
+        var demoAdminOwner = _configuration["DashboardAuth:Admin:Username"]?.Trim();
+        if (string.IsNullOrWhiteSpace(demoAdminOwner)) demoAdminOwner = DashboardRoles.Admin;
 
         foreach (var seed in GetDemoCharacterTemplates())
         {
@@ -654,8 +657,13 @@ public class DashboardController : ControllerBase
                 continue;
             }
 
+            if (existing is not null)
+                await _stateManager.RemovePlayerAsync(seed.PlayerId!, ct);
+
             var concept = BuildCharacterConcept(seed, seed.PlayerId!);
-            concept.OwnerId = demoOwner;
+            concept.OwnerId = string.Equals(seed.PlayerId, "demo-user", StringComparison.OrdinalIgnoreCase)
+                ? demoUserOwner
+                : demoAdminOwner;
             var player = await _engine.CreateCharacterFromConceptAsync(concept, ct);
             seededPlayers.Add(player);
             createdCount++;

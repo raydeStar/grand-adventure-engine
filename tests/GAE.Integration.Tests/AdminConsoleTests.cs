@@ -139,9 +139,17 @@ public class AdminConsoleTests : IClassFixture<GaeWebApplicationFactory>
     [Fact]
     public async Task AdminSeedDemo_ReturnsDemoUserAndAdmin()
     {
+        await _adminClient.PostAsJsonAsync("/api/dashboard/admin/seed-demo", new { replaceExisting = true });
+        var message = await _adminClient.PostAsJsonAsync("/api/dashboard/admin/send-message", new
+        {
+            playerId = "demo-user",
+            message = "Temporary QA history that must not survive a deterministic reseed."
+        });
+        message.EnsureSuccessStatusCode();
+
         var response = await _adminClient.PostAsJsonAsync("/api/dashboard/admin/seed-demo", new
         {
-            replaceExisting = false
+            replaceExisting = true
         });
         response.EnsureSuccessStatusCode();
 
@@ -156,6 +164,15 @@ public class AdminConsoleTests : IClassFixture<GaeWebApplicationFactory>
         Assert.Equal(HttpStatusCode.OK, asUser.StatusCode);
         var demoUser = await asUser.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(GaeWebApplicationFactory.DefaultUserUsername, demoUser.GetProperty("ownerId").GetString());
+
+        var adminPersonaAsUser = await _userClient.GetAsync("/api/dashboard/players/demo-admin");
+        Assert.Equal(HttpStatusCode.NotFound, adminPersonaAsUser.StatusCode);
+        var adminPersona = await _adminClient.GetFromJsonAsync<JsonElement>("/api/dashboard/players/demo-admin");
+        Assert.Equal(GaeWebApplicationFactory.DefaultAdminUsername, adminPersona.GetProperty("ownerId").GetString());
+
+        var cleanStory = await _userClient.GetFromJsonAsync<JsonElement>("/api/dashboard/story?playerId=demo-user");
+        Assert.DoesNotContain(cleanStory.EnumerateArray(), entry =>
+            entry.GetProperty("narration").GetString()?.Contains("Temporary QA history", StringComparison.Ordinal) == true);
     }
 
     [Fact]

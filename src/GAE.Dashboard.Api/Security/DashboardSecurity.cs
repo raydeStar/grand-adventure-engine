@@ -49,8 +49,8 @@ public sealed class DashboardAuthOptions
 
     public bool ShowLoginPasswords { get; set; }
 
-    /// <summary>When false, the self-service registration endpoint is closed. Defaults to open.</summary>
-    public bool AllowRegistration { get; set; } = true;
+    /// <summary>Self-service registration is opt-in so an omitted production setting stays closed.</summary>
+    public bool AllowRegistration { get; set; }
 }
 
 public sealed class DashboardAccountOptions

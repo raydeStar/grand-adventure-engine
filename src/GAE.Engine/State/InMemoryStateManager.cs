@@ -37,7 +37,19 @@ public class InMemoryStateManager : IStateManager
     }
 
     public Task<bool> RemovePlayerAsync(string playerId, CancellationToken ct = default)
-        => Task.FromResult(_players.TryRemove(playerId, out _));
+    {
+        var removed = _players.TryRemove(playerId, out _);
+        var roomPrefix = $"{playerId}:";
+        foreach (var key in _playerRooms.Keys.Where(key => key.StartsWith(roomPrefix, StringComparison.Ordinal)))
+            _playerRooms.TryRemove(key, out _);
+
+        lock (_storyLock)
+        {
+            _storyEntries.RemoveAll(entry => string.Equals(entry.PlayerId, playerId, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return Task.FromResult(removed);
+    }
 
     // Room operations (templates)
     public Task<Room?> GetRoomAsync(string roomId, CancellationToken ct = default)

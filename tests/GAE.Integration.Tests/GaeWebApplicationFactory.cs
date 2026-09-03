@@ -70,7 +70,8 @@ public class GaeWebApplicationFactory : WebApplicationFactory<Program>, IAsyncLi
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ConnectionStrings:GameDatabase"] = _postgres.GetConnectionString(),
-                ["DataDir"] = _dataDir
+                ["DataDir"] = _dataDir,
+                ["DashboardAuth:AllowRegistration"] = "true"
             });
         });
 

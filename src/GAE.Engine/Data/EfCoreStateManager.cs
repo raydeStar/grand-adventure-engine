@@ -70,7 +70,10 @@ public class EfCoreStateManager : IStateManager
     public async Task<bool> RemovePlayerAsync(string playerId, CancellationToken ct = default)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
-        // Clean up per-player room instances first (orphaned rooms cause stale state on re-create)
+        // Remove player-scoped history and queued prose before the identity disappears.
+        // Otherwise a recycled demo ID inherits its predecessor's rather incriminating diary.
+        await db.PendingNarrations.Where(n => n.PlayerId == playerId).ExecuteDeleteAsync(ct);
+        await db.StoryEntries.Where(e => e.PlayerId == playerId).ExecuteDeleteAsync(ct);
         await db.PlayerRooms.Where(pr => pr.PlayerId == playerId).ExecuteDeleteAsync(ct);
         var rows = await db.Players.Where(p => p.Id == playerId).ExecuteDeleteAsync(ct);
         return rows > 0;

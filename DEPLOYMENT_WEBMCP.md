@@ -22,6 +22,7 @@ GAE_DASHBOARD_USER_PASSWORD=replace-with-a-unique-player-secret
 GAE_DASHBOARD_ADMIN_USERNAME=admin
 GAE_DASHBOARD_ADMIN_PASSWORD=replace-with-a-different-admin-secret
 GAE_DASHBOARD_SHOW_LOGIN_PASSWORDS=false
+GAE_DASHBOARD_ALLOW_REGISTRATION=false
 GAE_AUTH_RATE_LIMIT_PER_MINUTE=10
 GAE_DB_PASSWORD=replace-with-a-third-unique-secret
 GAE_HOST_PORT=8181
@@ -29,6 +30,7 @@ POSTGRES_HOST_PORT=5432
 ```
 
 Production startup rejects blank, short, shared, or published demo passwords. Use three different secrets of at least 12 characters and keep `.env` out of version control.
+Self-service registration is closed by default. Keep it closed for the shared challenge demo; set it to `true` only when you intentionally want visitors to create isolated accounts and characters.
 
 ## Narrator configuration and fallback
 
@@ -94,6 +96,7 @@ The smallest durable route is one Docker web service plus one managed PostgreSQL
    DashboardAuth__Admin__Username=admin
    DashboardAuth__Admin__Password=<different-admin-secret>
    DashboardAuth__ShowLoginPasswords=false
+   DashboardAuth__AllowRegistration=false
    DashboardAuth__LoginRateLimitPerMinute=10
    ConnectionStrings__GameDatabase=<Npgsql connection string above>
    LmStudio__Provider=OpenAICompatible
@@ -107,6 +110,28 @@ The smallest durable route is one Docker web service plus one managed PostgreSQL
 7. Deploy, verify `/health/live`, sign in as administrator, click **Seed Demo**, and run the scenario before sharing judge credentials.
 
 No Render Blueprint was added because it was not deployed and tested during the challenge timebox. The manual mapping above is explicit; an unverified infrastructure file would be theatre in a YAML waistcoat.
+
+## Azure Container Apps route
+
+For a Visual Studio Azure dev/test credit, use a single Container Apps Consumption app plus PostgreSQL Flexible Server in the same region. Reuse an existing Container Apps environment, Basic container registry, and PostgreSQL server when they are still needed and healthy; create a separate database and login for this application. Do not keep duplicate idle PostgreSQL servers and registries merely for sentiment's sake.
+
+1. Build and push the existing `Dockerfile` image to Azure Container Registry.
+2. Grant the Container App's managed identity `AcrPull` instead of storing registry credentials.
+3. Expose external ingress on container port `8080`. Keep one replica during a live judging window; otherwise use a minimum of zero and maximum of one.
+4. Create an isolated PostgreSQL database and role. Restrict its firewall to the app's outbound addresses and require TLS in the Npgsql connection string.
+5. Set the same dashboard authentication variables listed above, plus:
+
+   ```text
+   ASPNETCORE_ENVIRONMENT=Production
+   ASPNETCORE_URLS=http://+:8080
+   ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
+   ConnectionStrings__GameDatabase=Host=<server>.postgres.database.azure.com;Port=5432;Database=gae;Username=<app-user>;Password=<secret>;Ssl Mode=Require
+   ```
+
+6. Mount durable storage at `/app/data/data-protection-keys` if browser sessions must survive a revision replacement. Without it, users may need to sign in again after a restart.
+7. Verify the HTTPS FQDN, `/health/live`, login isolation, SignalR delivery, and the complete demo scenario before sharing credentials.
+
+The app can run with its grounded fallback when no reachable OpenAI-compatible narrator is configured. That is safe for infrastructure validation, but the signed-in health panel will correctly report degraded narrator health. Retire old Azure resources only after identifying their exact resource group, checking for data that needs export, and receiving explicit approval; deleting an Azure subscription is neither required nor appropriate.
 
 ## Fastest temporary verification route
 
