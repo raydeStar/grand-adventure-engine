@@ -20,8 +20,9 @@
     bound: false,
     authenticated: false,
     players: [],
-    selectedPlayerId: readStoredText(STORAGE.player),
+    selectedPlayerId: '',
     context: null,
+    liveFeed: [],
     selectedEntity: null,
     entityIndex: new Map(),
     approvalInFlight: null,
@@ -171,6 +172,7 @@
     return {
       id: bounded(entry?.id || '', 120),
       actionId: bounded(entry?.actionId || '', 120),
+      playerId: bounded(entry?.playerId || '', 120),
       rawInput: bounded(entry?.rawInput || '', 240),
       mechanicalSummary: bounded(entry?.mechanicalSummary || '', 500),
       narration: bounded(entry?.narration || '', 900),
@@ -245,15 +247,67 @@
     const select = document.getElementById('co-dm-player-select');
     if (!select) return;
     const selected = state.selectedPlayerId;
-    select.innerHTML = '<option value="">Choose a player</option>' + state.players.map((player) =>
+    select.innerHTML = '<option value="">All Players — Live Feed</option>' + state.players.map((player) =>
       `<option value="${esc(player.id)}">${esc(player.name || player.id)} (${esc(player.id)})</option>`
     ).join('');
     select.value = state.players.some((player) => player.id === selected) ? selected : '';
   }
 
+  function renderLiveFeed(host) {
+    const playerById = new Map(state.players.map((player) => [player.id, player]));
+    const latestByPlayer = new Map();
+    for (const entry of state.liveFeed) {
+      if (!latestByPlayer.has(entry.playerId)) latestByPlayer.set(entry.playerId, entry);
+    }
+    const playerCards = state.players.length
+      ? state.players.map((player) => {
+        const latest = latestByPlayer.get(player.id);
+        const hold = player.commandHold;
+        return `<article class="co-dm-player-card${hold ? ' is-held' : ''}">
+          <div class="co-dm-card-heading"><strong>${esc(player.name || player.id)}</strong><span class="co-dm-presence ${hold ? 'held' : 'live'}">${hold ? 'held' : 'live'}</span></div>
+          <code>${esc(player.id)}</code>
+          <div class="co-dm-player-vitals"><span>HP ${esc(player.hp)}/${esc(player.maxHp)}</span><span>MP ${esc(player.mp)}/${esc(player.maxMp)}</span><span>Lv.${esc(player.level)}</span></div>
+          <div class="co-dm-player-location">${esc(player.currentRoomId || 'unknown room')} · ${esc(player.activeWorldId || 'default world')}</div>
+          <p>${esc(latest?.narration || latest?.mechanicalSummary || (hold?.reason ? `DM review: ${hold.reason}` : 'No recent activity.'))}</p>
+          <button class="btn btn-secondary btn-xs" data-co-dm-focus="${esc(player.id)}" type="button">Focus ${esc(player.name || player.id)}</button>
+        </article>`;
+      }).join('')
+      : '<div class="empty-state">No players are currently available.</div>';
+    const timeline = state.liveFeed.length
+      ? state.liveFeed.map((entry) => {
+        const player = playerById.get(entry.playerId);
+        const time = entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'now';
+        return `<article class="co-dm-live-entry">
+          <time datetime="${esc(entry.timestamp || '')}">${esc(time)}</time>
+          <button data-co-dm-focus="${esc(entry.playerId)}" type="button">${esc(player?.name || entry.playerId)}</button>
+          <div><strong>${esc(entry.rawInput || 'DM / world')}</strong><p>${esc(entry.narration || entry.mechanicalSummary || 'State changed without visible narration.')}</p></div>
+        </article>`;
+      }).join('')
+      : '<div class="empty-state">No player activity yet. New commands and DM messages will appear here live.</div>';
+
+    host.innerHTML = `<div class="co-dm-live-heading"><div><strong>ALL PLAYERS LIVE</strong><span>Chronological campaign view</span></div><span>${state.players.length} player${state.players.length === 1 ? '' : 's'}</span></div>
+      <div class="co-dm-player-grid">${playerCards}</div>
+      <div class="co-dm-live-timeline"><h4>Latest activity</h4>${timeline}</div>`;
+  }
+
+  function syncPlayerScopedControls(hasFocus) {
+    const label = document.querySelector('#co-dm-message-form > label');
+    if (label) label.textContent = hasFocus ? 'Message exactly one selected player' : 'Focus one player to send a message';
+    document.querySelectorAll('#co-dm-message, #co-dm-message-delivery, #co-dm-message-form button')
+      .forEach((control) => { control.disabled = !hasFocus; });
+  }
+
   function renderScene() {
     const host = document.getElementById('co-dm-scene');
     if (!host) return;
+    syncPlayerScopedControls(!!state.selectedPlayerId);
+    const title = document.getElementById('co-dm-scene-title');
+    if (!state.selectedPlayerId) {
+      if (title) title.textContent = 'All Player Activity';
+      renderLiveFeed(host);
+      return;
+    }
+    if (title) title.textContent = 'Current Scene';
     const context = state.context;
     if (!context) {
       host.innerHTML = `<div class="empty-state">${state.selectedPlayerId ? 'Context has not been refreshed.' : 'Choose one player to inspect authoritative game state.'}</div>`;
@@ -368,13 +422,14 @@
         state.selectedPlayerId = '';
         state.context = null;
         persistText(STORAGE.player, '');
-        renderScene();
+        void service.refreshLiveFeed({ record: true }).catch((error) => service.recordActivity(`Live feed refresh failed: ${error.message}`, 'failure'));
         return;
       }
       void service.selectPlayer(playerId, { record: true });
     });
     document.getElementById('btn-co-dm-refresh')?.addEventListener('click', () => {
-      void service.refreshContext({ record: true }).catch((error) => service.recordActivity(`Refresh failed: ${error.message}`, 'failure'));
+      const refresh = state.selectedPlayerId ? service.refreshContext({ record: true }) : service.refreshLiveFeed({ record: true });
+      void refresh.catch((error) => service.recordActivity(`Refresh failed: ${error.message}`, 'failure'));
     });
     document.getElementById('btn-co-dm-clear-activity')?.addEventListener('click', () => {
       state.activity = [];
@@ -415,6 +470,12 @@
       if (reject) void service.rejectProposal(reject.dataset.coDmReject);
     });
     document.getElementById('co-dm-scene')?.addEventListener('click', (event) => {
+      const focus = event.target.closest('[data-co-dm-focus]');
+      if (focus) {
+        void service.selectPlayer(focus.dataset.coDmFocus, { record: true })
+          .catch((error) => service.recordActivity(`Player focus failed: ${error.message}`, 'failure'));
+        return;
+      }
       const hold = event.target.closest('[data-co-dm-hold]');
       const resume = event.target.closest('[data-co-dm-resume]');
       if (!hold && !resume) return;
@@ -557,8 +618,15 @@
         renderAll();
         return null;
       }
-      const [players, actions] = await Promise.all([API.getPlayers(), API.getCoDmActions().catch(() => [])]);
+      const [players, actions, story] = await Promise.all([
+        API.getPlayers(),
+        API.getCoDmActions().catch(() => []),
+        API.getStory(null, 50).catch(() => [])
+      ]);
       state.players = players;
+      state.liveFeed = (story || []).map(compactStory)
+        .filter((entry) => entry.playerId)
+        .sort((left, right) => new Date(right.timestamp || 0) - new Date(left.timestamp || 0));
       if (state.selectedPlayerId && !state.players.some((player) => player.id === state.selectedPlayerId)) {
         state.selectedPlayerId = '';
         state.context = null;
@@ -583,7 +651,15 @@
     },
 
     handleGameEvent(event = {}) {
-      if (!state.selectedPlayerId) return;
+      if (!state.selectedPlayerId) {
+        window.clearTimeout(state.eventRefreshTimer);
+        state.eventRefreshTimer = window.setTimeout(() => {
+          void this.refreshLiveFeed({ record: false }).catch((error) => {
+            console.warn('Co-DM live feed refresh failed; the manual refresh lever still functions.', error);
+          });
+        }, 150);
+        return;
+      }
       if (event.playerId && event.playerId !== state.selectedPlayerId) return;
       window.clearTimeout(state.eventRefreshTimer);
       state.eventRefreshTimer = window.setTimeout(() => {
@@ -591,6 +667,23 @@
           console.warn('Co-DM event refresh failed; the manual refresh lever still functions.', error);
         });
       }, 150);
+    },
+
+    async refreshLiveFeed(options = {}) {
+      if (!state.authenticated) throw domainError('AUTH_REQUIRED', 'An authenticated admin session is required.');
+      const [players, story] = await Promise.all([
+        API.getPlayers({ signal: options.signal }),
+        API.getStory(null, 50, undefined, { signal: options.signal })
+      ]);
+      state.players = Array.isArray(players) ? players : [];
+      state.liveFeed = (story || []).map(compactStory)
+        .filter((entry) => entry.playerId)
+        .sort((left, right) => new Date(right.timestamp || 0) - new Date(left.timestamp || 0));
+      state.context = null;
+      renderPlayerOptions();
+      renderScene();
+      if (options.record !== false) this.recordActivity('Refreshed the all-player live feed.', 'info');
+      return { players: clone(state.players), recentStory: clone(state.liveFeed) };
     },
 
     async selectPlayer(playerId, options = {}) {

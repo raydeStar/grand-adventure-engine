@@ -518,6 +518,41 @@ test.describe('Grand Adventure Engine dashboard', () => {
     await expect(page.locator('#story-log')).not.toContainText('Exits: south');
   });
 
+  test('DM Console opens on an all-player live feed and can focus one player', async ({ page }) => {
+    await login(page, 'admin');
+    await seedDemoViaApi(page, true);
+    await page.evaluate(async () => {
+      await API.sendMessage({ playerId: 'demo-user', message: 'Ari studies the southern passage.' });
+      await API.sendMessage({ playerId: 'demo-admin', message: 'Marshal Vale watches the tavern door.' });
+      await window.GaeCoDm.initialize({ authenticated: true });
+    });
+    await openAdminConsole(page);
+    await switchAdminTab(page, 'overview');
+
+    await expect(page.locator('#co-dm-player-select')).toHaveValue('');
+    await expect(page.locator('#co-dm-scene-title')).toHaveText('All Player Activity');
+    await expect(page.locator('#co-dm-scene')).toContainText('ALL PLAYERS LIVE');
+    await expect(page.locator('#co-dm-scene')).toContainText('Ari studies the southern passage.');
+    await expect(page.locator('#co-dm-scene')).toContainText('Marshal Vale watches the tavern door.');
+    await expect(page.locator('#co-dm-message')).toBeDisabled();
+
+    await page.locator('#co-dm-scene [data-co-dm-focus="demo-user"]').first().click();
+    await expect(page.locator('#co-dm-player-select')).toHaveValue('demo-user');
+    await expect(page.locator('#co-dm-scene-title')).toHaveText('Current Scene');
+    await expect(page.locator('#co-dm-scene')).toContainText('Ari Quickstep');
+    await expect(page.locator('#co-dm-message')).toBeEnabled();
+
+    await page.locator('#co-dm-player-select').selectOption('');
+    await expect(page.locator('#co-dm-scene-title')).toHaveText('All Player Activity');
+    await expect(page.locator('#co-dm-scene')).toContainText('ALL PLAYERS LIVE');
+
+    const liveMessage = `Ari moves while the DM watches ${Date.now()}`;
+    await page.evaluate(async (message) => {
+      await API.sendMessage({ playerId: 'demo-user', message });
+    }, liveMessage);
+    await expect(page.locator('#co-dm-scene')).toContainText(liveMessage, { timeout: 5_000 });
+  });
+
   test('WebMCP Co-DM registers bounded tools and keeps human approval authoritative', async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.removeItem('gae.coDm.selectedPlayer');

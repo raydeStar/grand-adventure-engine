@@ -38,8 +38,8 @@ const API = {
     return res.json();
   },
 
-  async getPlayers() {
-    return this.getJson(`${this.base}/players`);
+  async getPlayers(options = {}) {
+    return this.getJson(`${this.base}/players`, options);
   },
 
   async getPlayer(id, options = {}) {
