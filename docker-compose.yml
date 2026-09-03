@@ -25,6 +25,7 @@ services:
       DashboardAuth__Admin__Username: "${GAE_DASHBOARD_ADMIN_USERNAME:-admin}"
       DashboardAuth__Admin__Password: "${GAE_DASHBOARD_ADMIN_PASSWORD:?Set GAE_DASHBOARD_ADMIN_PASSWORD in .env}"
       DashboardAuth__ShowLoginPasswords: "${GAE_DASHBOARD_SHOW_LOGIN_PASSWORDS:-false}"
+      DashboardAuth__AllowRegistration: "${GAE_DASHBOARD_ALLOW_REGISTRATION:-true}"
       DashboardAuth__LoginRateLimitPerMinute: "${GAE_AUTH_RATE_LIMIT_PER_MINUTE:-10}"
       ConnectionStrings__GameDatabase: "Host=postgres;Port=5432;Database=gae;Username=gae_app;Password=${GAE_DB_PASSWORD:?Set GAE_DB_PASSWORD in .env}"
     volumes:

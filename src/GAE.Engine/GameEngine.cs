@@ -395,6 +395,7 @@ public class GameEngine : IGameEngine
         {
             Id = concept.PlayerDiscordId,
             DiscordId = concept.PlayerDiscordId,
+            OwnerId = concept.OwnerId,
             Name = concept.Name,
             Gender = concept.Gender,
             Race = concept.Race,

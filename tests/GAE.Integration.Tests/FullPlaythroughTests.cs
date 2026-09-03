@@ -111,6 +111,7 @@ public class FullPlaythroughTests : IClassFixture<GaeWebApplicationFactory>
         await engine.CreateCharacterFromConceptAsync(new CharacterConcept
         {
             PlayerDiscordId = PlayerId,
+            OwnerId = GaeWebApplicationFactory.DefaultUserUsername,
             Name = "Thorin Ironfoot",
             Race = "Dwarf",
             Class = "Fighter",
@@ -228,6 +229,7 @@ public class FullPlaythroughTests : IClassFixture<GaeWebApplicationFactory>
         await engine.CreateCharacterFromConceptAsync(new CharacterConcept
         {
             PlayerDiscordId = "forest-explorer",
+            OwnerId = GaeWebApplicationFactory.DefaultUserUsername,
             Name = "Elara Windwalker",
             Race = "Elf",
             Class = "Ranger",
@@ -303,6 +305,7 @@ public class FullPlaythroughTests : IClassFixture<GaeWebApplicationFactory>
         var player = await engine.CreateCharacterFromConceptAsync(new CharacterConcept
         {
             PlayerDiscordId = "math-check",
+            OwnerId = GaeWebApplicationFactory.DefaultUserUsername,
             Name = "Mathius the Calculated",
             Race = "Human",
             Class = "Fighter",
@@ -379,6 +382,7 @@ public class FullPlaythroughTests : IClassFixture<GaeWebApplicationFactory>
         await engine.CreateCharacterFromConceptAsync(new CharacterConcept
         {
             PlayerDiscordId = "combat-test",
+            OwnerId = GaeWebApplicationFactory.DefaultUserUsername,
             Name = "Stabitha the Brave",
             Race = "Human",
             Class = "Fighter",
@@ -433,6 +437,7 @@ public class FullPlaythroughTests : IClassFixture<GaeWebApplicationFactory>
         await engine.CreateCharacterFromConceptAsync(new CharacterConcept
         {
             PlayerDiscordId = "silly-player",
+            OwnerId = GaeWebApplicationFactory.DefaultUserUsername,
             Name = "Bongo McSlapface",
             Race = "Halfling",
             Class = "Bard",
@@ -495,6 +500,7 @@ public class FullPlaythroughTests : IClassFixture<GaeWebApplicationFactory>
         await engine.CreateCharacterFromConceptAsync(new CharacterConcept
         {
             PlayerDiscordId = "reset-test-player",
+            OwnerId = GaeWebApplicationFactory.DefaultUserUsername,
             Name = "Resettus",
             Race = "Human",
             Class = "Fighter",

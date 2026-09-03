@@ -30,6 +30,7 @@ public class QuestFlowTests : IClassFixture<GaeWebApplicationFactory>
         var concept = new CharacterConcept
         {
             PlayerDiscordId = playerId,
+            OwnerId = GaeWebApplicationFactory.DefaultUserUsername,
             Name = "Quester McQuestface",
             Race = "Human",
             Class = "Fighter",

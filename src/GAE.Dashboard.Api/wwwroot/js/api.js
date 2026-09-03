@@ -20,6 +20,10 @@ const API = {
     return this.postJson(`${this.base}/auth/login`, { username, password, rememberMe });
   },
 
+  async register(username, password, rememberMe = false) {
+    return this.postJson(`${this.base}/auth/register`, { username, password, rememberMe });
+  },
+
   async logout() {
     const res = await fetch(`${this.base}/auth/logout`, {
       method: 'POST',

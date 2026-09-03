@@ -66,6 +66,8 @@ public class PlayerConfiguration : IEntityTypeConfiguration<PlayerEntity>
             .IsRequired();
         builder.Property(p => p.Backstory).HasColumnName("backstory");
         builder.Property(p => p.DiscordId).HasColumnName("discord_id");
+        builder.Property(p => p.OwnerId).HasColumnName("owner_id");
+        builder.HasIndex(p => p.OwnerId);
         builder.Property(p => p.ThreadId).HasColumnName("thread_id");
         builder.Property(p => p.HasCompletedDemo).HasColumnName("has_completed_demo");
         builder.Property(p => p.CurrentRoomId).HasColumnName("current_room_id");

@@ -181,6 +181,8 @@ const UI = {
     this.$('btn-logout-portal').classList.toggle('hidden', !signedIn);
     this.$('btn-fill-user').classList.toggle('hidden', signedIn);
     this.$('btn-fill-admin').classList.toggle('hidden', signedIn);
+    const registerButton = this.$('btn-register');
+    if (registerButton) registerButton.classList.toggle('hidden', signedIn);
 
     const modeAdmin = document.querySelector('[data-mode-button="admin"]');
     if (modeAdmin) modeAdmin.classList.toggle('hidden', !canAdmin);

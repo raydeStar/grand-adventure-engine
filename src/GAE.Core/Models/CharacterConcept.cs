@@ -3,6 +3,8 @@ namespace GAE.Core.Models;
 public class CharacterConcept
 {
     public string PlayerDiscordId { get; set; } = string.Empty;
+    /// <summary>Dashboard account creating the character; stamped onto PlayerCharacter.OwnerId.</summary>
+    public string? OwnerId { get; set; }
     public string Name { get; set; } = string.Empty;
     public string Gender { get; set; } = string.Empty;
     public string Race { get; set; } = string.Empty;

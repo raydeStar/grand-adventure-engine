@@ -105,6 +105,7 @@
     bind('auth-form', 'submit', handleLogin);
     bind('btn-fill-user', 'click', () => fillCredentials('user'));
     bind('btn-fill-admin', 'click', () => fillCredentials('admin'));
+    bind('btn-register', 'click', handleRegister);
     bind('btn-logout-header', 'click', () => void handleLogout());
     bind('btn-logout-portal', 'click', () => void handleLogout());
 
@@ -506,6 +507,34 @@
     } finally {
       submit.disabled = false;
       submit.textContent = 'Sign In';
+    }
+  }
+
+  async function handleRegister() {
+    const submit = UI.$('btn-register');
+    const username = UI.$('auth-username').value.trim();
+    const password = UI.$('auth-password').value;
+    const rememberMe = UI.$('auth-remember').checked;
+
+    if (!username || !password) {
+      UI.setAuthMessage('Choose a username and a password (8+ characters), then press Create Account.', 'info');
+      UI.$(username ? 'auth-password' : 'auth-username').focus();
+      return;
+    }
+
+    submit.disabled = true;
+    submit.textContent = 'Creating...';
+    UI.setAuthMessage('');
+
+    try {
+      const session = await API.register(username, password, rememberMe);
+      UI.$('auth-form').reset();
+      await onAuthenticated(session);
+    } catch (error) {
+      await handleError(error, { auth: true });
+    } finally {
+      submit.disabled = false;
+      submit.textContent = 'Create Account';
     }
   }
 

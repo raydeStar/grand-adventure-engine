@@ -15,6 +15,7 @@ public class PlayerEntity
     public string HomeWorldId { get; set; } = WorldDefaults.DefaultWorldId;
     public string Backstory { get; set; } = string.Empty;
     public string? DiscordId { get; set; }
+    public string? OwnerId { get; set; }
     public long? ThreadId { get; set; }
     public bool HasCompletedDemo { get; set; }
     public string CurrentRoomId { get; set; } = "spawn";
@@ -71,6 +72,7 @@ public class PlayerEntity
         HomeWorldId = HomeWorldId,
         Backstory = Backstory,
         DiscordId = DiscordId,
+        OwnerId = OwnerId,
         ThreadId = ThreadId is not null ? (ulong)ThreadId.Value : null,
         HasCompletedDemo = HasCompletedDemo,
         CurrentRoomId = CurrentRoomId,
@@ -116,6 +118,7 @@ public class PlayerEntity
         HomeWorldId = p.HomeWorldId,
         Backstory = p.Backstory,
         DiscordId = p.DiscordId,
+        OwnerId = p.OwnerId,
         ThreadId = p.ThreadId is not null ? (long)p.ThreadId.Value : null,
         HasCompletedDemo = p.HasCompletedDemo,
         CurrentRoomId = p.CurrentRoomId,
@@ -160,6 +163,7 @@ public class PlayerEntity
         HomeWorldId = p.HomeWorldId;
         Backstory = p.Backstory;
         DiscordId = p.DiscordId;
+        OwnerId = p.OwnerId;
         ThreadId = p.ThreadId is not null ? (long)p.ThreadId.Value : null;
         HasCompletedDemo = p.HasCompletedDemo;
         CurrentRoomId = p.CurrentRoomId;

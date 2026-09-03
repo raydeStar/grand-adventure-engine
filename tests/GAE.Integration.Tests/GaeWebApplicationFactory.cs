@@ -34,6 +34,20 @@ public class GaeWebApplicationFactory : WebApplicationFactory<Program>, IAsyncLi
 
     public HttpClient CreateAdminClient() => CreateAuthenticatedClient(DefaultAdminUsername, DefaultAdminPassword);
 
+    /// <summary>Registers a fresh self-service account and returns a client signed in as it.</summary>
+    public async Task<HttpClient> CreateRegisteredClientAsync(string username, string password)
+    {
+        var client = CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            HandleCookies = true
+        });
+
+        var response = await client.PostAsJsonAsync("/api/dashboard/auth/register", new { username, password });
+        response.EnsureSuccessStatusCode();
+        return client;
+    }
+
     public async Task InitializeAsync()
     {
         await _postgres.StartAsync();

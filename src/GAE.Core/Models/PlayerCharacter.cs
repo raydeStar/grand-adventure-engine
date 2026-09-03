@@ -12,6 +12,8 @@ public class PlayerCharacter
     public string HomeWorldId { get; set; } = WorldDefaults.DefaultWorldId;
     public string Backstory { get; set; } = string.Empty;
     public string? DiscordId { get; set; }
+    /// <summary>Dashboard account that owns this character. Null for legacy or Discord-only characters (admin-only from the dashboard).</summary>
+    public string? OwnerId { get; set; }
     public ulong? ThreadId { get; set; }
     public bool HasCompletedDemo { get; set; }
     public string CurrentRoomId { get; set; } = "spawn";

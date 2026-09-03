@@ -1,8 +1,11 @@
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
+using GAE.Engine.Data;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace GAE.Dashboard.Api.Security;
@@ -45,6 +48,9 @@ public sealed class DashboardAuthOptions
     public int SessionHours { get; set; } = 12;
 
     public bool ShowLoginPasswords { get; set; }
+
+    /// <summary>When false, the self-service registration endpoint is closed. Defaults to open.</summary>
+    public bool AllowRegistration { get; set; } = true;
 }
 
 public sealed class DashboardAccountOptions
@@ -60,9 +66,13 @@ public sealed record DashboardLoginHint(string Username, string? Password, strin
 
 public sealed record DashboardSessionDescriptor(string Username, string Role, string DisplayName, bool IsAdmin);
 
+public sealed record DashboardRegistrationResult(DashboardAccount? Account, string? Error, bool Conflict = false);
+
 public interface IDashboardAuthService
 {
-    DashboardAccount? ValidateCredentials(string username, string password);
+    Task<DashboardAccount?> ValidateCredentialsAsync(string username, string password, CancellationToken ct = default);
+    Task<DashboardRegistrationResult> RegisterAsync(string username, string password, string? displayName, CancellationToken ct = default);
+    bool IsRegistrationOpen { get; }
     IReadOnlyList<DashboardLoginHint> GetLoginHints(bool includePasswords);
     DashboardSessionDescriptor CreateSessionDescriptor(ClaimsPrincipal principal);
     int GetSessionLifetimeHours();
@@ -70,35 +80,137 @@ public interface IDashboardAuthService
     IReadOnlyList<string> GetStartupErrors(bool isProduction);
 }
 
+/// <summary>PBKDF2-SHA256 password hashing for self-registered dashboard accounts.</summary>
+public static class DashboardPasswordHasher
+{
+    private const string Scheme = "pbkdf2-sha256";
+    private const int Iterations = 210_000;
+    private const int SaltSize = 16;
+    private const int KeySize = 32;
+
+    public static string Hash(string password)
+    {
+        var salt = RandomNumberGenerator.GetBytes(SaltSize);
+        var key = Rfc2898DeriveBytes.Pbkdf2(password, salt, Iterations, HashAlgorithmName.SHA256, KeySize);
+        return $"{Scheme}${Iterations}${Convert.ToBase64String(salt)}${Convert.ToBase64String(key)}";
+    }
+
+    public static bool Verify(string password, string stored)
+    {
+        var parts = stored.Split('$');
+        if (parts.Length != 4 || parts[0] != Scheme || !int.TryParse(parts[1], out var iterations))
+            return false;
+
+        byte[] salt;
+        byte[] expected;
+        try
+        {
+            salt = Convert.FromBase64String(parts[2]);
+            expected = Convert.FromBase64String(parts[3]);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+
+        var actual = Rfc2898DeriveBytes.Pbkdf2(password, salt, iterations, HashAlgorithmName.SHA256, expected.Length);
+        return CryptographicOperations.FixedTimeEquals(actual, expected);
+    }
+}
+
 public sealed class DashboardAuthService : IDashboardAuthService
 {
     private static readonly DashboardAuthOptions DefaultOptions = new();
+    private static readonly Regex UsernamePattern = new("^[A-Za-z0-9][A-Za-z0-9_.-]{2,31}$", RegexOptions.Compiled);
 
     // Stand-in compared against when the submitted username matches no account. Never a valid
-    // credential — it only exists to keep the failure path's timing identical to the success path.
+    // credential; it only exists to keep the failure path's timing identical to the success path.
     private const string DecoyPassword = "gae-unknown-account-decoy-not-a-credential";
-    private readonly IOptionsMonitor<DashboardAuthOptions> _optionsMonitor;
+    private static readonly string DecoyHash = DashboardPasswordHasher.Hash(DecoyPassword);
 
-    public DashboardAuthService(IOptionsMonitor<DashboardAuthOptions> optionsMonitor)
+    private readonly IOptionsMonitor<DashboardAuthOptions> _optionsMonitor;
+    private readonly IDbContextFactory<GaeDbContext> _dbContextFactory;
+
+    public DashboardAuthService(IOptionsMonitor<DashboardAuthOptions> optionsMonitor, IDbContextFactory<GaeDbContext> dbContextFactory)
     {
         _optionsMonitor = optionsMonitor;
+        _dbContextFactory = dbContextFactory;
     }
 
+    public bool IsRegistrationOpen => CurrentOptions.AllowRegistration;
+
     /// <summary>
-    /// Validates a login. The password comparison is fixed-time and still runs when the username
-    /// is unknown, so response timing does not reveal which usernames exist.
+    /// Validates a login against the two configuration-backed accounts first, then the
+    /// self-registered accounts table. Both paths do constant work whether or not the username exists.
     /// </summary>
-    public DashboardAccount? ValidateCredentials(string username, string password)
+    public async Task<DashboardAccount?> ValidateCredentialsAsync(string username, string password, CancellationToken ct = default)
     {
-        var account = GetAccounts().FirstOrDefault(candidate =>
-            string.Equals(candidate.Username, username?.Trim(), StringComparison.OrdinalIgnoreCase));
+        var trimmed = username?.Trim() ?? string.Empty;
+        var configured = GetConfiguredAccounts().FirstOrDefault(candidate =>
+            string.Equals(candidate.Username, trimmed, StringComparison.OrdinalIgnoreCase));
 
-        // Compare against a decoy of the same shape when the account is missing, so both the
-        // found and not-found paths do the same work.
-        var expected = account?.Password ?? DecoyPassword;
-        var matches = FixedTimeEquals(expected, password);
+        if (configured is not null)
+            return FixedTimeEquals(configured.Password, password) ? configured : null;
 
-        return account is not null && matches ? account : null;
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var normalized = Normalize(trimmed);
+        var user = await db.DashboardUsers.FirstOrDefaultAsync(u => u.NormalizedUsername == normalized, ct);
+
+        // Verify against a decoy hash when the account is missing, so both paths cost the same.
+        var matches = DashboardPasswordHasher.Verify(password ?? string.Empty, user?.PasswordHash ?? DecoyHash);
+        if (user is null || !matches)
+            return null;
+
+        user.LastLoginAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+
+        return new DashboardAccount(user.Username, string.Empty, user.Role, user.DisplayName);
+    }
+
+    public async Task<DashboardRegistrationResult> RegisterAsync(string username, string password, string? displayName, CancellationToken ct = default)
+    {
+        if (!IsRegistrationOpen)
+            return new DashboardRegistrationResult(null, "Registration is closed on this deployment.");
+
+        var trimmed = username?.Trim() ?? string.Empty;
+        if (!UsernamePattern.IsMatch(trimmed))
+            return new DashboardRegistrationResult(null, "Username must be 3-32 characters: letters, digits, dot, underscore or hyphen.");
+
+        if (string.IsNullOrEmpty(password) || password.Length < 8)
+            return new DashboardRegistrationResult(null, "Password must contain at least 8 characters.");
+
+        if (password.Length > 256)
+            return new DashboardRegistrationResult(null, "Password is too long.");
+
+        if (GetConfiguredAccounts().Any(account => string.Equals(account.Username, trimmed, StringComparison.OrdinalIgnoreCase)))
+            return new DashboardRegistrationResult(null, "That username is already taken.", Conflict: true);
+
+        var normalized = Normalize(trimmed);
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        if (await db.DashboardUsers.AnyAsync(u => u.NormalizedUsername == normalized, ct))
+            return new DashboardRegistrationResult(null, "That username is already taken.", Conflict: true);
+
+        var entity = new DashboardUserEntity
+        {
+            Username = trimmed,
+            NormalizedUsername = normalized,
+            DisplayName = string.IsNullOrWhiteSpace(displayName) ? trimmed : displayName.Trim(),
+            PasswordHash = DashboardPasswordHasher.Hash(password),
+            Role = DashboardRoles.User
+        };
+
+        db.DashboardUsers.Add(entity);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            // The unique index on normalized_username lost a race with a concurrent registration.
+            return new DashboardRegistrationResult(null, "That username is already taken.", Conflict: true);
+        }
+
+        return new DashboardRegistrationResult(new DashboardAccount(entity.Username, string.Empty, entity.Role, entity.DisplayName), null);
     }
 
     /// <summary>
@@ -112,9 +224,11 @@ public sealed class DashboardAuthService : IDashboardAuthService
         return CryptographicOperations.FixedTimeEquals(expectedHash, candidateHash);
     }
 
+    private static string Normalize(string username) => username.Trim().ToLowerInvariant();
+
     public IReadOnlyList<DashboardLoginHint> GetLoginHints(bool includePasswords)
     {
-        return GetAccounts()
+        return GetConfiguredAccounts()
             .Select(account => new DashboardLoginHint(account.Username, includePasswords ? account.Password : null, account.Role, account.DisplayName))
             .ToArray();
     }
@@ -124,7 +238,7 @@ public sealed class DashboardAuthService : IDashboardAuthService
         var username = principal.Identity?.Name ?? string.Empty;
         var role = principal.FindFirstValue(ClaimTypes.Role) ?? DashboardRoles.User;
         var displayName = principal.FindFirstValue(DashboardClaimTypes.DisplayName)
-            ?? GetAccounts().FirstOrDefault(account => string.Equals(account.Username, username, StringComparison.OrdinalIgnoreCase))?.DisplayName
+            ?? GetConfiguredAccounts().FirstOrDefault(account => string.Equals(account.Username, username, StringComparison.OrdinalIgnoreCase))?.DisplayName
             ?? username;
 
         return new DashboardSessionDescriptor(username, role, displayName, string.Equals(role, DashboardRoles.Admin, StringComparison.OrdinalIgnoreCase));
@@ -182,7 +296,7 @@ public sealed class DashboardAuthService : IDashboardAuthService
 
     private DashboardAuthOptions CurrentOptions => _optionsMonitor.CurrentValue;
 
-    private IReadOnlyList<DashboardAccount> GetAccounts()
+    private IReadOnlyList<DashboardAccount> GetConfiguredAccounts()
     {
         var options = CurrentOptions;
         return

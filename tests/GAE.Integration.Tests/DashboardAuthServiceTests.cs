@@ -1,4 +1,7 @@
 using GAE.Dashboard.Api.Security;
+using GAE.Engine.Data;
+using Microsoft.EntityFrameworkCore;
+using Moq;
 using Microsoft.Extensions.Options;
 
 namespace GAE.Integration.Tests;
@@ -8,7 +11,7 @@ public class DashboardAuthServiceTests
     [Fact]
     public void GetLoginHints_WhenPasswordsExcluded_LeavesPasswordsNull()
     {
-        var service = new DashboardAuthService(new StaticOptionsMonitor<DashboardAuthOptions>(new DashboardAuthOptions()));
+        var service = new DashboardAuthService(new StaticOptionsMonitor<DashboardAuthOptions>(new DashboardAuthOptions()), Mock.Of<IDbContextFactory<GaeDbContext>>());
 
         var hints = service.GetLoginHints(includePasswords: false);
 
@@ -21,7 +24,7 @@ public class DashboardAuthServiceTests
     [Fact]
     public void GetLoginHints_WhenPasswordsIncluded_ReturnsConfiguredPasswords()
     {
-        var service = new DashboardAuthService(new StaticOptionsMonitor<DashboardAuthOptions>(new DashboardAuthOptions()));
+        var service = new DashboardAuthService(new StaticOptionsMonitor<DashboardAuthOptions>(new DashboardAuthOptions()), Mock.Of<IDbContextFactory<GaeDbContext>>());
 
         var hints = service.GetLoginHints(includePasswords: true);
 
@@ -32,7 +35,7 @@ public class DashboardAuthServiceTests
     [Fact]
     public void GetStartupErrors_InDevelopment_AllowsDocumentedLocalAccounts()
     {
-        var service = new DashboardAuthService(new StaticOptionsMonitor<DashboardAuthOptions>(new DashboardAuthOptions()));
+        var service = new DashboardAuthService(new StaticOptionsMonitor<DashboardAuthOptions>(new DashboardAuthOptions()), Mock.Of<IDbContextFactory<GaeDbContext>>());
 
         var errors = service.GetStartupErrors(isProduction: false);
 
@@ -42,7 +45,7 @@ public class DashboardAuthServiceTests
     [Fact]
     public void GetStartupErrors_InProduction_RejectsDefaultAccounts()
     {
-        var service = new DashboardAuthService(new StaticOptionsMonitor<DashboardAuthOptions>(new DashboardAuthOptions()));
+        var service = new DashboardAuthService(new StaticOptionsMonitor<DashboardAuthOptions>(new DashboardAuthOptions()), Mock.Of<IDbContextFactory<GaeDbContext>>());
 
         var errors = service.GetStartupErrors(isProduction: true);
 
@@ -68,7 +71,7 @@ public class DashboardAuthServiceTests
                 DisplayName = "Admin"
             }
         };
-        var service = new DashboardAuthService(new StaticOptionsMonitor<DashboardAuthOptions>(options));
+        var service = new DashboardAuthService(new StaticOptionsMonitor<DashboardAuthOptions>(options), Mock.Of<IDbContextFactory<GaeDbContext>>());
 
         var errors = service.GetStartupErrors(isProduction: true);
 
@@ -84,7 +87,7 @@ public class DashboardAuthServiceTests
             User = new DashboardAccountOptions { Username = "player", Password = "A-Long-Unique-Player-Secret" },
             Admin = new DashboardAccountOptions { Username = "steward", Password = "A-Different-Admin-Secret" }
         };
-        var service = new DashboardAuthService(new StaticOptionsMonitor<DashboardAuthOptions>(options));
+        var service = new DashboardAuthService(new StaticOptionsMonitor<DashboardAuthOptions>(options), Mock.Of<IDbContextFactory<GaeDbContext>>());
 
         var errors = service.GetStartupErrors(isProduction: true);
 

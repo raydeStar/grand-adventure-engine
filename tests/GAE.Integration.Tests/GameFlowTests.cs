@@ -29,6 +29,7 @@ public class GameFlowTests : IClassFixture<GaeWebApplicationFactory>
         var concept = new CharacterConcept
         {
             PlayerDiscordId = playerId,
+            OwnerId = GaeWebApplicationFactory.DefaultUserUsername,
             Name = "Testus the Bold",
             Race = "Human",
             Class = "Fighter",

@@ -5,6 +5,7 @@ using GAE.Dashboard.Api.Security;
 using GAE.Engine.Configuration;
 using GAE.Engine.Data;
 using GAE.Engine.Worlds;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -39,6 +40,15 @@ public class DashboardController : ControllerBase
     private static readonly TimeSpan NarratorCacheDuration = TimeSpan.FromSeconds(60);
     private static object? _narratorCachedResult;
     private static DateTimeOffset _narratorCacheExpiry;
+
+    /// <summary>Username from the auth cookie. Characters are owned by this value.</summary>
+    private string CurrentUsername => User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.Identity?.Name ?? string.Empty;
+
+    private bool IsAdmin => User.IsInRole(DashboardRoles.Admin);
+
+    /// <summary>Admins may touch any character; everyone else only the characters their account created.</summary>
+    private bool CanAccess(PlayerCharacter player)
+        => IsAdmin || (!string.IsNullOrEmpty(player.OwnerId) && string.Equals(player.OwnerId, CurrentUsername, StringComparison.OrdinalIgnoreCase));
 
     public DashboardController(
         IStateManager stateManager,
@@ -82,14 +92,14 @@ public class DashboardController : ControllerBase
     public async Task<IActionResult> GetPlayers(CancellationToken ct)
     {
         var players = await _stateManager.GetAllPlayersAsync(ct);
-        return Ok(players);
+        return Ok(IsAdmin ? players : players.Where(CanAccess).ToArray());
     }
 
     [HttpGet("players/{playerId}")]
     public async Task<IActionResult> GetPlayer(string playerId, CancellationToken ct)
     {
         var player = await _stateManager.GetPlayerAsync(playerId, ct);
-        return player is not null ? Ok(player) : NotFound();
+        return player is not null && CanAccess(player) ? Ok(player) : NotFound();
     }
 
     [HttpGet("rooms")]
@@ -109,7 +119,7 @@ public class DashboardController : ControllerBase
         if (!string.IsNullOrWhiteSpace(playerId))
         {
             var player = await _stateManager.GetPlayerAsync(playerId.Trim(), ct);
-            if (player is null)
+            if (player is null || !CanAccess(player))
                 return NotFound(new { error = $"Player '{playerId}' was not found." });
             if (!string.Equals(player.CurrentRoomId, roomId, StringComparison.OrdinalIgnoreCase))
                 return BadRequest(new { error = $"Room '{roomId}' is not the current room for player '{player.Id}'." });
@@ -126,6 +136,17 @@ public class DashboardController : ControllerBase
     [HttpGet("story")]
     public async Task<IActionResult> GetStory([FromQuery] string? playerId = null, [FromQuery] string? worldId = null, [FromQuery] int limit = 50, CancellationToken ct = default)
     {
+        if (!IsAdmin)
+        {
+            // Non-admins only ever see the story of characters they own.
+            var owned = (await _stateManager.GetAllPlayersAsync(ct)).Where(CanAccess).Select(p => p.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (!string.IsNullOrWhiteSpace(playerId) && !owned.Contains(playerId.Trim()))
+                return Ok(Array.Empty<StoryEntry>());
+
+            var visible = await _stateManager.GetStoryEntriesAsync(playerId, limit, ct);
+            return Ok(visible.Where(e => owned.Contains(e.PlayerId)));
+        }
+
         var entries = await _stateManager.GetStoryEntriesAsync(playerId, limit, ct);
         if (!string.IsNullOrWhiteSpace(worldId))
             return Ok(entries.Where(e => string.Equals(e.WorldId, worldId, StringComparison.OrdinalIgnoreCase)));
@@ -270,6 +291,9 @@ public class DashboardController : ControllerBase
             return BadRequest(new { error = "playerId and command are required." });
 
         var player = await _stateManager.GetPlayerAsync(request.PlayerId, ct);
+        if (player is not null && !CanAccess(player))
+            return StatusCode(StatusCodes.Status403Forbidden, new { error = "That character belongs to another adventurer." });
+
         if (player is not null)
             _worldContext.SetCurrentWorld(player.ActiveWorldId);
 
@@ -369,6 +393,7 @@ public class DashboardController : ControllerBase
             return Conflict(new { error = $"A player with id '{playerId}' already exists." });
 
         var concept = BuildCharacterConcept(request, playerId);
+        concept.OwnerId = CurrentUsername;
         var player = await _engine.CreateCharacterFromConceptAsync(concept, ct);
 
         if (request.SkipHeroIntro)

@@ -29,6 +29,7 @@ public class SignalRBroadcastTests : IClassFixture<GaeWebApplicationFactory>
         return await engine.CreateCharacterFromConceptAsync(new CharacterConcept
         {
             PlayerDiscordId = playerId,
+            OwnerId = GaeWebApplicationFactory.DefaultUserUsername,
             Name = "SignalR Tester",
             Race = "Human",
             Class = "Fighter",
