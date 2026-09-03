@@ -1072,7 +1072,7 @@ public class NarratorService : INarratorService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Free-form narration failed for \"{RawInput}\". Raw response: {RawResponse}", rawInput, rawCompletion ?? "<no response>");
+            _logger.LogWarning(ex, "Free-form narration failed for \"{RawInput}\"; using the local consequence fallback. Raw response: {RawResponse}", rawInput, rawCompletion ?? "<no response>");
         }
 
         return BuildLocalFreeFormFallbackResponse(player, room, rawInput, recentStory);
