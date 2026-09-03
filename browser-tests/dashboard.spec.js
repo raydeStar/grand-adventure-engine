@@ -54,6 +54,7 @@ test.describe('Grand Adventure Engine dashboard', () => {
     await expect(page.locator('#auth-form')).toBeVisible();
     await expect(page.locator('#session-summary')).toContainText('Authentication required.');
     await expect(page.getByRole('button', { name: 'Quick: User' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Create Account' })).toBeHidden();
     await expect(page.locator('#dashboard')).toBeHidden();
   });
 

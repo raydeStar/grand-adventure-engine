@@ -13,6 +13,7 @@
     health: null,
     session: null,
     loginHints: [],
+    registrationOpen: false,
     refreshTimer: null,
     transportLabel: 'Offline',
     recentActionIds: new Set(),
@@ -75,8 +76,10 @@
     GameHub.on('actionResult', handleRealtimeActionResult);
     GameHub.on('adminEvent', handleAdminEvent);
 
-    state.loginHints = await API.getLoginOptions();
-    UI.setSession(null, state.loginHints);
+    const loginOptions = await API.getLoginOptions();
+    state.loginHints = loginOptions.accounts;
+    state.registrationOpen = loginOptions.registrationOpen;
+    UI.setSession(null, state.loginHints, state.registrationOpen);
 
     const session = await API.getSession();
     if (!session) {
@@ -463,7 +466,7 @@
 
   async function onAuthenticated(session, options = {}) {
     state.session = session;
-    UI.setSession(state.session, state.loginHints);
+    UI.setSession(state.session, state.loginHints, state.registrationOpen);
     UI.setAuthMessage('');
     state.mode = UI.setMode(session.isAdmin ? 'admin' : 'user', state.session);
     localStorage.setItem('gae.operator.mode', state.mode);
@@ -512,6 +515,11 @@
 
   async function handleRegister() {
     const submit = UI.$('btn-register');
+    if (!state.registrationOpen) {
+      UI.setAuthMessage('Account creation is closed on this deployment.', 'info');
+      return;
+    }
+
     const username = UI.$('auth-username').value.trim();
     const password = UI.$('auth-password').value;
     const rememberMe = UI.$('auth-remember').checked;
@@ -565,7 +573,7 @@
 
     UI.showDashboard(false);
     UI.showPortal(true);
-    UI.setSession(null, state.loginHints);
+    UI.setSession(null, state.loginHints, state.registrationOpen);
     UI.setConnectionStatus('disconnected');
     UI.renderNoActivePlayer(false);
     UI.renderPortalPlayers([], '', null);

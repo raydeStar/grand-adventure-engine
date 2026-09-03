@@ -6,7 +6,10 @@ const API = {
     const res = await fetch(`${this.base}/auth/options`, { credentials: 'same-origin' });
     if (!res.ok) throw new Error(await this.readError(res));
     const body = await res.json();
-    return body.accounts || [];
+    return {
+      accounts: body.accounts || [],
+      registrationOpen: body.registrationOpen === true
+    };
   },
 
   async getSession() {
