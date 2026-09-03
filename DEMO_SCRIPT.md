@@ -1,5 +1,17 @@
 # Grand Adventure Engine: Co-DM — 2:20 Demo Script
 
+## Repeatable local reset
+
+Before each rehearsal or recording take, run this from the repository root:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\reset-demo-run.ps1
+```
+
+The command targets `http://127.0.0.1:8282`, replaces only `demo-user` and `demo-admin`, stages Ari wounded in a live Velvet Maw fight, delivers a prepared cinematic opening to Player Flow, creates Marshal Vale's approved divine-singe receipt, verifies the final state, and copies the local admin password to the clipboard. The opening attack uses real dice, so the Velvet Maw's remaining HP may vary between takes; the scene, combat state, Ari's final 12 HP, opening beat, and Co-DM intervention are fixed. The prepared beat also keeps rehearsals fast when the local narrator is thinking at wizardly length.
+
+Use `-NoClipboard` when you do not want the password copied. The script refuses non-loopback URLs, so it cannot reset the deployed site by accident.
+
 ## 0:00–0:15 — The product
 
 **Visual:** Grand Adventure Engine title, then the seeded Player Flow.
