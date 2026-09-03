@@ -190,6 +190,15 @@ public partial class CommandParser
             return action;
         }
 
+        // A bare "pick" is also ordinary roleplay ("pick my nose", "pick at my teeth").
+        // Mark explicit bodily actions so intent translation cannot turn them into inventory pickup.
+        if (PickBodyActionRegex().IsMatch(input))
+        {
+            action.Type = ActionType.Unknown;
+            action.Parameters["routing"] = "free-form";
+            return action;
+        }
+
         // Take / pick up
         var takeMatch = TakeRegex().Match(input);
         if (takeMatch.Success)
@@ -595,6 +604,9 @@ public partial class CommandParser
 
     [GeneratedRegex(@"^(?:take|pick\s+up|scoop\s+up|pick|grab|get|collect|retrieve|snag|scoop)\s+(?<target>.+?)(?:\s+up)?$", RegexOptions.IgnoreCase)]
     private static partial Regex TakeRegex();
+
+    [GeneratedRegex(@"^pick(?:\s+at)?\s+(?:(?:my|your|his|her|their|our|its|one'?s)(?:\s+own)?\s+)?(?:nose|nostril|teeth|tooth|ear|nail|fingernail|toenail)\b", RegexOptions.IgnoreCase)]
+    private static partial Regex PickBodyActionRegex();
 
     [GeneratedRegex(@"^(?:drop|discard|throw\s+away)\s+(?<target>.+)$", RegexOptions.IgnoreCase)]
     private static partial Regex DropRegex();

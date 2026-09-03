@@ -687,6 +687,45 @@ public class NarratorServiceTests
     }
 
     [Fact]
+    public async Task ProcessFreeFormAsync_WhenModelRejectsNosePicking_PreservesHarmlessPlayerAgency()
+    {
+        var handler = new ResponseHttpMessageHandler("""
+            {
+              "choices": [
+                {
+                  "message": {
+                    "content": "{\"narration\":\"Your fingers close on nothing except desert air; choose an object that actually exists.\",\"success\":false,\"statChanges\":{},\"inventoryChanges\":[],\"entityChanges\":[],\"combatInitiated\":false}"
+                  }
+                }
+              ]
+            }
+            """);
+        var narrator = new NarratorService(
+            new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") },
+            NullLogger<NarratorService>.Instance);
+
+        var response = await narrator.ProcessFreeFormAsync(
+            new PlayerCharacter { Name = "Ari Quickstep", Race = "Human", Class = "Ranger" },
+            new Room
+            {
+                Id = "inn",
+                Name = "Lantern's Rest",
+                Description = "A crowded inn.",
+                Npcs = [new Npc { Id = "mara", Name = "Mara Vale" }]
+            },
+            "pick my nose in full view of the room, making loud smacking noises",
+            []);
+
+        Assert.True(response.Success);
+        Assert.Contains("picks their nose", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Mara Vale", response.Narration);
+        Assert.DoesNotContain("actually exists", response.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(response.StatChanges);
+        Assert.Empty(response.InventoryChanges);
+        Assert.Empty(response.EntityChanges);
+    }
+
+    [Fact]
     public async Task ProcessFreeFormAsync_WhenHttpFailsOnCasualSocialAction_ReturnsConsequentialNpcReaction()
     {
         var handler = new FakeHttpMessageHandler(new HttpRequestException("Connection refused"));

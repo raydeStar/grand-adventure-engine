@@ -925,6 +925,9 @@ public class NarratorService : INarratorService
             - For silly/harmless actions (emotes, jokes, bodily functions), narrate them literally and locally
               with humor. These should never change stats or inventory. But even silly actions should get
               entertaining reactions — the world is WATCHING this hero, even when they're being ridiculous.
+            - The player's own body is not an inventory entity and does not need to appear in Room Items.
+              Self-directed bodily actions such as "pick my nose" happen as stated. Narrate the deed and any
+              nearby reactions; never reject it by claiming the body part or an "object" does not exist.
 
             GAME MASTER RULES:
             - Resolve actions using the Character Definition Card, room state, and recent history.
@@ -1054,6 +1057,14 @@ public class NarratorService : INarratorService
 
             if (TryParseFreeFormResponse(rawCompletion, out var response))
             {
+                var actionPhrase = ExtractFreeFormActionPhrase(rawInput);
+                if (IsLowStakesAction(actionPhrase) && !response.Success)
+                {
+                    _logger.LogWarning("Free-form action incorrectly rejected harmless player agency for \"{RawInput}\"; using local roleplay narration.", rawInput);
+                    if (TryBuildLowStakesFreeFormResponse(player, room, actionPhrase, out var lowStakesResponse))
+                        return lowStakesResponse;
+                }
+
                 if (IsBoringFreeFormNarration(response.Narration))
                 {
                     _logger.LogWarning("Free-form action returned non-consequential narration for \"{RawInput}\"; using local consequence fallback.", rawInput);
@@ -2203,6 +2214,12 @@ public class NarratorService : INarratorService
     {
         narration = string.Empty;
         var normalized = actionPhrase.Trim().ToLowerInvariant();
+
+        if (IsNosePickingAction(normalized))
+        {
+            narration = $"{player.Name} picks their nose with the grim concentration of a locksmith confronting a particularly personal vault. The deed changes no fortunes in {roomName}, but dignity suffers a small and entirely self-inflicted defeat. {witnessReaction}";
+            return true;
+        }
 
         if (StartsWithAny(normalized, "lick ", "taste ", "bite ", "chew ", "eat "))
         {
@@ -3405,7 +3422,7 @@ public class NarratorService : INarratorService
 
         var narration = normalized switch
         {
-            "pick nose" or "pick your nose" => $"{player.Name} commits a brief lapse in dignity and picks at their nose. {witnessReaction}",
+            _ when IsNosePickingAction(normalized) => $"{player.Name} picks their nose with the grim concentration of a locksmith confronting a particularly personal vault. {witnessReaction}",
             _ when normalized.StartsWith("dance") => $"{player.Name} gives the room a few improvised steps and a half-serious flourish. {witnessReaction}",
             _ when normalized.StartsWith("wave") => $"{player.Name} gives a small wave into the room. {witnessReaction}",
             _ when normalized.StartsWith("shrug") => $"{player.Name} offers a small shrug, as if the room itself might explain something. {witnessReaction}",
@@ -3422,8 +3439,10 @@ public class NarratorService : INarratorService
         return true;
     }
 
-    private static bool IsLowStakesAction(string normalized)
-        => normalized is "pick nose" or "pick your nose"
+    private static bool IsLowStakesAction(string actionPhrase)
+    {
+        var normalized = NormalizeLookupText(actionPhrase);
+        return IsNosePickingAction(normalized)
             || normalized.StartsWith("dance", StringComparison.Ordinal)
             || normalized.StartsWith("wave", StringComparison.Ordinal)
             || normalized.StartsWith("shrug", StringComparison.Ordinal)
@@ -3434,6 +3453,16 @@ public class NarratorService : INarratorService
             || normalized.StartsWith("yawn", StringComparison.Ordinal)
             || normalized.StartsWith("sneeze", StringComparison.Ordinal)
             || normalized.StartsWith("cough", StringComparison.Ordinal);
+    }
+
+    private static bool IsNosePickingAction(string normalized)
+    {
+        var tokens = NormalizeLookupText(normalized)
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .ToHashSet(StringComparer.Ordinal);
+        return tokens.Contains("pick")
+            && (tokens.Contains("nose") || tokens.Contains("nostril") || tokens.Contains("nostrils"));
+    }
 
     private static string TrimToSentence(string text)
     {

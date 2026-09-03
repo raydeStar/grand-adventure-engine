@@ -279,7 +279,8 @@ public class GameEngine : IGameEngine
         }
 
         // NLP fallback: when regex parsing fails, ask the narrator to interpret natural language
-        if (action.Type == ActionType.Unknown)
+        if (action.Type == ActionType.Unknown
+            && !string.Equals(action.Parameters.GetValueOrDefault("routing"), "free-form", StringComparison.Ordinal))
         {
             _logger.LogInformation("Unrecognized command for {PlayerId}: {RawInput}. Attempting intent translation before free-form handling.", player.Id, action.RawInput);
             var translated = await _narrator.ParseIntentAsync(action.RawInput, ct);

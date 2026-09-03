@@ -186,6 +186,41 @@ public class GameEngineCommandFlowTests
         Assert.Equal(result.Narration, entry.Narration);
     }
 
+    [Fact]
+    public async Task ProcessActionAsync_PickOwnNose_BypassesInventoryAndIntentTranslation()
+    {
+        var stateManager = await CreateStateAsync(room: new Room
+        {
+            Id = "inn",
+            Name = "Lantern's Rest",
+            Description = "A crowded tavern.",
+            Npcs = [new Npc { Id = "mara", Name = "Mara Vale" }]
+        });
+        var narrator = new Mock<INarratorService>(MockBehavior.Strict);
+        narrator.Setup(service => service.ProcessFreeFormAsync(
+                It.IsAny<PlayerCharacter>(),
+                It.IsAny<Room>(),
+                "pick my nose in full view of the room, making loud smacking noises",
+                It.IsAny<IReadOnlyList<StoryEntry>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new FreeFormResponse
+            {
+                Success = true,
+                Narration = "Playwright Hero picks their nose. Mara Vale stares with professional disappointment."
+            });
+
+        var engine = CreateEngine(stateManager, narrator.Object);
+        var action = engine.ParseCommand(PlayerId, "pick my nose in full view of the room, making loud smacking noises");
+        var result = await engine.ProcessActionAsync(PlayerId, action);
+
+        Assert.True(result.Success);
+        Assert.Contains("picks their nose", result.Narration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("pick up", result.MechanicalSummary, StringComparison.OrdinalIgnoreCase);
+        narrator.Verify(service => service.ParseIntentAsync(
+            It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        narrator.VerifyAll();
+    }
+
     [Theory]
     [InlineData("I grab the chest")]
     [InlineData("I touch the wall over there")]

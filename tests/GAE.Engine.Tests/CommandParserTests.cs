@@ -168,6 +168,18 @@ public class CommandParserTests
         Assert.Equal(ActionType.Unknown, action.Type);
     }
 
+    [Theory]
+    [InlineData("pick my nose in full view of the room, making loud smacking noises")]
+    [InlineData("pick at my teeth")]
+    public void Parse_PersonalBodyAction_RoutesDirectlyToFreeForm(string input)
+    {
+        var action = _parser.Parse("player1", input);
+
+        Assert.Equal(ActionType.Unknown, action.Type);
+        Assert.Equal("free-form", action.Parameters.GetValueOrDefault("routing"));
+        Assert.Null(action.Target);
+    }
+
     [Fact]
     public void Parse_EmptyInput_ReturnsUnknown()
     {
