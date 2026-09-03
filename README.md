@@ -54,6 +54,10 @@ The authenticated admin DM Console exposes five bounded WebMCP site tools when t
 
 Browsers without WebMCP continue to use the normal dashboard. See the [challenge architecture and safety boundary](docs/WEBMCP-CHALLENGE.md), [deterministic demo scenario](docs/WEBMCP-DEMO-SCENARIO.md), and [deployment notes](DEPLOYMENT_WEBMCP.md).
 
+**[Open the deployed WebMCP challenge demo](https://projectbonk-vs-demo.calmpond-0e183dc4.centralus.azurecontainerapps.io/)** or review the [final submission evidence and checklist](CHALLENGE_READY_REPORT.md). Judge credentials are supplied privately in the submission form, never in the repository.
+
+![The AI Co-DM's approved human-reviewed intervention beside the five registered WebMCP tools](docs/images/submission/02-webmcp-approved-intervention.jpg)
+
 ## Run it yourself
 
 You'll need [Docker Desktop](https://www.docker.com/products/docker-desktop/) and a local AI backend such as [LM Studio](https://lmstudio.ai/) or [Ollama](https://ollama.com/). The [.NET 10 SDK](https://dotnet.microsoft.com/download) is only required for source builds. A Discord bot token is optional—only needed for Discord play.

@@ -1,5 +1,11 @@
 # Grand Adventure Engine: Co-DM
 
+## Submission links
+
+- Live demo: <https://projectbonk-vs-demo.calmpond-0e183dc4.centralus.azurecontainerapps.io/>
+- Public repository: <https://github.com/raydeStar/grand-adventure-engine>
+- Demo video: **Add the public YouTube URL before submitting.**
+
 ## Tagline
 
 **Give your AI Dungeon Master memory, rules, and a human co-pilot.**
@@ -54,3 +60,9 @@ New for the challenge: WebMCP site tools, selected-player Co-DM context, agent a
 ## Demo proof
 
 The two-surface demo shows Ari Quickstep make an unsupported claim to Mara Vale. The browser agent inspects Ari's genuine quest log and current room, searches Mara and The Waterway Infestation, sends a grounded response, and proposes `Under Suspicion`. The human approves the proposal; the Player Flow shows the message and refreshed status. No Discord token is required.
+
+## Project gallery captions
+
+1. **The AI Co-DM shares the human DM's live campaign context.** Ari's selected scene and the browser agent's inspection activity are visible together in the deployed Admin Console.
+2. **The agent proposes; the human decides.** The approved `Under Suspicion` intervention shows its rationale, evidence, exact mechanical effect, and all five registered WebMCP tools.
+3. **The result reaches the player, not a debug console.** Ari's unsupported quest claim and Mara's grounded Co-DM response appear in the full-width Player Flow.
