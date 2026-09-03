@@ -16,7 +16,7 @@
   <meta property="og:image:height" content="640" />
   <meta name="twitter:card" content="summary_large_image" />
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
-  <link rel="stylesheet" href="css/style.css?v=35" />
+  <link rel="stylesheet" href="css/style.css?v=36" />
   <script src="vendor/signalr-10.0.11.min.js?v=10.0.11"></script>
   <script src="vendor/rot-2.2.1.min.js?v=2.2.1"></script>
 </head>
@@ -126,10 +126,12 @@
               <!-- Character selection (shown when no player is active) -->
               <div id="player-select-panel" class="player-select-panel">
                 <h3>Choose Your Character</h3>
-                <p class="panel-hint">Enter your player ID to resume, or create a new character.</p>
+                <p class="panel-hint" id="character-select-hint">Choose one of your available characters, or create a new one.</p>
 
                 <form id="resume-form" class="resume-row">
-                  <input type="text" id="resume-player-id" placeholder="Player ID" autocomplete="off" />
+                  <select id="resume-player-id" aria-label="Available characters">
+                    <option value="" selected disabled>Loading characters...</option>
+                  </select>
                   <button type="submit" class="btn btn-primary" id="btn-resume">Resume</button>
                   <button type="button" class="btn btn-secondary" id="btn-new-char">New Character</button>
                 </form>
@@ -848,7 +850,7 @@
   <script src="js/api.js?v=14"></script>
   <script src="js/signalr-client.js?v=3"></script>
   <script src="js/room-map.js?v=3"></script>
-  <script src="js/ui.js?v=39"></script>
+  <script src="js/ui.js?v=40"></script>
   <script src="js/co-dm.js?v=10"></script>
   <script src="js/webmcp.js?v=5"></script>
   <script src="js/app.js?v=37"></script>

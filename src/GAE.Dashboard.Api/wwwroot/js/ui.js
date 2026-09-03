@@ -275,8 +275,49 @@ const UI = {
         : 'Sign in to send commands';
   },
 
-  renderPortalPlayers(_players, _currentPlayerId, _session) {
-    // Character list removed — players resume by entering their ID directly.
+  renderPortalPlayers(players, currentPlayerId, session) {
+    const select = this.$('resume-player-id');
+    const resumeButton = this.$('btn-resume');
+    const hint = this.$('character-select-hint');
+    if (!select || !resumeButton) return;
+
+    const available = Array.isArray(players) ? players : [];
+    const previousId = select.value;
+    if (!session) {
+      select.innerHTML = '<option value="" selected disabled>Sign in to view characters</option>';
+      select.disabled = true;
+      resumeButton.disabled = true;
+      if (hint) hint.textContent = 'Sign in to view the characters available to your account.';
+      return;
+    }
+
+    if (available.length === 0) {
+      select.innerHTML = '<option value="" selected disabled>No characters available</option>';
+      select.disabled = true;
+      resumeButton.disabled = true;
+      if (hint) hint.textContent = 'No characters belong to this account yet. Create one to begin.';
+      return;
+    }
+
+    select.innerHTML = available.map((player) => {
+      const identity = [player.race, player.class].filter(Boolean).join(' ');
+      const details = [`Lv.${player.level || 1}`, identity].filter(Boolean).join(' ');
+      return `<option value="${this.esc(player.id)}">${this.esc(player.name || player.id)} — ${this.esc(details)}</option>`;
+    }).join('');
+
+    const preferredId = available.some((player) => player.id === currentPlayerId)
+      ? currentPlayerId
+      : available.some((player) => player.id === previousId)
+        ? previousId
+        : available[0].id;
+    select.value = preferredId;
+    select.disabled = false;
+    resumeButton.disabled = false;
+    if (hint) {
+      hint.textContent = session.isAdmin
+        ? 'Choose any available character to inspect through the player experience.'
+        : 'Choose one of your characters, or create a new one.';
+    }
   },
 
   _filterPortalPlayers() {},

@@ -58,6 +58,28 @@ test.describe('Grand Adventure Engine dashboard', () => {
     await expect(page.locator('#dashboard')).toBeHidden();
   });
 
+  test('character chooser lists only characters available to the signed-in user', async ({ page }) => {
+    await login(page, 'admin');
+    await seedDemoViaApi(page, true);
+    await page.locator('#btn-logout-header').click();
+    await expect(page.locator('#auth-form')).toBeVisible();
+
+    await login(page, 'user');
+    const chooser = page.locator('#resume-player-id');
+    await expect(chooser).toHaveCount(1);
+    await expect(chooser).toHaveValue('demo-user');
+    await expect(chooser.locator('option')).toHaveCount(1);
+    await expect(chooser.locator('option')).toContainText('Ari Quickstep');
+    await expect(chooser.locator('option')).toContainText('Lv.1');
+    await expect(chooser.locator('option')).toContainText('Human Ranger');
+    await expect(chooser).not.toContainText('Marshal Vale');
+    await expect(page.locator('#btn-resume')).toBeEnabled();
+
+    await page.locator('#btn-resume').click();
+    await expect(page.locator('#header-player')).toContainText('Ari Quickstep');
+    await expect(page.locator('#command-input')).toBeEnabled();
+  });
+
   test('user can sign in, create a character, and complete a first gameplay loop', async ({ page }, testInfo) => {
     const playerId = uniqueId('pw-user', testInfo.project.name);
 

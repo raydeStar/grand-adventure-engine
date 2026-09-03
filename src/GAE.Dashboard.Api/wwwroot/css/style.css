@@ -1052,8 +1052,9 @@ textarea { resize: vertical; min-height: 80px; }
   max-width: 480px;
 }
 
-.resume-row input[type="text"] {
+.resume-row select {
   flex: 1;
+  min-width: 0;
 }
 
 .create-form-inline {
@@ -3859,8 +3860,8 @@ body::after { animation: scanDrift 8s linear infinite; will-change: transform; }
   text-shadow: var(--bloom-strong);
 }
 .player-select-panel .panel-hint { font-size: 13px; }
-.resume-row input[type="text"] { padding: 0.55rem 0.7rem; font-size: 14px; }
-.resume-row input[type="text"]:focus { box-shadow: var(--focus-ring); }
+.resume-row select { padding: 0.55rem 2rem 0.55rem 0.7rem; font-size: 14px; }
+.resume-row select:focus { box-shadow: var(--focus-ring); }
 
 /* ───────────────────────── App header polish ───────────────────────── */
 .app-header { box-shadow: 0 1px 0 var(--accent-soft); }
