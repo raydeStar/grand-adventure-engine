@@ -447,6 +447,14 @@
   --arcane: var(--mp);            /* cool accent already in the palette — use instead of stray blues */
   --arcane-soft: rgba(68,170,255,0.12);
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+
+  /* ── Co-DM tokens (were referenced but never defined, so dim text rendered
+        full-brightness and status colours fell back to off-palette hex) ── */
+  --text-dim: var(--dim);
+  --text-bright: var(--accent);
+  --success: var(--ok);
+  --warning: var(--warn);
+  --panel-bg: var(--bg-panel);
 }
 
 [data-theme="amber"] {
@@ -4357,3 +4365,74 @@ body::after { animation: scanDrift 8s linear infinite; will-change: transform; }
     animation: none;
   }
 }
+
+/* ═══════════════════════ QA POLISH PASS (2026-09-03) ═══════════════════════
+   Fixes observed in a full desktop + mobile screenshot sweep. Every rule below
+   stays inside the phosphor palette; nothing here introduces a new colour.  */
+
+/* Extra-small buttons were 9px text on a 1px pad: unreadable and a poor tap target. */
+.btn-xs {
+  font-size: 10.5px;
+  padding: 2px 7px;
+  min-height: 22px;
+  letter-spacing: 0.02em;
+}
+
+/* Form groups stretched to their row's tallest control, so a select's label sat
+   a line lower than the textarea label beside it. Pin content to the top. */
+.form-group { align-content: start; }
+
+/* Room description clipped mid-line at 4.8em. Clamp on whole lines instead. */
+.room-description {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+  max-height: none;
+  line-height: 1.55;
+}
+
+/* Character chooser: the dropdown truncated "Ari Quickstep — Lv.1 Human Ranger". */
+.resume-row { max-width: 640px; }
+.resume-row select { flex: 1 1 320px; }
+
+/* The global `select { width: 100% }` let the two Registry filters each take a
+   third of the bar and squeezed the search box to 150px. Size them to content. */
+.registry-search-bar { flex-wrap: wrap; }
+.registry-search-bar select {
+  width: auto;
+  flex: 0 0 auto;
+  min-width: 130px;
+  max-width: 200px;
+  padding-right: 2rem;
+}
+.registry-search-bar input { flex: 1 1 260px; }
+.registry-count { margin-left: 0.25rem; }
+
+/* Panel header controls (Events filter + Clear) stacked because the select was
+   full-width. Lay the header's right-hand cluster out as a row. */
+.panel-header-row > div {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.panel-header-row select { width: auto; min-width: 150px; }
+
+/* Command Harness: 150px was too narrow to show a character name. */
+.admin-command-form { grid-template-columns: minmax(180px, 260px) 1fr auto; }
+.admin-command-form select { max-width: none; }
+
+/* Admin tabs overflowed off-screen on phones; let the deck scroll sideways. */
+.admin-toolbar {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+.admin-toolbar .admin-tab { white-space: nowrap; flex-shrink: 0; }
+
+/* Admin form rows bottom-aligned their controls, so a select beside a tall
+   textarea had its label pushed a line lower. Align labels along the top. */
+#workspace-admin .mutation-row { align-items: start; }
