@@ -25,6 +25,22 @@ public class GameEngine : IGameEngine
     private readonly IWorldRepository? _worldRepository;
     private readonly LoreTracker? _loreTracker;
     private readonly BlindAdventureService? _blindAdventureService;
+    private readonly IPlayerCommandGate? _commandGate;
+
+    private static readonly HashSet<ActionType> HoldSafeActionTypes =
+    [
+        ActionType.Inventory,
+        ActionType.Stats,
+        ActionType.Help,
+        ActionType.Map,
+        ActionType.Spellbook,
+        ActionType.Journal,
+        ActionType.CompletedQuests,
+        ActionType.QuestInfo,
+        ActionType.Lorebook,
+        ActionType.LoreInfo,
+        ActionType.Narrator
+    ];
 
 
     public GameEngine(
@@ -40,7 +56,8 @@ public class GameEngine : IGameEngine
         IRealmTravelService? realmTravelService = null,
         IWorldRepository? worldRepository = null,
         LoreTracker? loreTracker = null,
-        BlindAdventureService? blindAdventureService = null)
+        BlindAdventureService? blindAdventureService = null,
+        IPlayerCommandGate? commandGate = null)
     {
         _stateManager = stateManager;
         _dice = dice;
@@ -55,6 +72,7 @@ public class GameEngine : IGameEngine
         _worldRepository = worldRepository;
         _loreTracker = loreTracker;
         _blindAdventureService = blindAdventureService;
+        _commandGate = commandGate;
     }
 
     public GameAction ParseCommand(string playerId, string rawInput)
@@ -74,16 +92,50 @@ public class GameEngine : IGameEngine
     {
         playerId ??= string.Empty;
 
+        var heldResult = await BuildHeldTurnResultAsync(playerId, action, ct);
+        if (heldResult is not null)
+            return heldResult;
+
         var turnLock = _playerTurnLocks.GetOrAdd(playerId, _ => new SemaphoreSlim(1, 1));
         await turnLock.WaitAsync(ct);
         try
         {
+            // Recheck after acquiring the turn lock. A DM may have placed a hold while this turn
+            // waited behind narration, and queued commands must not slip across that boundary.
+            heldResult = await BuildHeldTurnResultAsync(playerId, action, ct);
+            if (heldResult is not null)
+                return heldResult;
             return await ProcessPlayerTurnAsync(playerId, action, ct);
         }
         finally
         {
             turnLock.Release();
         }
+    }
+
+    private async Task<ActionResult?> BuildHeldTurnResultAsync(
+        string playerId,
+        GameAction action,
+        CancellationToken ct)
+    {
+        if (_commandGate is null || HoldSafeActionTypes.Contains(action.Type))
+            return null;
+
+        var hold = await _commandGate.GetHoldAsync(playerId, ct);
+        if (hold is null)
+            return null;
+
+        _logger.LogInformation(
+            "Blocked {ActionType} for held player {PlayerId}; the DM is reviewing the scene.",
+            action.Type,
+            playerId);
+        return new ActionResult
+        {
+            ActionId = action.Id,
+            RawInput = action.RawInput,
+            Success = false,
+            MechanicalSummary = $"Dungeon Master review hold: {hold.Reason} You may still use stats, inventory, journal, map, lorebook, or help."
+        };
     }
 
     /// <summary>
@@ -2164,6 +2216,141 @@ move_room_ready:
         await PersistInteractionStoryEntry(player, action, result, ct);
         return result;
     }
+
+    /// <inheritdoc />
+    public async Task<ActionResult> InvokeDmSpellAsync(
+        string playerId,
+        string spellId,
+        string targetEntityId,
+        string actionId,
+        CancellationToken ct = default)
+    {
+        var turnLock = _playerTurnLocks.GetOrAdd(playerId, _ => new SemaphoreSlim(1, 1));
+        await turnLock.WaitAsync(ct);
+        try
+        {
+            var player = await _stateManager.GetPlayerAsync(playerId, ct);
+            if (player is null)
+                return DmSpellFailure(actionId, $"Player '{playerId}' was not found.");
+
+            var spell = _registry?.Spells.GetById(spellId);
+            if (spell is null || !spell.WorldIds.Contains(player.ActiveWorldId, StringComparer.OrdinalIgnoreCase))
+                return DmSpellFailure(actionId, $"Registered spell '{spellId}' is unavailable in this world.");
+
+            var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
+            if (room is null)
+                return DmSpellFailure(actionId, "The selected player's current room is unavailable.");
+
+            if (!string.IsNullOrWhiteSpace(spell.DamageDice))
+                return await InvokeDmDamageSpellAsync(player, room, spell, targetEntityId, actionId, ct);
+
+            if (!string.IsNullOrWhiteSpace(spell.HealDice))
+            {
+                if (!string.Equals(targetEntityId, player.Id, StringComparison.OrdinalIgnoreCase))
+                    return DmSpellFailure(actionId, "This healing intervention may target only the selected player.");
+
+                var roll = _dice.RollDamage(spell.HealDice, 0);
+                var oldHp = player.Hp;
+                player.Hp = Math.Min(player.MaxHp, player.Hp + Math.Max(1, roll.Total));
+                var restored = player.Hp - oldHp;
+                await _stateManager.SavePlayerAsync(player, ct);
+                return new ActionResult
+                {
+                    ActionId = actionId,
+                    RawInput = $"Dungeon Master invokes {spell.Name}",
+                    Success = true,
+                    MechanicalSummary = $"DM invoked {spell.Name}; {player.Name} recovered {restored} HP ({player.Hp}/{player.MaxHp}).",
+                    DiceRolls = [roll],
+                    StateChanges =
+                    [
+                        new StateChange
+                        {
+                            EntityType = "player",
+                            EntityId = player.Id,
+                            Property = "hp",
+                            OldValue = oldHp.ToString(),
+                            NewValue = player.Hp.ToString()
+                        }
+                    ]
+                };
+            }
+
+            return DmSpellFailure(actionId, $"{spell.Name} has no bounded damage or healing mechanic available to DM intervention.");
+        }
+        finally
+        {
+            turnLock.Release();
+        }
+    }
+
+    private async Task<ActionResult> InvokeDmDamageSpellAsync(
+        PlayerCharacter player,
+        Room room,
+        SpellDefinition spell,
+        string targetEntityId,
+        string actionId,
+        CancellationToken ct)
+    {
+        var primary = room.Npcs.FirstOrDefault(npc =>
+            string.Equals(npc.Id, targetEntityId, StringComparison.OrdinalIgnoreCase)
+            && npc.Hp is > 0);
+        if (primary is null)
+            return DmSpellFailure(actionId, $"Living target '{targetEntityId}' is not in the selected player's current room.");
+
+        var isAreaEffect = spell.Tags.Contains("aoe", StringComparer.OrdinalIgnoreCase);
+        var targets = isAreaEffect
+            ? room.Npcs.Where(npc => npc.Hp is > 0 && (npc.IsHostile || string.Equals(npc.Id, primary.Id, StringComparison.OrdinalIgnoreCase))).ToList()
+            : [primary];
+        var damageRoll = _dice.RollDamage(spell.DamageDice!, 0);
+        var damage = Math.Max(1, damageRoll.Total);
+        var stateChanges = new List<StateChange>();
+        var outcomes = new List<string>();
+
+        foreach (var target in targets.DistinctBy(npc => npc.Id, StringComparer.OrdinalIgnoreCase))
+        {
+            var oldHp = target.Hp ?? 0;
+            target.Hp = Math.Max(0, oldHp - damage);
+            stateChanges.Add(new StateChange
+            {
+                EntityType = "npc",
+                EntityId = target.Id,
+                Property = "hp",
+                OldValue = oldHp.ToString(),
+                NewValue = target.Hp.Value.ToString()
+            });
+            outcomes.Add($"{target.Name} took {oldHp - target.Hp.Value} damage ({target.Hp}/{target.MaxHp ?? oldHp} HP)");
+        }
+
+        var allHostilesDefeated = !room.Npcs.Any(npc => npc.IsHostile && npc.Hp is > 0);
+        if (allHostilesDefeated && player.Interaction.Mode == InteractionMode.Combat)
+        {
+            player.Interaction.Reset();
+            await _stateManager.RemoveCombatStateAsync(player.CurrentRoomId, player.ActiveWorldId, ct);
+            await _stateManager.SavePlayerAsync(player, ct);
+        }
+
+        await _stateManager.SaveRoomAsync(room, ct);
+        return new ActionResult
+        {
+            ActionId = actionId,
+            RawInput = $"Dungeon Master invokes {spell.Name}",
+            Success = true,
+            MechanicalSummary = $"DM invoked {spell.Name} ({spell.DamageDice}{(isAreaEffect ? ", area effect" : string.Empty)}): {string.Join("; ", outcomes)}.",
+            DiceRolls = [damageRoll],
+            StateChanges = stateChanges,
+            InteractionUpdate = allHostilesDefeated
+                ? new InteractionUpdate { Mode = InteractionMode.Explore, CombatStatus = "victory" }
+                : null
+        };
+    }
+
+    private static ActionResult DmSpellFailure(string actionId, string summary) => new()
+    {
+        ActionId = actionId,
+        RawInput = "Dungeon Master spell intervention",
+        Success = false,
+        MechanicalSummary = summary
+    };
 
     private static ActionResult ProcessSpellbook(PlayerCharacter player, GameAction action)
     {

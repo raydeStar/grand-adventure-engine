@@ -83,6 +83,7 @@ builder.Services.AddDbContextFactory<GaeDbContext>((sp, options) =>
 });
 
 builder.Services.AddSingleton<IStateManager, EfCoreStateManager>();
+builder.Services.AddSingleton<IPlayerCommandGate, EfCorePlayerCommandGate>();
 builder.Services.AddSingleton<IConversationLogger, EfCoreConversationLogger>();
 builder.Services.AddSingleton<IWorldRepository, EfCoreWorldRepository>();
 

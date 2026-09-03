@@ -16,7 +16,7 @@
   <meta property="og:image:height" content="640" />
   <meta name="twitter:card" content="summary_large_image" />
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
-  <link rel="stylesheet" href="css/style.css?v=33" />
+  <link rel="stylesheet" href="css/style.css?v=34" />
   <script src="vendor/signalr-10.0.11.min.js?v=10.0.11"></script>
   <script src="vendor/rot-2.2.1.min.js?v=2.2.1"></script>
 </head>
@@ -222,6 +222,7 @@
               </div>
 
               <div id="story-log" class="narrative-log"></div>
+              <div id="command-hold-banner" class="command-hold-banner hidden" role="status" aria-live="polite"></div>
             </div>
 
             <div id="stat-bar" class="stat-bar">
@@ -325,8 +326,8 @@
                   <div class="co-dm-message-row">
                     <textarea id="co-dm-message" maxlength="800" rows="2" placeholder="A visible in-world Dungeon Master message..."></textarea>
                     <select id="co-dm-message-delivery" aria-label="Message delivery">
-                      <option value="player_flow">Player Flow only</option>
-                      <option value="player_flow_and_discord">Player Flow + Discord review</option>
+                      <option value="player_flow">Player Flow</option>
+                      <option value="player_flow_and_discord">Player Flow + Discord</option>
                     </select>
                     <button class="btn btn-primary btn-sm" type="submit">Send or Stage Message</button>
                   </div>
@@ -336,7 +337,7 @@
                     <strong>Suggested prompt</strong>
                     <button class="btn btn-secondary btn-xs" id="btn-co-dm-copy-prompt" type="button">Copy</button>
                   </div>
-                  <p id="co-dm-suggested-prompt">Inspect the selected player's current scene. Search the world for any NPC, quest, or lore relevant to the player's latest action. Send an appropriate in-world response, then propose the smallest persistent consequence that would make the roleplay state remain consistent. Do not invent facts that are not present in the game.</p>
+                  <p id="co-dm-suggested-prompt">Inspect the selected player's current scene. Search exact NPC, spell, quest, or lore IDs before acting. For ordinary consequences, propose the smallest mechanical change with final in-world narration. If the player crosses a consequential boundary, propose a hold first; after review, resolve it with a registered spell or another bounded mechanic plus narration, then propose resume. Example: cast fireball on the goblin and say “God smites thee!” Never invent campaign facts.</p>
                 </div>
               </div>
             </section>
@@ -847,9 +848,9 @@
   <script src="js/api.js?v=13"></script>
   <script src="js/signalr-client.js?v=3"></script>
   <script src="js/room-map.js?v=3"></script>
-  <script src="js/ui.js?v=38"></script>
-  <script src="js/co-dm.js?v=8"></script>
-  <script src="js/webmcp.js?v=4"></script>
-  <script src="js/app.js?v=36"></script>
+  <script src="js/ui.js?v=39"></script>
+  <script src="js/co-dm.js?v=9"></script>
+  <script src="js/webmcp.js?v=5"></script>
+  <script src="js/app.js?v=37"></script>
 </body>
 </html>

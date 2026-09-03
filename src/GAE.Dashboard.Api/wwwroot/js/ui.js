@@ -260,13 +260,15 @@ const UI = {
   },
 
   setUserCommandState(enabled, isAuthenticated = true) {
-    if (enabled && this._streamNode) {
+    if (enabled && (this._streamNode || this._commandHeld)) {
       return;
     }
 
     this.$('command-input').disabled = !enabled;
     this.$('command-submit').disabled = !enabled;
-    this.$('command-input').placeholder = enabled
+    this.$('command-input').placeholder = this._commandHeld
+      ? 'DM review in progress — awaiting Resume'
+      : enabled
       ? 'Enter a command or natural-language probe such as look, go north, or what can I do here?'
       : isAuthenticated
         ? 'Choose a character to start playing'
@@ -351,6 +353,7 @@ const UI = {
     this.renderRoom(null);
     this.renderStatBar(null);
     html('story-log', '');
+    this.renderCommandHold(null);
     this._lastStoryCount = 0;
     this._lastStorySignature = '';
     this._renderedActionIds.clear();
@@ -371,7 +374,8 @@ const UI = {
     set('char-title', player.name);
     set('char-meta', `${player.race} ${player.class} | Room ${player.currentRoomId}`);
     this.showPlayerSelect(false);
-    this.setUserCommandState(true, true);
+    this.renderCommandHold(player.commandHold);
+    this.setUserCommandState(!this._commandHeld, true);
 
     this.setBar('hp-bar', 'hp-text', player.hp, player.maxHp);
     this.setBar('mp-bar', 'mp-text', player.mp, player.maxMp);
@@ -763,6 +767,23 @@ const UI = {
   _streamTimer: null,
   _streamNode: null,
   _finishStreaming: null,
+  _commandHeld: false,
+
+  renderCommandHold(hold) {
+    this._commandHeld = !!hold;
+    const banner = this.$('command-hold-banner');
+    if (!banner) return;
+    banner.classList.toggle('hidden', !hold);
+    banner.innerHTML = hold
+      ? `<strong>DM REVIEW</strong><span>${this.esc(hold.reason || 'The Dungeon Master is reviewing this scene.')}</span><small>This browser input is paused until the DM approves Resume.</small>`
+      : '';
+    const syncControls = () => {
+      document.querySelectorAll('[data-room-exit], [data-interaction-cmd], .qcmd, #btn-adventure-spark')
+        .forEach((button) => { button.disabled = this._commandHeld; });
+    };
+    syncControls();
+    requestAnimationFrame(syncControls);
+  },
 
   _startStreaming(parentNode, text, trailingHtml) {
     // Cancel any previous stream
@@ -847,11 +868,11 @@ const UI = {
       if (!isCurrentStream) return;
 
       // Re-enable input
-      if (input) {
+      if (input && !this._commandHeld) {
         input.disabled = false;
         input.focus();
       }
-      if (submit) submit.disabled = false;
+      if (submit) submit.disabled = this._commandHeld;
       if (log) log.scrollTop = log.scrollHeight;
     };
     this._finishStreaming = finishStream;
@@ -894,9 +915,9 @@ const UI = {
     }
     // Re-enable input in case it was locked
     const input = this.$('command-input');
-    if (input) input.disabled = false;
+    if (input) input.disabled = this._commandHeld;
     const submit = this.$('command-submit');
-    if (submit) submit.disabled = false;
+    if (submit) submit.disabled = this._commandHeld;
   },
 
   renderPlayersList(players, currentPlayerId, session) {

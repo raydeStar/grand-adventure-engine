@@ -606,6 +606,12 @@ test.describe('Grand Adventure Engine dashboard', () => {
     expect(searchResult.data.results.some((entry) => entry.entityType === 'npc')).toBeTruthy();
     await expect(page.locator('#overview-results .dm-result-card')).not.toHaveCount(0);
 
+    const spellSearch = await page.evaluate(async () => {
+      const tool = window.__gaeRegisteredTools.find((entry) => entry.tool.name === 'search_campaign_world').tool;
+      return await tool.execute({ query: 'fireball', entityTypes: ['spell'], limit: 3 });
+    });
+    expect(spellSearch.data.results).toContainEqual(expect.objectContaining({ entityId: 'fireball', entityType: 'spell' }));
+
     const rejectedScope = await page.evaluate(async () => {
       const tool = window.__gaeRegisteredTools.find((entry) => entry.tool.name === 'get_selected_player_context').tool;
       return await tool.execute({ playerId: 'demo-admin' });
@@ -728,6 +734,39 @@ test.describe('Grand Adventure Engine dashboard', () => {
     await expect(statusDetails).toHaveAttribute('open', '');
     await expect(statusDetails).toContainText('QA Watch');
     expect(await page.evaluate(() => window.__mutationCalls)).toBe(0);
+
+    await page.locator('#co-dm-scene [data-co-dm-hold]').click();
+    const holdCard = page.locator('#co-dm-proposals .co-dm-proposal').first();
+    await expect(holdCard).toContainText('Hold for DM review');
+    await holdCard.getByRole('button', { name: 'Approve' }).click();
+    await expect(holdCard).toContainText('approved');
+    await expect(page.locator('#co-dm-scene')).toContainText('PLAYER HELD');
+    const heldContext = await page.evaluate(async () => {
+      const tool = window.__gaeRegisteredTools.find((entry) => entry.tool.name === 'get_selected_player_context').tool;
+      return await tool.execute({});
+    });
+    expect(heldContext.data.player.commandHold.reason).toContain('Dungeon Master');
+
+    await page.locator('#co-dm-scene [data-co-dm-resume]').click();
+    const resumeCard = page.locator('#co-dm-proposals .co-dm-proposal').first();
+    await expect(resumeCard).toContainText('Resume player commands');
+    await resumeCard.getByRole('button', { name: 'Approve' }).click();
+    await expect(resumeCard).toContainText('approved');
+    await expect(page.locator('#co-dm-scene')).toContainText('PLAYER LIVE');
+
+    const combinedNarration = `A single approved act carries both arithmetic and thunder. ${Date.now()}`;
+    await page.evaluate(async (message) => {
+      const tool = window.__gaeRegisteredTools.find((entry) => entry.tool.name === 'propose_mechanical_change').tool;
+      await tool.execute({
+        kind: 'adjust_resources', title: 'Narrated approval', rationale: 'Verify one review card controls mechanic and story.',
+        evidenceIds: ['demo-user'], xpDelta: 1, message
+      });
+    }, combinedNarration);
+    const narratedCard = page.locator('#co-dm-proposals .co-dm-proposal').first();
+    await expect(narratedCard).toContainText(combinedNarration);
+    await narratedCard.getByRole('button', { name: 'Approve' }).click();
+    await expect(narratedCard).toContainText('approved');
+    expect(await page.evaluate(async (message) => (await API.getStory('demo-user', 50)).some((entry) => entry.narration === message), combinedNarration)).toBeTruthy();
 
     const externalMessage = `Discord review must remain inert ${Date.now()}`;
     const externalResult = await page.evaluate(async (message) => {

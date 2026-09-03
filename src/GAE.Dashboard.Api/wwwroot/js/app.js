@@ -1044,6 +1044,7 @@
     if (!ensureAuthenticated()) return;
 
     const input = UI.$('command-input');
+    if (UI._commandHeld) return;
     const command = input.value.trim();
     if (!command || !state.currentPlayerId) return;
 
@@ -1071,7 +1072,7 @@
       UI.endPendingAction();
       await handleError(error, { story: true });
     } finally {
-      if (!UI._streamNode) {
+      if (!UI._streamNode && !UI._commandHeld) {
         input.disabled = false;
         UI.$('command-submit').disabled = false;
         input.focus();

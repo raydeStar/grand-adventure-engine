@@ -333,6 +333,123 @@ public class AdminConsoleTests : IClassFixture<GaeWebApplicationFactory>
     }
 
     [Fact]
+    public async Task CoDmHold_BlocksConsequentialCommandsUntilApprovedResume()
+    {
+        var playerId = $"codm-hold-{Guid.NewGuid():N}";
+        var createResponse = await _userClient.PostAsJsonAsync("/api/dashboard/characters", new
+        {
+            playerId,
+            name = "Prudence Under Review",
+            race = "Human",
+            @class = "Ranger",
+            statMethod = "StandardArray"
+        });
+        createResponse.EnsureSuccessStatusCode();
+
+        var holdToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+        var holdProposal = await PostCoDmAsync("/api/dashboard/admin/co-dm/proposals", new
+        {
+            requestId = $"request-{Guid.NewGuid():N}", approvalToken = holdToken, playerId,
+            kind = "pause_player", title = "Review the forbidden door",
+            rationale = "A consequential boundary needs a human ruling.",
+            holdReason = "The Dungeon Master is reviewing the forbidden door."
+        });
+        holdProposal.EnsureSuccessStatusCode();
+        var holdId = (await holdProposal.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString();
+        (await PostCoDmAsync($"/api/dashboard/admin/co-dm/actions/{holdId}/approve", new { approvalToken = holdToken })).EnsureSuccessStatusCode();
+
+        var heldPlayer = await _userClient.GetFromJsonAsync<JsonElement>($"/api/dashboard/players/{playerId}");
+        Assert.Equal("The Dungeon Master is reviewing the forbidden door.", heldPlayer.GetProperty("commandHold").GetProperty("reason").GetString());
+
+        var safeRead = await _userClient.PostAsJsonAsync("/api/dashboard/action", new { playerId, command = "stats" });
+        safeRead.EnsureSuccessStatusCode();
+        var blockedMove = await _userClient.PostAsJsonAsync("/api/dashboard/action", new { playerId, command = "go north" });
+        blockedMove.EnsureSuccessStatusCode();
+        var blockedResult = await blockedMove.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.False(blockedResult.GetProperty("success").GetBoolean());
+        Assert.Contains("Dungeon Master review hold", blockedResult.GetProperty("mechanicalSummary").GetString(), StringComparison.OrdinalIgnoreCase);
+
+        var resumeToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+        var resumeProposal = await PostCoDmAsync("/api/dashboard/admin/co-dm/proposals", new
+        {
+            requestId = $"request-{Guid.NewGuid():N}", approvalToken = resumeToken, playerId,
+            kind = "resume_player", title = "Ruling complete", rationale = "The scene may continue."
+        });
+        resumeProposal.EnsureSuccessStatusCode();
+        var resumeId = (await resumeProposal.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString();
+        (await PostCoDmAsync($"/api/dashboard/admin/co-dm/actions/{resumeId}/approve", new { approvalToken = resumeToken })).EnsureSuccessStatusCode();
+
+        var resumedPlayer = await _userClient.GetFromJsonAsync<JsonElement>($"/api/dashboard/players/{playerId}");
+        Assert.Equal(JsonValueKind.Null, resumedPlayer.GetProperty("commandHold").ValueKind);
+    }
+
+    [Fact]
+    public async Task CoDmApprovedResourceChange_PersistsItsPreviewedNarration()
+    {
+        var playerId = $"codm-narration-{Guid.NewGuid():N}";
+        var createResponse = await _userClient.PostAsJsonAsync("/api/dashboard/characters", new
+        {
+            playerId, name = "Ari of Receipts", race = "Human", @class = "Ranger", statMethod = "StandardArray"
+        });
+        createResponse.EnsureSuccessStatusCode();
+        var before = await _adminClient.GetFromJsonAsync<JsonElement>($"/api/dashboard/players/{playerId}");
+        var hpBefore = before.GetProperty("hp").GetInt32();
+        const string narration = "A warm gold light closes Ari's wounds; fate has signed the receipt.";
+        var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+        var proposalResponse = await PostCoDmAsync("/api/dashboard/admin/co-dm/proposals", new
+        {
+            requestId = $"request-{Guid.NewGuid():N}", approvalToken = token, playerId,
+            kind = "adjust_resources", title = "Heal Ari", rationale = "The DM invokes a bounded restorative effect.",
+            hpDelta = 10, message = narration
+        });
+        proposalResponse.EnsureSuccessStatusCode();
+        var actionId = (await proposalResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString();
+        (await PostCoDmAsync($"/api/dashboard/admin/co-dm/actions/{actionId}/approve", new { approvalToken = token })).EnsureSuccessStatusCode();
+
+        var after = await _adminClient.GetFromJsonAsync<JsonElement>($"/api/dashboard/players/{playerId}");
+        Assert.Equal(Math.Min(after.GetProperty("maxHp").GetInt32(), hpBefore + 10), after.GetProperty("hp").GetInt32());
+        var story = await _adminClient.GetFromJsonAsync<JsonElement>($"/api/dashboard/story?playerId={playerId}&limit=10");
+        Assert.Single(story.EnumerateArray(), entry => entry.GetProperty("narration").GetString() == narration);
+    }
+
+    [Fact]
+    public async Task CoDmRegisteredSpell_UsesExactCurrentRoomTargetAndNarration()
+    {
+        var playerId = $"codm-spell-{Guid.NewGuid():N}";
+        var roomId = $"codm-arena-{Guid.NewGuid():N}";
+        const string goblinId = "qa-goblin";
+        (await _userClient.PostAsJsonAsync("/api/dashboard/characters", new
+        {
+            playerId, name = "Ari Spellwright", race = "Human", @class = "Mage", statMethod = "StandardArray"
+        })).EnsureSuccessStatusCode();
+        (await _adminClient.PostAsJsonAsync("/api/dashboard/admin/mutations/room-fixture", new
+        {
+            roomId, name = "The Approval Arena", description = "A bounded stage for exact-target spell review.",
+            clearNpcs = true, npcs = new[] { new { npcId = goblinId, name = "Audit Goblin", isHostile = true, hp = 50, maxHp = 50 } }
+        })).EnsureSuccessStatusCode();
+        (await _adminClient.PostAsJsonAsync("/api/dashboard/admin/mutations/teleport", new { playerId, roomId })).EnsureSuccessStatusCode();
+
+        const string narration = "Ari, the heavens misfile their thunder as flame, and the goblin receives the correction.";
+        var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+        var proposalResponse = await PostCoDmAsync("/api/dashboard/admin/co-dm/proposals", new
+        {
+            requestId = $"request-{Guid.NewGuid():N}", approvalToken = token, playerId,
+            kind = "invoke_registered_spell", title = "Cast Firaga on the goblin",
+            rationale = "The exact spell and current-room target were inspected.", evidenceIds = new[] { "fireball", goblinId },
+            spellId = "fireball", targetEntityId = goblinId, message = narration
+        });
+        proposalResponse.EnsureSuccessStatusCode();
+        var actionId = (await proposalResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString();
+        (await PostCoDmAsync($"/api/dashboard/admin/co-dm/actions/{actionId}/approve", new { approvalToken = token })).EnsureSuccessStatusCode();
+
+        var room = await _adminClient.GetFromJsonAsync<JsonElement>($"/api/dashboard/rooms/{roomId}?playerId={playerId}");
+        var goblin = room.GetProperty("npcs").EnumerateArray().Single(npc => npc.GetProperty("id").GetString() == goblinId);
+        Assert.InRange(goblin.GetProperty("hp").GetInt32(), 32, 47);
+        var story = await _adminClient.GetFromJsonAsync<JsonElement>($"/api/dashboard/story?playerId={playerId}&limit=10");
+        Assert.Contains(story.EnumerateArray(), entry => entry.GetProperty("narration").GetString() == narration);
+    }
+
+    [Fact]
     public async Task UserRole_CannotAccessAdminSummary()
     {
         var response = await _userClient.GetAsync("/api/dashboard/admin/summary");

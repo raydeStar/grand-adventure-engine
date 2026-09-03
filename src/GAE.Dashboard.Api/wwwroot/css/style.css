@@ -112,6 +112,30 @@
   padding: 2px 6px;
 }
 
+.co-dm-hold-state {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 0 10px;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+
+.co-dm-hold-state > div { display: grid; gap: 2px; }
+.co-dm-hold-state strong { color: var(--success, #70d98b); font-size: 11px; letter-spacing: .08em; }
+.co-dm-hold-state span { color: var(--text-dim); }
+.co-dm-hold-state.is-held { border-color: color-mix(in srgb, var(--warning, #d7a84b) 60%, transparent); background: color-mix(in srgb, var(--warning, #d7a84b) 8%, transparent); }
+.co-dm-hold-state.is-held strong { color: var(--warning, #d7a84b); }
+
+.co-dm-preview {
+  padding: 7px 8px;
+  border-left: 2px solid var(--accent);
+  color: var(--text-bright, var(--text));
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
 .co-dm-scene-columns {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -282,6 +306,21 @@
   .co-dm-actions { grid-template-columns: 1fr; }
   .co-dm-scene-columns { grid-template-columns: 1fr; }
 }
+
+.command-hold-banner {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 3px 12px;
+  margin: 0 12px 8px;
+  padding: 8px 11px;
+  border: 1px solid color-mix(in srgb, var(--gold) 65%, transparent);
+  border-left-width: 4px;
+  background: color-mix(in srgb, var(--gold) 9%, var(--bg));
+}
+
+.command-hold-banner strong { grid-row: 1 / span 2; align-self: center; color: var(--gold); letter-spacing: .12em; }
+.command-hold-banner span { color: var(--text); }
+.command-hold-banner small { color: var(--dim); }
 
 @font-face {
   font-family: 'IBM Plex Mono';

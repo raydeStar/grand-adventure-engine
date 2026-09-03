@@ -11,8 +11,8 @@
   const MAX_ACTIVITY = 50;
   const MAX_PROPOSALS = 30;
   const ENTITY_TYPES = new Set(['player', 'room', 'npc', 'item', 'spell', 'class', 'race', 'quest', 'monster', 'narrator_preset', 'lore_entry']);
-  const ENTITY_CATEGORY_MAP = Object.freeze({ character: 'player', location: 'room', npc: 'npc', item: 'item', quest: 'quest', lore: 'lore_entry' });
-  const PROPOSAL_KINDS = new Set(['grant_item', 'apply_status', 'adjust_resources', 'teleport']);
+  const ENTITY_CATEGORY_MAP = Object.freeze({ character: 'player', location: 'room', npc: 'npc', item: 'item', spell: 'spell', quest: 'quest', lore: 'lore_entry' });
+  const PROPOSAL_KINDS = new Set(['grant_item', 'apply_status', 'adjust_resources', 'teleport', 'pause_player', 'resume_player', 'invoke_registered_spell']);
   const MESSAGE_DELIVERIES = new Set(['player_flow', 'player_flow_and_discord']);
   const STATUS_TYPES = ['buff', 'debuff', 'poison', 'regen', 'stun', 'blind', 'charm'];
 
@@ -276,6 +276,10 @@
     const story = context.recentStory.length
       ? context.recentStory.map((entry) => `<li><strong>${esc(entry.rawInput || 'DM / world')}</strong><span>${esc(entry.narration || entry.mechanicalSummary || 'No visible text.')}</span></li>`).join('')
       : '<li class="muted">No recent story entries.</li>';
+    const hold = player.commandHold;
+    const holdControl = hold
+      ? `<div class="co-dm-hold-state is-held"><div><strong>PLAYER HELD</strong><span>${esc(hold.reason)}</span></div><button class="btn btn-primary btn-xs" data-co-dm-resume type="button">Propose Resume</button></div>`
+      : '<div class="co-dm-hold-state"><div><strong>PLAYER LIVE</strong><span>Consequential commands are currently enabled.</span></div><button class="btn btn-secondary btn-xs" data-co-dm-hold type="button">Propose Hold</button></div>';
 
     host.innerHTML = `
       <div class="co-dm-scene-heading">
@@ -287,6 +291,7 @@
         <span>HP ${esc(player.hp)}/${esc(player.maxHp)}</span><span>MP ${esc(player.mp)}/${esc(player.maxMp)}</span>
         <span>${esc(player.gold)} gold</span><span>World <code>${esc(player.activeWorldId)}</code></span>
       </div>
+      ${holdControl}
       <h4>${esc(room?.name || 'Room unavailable')} <code>${esc(room?.id || player.currentRoomId)}</code></h4>
       <p>${esc(room?.description || 'No room description is available.')}</p>
       <div class="co-dm-scene-columns">
@@ -321,7 +326,8 @@
         <div class="co-dm-proposal-meta">${esc(proposal.kind)} · ${esc(proposal.playerName || proposal.playerId)} · proposed by ${esc(proposal.proposedBy)}</div>
         <p>${esc(proposal.summary)}</p>
         <p><strong>Rationale:</strong> ${esc(proposal.rationale)}</p>
-        ${proposal.kind === 'player_flow_and_discord' ? `<p><strong>Destination:</strong> Player Flow and configured Discord thread for <code>${esc(proposal.playerId)}</code></p><p><strong>Exact message:</strong> ${esc(proposal.payload?.message || '')}</p>` : ''}
+        ${proposal.kind === 'player_flow_and_discord' ? `<p><strong>Destination:</strong> Player Flow and configured Discord thread for <code>${esc(proposal.playerId)}</code></p>` : ''}
+        ${proposal.payload?.message ? `<p class="co-dm-preview"><strong>Player preview:</strong> “${esc(proposal.payload.message)}”</p>` : ''}
         ${(proposal.evidenceIds || []).length ? `<p><strong>Evidence:</strong> ${proposal.evidenceIds.map((id) => `<code>${esc(id)}</code>`).join(' ')}</p>` : ''}
         <details><summary>Exact ${proposal.actionType === 'message_delivery' ? 'delivery' : 'mechanical'} payload</summary><pre>${esc(JSON.stringify(proposal.payload, null, 2))}</pre></details>
         ${proposal.result ? `<div class="co-dm-proposal-result">${esc(proposal.result)}</div>` : ''}
@@ -408,6 +414,18 @@
       }
       if (reject) void service.rejectProposal(reject.dataset.coDmReject);
     });
+    document.getElementById('co-dm-scene')?.addEventListener('click', (event) => {
+      const hold = event.target.closest('[data-co-dm-hold]');
+      const resume = event.target.closest('[data-co-dm-resume]');
+      if (!hold && !resume) return;
+      const isResume = !!resume;
+      void service.createProposal({
+        kind: isResume ? 'resume_player' : 'pause_player',
+        title: isResume ? 'Resume player commands' : 'Hold for DM review',
+        rationale: isResume ? 'The Dungeon Master has resolved the intervention.' : 'Pause consequential commands while the Dungeon Master reviews this scene.',
+        holdReason: isResume ? undefined : 'The Dungeon Master is reviewing a consequential moment.'
+      }).catch((error) => service.recordActivity(`Hold proposal failed: ${error.message}`, 'failure'));
+    });
   }
 
   function validateProposal(input) {
@@ -427,40 +445,60 @@
       if (unsupported.length) throw new Error(`${kind} does not accept: ${unsupported.join(', ')}.`);
     };
 
+    const message = bounded(input?.message, 801);
+    if (message.length > 800) throw new Error('message must be at most 800 characters.');
     let payload;
     let summary;
     if (kind === 'grant_item') {
-      rejectFields(['statusName', 'statusDescription', 'durationTurns', 'hpDelta', 'mpDelta', 'goldDelta', 'xpDelta', 'destinationRoomId']);
+      rejectFields(['statusName', 'statusDescription', 'durationTurns', 'hpDelta', 'mpDelta', 'goldDelta', 'xpDelta', 'destinationRoomId', 'spellId', 'targetEntityId', 'holdReason']);
       const itemId = bounded(input.itemId, 120);
       const quantity = integer(input.quantity, 1);
       if (!itemId) throw new Error('itemId is required for grant_item.');
       if (quantity < 1 || quantity > 20) throw new Error('quantity must be between 1 and 20.');
-      payload = { itemId, quantity };
+      payload = { itemId, quantity, ...(message ? { message } : {}) };
       summary = `Grant ${quantity} × registered item ${itemId}.`;
     } else if (kind === 'apply_status') {
-      rejectFields(['itemId', 'quantity', 'hpDelta', 'mpDelta', 'goldDelta', 'xpDelta', 'destinationRoomId']);
+      rejectFields(['itemId', 'quantity', 'hpDelta', 'mpDelta', 'goldDelta', 'xpDelta', 'destinationRoomId', 'spellId', 'targetEntityId', 'holdReason']);
       const statusName = bounded(input.statusName, 120);
       const statusDescription = bounded(input.statusDescription, 500);
       const durationTurns = integer(input.durationTurns, 3);
       if (!statusName) throw new Error('statusName is required for apply_status.');
       if (durationTurns < 1 || durationTurns > 50) throw new Error('durationTurns must be between 1 and 50.');
-      payload = { statusName, statusDescription, durationTurns };
+      payload = { statusName, statusDescription, durationTurns, ...(message ? { message } : {}) };
       summary = `Apply status “${statusName}” for ${durationTurns} turn(s).`;
     } else if (kind === 'adjust_resources') {
-      rejectFields(['itemId', 'quantity', 'statusName', 'statusDescription', 'durationTurns', 'destinationRoomId']);
+      rejectFields(['itemId', 'quantity', 'statusName', 'statusDescription', 'durationTurns', 'destinationRoomId', 'spellId', 'targetEntityId', 'holdReason']);
       payload = {
         hpDelta: integer(input.hpDelta), mpDelta: integer(input.mpDelta),
-        goldDelta: integer(input.goldDelta), xpDelta: integer(input.xpDelta)
+        goldDelta: integer(input.goldDelta), xpDelta: integer(input.xpDelta), ...(message ? { message } : {})
       };
       if (!Object.values(payload).some((value) => value !== 0)) throw new Error('At least one resource delta must be non-zero.');
       if (Object.values(payload).some((value) => Math.abs(value) > 10000)) throw new Error('Resource deltas are capped at 10000 per proposal.');
       summary = `Adjust resources: HP ${payload.hpDelta}, MP ${payload.mpDelta}, gold ${payload.goldDelta}, XP ${payload.xpDelta}.`;
-    } else {
-      rejectFields(['itemId', 'quantity', 'statusName', 'statusDescription', 'durationTurns', 'hpDelta', 'mpDelta', 'goldDelta', 'xpDelta']);
+    } else if (kind === 'teleport') {
+      rejectFields(['itemId', 'quantity', 'statusName', 'statusDescription', 'durationTurns', 'hpDelta', 'mpDelta', 'goldDelta', 'xpDelta', 'spellId', 'targetEntityId', 'holdReason']);
       const destinationRoomId = bounded(input.destinationRoomId, 120);
       if (!destinationRoomId) throw new Error('destinationRoomId is required for teleport.');
-      payload = { destinationRoomId };
+      payload = { destinationRoomId, ...(message ? { message } : {}) };
       summary = `Teleport to existing room ${destinationRoomId}.`;
+    } else if (kind === 'pause_player') {
+      rejectFields(['itemId', 'quantity', 'statusName', 'statusDescription', 'durationTurns', 'hpDelta', 'mpDelta', 'goldDelta', 'xpDelta', 'destinationRoomId', 'spellId', 'targetEntityId', 'message']);
+      const holdReason = bounded(input.holdReason || 'The Dungeon Master is reviewing this scene.', 301);
+      if (holdReason.length > 300) throw new Error('holdReason must be at most 300 characters.');
+      payload = { holdReason };
+      summary = 'Hold future consequential player commands for DM review.';
+    } else if (kind === 'resume_player') {
+      rejectFields(['itemId', 'quantity', 'statusName', 'statusDescription', 'durationTurns', 'hpDelta', 'mpDelta', 'goldDelta', 'xpDelta', 'destinationRoomId', 'spellId', 'targetEntityId', 'holdReason', 'message']);
+      payload = {};
+      summary = 'Release the DM review hold and resume normal play.';
+    } else {
+      rejectFields(['itemId', 'quantity', 'statusName', 'statusDescription', 'durationTurns', 'hpDelta', 'mpDelta', 'goldDelta', 'xpDelta', 'destinationRoomId', 'holdReason']);
+      const spellId = bounded(input.spellId, 120);
+      const targetEntityId = bounded(input.targetEntityId, 120);
+      if (!spellId || !targetEntityId) throw new Error('spellId and targetEntityId are required for invoke_registered_spell.');
+      if (!message) throw new Error('message is required so the player can preview the spell narration.');
+      payload = { spellId, targetEntityId, message };
+      summary = `Invoke registered spell ${spellId} on ${targetEntityId}; the server will calculate its effect.`;
     }
     return { playerId, kind, title, rationale, evidenceIds, payload, summary };
   }
@@ -595,7 +633,11 @@
         player: {
           id: bounded(player.id, 120), name: bounded(player.name, 160), race: bounded(player.race, 100), class: bounded(player.class, 100),
           level: player.level, hp: player.hp, maxHp: player.maxHp, mp: player.mp, maxMp: player.maxMp, gold: player.gold,
-          currentRoomId: bounded(player.currentRoomId, 120), activeWorldId: bounded(player.activeWorldId, 120)
+          currentRoomId: bounded(player.currentRoomId, 120), activeWorldId: bounded(player.activeWorldId, 120),
+          commandHold: player.commandHold ? {
+            reason: bounded(player.commandHold.reason, 300), heldBy: bounded(player.commandHold.heldBy, 120),
+            heldAt: player.commandHold.heldAt || null, sourceActionId: bounded(player.commandHold.sourceActionId, 120)
+          } : null
         },
         room: room ? {
           id: bounded(player.currentRoomId, 120), instanceId: bounded(room.id, 160), name: bounded(room.name, 160), description: bounded(room.description, 900),

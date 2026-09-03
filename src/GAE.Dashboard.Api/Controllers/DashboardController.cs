@@ -41,6 +41,7 @@ public class DashboardController : ControllerBase
     private readonly IRealmTravelService _realmTravelService;
     private readonly IWorldRepository _worldRepository;
     private readonly IDbContextFactory<GaeDbContext>? _dbContextFactory;
+    private readonly IPlayerCommandGate? _commandGate;
     private readonly ILogger<DashboardController> _logger;
 
     private static readonly TimeSpan NarratorCacheDuration = TimeSpan.FromSeconds(60);
@@ -75,7 +76,8 @@ public class DashboardController : ControllerBase
         ILogger<DashboardController> logger,
         IDbContextFactory<GaeDbContext>? dbContextFactory = null,
         IDiscordNotifier? discordNotifier = null,
-        ContentSeedService? contentSeed = null)
+        ContentSeedService? contentSeed = null,
+        IPlayerCommandGate? commandGate = null)
     {
         _stateManager = stateManager;
         _engine = engine;
@@ -94,12 +96,18 @@ public class DashboardController : ControllerBase
         _dbContextFactory = dbContextFactory;
         _discordNotifier = discordNotifier;
         _contentSeed = contentSeed;
+        _commandGate = commandGate;
     }
 
     [HttpGet("players")]
     public async Task<IActionResult> GetPlayers(CancellationToken ct)
     {
         var players = await _stateManager.GetAllPlayersAsync(ct);
+        if (_commandGate is not null)
+        {
+            await Task.WhenAll(players.Select(async player =>
+                player.CommandHold = await _commandGate.GetHoldAsync(player.Id, ct)));
+        }
         return Ok(IsAdmin ? players : players.Where(CanAccess).ToArray());
     }
 
@@ -107,6 +115,8 @@ public class DashboardController : ControllerBase
     public async Task<IActionResult> GetPlayer(string playerId, CancellationToken ct)
     {
         var player = await _stateManager.GetPlayerAsync(playerId, ct);
+        if (player is not null && _commandGate is not null)
+            player.CommandHold = await _commandGate.GetHoldAsync(player.Id, ct);
         return player is not null && CanAccess(player) ? Ok(player) : NotFound();
     }
 
@@ -739,6 +749,8 @@ public class DashboardController : ControllerBase
             {
                 ResetPlayerToConfiguredBaseline(player);
                 await _stateManager.SavePlayerAsync(player, ct);
+                if (_commandGate is not null)
+                    await _commandGate.ResumeAsync(player.Id, ct);
             }
         }
         else
@@ -1179,9 +1191,15 @@ public class DashboardController : ControllerBase
         });
     }
 
-    private async Task<StoryEntry> PersistDmMessageAsync(PlayerCharacter player, string message, CancellationToken ct)
+    private async Task<StoryEntry> PersistDmMessageAsync(
+        PlayerCharacter player,
+        string message,
+        CancellationToken ct,
+        string mechanicalSummary = "Dungeon Master message delivered.",
+        string? actionId = null,
+        string source = "admin-dm-message")
     {
-        var actionId = $"dm-{Guid.NewGuid():N}";
+        actionId ??= $"dm-{Guid.NewGuid():N}";
         var entry = new StoryEntry
         {
             ActionId = actionId,
@@ -1189,7 +1207,7 @@ public class DashboardController : ControllerBase
             PlayerId = player.Id,
             WorldId = player.ActiveWorldId,
             RoomId = player.CurrentRoomId,
-            MechanicalSummary = "Dungeon Master message delivered.",
+            MechanicalSummary = mechanicalSummary,
             Narration = message
         };
         await _stateManager.AddStoryEntryAsync(entry, ct);
@@ -1204,7 +1222,7 @@ public class DashboardController : ControllerBase
             Data = new Dictionary<string, object?>
             {
                 ["storyEntry"] = entry,
-                ["source"] = "admin-dm-message"
+                ["source"] = source
             }
         }, ct);
         return entry;
@@ -1508,6 +1526,8 @@ public class DashboardController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.Title) || request.Title.Trim().Length > 160) return "title is required and must be at most 160 characters.";
         if (string.IsNullOrWhiteSpace(request.Rationale) || request.Rationale.Trim().Length > 800) return "rationale is required and must be at most 800 characters.";
         if (request.EvidenceIds is { Count: > 8 } || request.EvidenceIds?.Any(value => value?.Length > 140) == true) return "evidenceIds may contain at most eight bounded IDs.";
+        if (request.Message?.Trim().Length > 800) return "message must be at most 800 characters.";
+        if (request.HoldReason?.Trim().Length > 300) return "holdReason must be at most 300 characters.";
 
         var kind = request.Kind?.Trim();
         if (kind == "player_flow_and_discord")
@@ -1526,6 +1546,46 @@ public class DashboardController : ControllerBase
         }
         if (kind == "teleport")
             return string.IsNullOrWhiteSpace(request.DestinationRoomId) || await _stateManager.GetRoomAsync(request.DestinationRoomId.Trim(), ct) is null ? "teleport requires an existing destinationRoomId." : null;
+        if (kind == "pause_player")
+        {
+            if (_commandGate is null) return "Player command holds are unavailable.";
+            return await _commandGate.GetHoldAsync(request.PlayerId.Trim(), ct) is null
+                ? null
+                : "The selected player is already held for DM review.";
+        }
+        if (kind == "resume_player")
+        {
+            if (_commandGate is null) return "Player command holds are unavailable.";
+            return await _commandGate.GetHoldAsync(request.PlayerId.Trim(), ct) is not null
+                ? null
+                : "The selected player is not currently held.";
+        }
+        if (kind == "invoke_registered_spell")
+        {
+            if (string.IsNullOrWhiteSpace(request.SpellId) || string.IsNullOrWhiteSpace(request.TargetEntityId))
+                return "invoke_registered_spell requires exact spellId and targetEntityId values.";
+            if (string.IsNullOrWhiteSpace(request.Message))
+                return "invoke_registered_spell requires previewed player-facing narration.";
+
+            var player = await _stateManager.GetPlayerAsync(request.PlayerId.Trim(), ct);
+            if (player is null) return null; // The standard player lookup returns the authoritative 404.
+            var spell = _registry.Spells.GetById(request.SpellId.Trim());
+            if (spell is null || !spell.WorldIds.Contains(player.ActiveWorldId, StringComparer.OrdinalIgnoreCase))
+                return "The registered spell is unavailable in the selected player's world.";
+            if (string.IsNullOrWhiteSpace(spell.DamageDice) && string.IsNullOrWhiteSpace(spell.HealDice))
+                return "Only registered damage or healing spells are supported by DM intervention.";
+            if (!string.IsNullOrWhiteSpace(spell.HealDice))
+                return string.Equals(request.TargetEntityId.Trim(), player.Id, StringComparison.OrdinalIgnoreCase)
+                    ? null
+                    : "A healing spell may target only the selected player in this bounded workflow.";
+
+            var room = await _stateManager.GetPlayerRoomAsync(player.Id, player.CurrentRoomId, ct);
+            return room?.Npcs.Any(npc =>
+                string.Equals(npc.Id, request.TargetEntityId.Trim(), StringComparison.OrdinalIgnoreCase)
+                && npc.Hp is > 0) == true
+                ? null
+                : "The exact living spell target is not in the selected player's current room.";
+        }
         return "Unsupported proposal kind.";
     }
 
@@ -1536,6 +1596,9 @@ public class DashboardController : ControllerBase
         "apply_status" => $"Apply status {request.StatusName} for {request.DurationTurns} turn(s).",
         "adjust_resources" => $"Adjust resources: HP {request.HpDelta}, MP {request.MpDelta}, gold {request.GoldDelta}, XP {request.XpDelta}.",
         "teleport" => $"Teleport to existing room {request.DestinationRoomId}.",
+        "pause_player" => "Hold future mutating player commands for DM review.",
+        "resume_player" => "Release the DM review hold and resume normal play.",
+        "invoke_registered_spell" => $"Invoke registered spell {request.SpellId} on {request.TargetEntityId} with DM authority.",
         _ => "Review Co-DM action."
     };
 
@@ -1545,49 +1608,118 @@ public class DashboardController : ControllerBase
         var player = await RequirePlayerAsync(action.TargetPlayerId, ct) ?? throw new InvalidOperationException("Target player no longer exists.");
         if (action.ActionKind == "player_flow_and_discord")
         {
-            var message = payload.Message?.Trim();
-            if (string.IsNullOrWhiteSpace(message) || message.Length > 800) throw new InvalidOperationException("Stored message failed validation.");
-            await PersistDmMessageAsync(player, message, ct);
-            var mirrored = await TryMirrorDmMessageToDiscordAsync(player, message, ct);
+            var externalMessage = payload.Message?.Trim();
+            if (string.IsNullOrWhiteSpace(externalMessage) || externalMessage.Length > 800) throw new InvalidOperationException("Stored message failed validation.");
+            await PersistDmMessageAsync(player, externalMessage, ct);
+            var mirrored = await TryMirrorDmMessageToDiscordAsync(player, externalMessage, ct);
             return mirrored ? "Player Flow and Discord delivery completed." : "Player Flow delivery completed; Discord was unavailable.";
         }
 
-        IActionResult result = action.ActionKind switch
+        string resultSummary;
+        if (action.ActionKind == "pause_player")
         {
-            "grant_item" => await GrantItem(BuildCoDmGrantItemRequest(player.Id, payload), ct),
-            "apply_status" => await ApplyStatus(new ApplyStatusRequest
+            if (_commandGate is null) throw new InvalidOperationException("Player command holds are unavailable.");
+            if (await _commandGate.GetHoldAsync(player.Id, ct) is not null)
+                throw new InvalidOperationException("The selected player is already held for DM review.");
+            var hold = await _commandGate.HoldAsync(
+                player.Id,
+                payload.HoldReason ?? "The Dungeon Master is reviewing this scene.",
+                CurrentUsername,
+                action.Id,
+                ct);
+            resultSummary = $"{player.Name} is held for DM review: {hold.Reason}";
+            await BroadcastAdminMutationAsync(
+                resultSummary,
+                playerId: player.Id,
+                roomId: player.CurrentRoomId,
+                data: new Dictionary<string, object?> { ["commandHold"] = hold, ["mutation"] = "pause-player" },
+                ct: ct);
+        }
+        else if (action.ActionKind == "resume_player")
+        {
+            if (_commandGate is null) throw new InvalidOperationException("Player command holds are unavailable.");
+            if (!await _commandGate.ResumeAsync(player.Id, ct))
+                throw new InvalidOperationException("The selected player is no longer held.");
+            resultSummary = $"{player.Name} may act again.";
+            await BroadcastAdminMutationAsync(
+                resultSummary,
+                playerId: player.Id,
+                roomId: player.CurrentRoomId,
+                data: new Dictionary<string, object?> { ["mutation"] = "resume-player" },
+                ct: ct);
+        }
+        else if (action.ActionKind == "invoke_registered_spell")
+        {
+            var spellResult = await _engine.InvokeDmSpellAsync(
+                player.Id,
+                payload.SpellId ?? string.Empty,
+                payload.TargetEntityId ?? string.Empty,
+                action.Id,
+                ct);
+            if (!spellResult.Success)
+                throw new InvalidOperationException(spellResult.MechanicalSummary);
+            resultSummary = spellResult.MechanicalSummary;
+        }
+        else
+        {
+            IActionResult result = action.ActionKind switch
             {
-                PlayerId = player.Id,
-                Name = payload.StatusName ?? string.Empty,
-                Description = payload.StatusDescription,
-                Type = nameof(StatusEffectType.Debuff),
-                RemainingTurns = payload.DurationTurns,
-                ReplaceExisting = true
-            }, ct),
-            "adjust_resources" => await AdjustResources(new AdjustResourcesRequest
-            {
-                PlayerId = player.Id,
-                HpDelta = payload.HpDelta,
-                MpDelta = payload.MpDelta,
-                GoldDelta = payload.GoldDelta,
-                XpDelta = payload.XpDelta
-            }, ct),
-            "teleport" => await TeleportPlayer(new TeleportPlayerRequest
-            {
-                PlayerId = player.Id,
-                RoomId = payload.DestinationRoomId ?? string.Empty,
-                CreateRoomIfMissing = false,
-                ConnectFromCurrentRoom = false
-            }, ct),
-            _ => throw new InvalidOperationException("Stored Co-DM action kind is unsupported.")
-        };
+                "grant_item" => await GrantItem(BuildCoDmGrantItemRequest(player.Id, payload), ct),
+                "apply_status" => await ApplyStatus(new ApplyStatusRequest
+                {
+                    PlayerId = player.Id,
+                    Name = payload.StatusName ?? string.Empty,
+                    Description = payload.StatusDescription,
+                    Type = nameof(StatusEffectType.Debuff),
+                    RemainingTurns = payload.DurationTurns,
+                    ReplaceExisting = true
+                }, ct),
+                "adjust_resources" => await AdjustResources(new AdjustResourcesRequest
+                {
+                    PlayerId = player.Id,
+                    HpDelta = payload.HpDelta,
+                    MpDelta = payload.MpDelta,
+                    GoldDelta = payload.GoldDelta,
+                    XpDelta = payload.XpDelta
+                }, ct),
+                "teleport" => await TeleportPlayer(new TeleportPlayerRequest
+                {
+                    PlayerId = player.Id,
+                    RoomId = payload.DestinationRoomId ?? string.Empty,
+                    CreateRoomIfMissing = false,
+                    ConnectFromCurrentRoom = false
+                }, ct),
+                _ => throw new InvalidOperationException("Stored Co-DM action kind is unsupported.")
+            };
 
-        if (result is ObjectResult { StatusCode: >= 400 })
-            throw new InvalidOperationException("The existing game mutation endpoint rejected the approved action.");
-        if (result is not ObjectResult objectResult || objectResult.Value is null)
-            return "Existing game API accepted the approved action.";
-        var json = JsonSerializer.SerializeToElement(objectResult.Value);
-        return json.TryGetProperty("summary", out var summary) ? summary.GetString() ?? "Existing game API accepted the approved action." : "Existing game API accepted the approved action.";
+            if (result is ObjectResult { StatusCode: >= 400 })
+                throw new InvalidOperationException("The existing game mutation endpoint rejected the approved action.");
+            if (result is not ObjectResult objectResult || objectResult.Value is null)
+                resultSummary = "Existing game API accepted the approved action.";
+            else
+            {
+                var json = JsonSerializer.SerializeToElement(objectResult.Value);
+                resultSummary = json.TryGetProperty("summary", out var summary)
+                    ? summary.GetString() ?? "Existing game API accepted the approved action."
+                    : "Existing game API accepted the approved action.";
+            }
+        }
+
+        var playerNarration = payload.Message?.Trim();
+        if (!string.IsNullOrWhiteSpace(playerNarration))
+        {
+            var refreshedPlayer = await RequirePlayerAsync(player.Id, ct) ?? player;
+            await PersistDmMessageAsync(
+                refreshedPlayer,
+                playerNarration,
+                ct,
+                resultSummary,
+                action.Id,
+                "co-dm-approved-intervention");
+            resultSummary += " Player-facing narration delivered.";
+        }
+
+        return resultSummary;
     }
 
     private GrantItemRequest BuildCoDmGrantItemRequest(string playerId, CoDmActionPayload payload)
@@ -3540,7 +3672,7 @@ public class CoDmProposalRequest
     public string Rationale { get; set; } = string.Empty;
     /// <summary>Bounded entity IDs supporting the proposed action.</summary>
     public List<string>? EvidenceIds { get; set; }
-    /// <summary>Message used only by reviewed external delivery.</summary>
+    /// <summary>Optional final in-world narration delivered only after the approved mechanic succeeds.</summary>
     public string? Message { get; set; }
     /// <summary>Registered item ID used by grant_item.</summary>
     public string? ItemId { get; set; }
@@ -3562,6 +3694,12 @@ public class CoDmProposalRequest
     public int XpDelta { get; set; }
     /// <summary>Existing destination room used by teleport.</summary>
     public string? DestinationRoomId { get; set; }
+    /// <summary>Registered spell ID used by invoke_registered_spell.</summary>
+    public string? SpellId { get; set; }
+    /// <summary>Exact current-scene entity ID targeted by a DM spell.</summary>
+    public string? TargetEntityId { get; set; }
+    /// <summary>Player-facing explanation retained while pause_player is active.</summary>
+    public string? HoldReason { get; set; }
 }
 
 /// <summary>Human approval or rejection proof for one pending Co-DM action.</summary>
@@ -3584,6 +3722,9 @@ internal class CoDmActionPayload
     public int GoldDelta { get; set; }
     public int XpDelta { get; set; }
     public string? DestinationRoomId { get; set; }
+    public string? SpellId { get; set; }
+    public string? TargetEntityId { get; set; }
+    public string? HoldReason { get; set; }
 
     public static CoDmActionPayload From(CoDmProposalRequest request) => new()
     {
@@ -3597,7 +3738,10 @@ internal class CoDmActionPayload
         MpDelta = request.MpDelta,
         GoldDelta = request.GoldDelta,
         XpDelta = request.XpDelta,
-        DestinationRoomId = request.DestinationRoomId?.Trim()
+        DestinationRoomId = request.DestinationRoomId?.Trim(),
+        SpellId = request.SpellId?.Trim(),
+        TargetEntityId = request.TargetEntityId?.Trim(),
+        HoldReason = request.HoldReason?.Trim()
     };
 }
 

@@ -18,6 +18,12 @@ public class PlayerCharacter
     public bool HasCompletedDemo { get; set; }
     public string CurrentRoomId { get; set; } = "spawn";
 
+    /// <summary>
+    /// Transient command-control projection supplied by API callers. The durable record is stored
+    /// independently so a turn save cannot overwrite a DM hold placed while narration is running.
+    /// </summary>
+    public PlayerCommandHold? CommandHold { get; set; }
+
     // Resources
     public int Hp { get; set; }
     public int MaxHp { get; set; }

@@ -29,6 +29,10 @@ public class GaeDbContext : DbContext
     public DbSet<GAE.Engine.Data.Configurations.CoDmActionEntity> CoDmActions
         => Set<GAE.Engine.Data.Configurations.CoDmActionEntity>();
 
+    /// <summary>Active cross-transport player command holds.</summary>
+    public DbSet<GAE.Engine.Data.Configurations.PlayerCommandHoldEntity> PlayerCommandHolds
+        => Set<GAE.Engine.Data.Configurations.PlayerCommandHoldEntity>();
+
     // ── World tables ──
     public DbSet<WorldEntity> Worlds => Set<WorldEntity>();
     public DbSet<PlayerWorldStateEntity> PlayerWorldStates => Set<PlayerWorldStateEntity>();

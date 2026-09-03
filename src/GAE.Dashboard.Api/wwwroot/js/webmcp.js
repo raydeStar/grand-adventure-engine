@@ -102,7 +102,8 @@
         maxMp: data.player.maxMp,
         gold: data.player.gold,
         currentRoomId: data.player.currentRoomId,
-        activeWorldId: data.player.activeWorldId
+        activeWorldId: data.player.activeWorldId,
+        commandHold: data.player.commandHold || null
       } : null,
       room: data.room ? {
         id: data.room.id,
@@ -170,7 +171,7 @@
 
   function shrinkData(name, data) {
     if (name === 'get_selected_player_context') return {
-      player: data?.player ? { id: data.player.id, name: data.player.name, hp: data.player.hp, maxHp: data.player.maxHp, mp: data.player.mp, maxMp: data.player.maxMp, gold: data.player.gold, currentRoomId: data.player.currentRoomId, activeWorldId: data.player.activeWorldId } : null,
+      player: data?.player ? { id: data.player.id, name: data.player.name, hp: data.player.hp, maxHp: data.player.maxHp, mp: data.player.mp, maxMp: data.player.maxMp, gold: data.player.gold, currentRoomId: data.player.currentRoomId, activeWorldId: data.player.activeWorldId, commandHold: data.player.commandHold || null } : null,
       room: data?.room ? { id: data.room.id, name: data.room.name, exits: (data.room.exits || []).slice(0, 4), npcs: (data.room.npcs || []).slice(0, 4).map((item) => ({ id: item.id, name: item.name })) } : null,
       interaction: data?.interaction,
       activeQuests: (data?.activeQuests || []).slice(0, 4).map((quest) => ({ questId: quest.questId, status: quest.status })),
@@ -235,7 +236,7 @@
 
   const entityCategory = Object.freeze({
     type: 'string',
-    enum: ['character', 'location', 'npc', 'item', 'quest', 'lore'],
+    enum: ['character', 'location', 'npc', 'item', 'spell', 'quest', 'lore'],
     description: 'Optional category within the selected player campaign.'
   });
 
@@ -297,14 +298,15 @@
     {
       name: 'propose_mechanical_change',
       title: 'Propose mechanical change',
-      description: 'Stage one bounded mechanical change for the selected player. It never mutates game state until the human DM approves the visible proposal.',
+      description: 'Stage one bounded, reviewable DM intervention for the selected player. Supports holds, registered damage or healing spells, and optional final narration. The server calculates mechanics; nothing changes until the human DM approves the visible proposal.',
       inputSchema: {
         type: 'object',
         properties: {
-          kind: { type: 'string', enum: ['grant_item', 'apply_status', 'adjust_resources', 'teleport'], description: 'Supported proposal kind.' },
+          kind: { type: 'string', enum: ['grant_item', 'apply_status', 'adjust_resources', 'teleport', 'pause_player', 'resume_player', 'invoke_registered_spell'], description: 'Supported proposal kind.' },
           title: { type: 'string', minLength: 1, maxLength: 160, description: 'Short review-card title.' },
           rationale: { type: 'string', minLength: 1, maxLength: 800, description: 'Why this change follows from inspected evidence.' },
           evidenceIds: { type: 'array', maxItems: 8, uniqueItems: true, items: { type: 'string', minLength: 1, maxLength: 140 }, description: 'IDs supporting the proposal.' },
+          message: { type: 'string', minLength: 1, maxLength: 800, description: 'Optional final player-facing narration delivered only after the mechanic succeeds; required for invoke_registered_spell.' },
           itemId: { type: 'string', minLength: 1, maxLength: 120 },
           quantity: { type: 'integer', minimum: 1, maximum: 20 },
           statusName: { type: 'string', minLength: 1, maxLength: 120 },
@@ -314,7 +316,10 @@
           mpDelta: { type: 'integer', minimum: -10000, maximum: 10000 },
           goldDelta: { type: 'integer', minimum: -10000, maximum: 10000 },
           xpDelta: { type: 'integer', minimum: -10000, maximum: 10000 },
-          destinationRoomId: { type: 'string', minLength: 1, maxLength: 120 }
+          destinationRoomId: { type: 'string', minLength: 1, maxLength: 120 },
+          spellId: { type: 'string', minLength: 1, maxLength: 120, description: 'Exact registered spell ID returned by campaign search.' },
+          targetEntityId: { type: 'string', minLength: 1, maxLength: 120, description: 'Exact current-scene target ID. Healing may target only the selected player.' },
+          holdReason: { type: 'string', minLength: 1, maxLength: 300, description: 'Player-visible reason retained while pause_player is active.' }
         },
         required: ['kind', 'title', 'rationale'],
         additionalProperties: false
