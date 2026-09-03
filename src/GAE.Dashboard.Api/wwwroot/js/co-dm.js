@@ -296,7 +296,7 @@
       <div class="co-dm-interaction"><strong>Interaction:</strong> ${esc(context.interaction.mode || 'explore')}${context.interaction.target ? ` with ${esc(context.interaction.target)}` : ''}</div>
       <details${(context.statusEffects || []).length ? ' open' : ''}><summary>Status effects (${(context.statusEffects || []).length})</summary><ul>${statuses}</ul></details>
       <details><summary>Active quests (${context.activeQuests.length})</summary><ul>${quests}</ul></details>
-      <details open><summary>Recent story (${context.recentStory.length})</summary><ol class="co-dm-story">${story}</ol></details>
+      <details><summary>Recent story (${context.recentStory.length})</summary><ol class="co-dm-story">${story}</ol></details>
       ${context.limitations.length ? `<div class="co-dm-limitations"><strong>Unavailable:</strong> ${esc(context.limitations.join(' '))}</div>` : ''}`;
   }
 

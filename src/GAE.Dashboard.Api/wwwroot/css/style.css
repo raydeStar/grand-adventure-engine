@@ -10,7 +10,8 @@
 
 /* ── WebMCP Co-DM ─────────────────────────────────────────────── */
 .co-dm-panel {
-  margin: 14px 0 18px;
+  order: -1;
+  margin: 0 0 12px;
   padding: 14px;
   border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
   background: color-mix(in srgb, var(--panel-bg, #07110d) 92%, var(--accent) 8%);
@@ -81,8 +82,14 @@
 }
 
 .co-dm-scroll {
-  max-height: 310px;
+  max-height: 250px;
   overflow: auto;
+}
+
+.co-dm-scene-card .co-dm-card-body {
+  max-height: 360px;
+  overflow: auto;
+  padding-right: 4px;
 }
 
 .co-dm-scene-heading,
@@ -219,12 +226,57 @@
 }
 
 .co-dm-message-form > label { display: block; margin-bottom: 6px; }
-.co-dm-message-row textarea { flex: 1; resize: vertical; }
+.co-dm-message-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(150px, .72fr) auto;
+  align-items: stretch;
+}
+.co-dm-message-row textarea {
+  width: 100%;
+  min-height: 52px;
+  resize: vertical;
+}
+.co-dm-message-row select { width: 100%; }
+.co-dm-message-row .btn { white-space: nowrap; }
 .co-dm-prompt-block p { margin: 8px 0 0; color: var(--text-dim); font-size: 11px; line-height: 1.45; }
+
+@media (min-width: 1100px) {
+  .co-dm-grid {
+    height: 380px;
+    grid-template-columns: minmax(0, 1.35fr) minmax(240px, .85fr) minmax(240px, .85fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "scene activity proposals"
+      "scene status status";
+  }
+
+  .co-dm-grid > .co-dm-card {
+    display: flex;
+    min-height: 0;
+    overflow: hidden;
+    flex-direction: column;
+  }
+
+  .co-dm-grid > .co-dm-card .co-dm-card-body {
+    min-height: 0;
+    overflow: auto;
+  }
+
+  .co-dm-scene-card { grid-area: scene; }
+  .co-dm-grid > .co-dm-card:nth-child(2) { grid-area: activity; }
+  .co-dm-grid > .co-dm-card:nth-child(3) { grid-area: proposals; }
+  .co-dm-grid > .co-dm-card:nth-child(4) { grid-area: status; }
+  .co-dm-scene-card .co-dm-card-body,
+  .co-dm-scroll { max-height: none; }
+}
 
 @media (max-width: 900px) {
   .co-dm-header,
-  .co-dm-message-row { align-items: stretch; flex-direction: column; }
+  .co-dm-message-row {
+    display: flex;
+    align-items: stretch;
+    flex-direction: column;
+  }
   .co-dm-player-controls,
   .co-dm-grid,
   .co-dm-actions { grid-template-columns: 1fr; }
