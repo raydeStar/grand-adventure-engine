@@ -145,12 +145,16 @@ This resets only the deterministic demo characters through the existing admin en
 
 ## WebMCP verification
 
-With a healthy local stack:
+The most reliable local verification uses the repository's isolated E2E runner. It supplies matching throwaway credentials, raises the login limit for the test campaign, and removes its containers and volumes afterward:
 
 ```powershell
-$env:PLAYWRIGHT_BASE_URL='http://127.0.0.1:8181'
-npx playwright test browser-tests/dashboard.spec.js --grep "WebMCP Co-DM|dashboard remains usable when WebMCP" --project desktop-chromium --reporter=line --max-failures=1
+$env:GAE_E2E_PROJECT_NAME='gae-e2e-webmcp'
+$env:GAE_HOST_PORT='8183'
+$env:POSTGRES_HOST_PORT='55434'
+npm run test:e2e:docker
 ```
+
+Choose unused host ports when those examples are occupied. A direct Playwright run against an already-running stack must also export the exact user and admin credentials configured for that stack; setting only `PLAYWRIGHT_BASE_URL` can produce misleading authentication failures.
 
 Backend message verification:
 

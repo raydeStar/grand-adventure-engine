@@ -624,6 +624,32 @@ test.describe('Grand Adventure Engine dashboard', () => {
     expect(updatedPlayer.gold).toBe(originalPlayer.gold + 1);
     expect(await page.evaluate(() => window.__mutationCalls)).toBe(1);
 
+    await page.evaluate(async () => {
+      const tool = window.__gaeRegisteredTools.find((entry) => entry.name === 'propose_dm_intervention');
+      await tool.execute({
+        playerId: 'demo-user',
+        kind: 'apply_status',
+        title: 'Expose approved status evidence',
+        rationale: 'The Co-DM must verify its approved consequence in refreshed context.',
+        evidenceIds: ['demo-user'],
+        statusName: 'QA Watch',
+        statusDescription: 'Visible proof that approved status effects return to the shared context.',
+        durationTurns: 2
+      });
+    });
+    await page.locator('#co-dm-proposals [data-co-dm-approve]:not([disabled])').first().click();
+    await expect(page.locator('#co-dm-proposals .co-dm-proposal').first()).toContainText('approved');
+    const refreshedContext = await page.evaluate(async () => {
+      const tool = window.__gaeRegisteredTools.find((entry) => entry.name === 'get_dm_context');
+      return await tool.execute({ playerId: 'demo-user', storyLimit: 6 });
+    });
+    const qaStatus = refreshedContext.data.statusEffects.find((effect) => effect.name === 'QA Watch');
+    expect(qaStatus).toMatchObject({ type: 'debuff', remainingTurns: 2 });
+    const statusDetails = page.locator('#co-dm-scene details').filter({ hasText: 'Status effects' });
+    await expect(statusDetails).toHaveAttribute('open', '');
+    await expect(statusDetails).toContainText('QA Watch');
+    expect(await page.evaluate(() => window.__mutationCalls)).toBe(2);
+
     const dmMessage = `The ledger remembers, even when adventurers do not. ${Date.now()}`;
     const messageResult = await page.evaluate(async (message) => {
       const tool = window.__gaeRegisteredTools.find((entry) => entry.name === 'send_dm_message');

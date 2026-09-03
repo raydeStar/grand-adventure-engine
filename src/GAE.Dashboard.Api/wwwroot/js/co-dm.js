@@ -11,6 +11,7 @@
   const MAX_PROPOSALS = 30;
   const ENTITY_TYPES = new Set(['player', 'room', 'npc', 'item', 'spell', 'class', 'race', 'quest', 'monster', 'narrator_preset', 'lore_entry']);
   const PROPOSAL_KINDS = new Set(['grant_item', 'apply_status', 'adjust_resources', 'teleport']);
+  const STATUS_TYPES = ['buff', 'debuff', 'poison', 'regen', 'stun', 'blind', 'charm'];
 
   const state = {
     bound: false,
@@ -95,6 +96,27 @@
   function activeQuest(progress) {
     const status = String(progress?.status ?? '').toLowerCase();
     return status === 'active' || status === 'readytoturnin' || status === 'ready_to_turn_in';
+  }
+
+  function compactStatus(effect) {
+    const numericType = integer(effect?.type, -1);
+    const type = typeof effect?.type === 'number'
+      ? (STATUS_TYPES[numericType] || 'unknown')
+      : bounded(effect?.type || 'unknown', 40).toLowerCase();
+    const statModifiers = Object.fromEntries(Object.entries(effect?.statModifiers || {}).slice(0, 12).map(([stat, value]) => [
+      bounded(stat, 40),
+      Number.isFinite(Number(value)) ? Number(value) : 0
+    ]));
+    return {
+      id: bounded(effect?.id, 120),
+      name: bounded(effect?.name || 'Unnamed effect', 120),
+      description: bounded(effect?.description, 350),
+      type,
+      remainingTurns: Math.max(0, integer(effect?.remainingTurns)),
+      statModifiers,
+      damagePerTurn: effect?.damagePerTurn == null ? null : integer(effect.damagePerTurn),
+      healPerTurn: effect?.healPerTurn == null ? null : integer(effect.healPerTurn)
+    };
   }
 
   function summarizeEntities(entries, max = 12) {
@@ -206,6 +228,9 @@
     const quests = context.activeQuests.length
       ? context.activeQuests.map((quest) => `<li><code>${esc(quest.questId)}</code> ${esc(quest.summary || quest.currentStageId || quest.status)}</li>`).join('')
       : '<li class="muted">No active quests.</li>';
+    const statuses = (context.statusEffects || []).length
+      ? context.statusEffects.map((effect) => `<li><code>${esc(effect.name)}</code> ${esc(effect.type)} · ${esc(effect.remainingTurns)} turn(s)${effect.description ? ` — ${esc(effect.description)}` : ''}</li>`).join('')
+      : '<li class="muted">No active status effects.</li>';
     const story = context.recentStory.length
       ? context.recentStory.map((entry) => `<li><strong>${esc(entry.rawInput || 'DM / world')}</strong><span>${esc(entry.narration || entry.mechanicalSummary || 'No visible text.')}</span></li>`).join('')
       : '<li class="muted">No recent story entries.</li>';
@@ -228,6 +253,7 @@
         <div><strong>Items</strong><ul>${entityList(room?.items || [], 'No visible items reported.')}</ul></div>
       </div>
       <div class="co-dm-interaction"><strong>Interaction:</strong> ${esc(context.interaction.mode || 'explore')}${context.interaction.target ? ` with ${esc(context.interaction.target)}` : ''}</div>
+      <details${(context.statusEffects || []).length ? ' open' : ''}><summary>Status effects (${(context.statusEffects || []).length})</summary><ul>${statuses}</ul></details>
       <details><summary>Active quests (${context.activeQuests.length})</summary><ul>${quests}</ul></details>
       <details open><summary>Recent story (${context.recentStory.length})</summary><ol class="co-dm-story">${story}</ol></details>
       ${context.limitations.length ? `<div class="co-dm-limitations"><strong>Unavailable:</strong> ${esc(context.limitations.join(' '))}</div>` : ''}`;
@@ -575,6 +601,7 @@
           summary: bounded(quest.narratorDescription || '', 350),
           objectives: (quest.objectives || []).slice(0, 12).map((objective) => ({ objectiveId: bounded(objective.objectiveId, 120), currentCount: objective.currentCount, isComplete: !!objective.isComplete }))
         })),
+        statusEffects: (player.statusEffects || []).slice(0, 12).map(compactStatus),
         recentStory: (story || []).slice(0, storyLimit).map(compactStory),
         selectedEntity: clone(state.selectedEntity),
         capabilities: {

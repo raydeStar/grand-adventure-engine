@@ -5,7 +5,7 @@ Baseline commit: `01a709fa54d606ad666e2643c29e12c8f4a11de3`
 | Gate | Result | Evidence |
 |---|---|---|
 | Existing dashboard still works | PASS | Unsupported-WebMCP Playwright path passed; live authenticated Admin Console rendered successfully |
-| Co-DM context uses genuine state | PASS | `get_dm_context` composes `getPlayer`, selected-player room instance, world-filtered story, quest log, interaction, and health telemetry; browser test asserted `demo-user` |
+| Co-DM context uses genuine state | PASS | `get_dm_context` composes `getPlayer`, selected-player room instance, world-filtered story, quest log, bounded status effects, interaction, and health telemetry; browser test asserted `demo-user` and read back an approved status |
 | World search uses existing content | PASS | Browser test called existing DM search for Mara and rendered real NPC result cards |
 | WebMCP tools register | PASS | Stubbed `document.modelContext.registerTool` captured exactly five tools with closed top-level schemas |
 | Message reaches one player | PASS | Browser test sent to `demo-user`, verified `sent: 1`, story receipt, and Player Flow rendering; focused integration test passed without Discord |
@@ -14,7 +14,7 @@ Baseline commit: `01a709fa54d606ad666e2643c29e12c8f4a11de3`
 | Human rejection is non-mutating | PASS | Browser test rejected a status proposal and observed zero grant/status/resource/teleport calls |
 | Unsupported browser still works | PASS | Playwright ran without `document.modelContext`; Co-DM status reported `no` and existing search remained enabled |
 | Build passes | PASS | `dotnet build` completed with 0 warnings and 0 errors |
-| Targeted tests pass | PASS | Focused WebMCP Playwright: 2/2; existing Admin Console browser regression: 1/1; full `AdminConsoleTests`: 15/15; JavaScript syntax checks passed |
+| Targeted tests pass | PASS | Full desktop/mobile dashboard campaign: 28/28; full .NET solution: 834/834; JavaScript syntax checks passed |
 | Challenge work is distinguished | PASS | `docs/WEBMCP-CHALLENGE.md` records the baseline and explicit pre-existing/new-work boundary |
 | Deployment instructions exist | PASS | `DEPLOYMENT_WEBMCP.md` documents Compose, PostgreSQL, auth, narrator fallback, optional Discord, health, Render mapping, temporary tunnel, judge login, reset, and tests |
 | Demo scenario exists | PASS | `docs/WEBMCP-DEMO-SCENARIO.md` uses Ari Quickstep, The Lantern's Rest, Mara Vale, and The Waterway Infestation from seed content |

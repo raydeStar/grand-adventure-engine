@@ -46,7 +46,7 @@ The working tree was clean at the start of the run on 2026-09-03.
 
 All tool handlers call `window.GaeCoDm`, the same service used by the visible player selector, refresh button, message form, and proposal cards:
 
-1. `get_dm_context` refreshes a genuine player record, that player's current room instance, world-filtered recent story, interaction state, and available health telemetry.
+1. `get_dm_context` refreshes a genuine player record, that player's current room instance, bounded active status effects, world-filtered recent story, interaction state, and available health telemetry.
 2. `search_world` calls the existing DM search endpoint and renders the same result cards used by the human console.
 3. `inspect_entity` uses existing player, room, registry, and room/NPC data, then opens the existing detail panel.
 4. `send_dm_message` targets one non-empty player ID and calls the existing `API.sendMessage` path.
