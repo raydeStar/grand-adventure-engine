@@ -150,6 +150,12 @@ public class AdminConsoleTests : IClassFixture<GaeWebApplicationFactory>
 
         Assert.Contains("demo-user", ids);
         Assert.Contains("demo-admin", ids);
+
+        // Demo personas are handed to the shared user account so the documented Player Flow can resume them.
+        var asUser = await _userClient.GetAsync("/api/dashboard/players/demo-user");
+        Assert.Equal(HttpStatusCode.OK, asUser.StatusCode);
+        var demoUser = await asUser.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(GaeWebApplicationFactory.DefaultUserUsername, demoUser.GetProperty("ownerId").GetString());
     }
 
     [Fact]

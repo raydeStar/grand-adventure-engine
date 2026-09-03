@@ -641,6 +641,10 @@ public class DashboardController : ControllerBase
         var createdCount = 0;
         var seededPlayers = new List<PlayerCharacter>();
 
+        // Demo personas belong to the shared demo user account so the documented Player Flow walkthrough can resume them.
+        var demoOwner = _configuration["DashboardAuth:User:Username"]?.Trim();
+        if (string.IsNullOrWhiteSpace(demoOwner)) demoOwner = DashboardRoles.User;
+
         foreach (var seed in GetDemoCharacterTemplates())
         {
             var existing = await _stateManager.GetPlayerAsync(seed.PlayerId!, ct);
@@ -650,7 +654,9 @@ public class DashboardController : ControllerBase
                 continue;
             }
 
-            var player = await _engine.CreateCharacterFromConceptAsync(BuildCharacterConcept(seed, seed.PlayerId!), ct);
+            var concept = BuildCharacterConcept(seed, seed.PlayerId!);
+            concept.OwnerId = demoOwner;
+            var player = await _engine.CreateCharacterFromConceptAsync(concept, ct);
             seededPlayers.Add(player);
             createdCount++;
         }
