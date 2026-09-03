@@ -168,6 +168,38 @@ public class AdminConsoleTests : IClassFixture<GaeWebApplicationFactory>
     }
 
     [Fact]
+    public async Task AdminSendMessage_PersistsToPlayerStory_WhenDiscordIsUnavailable()
+    {
+        var playerId = $"dm-message-{Guid.NewGuid():N}";
+        var createResponse = await _userClient.PostAsJsonAsync("/api/dashboard/characters", new
+        {
+            playerId,
+            name = "Message Recipient",
+            race = "Human",
+            @class = "Warrior",
+            statMethod = "StandardArray"
+        });
+        createResponse.EnsureSuccessStatusCode();
+
+        const string message = "A private word from the Dungeon Master, delivered without a Discord raven.";
+        var response = await _adminClient.PostAsJsonAsync("/api/dashboard/admin/send-message", new
+        {
+            playerId,
+            message
+        });
+
+        response.EnsureSuccessStatusCode();
+        var receipt = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(1, receipt.GetProperty("sent").GetInt32());
+        Assert.False(receipt.GetProperty("discordMirrored").GetBoolean());
+
+        var storyResponse = await _userClient.GetAsync($"/api/dashboard/story?playerId={playerId}&limit=5");
+        storyResponse.EnsureSuccessStatusCode();
+        var story = await storyResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Contains(story.EnumerateArray(), entry => entry.GetProperty("narration").GetString() == message);
+    }
+
+    [Fact]
     public async Task UserRole_CannotAccessAdminSummary()
     {
         var response = await _userClient.GetAsync("/api/dashboard/admin/summary");

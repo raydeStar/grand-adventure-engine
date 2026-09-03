@@ -34,6 +34,7 @@ public class DashboardController : ControllerBase
     private readonly IRealmTravelService _realmTravelService;
     private readonly IWorldRepository _worldRepository;
     private readonly IDbContextFactory<GaeDbContext>? _dbContextFactory;
+    private readonly ILogger<DashboardController> _logger;
 
     private static readonly TimeSpan NarratorCacheDuration = TimeSpan.FromSeconds(60);
     private static object? _narratorCachedResult;
@@ -53,6 +54,7 @@ public class DashboardController : ControllerBase
         IWorldContext worldContext,
         IRealmTravelService realmTravelService,
         IWorldRepository worldRepository,
+        ILogger<DashboardController> logger,
         IDbContextFactory<GaeDbContext>? dbContextFactory = null,
         IDiscordNotifier? discordNotifier = null,
         ContentSeedService? contentSeed = null)
@@ -70,6 +72,7 @@ public class DashboardController : ControllerBase
         _worldContext = worldContext;
         _realmTravelService = realmTravelService;
         _worldRepository = worldRepository;
+        _logger = logger;
         _dbContextFactory = dbContextFactory;
         _discordNotifier = discordNotifier;
         _contentSeed = contentSeed;
@@ -98,10 +101,25 @@ public class DashboardController : ControllerBase
         return Ok(rooms);
     }
 
+    /// <summary>Returns a room template or, when playerId is supplied, that player's authoritative current-room instance.</summary>
     [HttpGet("rooms/{roomId}")]
-    public async Task<IActionResult> GetRoom(string roomId, CancellationToken ct)
+    public async Task<IActionResult> GetRoom(string roomId, [FromQuery] string? playerId = null, CancellationToken ct = default)
     {
-        var room = await _stateManager.GetRoomAsync(roomId, ct);
+        Room? room;
+        if (!string.IsNullOrWhiteSpace(playerId))
+        {
+            var player = await _stateManager.GetPlayerAsync(playerId.Trim(), ct);
+            if (player is null)
+                return NotFound(new { error = $"Player '{playerId}' was not found." });
+            if (!string.Equals(player.CurrentRoomId, roomId, StringComparison.OrdinalIgnoreCase))
+                return BadRequest(new { error = $"Room '{roomId}' is not the current room for player '{player.Id}'." });
+
+            room = await _stateManager.GetPlayerRoomAsync(player.Id, roomId, ct);
+        }
+        else
+        {
+            room = await _stateManager.GetRoomAsync(roomId, ct);
+        }
         return room is not null ? Ok(room) : NotFound();
     }
 
@@ -1031,6 +1049,7 @@ public class DashboardController : ControllerBase
         return Ok(new { summary, player });
     }
 
+    /// <summary>Persists a visible in-game DM message and optionally mirrors it to a configured Discord thread.</summary>
     [Authorize(Policy = DashboardPolicies.AdminAccess)]
     [HttpPost("admin/send-message")]
     public async Task<IActionResult> SendPlayerMessage([FromBody] SendMessageRequest request, CancellationToken ct)
@@ -1038,34 +1057,92 @@ public class DashboardController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.Message))
             return BadRequest(new { error = "message is required." });
 
-        if (_discordNotifier is null)
-            return BadRequest(new { error = "Discord is not configured." });
-
         var msg = request.Message.Trim();
+        if (msg.Length > 800)
+            return BadRequest(new { error = "message must be 800 characters or fewer." });
+
         int sent = 0;
+        int discordMirrored = 0;
+        var storyEntries = new List<StoryEntry>();
 
         if (!string.IsNullOrWhiteSpace(request.PlayerId))
         {
-            // Send to specific player
             var player = await RequirePlayerAsync(request.PlayerId, ct);
             if (player is null)
                 return NotFound(new { error = $"Player '{request.PlayerId}' was not found." });
 
-            await _discordNotifier.PostToPlayerThreadAsync(player.Id, msg, ct);
+            storyEntries.Add(await PersistDmMessageAsync(player, msg, ct));
             sent = 1;
+            discordMirrored += await TryMirrorDmMessageToDiscordAsync(player, msg, ct) ? 1 : 0;
         }
         else
         {
-            // Broadcast to all players
             var players = await _stateManager.GetAllPlayersAsync(ct);
-            foreach (var p in players.Where(p => p.ThreadId.HasValue))
+            foreach (var player in players)
             {
-                await _discordNotifier.PostToPlayerThreadAsync(p.Id, msg, ct);
+                storyEntries.Add(await PersistDmMessageAsync(player, msg, ct));
                 sent++;
+                discordMirrored += await TryMirrorDmMessageToDiscordAsync(player, msg, ct) ? 1 : 0;
             }
         }
 
-        return Ok(new { sent, message = msg });
+        return Ok(new
+        {
+            sent,
+            message = msg,
+            discordMirrored = discordMirrored > 0,
+            discordMirrorCount = discordMirrored,
+            summary = sent == 1 ? "Dungeon Master message delivered to one player." : $"Dungeon Master message delivered to {sent} players.",
+            storyEntries
+        });
+    }
+
+    private async Task<StoryEntry> PersistDmMessageAsync(PlayerCharacter player, string message, CancellationToken ct)
+    {
+        var actionId = $"dm-{Guid.NewGuid():N}";
+        var entry = new StoryEntry
+        {
+            ActionId = actionId,
+            RawInput = string.Empty,
+            PlayerId = player.Id,
+            WorldId = player.ActiveWorldId,
+            RoomId = player.CurrentRoomId,
+            MechanicalSummary = "Dungeon Master message delivered.",
+            Narration = message
+        };
+        await _stateManager.AddStoryEntryAsync(entry, ct);
+        await _broadcaster.BroadcastEventAsync(new GameEvent
+        {
+            ActionId = actionId,
+            Type = GameEventType.SystemMessage,
+            PlayerId = player.Id,
+            RoomId = player.CurrentRoomId,
+            Summary = $"Dungeon Master sent a message to {player.Name}.",
+            Narration = message,
+            Data = new Dictionary<string, object?>
+            {
+                ["storyEntry"] = entry,
+                ["source"] = "admin-dm-message"
+            }
+        }, ct);
+        return entry;
+    }
+
+    private async Task<bool> TryMirrorDmMessageToDiscordAsync(PlayerCharacter player, string message, CancellationToken ct)
+    {
+        if (_discordNotifier is null || !player.ThreadId.HasValue)
+            return false;
+
+        try
+        {
+            await _discordNotifier.PostToPlayerThreadAsync(player.Id, message, ct);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "DM message reached the game for {PlayerId}, but Discord mirroring failed. The raven has been reprimanded.", player.Id);
+            return false;
+        }
     }
 
     [Authorize(Policy = DashboardPolicies.AdminAccess)]

@@ -16,7 +16,7 @@
   <meta property="og:image:height" content="640" />
   <meta name="twitter:card" content="summary_large_image" />
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
-  <link rel="stylesheet" href="css/style.css?v=30" />
+  <link rel="stylesheet" href="css/style.css?v=31" />
   <script src="vendor/signalr-10.0.11.min.js?v=10.0.11"></script>
   <script src="vendor/rot-2.2.1.min.js?v=2.2.1"></script>
 </head>
@@ -271,6 +271,70 @@
           <div class="admin-tab-body">
             <div id="summary-cards" class="summary-cards"></div>
             <div id="admin-health" class="system-health"></div>
+
+            <section class="co-dm-panel" id="co-dm-panel" aria-labelledby="co-dm-title">
+              <div class="co-dm-header">
+                <div>
+                  <span class="eyebrow">Human + browser agent</span>
+                  <h2 id="co-dm-title">AI Co-DM</h2>
+                </div>
+                <div class="co-dm-player-controls">
+                  <label for="co-dm-player-select">Selected player</label>
+                  <select id="co-dm-player-select">
+                    <option value="">Choose a player</option>
+                  </select>
+                  <button class="btn btn-secondary btn-sm" id="btn-co-dm-refresh" type="button">Refresh</button>
+                </div>
+              </div>
+
+              <div class="co-dm-grid">
+                <section class="co-dm-card co-dm-scene-card" aria-labelledby="co-dm-scene-title">
+                  <h3 id="co-dm-scene-title">Current Scene</h3>
+                  <div id="co-dm-scene" class="co-dm-card-body">
+                    <div class="empty-state">Choose one player to inspect authoritative game state.</div>
+                  </div>
+                </section>
+
+                <section class="co-dm-card" aria-labelledby="co-dm-activity-title">
+                  <div class="co-dm-card-heading">
+                    <h3 id="co-dm-activity-title">Agent Activity</h3>
+                    <button class="btn btn-secondary btn-xs" id="btn-co-dm-clear-activity" type="button">Clear</button>
+                  </div>
+                  <div id="co-dm-activity" class="co-dm-card-body co-dm-scroll" aria-live="polite">
+                    <div class="empty-state">No agent receipts yet.</div>
+                  </div>
+                </section>
+
+                <section class="co-dm-card" aria-labelledby="co-dm-proposals-title">
+                  <h3 id="co-dm-proposals-title">DM Intervention Queue</h3>
+                  <div id="co-dm-proposals" class="co-dm-card-body co-dm-scroll" aria-live="polite">
+                    <div class="empty-state">No intervention proposals.</div>
+                  </div>
+                </section>
+
+                <section class="co-dm-card" aria-labelledby="co-dm-status-title">
+                  <h3 id="co-dm-status-title">WebMCP Status</h3>
+                  <div id="co-dm-status" class="co-dm-card-body"></div>
+                </section>
+              </div>
+
+              <div class="co-dm-actions">
+                <form id="co-dm-message-form" class="co-dm-message-form">
+                  <label for="co-dm-message">Message exactly one selected player</label>
+                  <div class="co-dm-message-row">
+                    <textarea id="co-dm-message" maxlength="800" rows="2" placeholder="A visible in-world Dungeon Master message..."></textarea>
+                    <button class="btn btn-primary btn-sm" type="submit">Send DM Message</button>
+                  </div>
+                </form>
+                <div class="co-dm-prompt-block">
+                  <div class="co-dm-card-heading">
+                    <strong>Suggested prompt</strong>
+                    <button class="btn btn-secondary btn-xs" id="btn-co-dm-copy-prompt" type="button">Copy</button>
+                  </div>
+                  <p id="co-dm-suggested-prompt">Inspect the selected player's current scene. Search the world for any NPC, quest, or lore relevant to the player's latest action. Send an appropriate in-world response, then propose the smallest persistent consequence that would make the roleplay state remain consistent. Do not invent facts that are not present in the game.</p>
+                </div>
+              </div>
+            </section>
 
             <!-- Search-driven DM browser -->
             <div class="dm-console-layout">
@@ -775,10 +839,12 @@
   </div>
 
   <script src="js/boot.js?v=2"></script>
-  <script src="js/api.js?v=8"></script>
+  <script src="js/api.js?v=9"></script>
   <script src="js/signalr-client.js?v=3"></script>
   <script src="js/room-map.js?v=3"></script>
   <script src="js/ui.js?v=36"></script>
-  <script src="js/app.js?v=32"></script>
+  <script src="js/co-dm.js?v=1"></script>
+  <script src="js/webmcp.js?v=1"></script>
+  <script src="js/app.js?v=33"></script>
 </body>
 </html>

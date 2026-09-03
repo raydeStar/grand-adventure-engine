@@ -48,6 +48,12 @@ The narrator only describes what actually happened. If the dice say you missed, 
 
 New player? Start with the **[Player Guide](docs/player-guide.md)**.
 
+## WebMCP Co-DM
+
+The authenticated DM Console now exposes five bounded WebMCP site tools when the browser provides `document.modelContext.registerTool`: inspect one selected player's genuine scene, search and inspect existing world entities, send a visible message to exactly one player, and stage a persistent intervention for human review. Proposals never change game state on their own; the human DM must approve or reject each card, and approval uses the existing validated grant-item, status, resource, or teleport APIs.
+
+Browsers without WebMCP continue to use the normal dashboard. See the [challenge architecture and safety boundary](docs/WEBMCP-CHALLENGE.md), [deterministic demo scenario](docs/WEBMCP-DEMO-SCENARIO.md), and [deployment notes](DEPLOYMENT_WEBMCP.md).
+
 ## Run it yourself
 
 You'll need [Docker Desktop](https://www.docker.com/products/docker-desktop/) and a local AI backend such as [LM Studio](https://lmstudio.ai/) or [Ollama](https://ollama.com/). The [.NET 10 SDK](https://dotnet.microsoft.com/download) is only required for source builds. A Discord bot token is optional—only needed for Discord play.

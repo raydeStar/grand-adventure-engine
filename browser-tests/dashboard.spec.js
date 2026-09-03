@@ -516,4 +516,136 @@ test.describe('Grand Adventure Engine dashboard', () => {
     await expect(page.locator('#story-log')).not.toContainText('Inspection Token');
     await expect(page.locator('#story-log')).not.toContainText('Exits: south');
   });
+
+  test('WebMCP Co-DM registers bounded tools and keeps human approval authoritative', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.removeItem('gae.coDm.selectedPlayer');
+      localStorage.removeItem('gae.coDm.activity');
+      localStorage.removeItem('gae.coDm.proposals');
+      window.__gaeRegisteredTools = [];
+      Object.defineProperty(document, 'modelContext', {
+        configurable: true,
+        value: {
+          registerTool: async (tool) => {
+            window.__gaeRegisteredTools.push(tool);
+          }
+        }
+      });
+    });
+
+    await login(page, 'admin');
+    await seedDemoViaApi(page, true);
+    await openAdminConsole(page);
+    await switchAdminTab(page, 'overview');
+
+    await page.waitForFunction(() => window.__gaeRegisteredTools?.length === 5);
+    const registration = await page.evaluate(() => window.__gaeRegisteredTools.map((tool) => ({
+      name: tool.name,
+      additionalProperties: tool.inputSchema.additionalProperties,
+      readOnlyHint: tool.annotations.readOnlyHint
+    })));
+    expect(registration.map((tool) => tool.name)).toEqual([
+      'get_dm_context',
+      'search_world',
+      'inspect_entity',
+      'send_dm_message',
+      'propose_dm_intervention'
+    ]);
+    expect(registration.every((tool) => tool.additionalProperties === false)).toBeTruthy();
+    expect(registration.find((tool) => tool.name === 'get_dm_context').readOnlyHint).toBeTruthy();
+    expect(registration.find((tool) => tool.name === 'propose_dm_intervention').readOnlyHint).toBeFalsy();
+
+    const contextResult = await page.evaluate(async () => {
+      const original = window.GaeCoDm.getContext.bind(window.GaeCoDm);
+      window.__sharedContextCalls = 0;
+      window.GaeCoDm.getContext = async (input) => {
+        window.__sharedContextCalls += 1;
+        return await original(input);
+      };
+      const tool = window.__gaeRegisteredTools.find((entry) => entry.name === 'get_dm_context');
+      return await tool.execute({ playerId: 'demo-user', storyLimit: 6 });
+    });
+    expect(contextResult.ok).toBeTruthy();
+    expect(contextResult.data.mode).toBe('co-dm');
+    expect(contextResult.data.player.id).toBe('demo-user');
+    expect(await page.evaluate(() => window.__sharedContextCalls)).toBe(1);
+    await expect(page.locator('#co-dm-player-select')).toHaveValue('demo-user');
+    await expect(page.locator('#co-dm-scene')).toContainText('demo-user');
+
+    const searchResult = await page.evaluate(async () => {
+      const tool = window.__gaeRegisteredTools.find((entry) => entry.name === 'search_world');
+      return await tool.execute({ query: 'Mara', type: 'npc', limit: 5 });
+    });
+    expect(searchResult.ok).toBeTruthy();
+    expect(searchResult.data.results.some((entry) => entry.type === 'npc')).toBeTruthy();
+    await expect(page.locator('#overview-results .dm-result-card')).not.toHaveCount(0);
+
+    await page.evaluate(async () => {
+      window.__mutationCalls = 0;
+      for (const method of ['grantItem', 'applyStatus', 'adjustResources', 'teleportPlayer']) {
+        const original = API[method].bind(API);
+        API[method] = async (...args) => {
+          window.__mutationCalls += 1;
+          return await original(...args);
+        };
+      }
+      const tool = window.__gaeRegisteredTools.find((entry) => entry.name === 'propose_dm_intervention');
+      await tool.execute({
+        playerId: 'demo-user',
+        kind: 'apply_status',
+        title: 'Mark the claim as suspicious',
+        rationale: 'Mara and the room evidence do not support the player claim.',
+        evidenceIds: ['spawn', 'mara'],
+        statusName: 'Under Suspicion',
+        statusDescription: 'The innkeeper is watching closely.',
+        durationTurns: 3
+      });
+    });
+    await expect(page.locator('#co-dm-proposals .co-dm-proposal').first()).toContainText('pending');
+    await page.locator('#co-dm-proposals [data-co-dm-reject]').first().click();
+    await expect(page.locator('#co-dm-proposals .co-dm-proposal').first()).toContainText('rejected');
+    expect(await page.evaluate(() => window.__mutationCalls)).toBe(0);
+
+    const originalPlayer = await page.evaluate(() => API.getPlayer('demo-user'));
+    await page.evaluate(async () => {
+      const tool = window.__gaeRegisteredTools.find((entry) => entry.name === 'propose_dm_intervention');
+      await tool.execute({
+        playerId: 'demo-user',
+        kind: 'adjust_resources',
+        title: 'Award one gold',
+        rationale: 'Small deterministic approval-path check.',
+        evidenceIds: ['demo-user'],
+        goldDelta: 1
+      });
+    });
+    await page.locator('#co-dm-proposals [data-co-dm-approve]:not([disabled])').first().click();
+    await expect(page.locator('#co-dm-proposals .co-dm-proposal').first()).toContainText('approved');
+    const updatedPlayer = await page.evaluate(() => API.getPlayer('demo-user'));
+    expect(updatedPlayer.gold).toBe(originalPlayer.gold + 1);
+    expect(await page.evaluate(() => window.__mutationCalls)).toBe(1);
+
+    const dmMessage = `The ledger remembers, even when adventurers do not. ${Date.now()}`;
+    const messageResult = await page.evaluate(async (message) => {
+      const tool = window.__gaeRegisteredTools.find((entry) => entry.name === 'send_dm_message');
+      return await tool.execute({ playerId: 'demo-user', message });
+    }, dmMessage);
+    expect(messageResult.ok).toBeTruthy();
+    expect(messageResult.data.player.id).toBe('demo-user');
+    expect(messageResult.data.server.sent).toBe(1);
+    expect(messageResult.data.storyReceipt.narration).toBe(dmMessage);
+
+    await page.evaluate(() => {
+      document.dispatchEvent(new CustomEvent('overview-play-player', { detail: { playerId: 'demo-user' } }));
+    });
+    await expect(page.locator('#story-log')).toContainText(dmMessage, { timeout: 15_000 });
+  });
+
+  test('dashboard remains usable when WebMCP is unavailable', async ({ page }) => {
+    await login(page, 'admin');
+    await openAdminConsole(page);
+    await switchAdminTab(page, 'overview');
+    await expect(page.locator('#co-dm-status')).toContainText('WebMCP supported');
+    await expect(page.locator('#co-dm-status')).toContainText('no');
+    await expect(page.locator('#overview-search-input')).toBeEnabled();
+  });
 });

@@ -43,13 +43,17 @@ const API = {
     return this.getJson(`${this.base}/rooms`);
   },
 
-  async getRoom(id) {
-    return this.getOptionalJson(`${this.base}/rooms/${encodeURIComponent(id)}`);
+  async getRoom(id, playerId) {
+    const params = new URLSearchParams();
+    if (playerId) params.set('playerId', playerId);
+    const suffix = params.size ? `?${params}` : '';
+    return this.getOptionalJson(`${this.base}/rooms/${encodeURIComponent(id)}${suffix}`);
   },
 
-  async getStory(playerId, limit = 50) {
+  async getStory(playerId, limit = 50, worldId) {
     const params = new URLSearchParams({ limit: String(limit) });
     if (playerId) params.set('playerId', playerId);
+    if (worldId) params.set('worldId', worldId);
     return this.getJson(`${this.base}/story?${params}`);
   },
 

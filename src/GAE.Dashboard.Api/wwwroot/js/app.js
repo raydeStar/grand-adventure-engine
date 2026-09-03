@@ -475,6 +475,9 @@
 
     try {
       await Promise.all([refreshAll(), refreshCreationOptions()]);
+      if (state.session?.isAdmin && window.GaeCoDm) {
+        await window.GaeCoDm.initialize({ authenticated: true });
+      }
     } catch (error) {
       await handleError(error, { logId: 'workflow-log' });
     }
@@ -539,6 +542,7 @@
     UI.renderPortalPlayers([], '', null);
     UI.renderPlayersList([], '', null);
     UI.renderAdminPlayers([], '', null);
+    window.GaeCoDm?.reset();
     UI.renderRoomCatalogue([]);
     UI.renderSummary(null, state.transportLabel, null);
     UI.clearActivity('workflow-log');
@@ -652,6 +656,7 @@
     UI.renderPlayersList(state.players, state.currentPlayerId, state.session);
     UI.renderAdminPlayers(state.players, state.currentPlayerId, state.session);
     UI.renderSelectOptions(state.players, state.currentPlayerId);
+    if (state.session?.isAdmin) window.GaeCoDm?.updatePlayers(state.players);
 
     if (state.currentPlayerId && !state.players.some((player) => player.id === state.currentPlayerId)) {
       state.currentPlayerId = '';
@@ -1896,6 +1901,7 @@
     state.transportLabel = status === 'connected' ? 'SignalR' : status === 'polling' ? 'Polling' : 'Offline';
     UI.setConnectionStatus(status);
     UI.renderSummary(state.summary, state.transportLabel, state.session);
+    window.GaeCoDm?.setWebMcpDiagnostics({ signalRConnected: status === 'connected' });
     // Admin clients join the admin feed to receive all game events for the event log
     if (status === 'connected' && state.session?.isAdmin) {
       void GameHub.joinAdminFeed();
@@ -1937,7 +1943,7 @@
 
   function handleRealtimePlayerEvent() {
     if (!state.currentPlayerId) return;
-    void refreshCurrentPlayer().catch((error) => handleError(error, { story: true }));
+    void Promise.all([refreshCurrentPlayer(), refreshStory()]).catch((error) => handleError(error, { story: true }));
   }
 
   // ─── Admin event log ─────────────────────────────────
@@ -1965,6 +1971,7 @@
     state.eventLog.unshift(entry);
     if (state.eventLog.length > 200) state.eventLog.length = 200;
     UI.appendEventLogEntry(entry, state.eventLogFilter);
+    window.GaeCoDm?.handleGameEvent(event);
   }
 
   function startRefreshLoop() {
