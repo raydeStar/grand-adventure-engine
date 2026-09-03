@@ -481,6 +481,9 @@
       await Promise.all([refreshAll(), refreshCreationOptions()]);
       if (state.session?.isAdmin && window.GaeCoDm) {
         await window.GaeCoDm.initialize({ authenticated: true });
+        await window.GaeWebMcp?.register({ authenticated: true, isAdmin: true });
+      } else {
+        window.GaeWebMcp?.dispose();
       }
     } catch (error) {
       await handleError(error, { logId: 'workflow-log' });
@@ -579,6 +582,7 @@
     UI.renderPortalPlayers([], '', null);
     UI.renderPlayersList([], '', null);
     UI.renderAdminPlayers([], '', null);
+    window.GaeWebMcp?.dispose();
     window.GaeCoDm?.reset();
     UI.renderRoomCatalogue([]);
     UI.renderSummary(null, state.transportLabel, null);

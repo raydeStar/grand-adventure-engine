@@ -42,26 +42,26 @@ const API = {
     return this.getJson(`${this.base}/players`);
   },
 
-  async getPlayer(id) {
-    return this.getOptionalJson(`${this.base}/players/${encodeURIComponent(id)}`);
+  async getPlayer(id, options = {}) {
+    return this.getOptionalJson(`${this.base}/players/${encodeURIComponent(id)}`, options);
   },
 
-  async getRooms() {
-    return this.getJson(`${this.base}/rooms`);
+  async getRooms(options = {}) {
+    return this.getJson(`${this.base}/rooms`, options);
   },
 
-  async getRoom(id, playerId) {
+  async getRoom(id, playerId, options = {}) {
     const params = new URLSearchParams();
     if (playerId) params.set('playerId', playerId);
     const suffix = params.size ? `?${params}` : '';
-    return this.getOptionalJson(`${this.base}/rooms/${encodeURIComponent(id)}${suffix}`);
+    return this.getOptionalJson(`${this.base}/rooms/${encodeURIComponent(id)}${suffix}`, options);
   },
 
-  async getStory(playerId, limit = 50, worldId) {
+  async getStory(playerId, limit = 50, worldId, options = {}) {
     const params = new URLSearchParams({ limit: String(limit) });
     if (playerId) params.set('playerId', playerId);
     if (worldId) params.set('worldId', worldId);
-    return this.getJson(`${this.base}/story?${params}`);
+    return this.getJson(`${this.base}/story?${params}`, options);
   },
 
   async getRoomStory(roomId, limit = 10) {
@@ -120,8 +120,28 @@ const API = {
     return this.postJson(`${this.base}/admin/mutations/room-fixture`, data);
   },
 
-  async sendMessage(data) {
-    return this.postJson(`${this.base}/admin/send-message`, data);
+  async sendMessage(data, options = {}) {
+    return this.postJson(`${this.base}/admin/send-message`, data, options);
+  },
+
+  async getCoDmActions(options = {}) {
+    return this.getJson(`${this.base}/admin/co-dm/actions`, options);
+  },
+
+  async sendCoDmPlayerFlowMessage(data, options = {}) {
+    return this.postJson(`${this.base}/admin/co-dm/messages`, data, { ...options, coDm: true });
+  },
+
+  async createCoDmProposal(data, options = {}) {
+    return this.postJson(`${this.base}/admin/co-dm/proposals`, data, { ...options, coDm: true });
+  },
+
+  async approveCoDmAction(actionId, approvalToken, options = {}) {
+    return this.postJson(`${this.base}/admin/co-dm/actions/${encodeURIComponent(actionId)}/approve`, { approvalToken }, { ...options, coDm: true });
+  },
+
+  async rejectCoDmAction(actionId, approvalToken, options = {}) {
+    return this.postJson(`${this.base}/admin/co-dm/actions/${encodeURIComponent(actionId)}/reject`, { approvalToken }, { ...options, coDm: true });
   },
 
   async resetWorld(keepPlayers = true) {
@@ -158,8 +178,8 @@ const API = {
     return this.putJson(`${this.base}/admin/players/${encodeURIComponent(playerId)}`, data);
   },
 
-  async getHealth() {
-    return this.getJson(`${this.base}/health`);
+  async getHealth(options = {}) {
+    return this.getJson(`${this.base}/health`, options);
   },
 
   async getLlmModels() {
@@ -182,11 +202,11 @@ const API = {
   },
 
   // ── DM Console ─────────────────────────────────────────
-  async dmSearch(query, typeFilter, worldId) {
+  async dmSearch(query, typeFilter, worldId, options = {}) {
     const params = new URLSearchParams({ q: query });
     if (typeFilter) params.set('type', typeFilter);
     if (worldId) params.set('worldId', worldId);
-    return this.getJson(`${this.base}/admin/dm/search?${params}`);
+    return this.getJson(`${this.base}/admin/dm/search?${params}`, options);
   },
 
   async dmBrowse(type, worldId) {
@@ -199,8 +219,8 @@ const API = {
     return this.getJson(`${this.base}/admin/registry/${encodeURIComponent(type)}`);
   },
 
-  async getRegistryEntry(type, id) {
-    return this.getOptionalJson(`${this.base}/admin/registry/${encodeURIComponent(type)}/${encodeURIComponent(id)}`);
+  async getRegistryEntry(type, id, options = {}) {
+    return this.getOptionalJson(`${this.base}/admin/registry/${encodeURIComponent(type)}/${encodeURIComponent(id)}`, options);
   },
 
   async getRegistrySummary() {
@@ -320,24 +340,28 @@ const API = {
     return res.json();
   },
 
-  async getJson(url) {
-    const res = await fetch(url, { credentials: 'same-origin' });
+  async getJson(url, options = {}) {
+    const res = await fetch(url, { credentials: 'same-origin', signal: options.signal });
     if (!res.ok) throw this.createHttpError(res, await this.readError(res));
     return res.json();
   },
 
-  async getOptionalJson(url) {
-    const res = await fetch(url, { credentials: 'same-origin' });
+  async getOptionalJson(url, options = {}) {
+    const res = await fetch(url, { credentials: 'same-origin', signal: options.signal });
     if (res.status === 404) return null;
     if (!res.ok) throw this.createHttpError(res, await this.readError(res));
     return res.json();
   },
 
-  async postJson(url, data) {
+  async postJson(url, data, options = {}) {
     const res = await fetch(url, {
       method: 'POST',
       credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(options.coDm ? { 'X-GAE-Request': 'co-dm' } : {})
+      },
+      signal: options.signal,
       body: JSON.stringify(data)
     });
 

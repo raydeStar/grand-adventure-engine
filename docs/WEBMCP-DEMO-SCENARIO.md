@@ -52,14 +52,14 @@ This claim requires checking the player's quest log, the current room, Mara, and
 
 ## Expected tool sequence
 
-1. `get_dm_context` with `playerId: "demo-user"` and `storyLimit: 8`.
-2. `search_world` for `Mara`, type `npc`.
-3. `inspect_entity` for `npc` / `innkeeper_mara`.
-4. `search_world` for `Waterway Infestation`, type `quest`.
-5. `inspect_entity` for `quest` / `waterway_infestation`.
+1. `get_selected_player_context` with an empty input object; the visible Ari selection supplies scope.
+2. `search_campaign_world` for `Mara` with `entityTypes: ["npc"]`.
+3. `inspect_campaign_entity` with `entityId: "innkeeper_mara"`.
+4. `search_campaign_world` for `Waterway Infestation` with `entityTypes: ["quest"]`.
+5. `inspect_campaign_entity` with `entityId: "waterway_infestation"`.
 6. Optionally search and inspect `lore-mara`; do not claim that global lore proves undisclosed NPC knowledge.
-7. `send_dm_message` to exactly `demo-user`.
-8. `propose_dm_intervention` with kind `apply_status`.
+7. `send_player_message` with `delivery: "player_flow"`; the visible selection fixes the target to `demo-user`.
+8. `propose_mechanical_change` with kind `apply_status`.
 9. Human approval in the visible proposal queue.
 
 ## Expected message
@@ -72,7 +72,6 @@ This is a prepared demo line. The browser agent may produce a shorter equivalent
 
 ```json
 {
-  "playerId": "demo-user",
   "kind": "apply_status",
   "title": "Mara watches Ari's claim",
   "rationale": "Ari claimed a quest completion that is not present in the authoritative quest log, while standing in Mara's tavern.",

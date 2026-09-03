@@ -4,8 +4,12 @@ using GAE.Core.Registry;
 using GAE.Dashboard.Api.Security;
 using GAE.Engine.Configuration;
 using GAE.Engine.Data;
+using GAE.Engine.Data.Configurations;
 using GAE.Engine.Worlds;
+using System.Security.Cryptography;
 using System.Security.Claims;
+using System.Text;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -40,6 +44,8 @@ public class DashboardController : ControllerBase
     private static readonly TimeSpan NarratorCacheDuration = TimeSpan.FromSeconds(60);
     private static object? _narratorCachedResult;
     private static DateTimeOffset _narratorCacheExpiry;
+    private const string CoDmRequestHeader = "X-GAE-Request";
+    private const string CoDmRequestHeaderValue = "co-dm";
 
     /// <summary>Username from the auth cookie. Characters are owned by this value.</summary>
     private string CurrentUsername => User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.Identity?.Name ?? string.Empty;
@@ -1182,6 +1188,394 @@ public class DashboardController : ControllerBase
             _logger.LogWarning(ex, "DM message reached the game for {PlayerId}, but Discord mirroring failed. The raven has been reprimanded.", player.Id);
             return false;
         }
+    }
+
+    /// <summary>Returns the durable Co-DM review queue without ever returning approval secrets or raw server errors.</summary>
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpGet("admin/co-dm/actions")]
+    public async Task<IActionResult> GetCoDmActions(CancellationToken ct)
+    {
+        if (_dbContextFactory is null)
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "The Co-DM review store is unavailable." });
+
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var actions = await db.CoDmActions.AsNoTracking()
+            .OrderByDescending(action => action.CreatedAt)
+            .Take(30)
+            .ToListAsync(ct);
+        return Ok(actions.Select(ProjectCoDmAction));
+    }
+
+    /// <summary>Delivers an internal Player Flow message once, using a durable request ID to make retries harmless.</summary>
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpPost("admin/co-dm/messages")]
+    public async Task<IActionResult> SendCoDmPlayerFlowMessage([FromBody] CoDmMessageRequest request, CancellationToken ct)
+    {
+        if (!IsTrustedCoDmRequest())
+            return BadRequest(new { error = "The Co-DM request marker is required." });
+        if (_dbContextFactory is null)
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "The Co-DM review store is unavailable." });
+
+        var validationError = ValidateCoDmMessage(request);
+        if (validationError is not null)
+            return BadRequest(new { error = validationError });
+
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var existing = await db.CoDmActions.AsNoTracking()
+            .SingleOrDefaultAsync(action => action.ProposedBy == CurrentUsername && action.RequestId == request.RequestId, ct);
+        if (existing is not null)
+            return Ok(ProjectCoDmAction(existing));
+
+        var player = await RequirePlayerAsync(request.PlayerId, ct);
+        if (player is null)
+            return NotFound(new { error = $"Player '{request.PlayerId}' was not found." });
+
+        var message = request.Message.Trim();
+        var action = new CoDmActionEntity
+        {
+            Id = $"codm-{Guid.NewGuid():N}",
+            RequestId = request.RequestId.Trim(),
+            ActionType = "message_delivery",
+            ActionKind = "player_flow",
+            TargetPlayerId = player.Id,
+            Title = $"Message {player.Name}",
+            Summary = $"Deliver one Player Flow message to {player.Name}.",
+            Rationale = "Requested through the authenticated Co-DM surface.",
+            PayloadJson = JsonSerializer.Serialize(new CoDmActionPayload { Message = message }),
+            Status = "processing",
+            ProposedBy = CurrentUsername,
+            CreatedAt = DateTimeOffset.UtcNow,
+            Version = 1
+        };
+        db.CoDmActions.Add(action);
+        await db.SaveChangesAsync(ct);
+
+        try
+        {
+            await PersistDmMessageAsync(player, message, ct);
+            action.Status = "completed";
+            action.ResultSummary = "Player Flow message delivered to one player.";
+            action.DecidedBy = CurrentUsername;
+            action.DecidedAt = DateTimeOffset.UtcNow;
+            action.Version++;
+            await db.SaveChangesAsync(ct);
+            _logger.LogInformation("Co-DM message {ActionId} delivered to {PlayerId} by {Approver}; Discord was not contacted. A tidy raven is an idle raven.", action.Id, player.Id, CurrentUsername);
+            return Ok(ProjectCoDmAction(action));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            action.Status = "failed";
+            action.ResultSummary = "Player Flow delivery failed.";
+            action.DecidedBy = CurrentUsername;
+            action.DecidedAt = DateTimeOffset.UtcNow;
+            action.Version++;
+            await db.SaveChangesAsync(CancellationToken.None);
+            _logger.LogError(ex, "Co-DM message {ActionId} failed for {PlayerId}. The ledger has kept the unpleasant detail.", action.Id, player.Id);
+            return StatusCode(StatusCodes.Status500InternalServerError, ProjectCoDmAction(action));
+        }
+    }
+
+    /// <summary>Creates a durable, non-executing mechanical or external-message proposal for explicit human review.</summary>
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpPost("admin/co-dm/proposals")]
+    public async Task<IActionResult> CreateCoDmProposal([FromBody] CoDmProposalRequest request, CancellationToken ct)
+    {
+        if (!IsTrustedCoDmRequest())
+            return BadRequest(new { error = "The Co-DM request marker is required." });
+        if (_dbContextFactory is null)
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "The Co-DM review store is unavailable." });
+
+        var validationError = await ValidateCoDmProposalAsync(request, ct);
+        if (validationError is not null)
+            return BadRequest(new { error = validationError });
+
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var existing = await db.CoDmActions.AsNoTracking()
+            .SingleOrDefaultAsync(action => action.ProposedBy == CurrentUsername && action.RequestId == request.RequestId, ct);
+        if (existing is not null)
+            return Ok(ProjectCoDmAction(existing));
+
+        var player = await RequirePlayerAsync(request.PlayerId, ct);
+        if (player is null)
+            return NotFound(new { error = $"Player '{request.PlayerId}' was not found." });
+
+        var payload = CoDmActionPayload.From(request);
+        var action = new CoDmActionEntity
+        {
+            Id = $"codm-{Guid.NewGuid():N}",
+            RequestId = request.RequestId.Trim(),
+            ActionType = request.Kind == "player_flow_and_discord" ? "message_delivery" : "mechanical_change",
+            ActionKind = request.Kind.Trim(),
+            TargetPlayerId = player.Id,
+            Title = request.Title.Trim(),
+            Summary = BuildCoDmSummary(request),
+            Rationale = request.Rationale.Trim(),
+            EvidenceJson = JsonSerializer.Serialize(request.EvidenceIds?.Select(value => value.Trim()).Where(value => value.Length > 0).Take(8).ToArray() ?? []),
+            PayloadJson = JsonSerializer.Serialize(payload),
+            ApprovalTokenHash = HashApprovalToken(request.ApprovalToken),
+            Status = "pending",
+            ProposedBy = CurrentUsername,
+            CreatedAt = DateTimeOffset.UtcNow,
+            Version = 1
+        };
+        db.CoDmActions.Add(action);
+        await db.SaveChangesAsync(ct);
+        _logger.LogInformation("Co-DM proposal {ActionId} staged by {Proposer} for {PlayerId}: {Kind}. No game state changed.", action.Id, CurrentUsername, player.Id, action.ActionKind);
+        return CreatedAtAction(nameof(GetCoDmActions), ProjectCoDmAction(action));
+    }
+
+    /// <summary>Executes one pending Co-DM proposal exactly once after validating its server-held approval nonce.</summary>
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpPost("admin/co-dm/actions/{actionId}/approve")]
+    public async Task<IActionResult> ApproveCoDmAction(string actionId, [FromBody] CoDmDecisionRequest request, CancellationToken ct)
+    {
+        if (!IsTrustedCoDmRequest())
+            return BadRequest(new { error = "The Co-DM request marker is required." });
+        if (_dbContextFactory is null)
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "The Co-DM review store is unavailable." });
+
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var action = await db.CoDmActions.SingleOrDefaultAsync(candidate => candidate.Id == actionId, ct);
+        if (action is null)
+            return NotFound(new { error = "The Co-DM action was not found." });
+        if (action.Status != "pending")
+            return Conflict(new { error = $"The Co-DM action is already {action.Status}." });
+        if (!ApprovalTokenMatches(action.ApprovalTokenHash, request.ApprovalToken))
+            return Forbid();
+
+        action.Status = "processing";
+        action.DecidedBy = CurrentUsername;
+        action.DecidedAt = DateTimeOffset.UtcNow;
+        action.Version++;
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Conflict(new { error = "Another approval already claimed this action." });
+        }
+
+        try
+        {
+            var resultSummary = await ExecuteCoDmActionAsync(action, ct);
+            action.Status = "approved";
+            action.ResultSummary = resultSummary;
+            action.Version++;
+            await db.SaveChangesAsync(ct);
+            _logger.LogInformation("Co-DM action {ActionId} approved by {Approver} for {PlayerId}: {Kind} -> {Outcome}", action.Id, CurrentUsername, action.TargetPlayerId, action.ActionKind, resultSummary);
+            return Ok(ProjectCoDmAction(action));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            action.Status = "failed";
+            action.ResultSummary = "The approved action failed validation or execution.";
+            action.Version++;
+            await db.SaveChangesAsync(CancellationToken.None);
+            _logger.LogError(ex, "Co-DM action {ActionId} failed after approval by {Approver} for {PlayerId}. No raw error will cross the tool boundary.", action.Id, CurrentUsername, action.TargetPlayerId);
+            return UnprocessableEntity(ProjectCoDmAction(action));
+        }
+    }
+
+    /// <summary>Rejects one pending Co-DM proposal and permanently consumes its approval path.</summary>
+    [Authorize(Policy = DashboardPolicies.AdminAccess)]
+    [HttpPost("admin/co-dm/actions/{actionId}/reject")]
+    public async Task<IActionResult> RejectCoDmAction(string actionId, [FromBody] CoDmDecisionRequest request, CancellationToken ct)
+    {
+        if (!IsTrustedCoDmRequest())
+            return BadRequest(new { error = "The Co-DM request marker is required." });
+        if (_dbContextFactory is null)
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "The Co-DM review store is unavailable." });
+
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var action = await db.CoDmActions.SingleOrDefaultAsync(candidate => candidate.Id == actionId, ct);
+        if (action is null)
+            return NotFound(new { error = "The Co-DM action was not found." });
+        if (action.Status != "pending")
+            return Conflict(new { error = $"The Co-DM action is already {action.Status}." });
+        if (!ApprovalTokenMatches(action.ApprovalTokenHash, request.ApprovalToken))
+            return Forbid();
+
+        action.Status = "rejected";
+        action.ResultSummary = "Rejected by the human DM; no mutation or external delivery occurred.";
+        action.DecidedBy = CurrentUsername;
+        action.DecidedAt = DateTimeOffset.UtcNow;
+        action.Version++;
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Conflict(new { error = "Another decision already consumed this action." });
+        }
+
+        _logger.LogInformation("Co-DM action {ActionId} rejected by {Approver} for {PlayerId}: {Kind}.", action.Id, CurrentUsername, action.TargetPlayerId, action.ActionKind);
+        return Ok(ProjectCoDmAction(action));
+    }
+
+    private bool IsTrustedCoDmRequest()
+        => string.Equals(Request.Headers[CoDmRequestHeader], CoDmRequestHeaderValue, StringComparison.Ordinal);
+
+    private static string HashApprovalToken(string token)
+        => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token.Trim())));
+
+    private static bool ApprovalTokenMatches(string? expectedHash, string suppliedToken)
+    {
+        if (string.IsNullOrWhiteSpace(expectedHash) || string.IsNullOrWhiteSpace(suppliedToken))
+            return false;
+        var expected = Convert.FromHexString(expectedHash);
+        var actual = Convert.FromHexString(HashApprovalToken(suppliedToken));
+        return CryptographicOperations.FixedTimeEquals(expected, actual);
+    }
+
+    private static object ProjectCoDmAction(CoDmActionEntity action)
+    {
+        var evidence = JsonSerializer.Deserialize<string[]>(action.EvidenceJson) ?? [];
+        var payload = JsonSerializer.Deserialize<CoDmActionPayload>(action.PayloadJson) ?? new CoDmActionPayload();
+        return new
+        {
+            id = action.Id,
+            requestId = action.RequestId,
+            actionType = action.ActionType,
+            kind = action.ActionKind,
+            playerId = action.TargetPlayerId,
+            title = action.Title,
+            summary = action.Summary,
+            rationale = action.Rationale,
+            evidenceIds = evidence.Take(8),
+            payload,
+            status = action.Status,
+            proposedBy = action.ProposedBy,
+            decidedBy = action.DecidedBy,
+            result = action.ResultSummary,
+            createdAt = action.CreatedAt,
+            decidedAt = action.DecidedAt
+        };
+    }
+
+    private static string? ValidateCoDmMessage(CoDmMessageRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.RequestId) || request.RequestId.Trim().Length > 120) return "requestId is required and must be at most 120 characters.";
+        if (string.IsNullOrWhiteSpace(request.PlayerId) || request.PlayerId.Trim().Length > 120) return "playerId is required and must be at most 120 characters.";
+        if (!string.Equals(request.Delivery, "player_flow", StringComparison.Ordinal)) return "delivery must be player_flow for immediate delivery.";
+        if (string.IsNullOrWhiteSpace(request.Message) || request.Message.Trim().Length > 800) return "message is required and must be at most 800 characters.";
+        return null;
+    }
+
+    private async Task<string?> ValidateCoDmProposalAsync(CoDmProposalRequest request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.RequestId) || request.RequestId.Trim().Length > 120) return "requestId is required and must be at most 120 characters.";
+        if (string.IsNullOrWhiteSpace(request.ApprovalToken) || request.ApprovalToken.Trim().Length is < 32 or > 200) return "approvalToken must contain 32 to 200 characters.";
+        if (string.IsNullOrWhiteSpace(request.PlayerId) || request.PlayerId.Trim().Length > 120) return "playerId is required and must be at most 120 characters.";
+        if (string.IsNullOrWhiteSpace(request.Title) || request.Title.Trim().Length > 160) return "title is required and must be at most 160 characters.";
+        if (string.IsNullOrWhiteSpace(request.Rationale) || request.Rationale.Trim().Length > 800) return "rationale is required and must be at most 800 characters.";
+        if (request.EvidenceIds is { Count: > 8 } || request.EvidenceIds?.Any(value => value?.Length > 140) == true) return "evidenceIds may contain at most eight bounded IDs.";
+
+        var kind = request.Kind?.Trim();
+        if (kind == "player_flow_and_discord")
+            return string.IsNullOrWhiteSpace(request.Message) || request.Message.Trim().Length > 800 ? "message is required and must be at most 800 characters." : null;
+        if (kind == "grant_item")
+        {
+            if (string.IsNullOrWhiteSpace(request.ItemId) || request.Quantity is < 1 or > 20) return "grant_item requires itemId and quantity from 1 to 20.";
+            return _registry.Items.GetById(request.ItemId.Trim()) is null ? "The registered item was not found." : null;
+        }
+        if (kind == "apply_status")
+            return string.IsNullOrWhiteSpace(request.StatusName) || request.StatusName.Trim().Length > 120 || request.DurationTurns is < 1 or > 50 ? "apply_status requires a bounded statusName and durationTurns from 1 to 50." : null;
+        if (kind == "adjust_resources")
+        {
+            var deltas = new[] { request.HpDelta, request.MpDelta, request.GoldDelta, request.XpDelta };
+            return deltas.All(value => value == 0) || deltas.Any(value => Math.Abs((long)value) > 10_000) ? "adjust_resources requires a non-zero delta, capped at 10000." : null;
+        }
+        if (kind == "teleport")
+            return string.IsNullOrWhiteSpace(request.DestinationRoomId) || await _stateManager.GetRoomAsync(request.DestinationRoomId.Trim(), ct) is null ? "teleport requires an existing destinationRoomId." : null;
+        return "Unsupported proposal kind.";
+    }
+
+    private static string BuildCoDmSummary(CoDmProposalRequest request) => request.Kind switch
+    {
+        "player_flow_and_discord" => "Review one Player Flow and Discord delivery.",
+        "grant_item" => $"Grant {request.Quantity} registered item {request.ItemId}.",
+        "apply_status" => $"Apply status {request.StatusName} for {request.DurationTurns} turn(s).",
+        "adjust_resources" => $"Adjust resources: HP {request.HpDelta}, MP {request.MpDelta}, gold {request.GoldDelta}, XP {request.XpDelta}.",
+        "teleport" => $"Teleport to existing room {request.DestinationRoomId}.",
+        _ => "Review Co-DM action."
+    };
+
+    private async Task<string> ExecuteCoDmActionAsync(CoDmActionEntity action, CancellationToken ct)
+    {
+        var payload = JsonSerializer.Deserialize<CoDmActionPayload>(action.PayloadJson) ?? throw new InvalidOperationException("Stored Co-DM payload is invalid.");
+        var player = await RequirePlayerAsync(action.TargetPlayerId, ct) ?? throw new InvalidOperationException("Target player no longer exists.");
+        if (action.ActionKind == "player_flow_and_discord")
+        {
+            var message = payload.Message?.Trim();
+            if (string.IsNullOrWhiteSpace(message) || message.Length > 800) throw new InvalidOperationException("Stored message failed validation.");
+            await PersistDmMessageAsync(player, message, ct);
+            var mirrored = await TryMirrorDmMessageToDiscordAsync(player, message, ct);
+            return mirrored ? "Player Flow and Discord delivery completed." : "Player Flow delivery completed; Discord was unavailable.";
+        }
+
+        IActionResult result = action.ActionKind switch
+        {
+            "grant_item" => await GrantItem(BuildCoDmGrantItemRequest(player.Id, payload), ct),
+            "apply_status" => await ApplyStatus(new ApplyStatusRequest
+            {
+                PlayerId = player.Id,
+                Name = payload.StatusName ?? string.Empty,
+                Description = payload.StatusDescription,
+                Type = nameof(StatusEffectType.Debuff),
+                RemainingTurns = payload.DurationTurns,
+                ReplaceExisting = true
+            }, ct),
+            "adjust_resources" => await AdjustResources(new AdjustResourcesRequest
+            {
+                PlayerId = player.Id,
+                HpDelta = payload.HpDelta,
+                MpDelta = payload.MpDelta,
+                GoldDelta = payload.GoldDelta,
+                XpDelta = payload.XpDelta
+            }, ct),
+            "teleport" => await TeleportPlayer(new TeleportPlayerRequest
+            {
+                PlayerId = player.Id,
+                RoomId = payload.DestinationRoomId ?? string.Empty,
+                CreateRoomIfMissing = false,
+                ConnectFromCurrentRoom = false
+            }, ct),
+            _ => throw new InvalidOperationException("Stored Co-DM action kind is unsupported.")
+        };
+
+        if (result is ObjectResult { StatusCode: >= 400 })
+            throw new InvalidOperationException("The existing game mutation endpoint rejected the approved action.");
+        if (result is not ObjectResult objectResult || objectResult.Value is null)
+            return "Existing game API accepted the approved action.";
+        var json = JsonSerializer.SerializeToElement(objectResult.Value);
+        return json.TryGetProperty("summary", out var summary) ? summary.GetString() ?? "Existing game API accepted the approved action." : "Existing game API accepted the approved action.";
+    }
+
+    private GrantItemRequest BuildCoDmGrantItemRequest(string playerId, CoDmActionPayload payload)
+    {
+        var template = _registry.Items.GetById(payload.ItemId ?? string.Empty)
+            ?? throw new InvalidOperationException("Registered item no longer exists.");
+        return new GrantItemRequest
+        {
+            PlayerId = playerId,
+            ItemId = template.Id,
+            Name = template.Name,
+            Type = template.Type.ToString(),
+            Quantity = payload.Quantity,
+            Value = template.Value,
+            Description = template.Description,
+            DamageDice = template.DamageDice,
+            DamageStat = template.DamageStat,
+            ArmorValue = template.ArmorValue,
+            IsEquippable = template.IsEquippable,
+            IsConsumable = template.IsConsumable,
+            IsTwoHanded = template.IsTwoHanded,
+            Effect = template.Effect,
+            StatBonuses = new Dictionary<string, int>(template.StatBonuses),
+            AutoEquip = false
+        };
     }
 
     [Authorize(Policy = DashboardPolicies.AdminAccess)]
@@ -3077,6 +3471,97 @@ public class SendMessageRequest
     /// <summary>Player ID to send to. If null/empty, broadcasts to ALL players.</summary>
     public string? PlayerId { get; set; }
     public string Message { get; set; } = string.Empty;
+}
+
+/// <summary>Authenticated Co-DM request for one idempotent, internal Player Flow delivery.</summary>
+public class CoDmMessageRequest
+{
+    /// <summary>Stable client-generated key used to collapse retries.</summary>
+    public string RequestId { get; set; } = string.Empty;
+    /// <summary>Trusted page-selected player ID, never supplied by the browser agent schema.</summary>
+    public string PlayerId { get; set; } = string.Empty;
+    /// <summary>Bounded message shown in the selected player's story flow.</summary>
+    public string Message { get; set; } = string.Empty;
+    /// <summary>Explicit delivery channel; immediate Co-DM delivery permits only player_flow.</summary>
+    public string Delivery { get; set; } = "player_flow";
+}
+
+/// <summary>Durable Co-DM proposal that remains inert until a human supplies its one-time nonce.</summary>
+public class CoDmProposalRequest
+{
+    /// <summary>Stable client-generated key used to collapse proposal retries.</summary>
+    public string RequestId { get; set; } = string.Empty;
+    /// <summary>High-entropy nonce whose hash is retained by the server for approval.</summary>
+    public string ApprovalToken { get; set; } = string.Empty;
+    /// <summary>Trusted page-selected player ID, never supplied by the browser agent schema.</summary>
+    public string PlayerId { get; set; } = string.Empty;
+    /// <summary>Supported mechanical kind or the reviewed player_flow_and_discord delivery kind.</summary>
+    public string Kind { get; set; } = string.Empty;
+    /// <summary>Short human-readable proposal title.</summary>
+    public string Title { get; set; } = string.Empty;
+    /// <summary>Bounded reason the human should consider the proposal.</summary>
+    public string Rationale { get; set; } = string.Empty;
+    /// <summary>Bounded entity IDs supporting the proposed action.</summary>
+    public List<string>? EvidenceIds { get; set; }
+    /// <summary>Message used only by reviewed external delivery.</summary>
+    public string? Message { get; set; }
+    /// <summary>Registered item ID used by grant_item.</summary>
+    public string? ItemId { get; set; }
+    /// <summary>Bounded item quantity used by grant_item.</summary>
+    public int Quantity { get; set; } = 1;
+    /// <summary>Status name used by apply_status.</summary>
+    public string? StatusName { get; set; }
+    /// <summary>Status explanation used by apply_status.</summary>
+    public string? StatusDescription { get; set; }
+    /// <summary>Status lifetime used by apply_status.</summary>
+    public int DurationTurns { get; set; } = 3;
+    /// <summary>Hit-point delta used by adjust_resources.</summary>
+    public int HpDelta { get; set; }
+    /// <summary>Mana delta used by adjust_resources.</summary>
+    public int MpDelta { get; set; }
+    /// <summary>Gold delta used by adjust_resources.</summary>
+    public int GoldDelta { get; set; }
+    /// <summary>Experience delta used by adjust_resources.</summary>
+    public int XpDelta { get; set; }
+    /// <summary>Existing destination room used by teleport.</summary>
+    public string? DestinationRoomId { get; set; }
+}
+
+/// <summary>Human approval or rejection proof for one pending Co-DM action.</summary>
+public class CoDmDecisionRequest
+{
+    /// <summary>One-time approval nonce originally generated inside the trusted page.</summary>
+    public string ApprovalToken { get; set; } = string.Empty;
+}
+
+internal class CoDmActionPayload
+{
+    public string? Message { get; set; }
+    public string? ItemId { get; set; }
+    public int Quantity { get; set; }
+    public string? StatusName { get; set; }
+    public string? StatusDescription { get; set; }
+    public int DurationTurns { get; set; }
+    public int HpDelta { get; set; }
+    public int MpDelta { get; set; }
+    public int GoldDelta { get; set; }
+    public int XpDelta { get; set; }
+    public string? DestinationRoomId { get; set; }
+
+    public static CoDmActionPayload From(CoDmProposalRequest request) => new()
+    {
+        Message = request.Message?.Trim(),
+        ItemId = request.ItemId?.Trim(),
+        Quantity = request.Quantity,
+        StatusName = request.StatusName?.Trim(),
+        StatusDescription = request.StatusDescription?.Trim(),
+        DurationTurns = request.DurationTurns,
+        HpDelta = request.HpDelta,
+        MpDelta = request.MpDelta,
+        GoldDelta = request.GoldDelta,
+        XpDelta = request.XpDelta,
+        DestinationRoomId = request.DestinationRoomId?.Trim()
+    };
 }
 
 public class EditPlayerRequest

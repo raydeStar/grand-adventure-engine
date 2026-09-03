@@ -18,16 +18,16 @@
 
 Show, in order:
 
-1. `get_dm_context` and the visible Current Scene;
-2. `search_world` for Mara and the existing DM result cards;
-3. `inspect_entity` opening Mara in the existing detail panel;
-4. `search_world` and `inspect_entity` for The Waterway Infestation.
+1. `get_selected_player_context` and the visible Current Scene;
+2. `search_campaign_world` for Mara and the existing DM result cards;
+3. `inspect_campaign_entity` opening Mara in the existing detail panel;
+4. `search_campaign_world` and `inspect_campaign_entity` for The Waterway Infestation.
 
 **Voiceover:** “WebMCP gives the signed-in browser agent structured access to the same state and search tools the human DM sees. Ari is at `spawn`, Mara is present, and the real quest definition exists—but Ari's authoritative quest log does not show that completion.”
 
 ## 1:10–1:35 — Grounded response
 
-**Visual:** Show `send_dm_message`, its Agent Activity receipt, and the message appearing in Player Flow.
+**Visual:** Show `send_player_message` with `delivery: "player_flow"`, its Agent Activity receipt, and the message appearing in Player Flow.
 
 **Prepared message:** “Ari Quickstep, Mara sets down the glass without looking impressed. ‘The Oldwater Tunnels do not pay bounties for confident grammar. Bring me proof, and we shall discuss coin.’”
 
@@ -35,7 +35,7 @@ Show, in order:
 
 ## 1:35–2:05 — Proposal and human decision
 
-**Visual:** Show `propose_dm_intervention` create “Mara watches Ari's claim.” Expand its evidence and exact payload. Pause on `pending`, then click **Approve** yourself.
+**Visual:** Show `propose_mechanical_change` create “Mara watches Ari's claim.” Expand its evidence and exact payload. Pause on `pending`, then click **Approve** yourself.
 
 Show the card become `approved`, the human-decision receipt, refreshed Current Scene, and `Under Suspicion` in Ari's Player Flow state.
 

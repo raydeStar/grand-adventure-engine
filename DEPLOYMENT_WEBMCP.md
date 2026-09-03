@@ -54,7 +54,7 @@ DISCORD_TOKEN=
 DISCORD_CHANNEL_ID=
 ```
 
-The no-Discord challenge path is deliberate. A DM message is persisted to the Player Flow first. When a player has a Discord thread and the notifier is configured, the same message is mirrored on a best-effort basis.
+The no-Discord challenge path is deliberate. Player Flow delivery is immediate and idempotent. Discord is never contacted directly by a WebMCP tool: `player_flow_and_discord` creates a durable review item whose exact message and destination must be confirmed by an authenticated administrator.
 
 ## Health checks
 
@@ -181,10 +181,10 @@ npm run test:e2e:docker
 
 Choose unused host ports when those examples are occupied. A direct Playwright run against an already-running stack must also export the exact user and admin credentials configured for that stack; setting only `PLAYWRIGHT_BASE_URL` can produce misleading authentication failures.
 
-Backend message verification:
+Focused backend Co-DM verification:
 
 ```powershell
-dotnet test tests/GAE.Integration.Tests/GAE.Integration.Tests.csproj --filter "FullyQualifiedName~AdminConsoleTests.AdminSendMessage_PersistsToPlayerStory_WhenDiscordIsUnavailable"
+dotnet test tests/GAE.Integration.Tests/GAE.Integration.Tests.csproj --filter "FullyQualifiedName~AdminConsoleTests.CoDm"
 ```
 
-The browser test injects a stub `document.modelContext.registerTool` before page load. It verifies five registrations, closed top-level schemas, shared-service context, real world search, visible proposal creation, non-mutating rejection, approved mutation, single-player message persistence, and graceful behavior without WebMCP.
+The browser test injects a stub `document.modelContext.registerTool` before page load. It verifies auth-gated five-tool registration, lifecycle cancellation, closed schemas, immutable metadata, selected-player isolation, prompt-injection handling, bounded outputs, request cancellation, durable proposal creation, non-mutating rejection, single-execution approval, explicit Discord review, idempotent Player Flow delivery, and graceful behavior without WebMCP.

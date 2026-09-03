@@ -419,7 +419,7 @@ app.Use(async (context, next) =>
     headers.XContentTypeOptions = "nosniff";
     headers.XFrameOptions = "DENY";
     headers["Referrer-Policy"] = "no-referrer";
-    headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
+    headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), tools=(self)";
     headers.ContentSecurityPolicy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' ws: wss:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'";
     await next();
 });

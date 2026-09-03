@@ -5,7 +5,7 @@ Baseline commit: `01a709fa54d606ad666e2643c29e12c8f4a11de3`
 | Gate | Result | Evidence |
 |---|---|---|
 | Existing dashboard still works | PASS | Unsupported-WebMCP Playwright path passed; live authenticated Admin Console rendered successfully |
-| Co-DM context uses genuine state | PASS | `get_dm_context` composes `getPlayer`, selected-player room instance, world-filtered story, quest log, bounded status effects, interaction, and health telemetry; browser test asserted `demo-user` and read back an approved status |
+| Co-DM context uses genuine state | PASS | `get_selected_player_context` composes `getPlayer`, selected-player room instance, world-filtered story, quest log, bounded status effects, interaction, and health telemetry; browser test asserted `demo-user` and read back an approved status |
 | World search uses existing content | PASS | Browser test called existing DM search for Mara and rendered real NPC result cards |
 | WebMCP tools register | PASS | Stubbed `document.modelContext.registerTool` captured exactly five tools with closed top-level schemas |
 | Message reaches one player | PASS | Browser test sent to `demo-user`, verified `sent: 1`, story receipt, and Player Flow rendering; focused integration test passed without Discord |
@@ -29,7 +29,7 @@ node --check src/GAE.Dashboard.Api/wwwroot/js/webmcp.js
 node --check src/GAE.Dashboard.Api/wwwroot/js/app.js
 node --check browser-tests/dashboard.spec.js
 dotnet build
-dotnet test tests/GAE.Integration.Tests/GAE.Integration.Tests.csproj --filter "FullyQualifiedName~AdminConsoleTests.AdminSendMessage_PersistsToPlayerStory_WhenDiscordIsUnavailable" --no-restore
+dotnet test tests/GAE.Integration.Tests/GAE.Integration.Tests.csproj --filter "FullyQualifiedName~AdminConsoleTests.CoDm" --no-restore
 dotnet test tests/GAE.Integration.Tests/GAE.Integration.Tests.csproj --filter "FullyQualifiedName~AdminConsoleTests" --no-restore
 npx playwright test browser-tests/dashboard.spec.js --grep "WebMCP Co-DM|dashboard remains usable when WebMCP" --project desktop-chromium --reporter=line --max-failures=1
 npx playwright test browser-tests/dashboard.spec.js --grep "admin console seeds demo actors" --project desktop-chromium --reporter=line --max-failures=1

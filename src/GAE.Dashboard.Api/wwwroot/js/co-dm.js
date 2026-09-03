@@ -5,12 +5,15 @@
   const STORAGE = {
     player: 'gae.coDm.selectedPlayer',
     activity: 'gae.coDm.activity',
-    proposals: 'gae.coDm.proposals'
+    proposals: 'gae.coDm.proposals',
+    approvalTokens: 'gae.coDm.approvalTokens'
   };
   const MAX_ACTIVITY = 50;
   const MAX_PROPOSALS = 30;
   const ENTITY_TYPES = new Set(['player', 'room', 'npc', 'item', 'spell', 'class', 'race', 'quest', 'monster', 'narrator_preset', 'lore_entry']);
+  const ENTITY_CATEGORY_MAP = Object.freeze({ character: 'player', location: 'room', npc: 'npc', item: 'item', quest: 'quest', lore: 'lore_entry' });
   const PROPOSAL_KINDS = new Set(['grant_item', 'apply_status', 'adjust_resources', 'teleport']);
+  const MESSAGE_DELIVERIES = new Set(['player_flow', 'player_flow_and_discord']);
   const STATUS_TYPES = ['buff', 'debuff', 'poison', 'regen', 'stun', 'blind', 'charm'];
 
   const state = {
@@ -20,6 +23,7 @@
     selectedPlayerId: readStoredText(STORAGE.player),
     context: null,
     selectedEntity: null,
+    entityIndex: new Map(),
     activity: readStoredArray(STORAGE.activity, MAX_ACTIVITY),
     proposals: readStoredArray(STORAGE.proposals, MAX_PROPOSALS),
     diagnostics: {
@@ -66,6 +70,25 @@
     }
   }
 
+  function readApprovalTokens() {
+    try {
+      const value = JSON.parse(sessionStorage.getItem(STORAGE.approvalTokens) || '{}');
+      return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function persistProposals() {
+    persist(STORAGE.proposals, state.proposals.map(({ approvalToken: _secret, ...proposal }) => proposal));
+    try {
+      const tokens = Object.fromEntries(state.proposals.filter((proposal) => proposal.approvalToken).map((proposal) => [proposal.requestId, proposal.approvalToken]));
+      sessionStorage.setItem(STORAGE.approvalTokens, JSON.stringify(tokens));
+    } catch (error) {
+      console.warn('Co-DM approval secrets could not be retained for this tab; fresh proposals still work.', error);
+    }
+  }
+
   function esc(value) {
     return UI?.esc ? UI.esc(String(value ?? '')) : String(value ?? '')
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -82,11 +105,23 @@
     return Number.isInteger(number) ? number : fallback;
   }
 
+  function domainError(code, message) {
+    const error = new Error(message);
+    error.code = code;
+    return error;
+  }
+
   function uuid(prefix) {
     const id = typeof crypto?.randomUUID === 'function'
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     return `${prefix}-${id}`;
+  }
+
+  function approvalToken() {
+    const bytes = new Uint8Array(32);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('');
   }
 
   function clone(value) {
@@ -199,6 +234,12 @@
     return value;
   }
 
+  function selectedPlayerId() {
+    if (!state.authenticated) throw domainError('AUTH_REQUIRED', 'An authenticated admin session is required.');
+    if (!state.selectedPlayerId) throw domainError('NO_PLAYER_SELECTED', 'Select one player visibly in the Co-DM panel first.');
+    return ensurePlayerId(state.selectedPlayerId);
+  }
+
   function renderPlayerOptions() {
     const select = document.getElementById('co-dm-player-select');
     if (!select) return;
@@ -279,12 +320,13 @@
         <div class="co-dm-proposal-meta">${esc(proposal.kind)} · ${esc(proposal.playerName || proposal.playerId)} · proposed by ${esc(proposal.proposedBy)}</div>
         <p>${esc(proposal.summary)}</p>
         <p><strong>Rationale:</strong> ${esc(proposal.rationale)}</p>
-        ${proposal.evidenceIds.length ? `<p><strong>Evidence:</strong> ${proposal.evidenceIds.map((id) => `<code>${esc(id)}</code>`).join(' ')}</p>` : ''}
-        <details><summary>Exact mechanical payload</summary><pre>${esc(JSON.stringify(proposal.mechanicalRequest || proposal.payload, null, 2))}</pre></details>
+        ${proposal.kind === 'player_flow_and_discord' ? `<p><strong>Destination:</strong> Player Flow and configured Discord thread for <code>${esc(proposal.playerId)}</code></p><p><strong>Exact message:</strong> ${esc(proposal.payload?.message || '')}</p>` : ''}
+        ${(proposal.evidenceIds || []).length ? `<p><strong>Evidence:</strong> ${proposal.evidenceIds.map((id) => `<code>${esc(id)}</code>`).join(' ')}</p>` : ''}
+        <details><summary>Exact ${proposal.actionType === 'message_delivery' ? 'delivery' : 'mechanical'} payload</summary><pre>${esc(JSON.stringify(proposal.payload, null, 2))}</pre></details>
         ${proposal.result ? `<div class="co-dm-proposal-result">${esc(proposal.result)}</div>` : ''}
         <div class="co-dm-proposal-actions">
-          <button class="btn btn-primary btn-xs" data-co-dm-approve="${esc(proposal.id)}" type="button"${proposal.status !== 'pending' ? ' disabled' : ''}>Approve</button>
-          <button class="btn btn-secondary btn-xs" data-co-dm-reject="${esc(proposal.id)}" type="button"${proposal.status !== 'pending' ? ' disabled' : ''}>Reject</button>
+          <button class="btn btn-primary btn-xs" data-co-dm-approve="${esc(proposal.id)}" type="button"${proposal.status !== 'pending' ? ' disabled' : ''}>${proposal.kind === 'player_flow_and_discord' ? 'Confirm delivery' : 'Approve'}</button>
+          <button class="btn btn-secondary btn-xs" data-co-dm-reject="${esc(proposal.id)}" type="button"${proposal.status !== 'pending' ? ' disabled' : ''}>${proposal.kind === 'player_flow_and_discord' ? 'Cancel' : 'Reject'}</button>
         </div>
       </article>`).join('') : '<div class="empty-state">No intervention proposals.</div>';
   }
@@ -336,7 +378,8 @@
       event.preventDefault();
       const input = document.getElementById('co-dm-message');
       const message = input?.value || '';
-      void service.sendMessage({ playerId: state.selectedPlayerId, message }).then(() => {
+      const delivery = document.getElementById('co-dm-message-delivery')?.value || 'player_flow';
+      void service.sendMessage({ message, delivery }).then(() => {
         if (input) input.value = '';
       }).catch((error) => service.recordActivity(`DM message failed: ${error.message}`, 'failure'));
     });
@@ -353,12 +396,12 @@
       const approve = event.target.closest('[data-co-dm-approve]');
       const reject = event.target.closest('[data-co-dm-reject]');
       if (approve) void service.approveProposal(approve.dataset.coDmApprove);
-      if (reject) service.rejectProposal(reject.dataset.coDmReject);
+      if (reject) void service.rejectProposal(reject.dataset.coDmReject);
     });
   }
 
   function validateProposal(input) {
-    const playerId = ensurePlayerId(input?.playerId);
+    const playerId = selectedPlayerId();
     const kind = bounded(input?.kind, 40);
     const title = bounded(input?.title, 160);
     const rationale = bounded(input?.rationale, 800);
@@ -412,75 +455,23 @@
     return { playerId, kind, title, rationale, evidenceIds, payload, summary };
   }
 
-  async function buildMutationRequest(proposal) {
-    if (proposal.kind === 'grant_item') {
-      const template = await API.getRegistryEntry('items', proposal.payload.itemId);
-      if (!template) throw new Error(`Registered item '${proposal.payload.itemId}' was not found.`);
-      return {
-        endpoint: 'grant-item',
-        body: {
-          playerId: proposal.playerId,
-          name: bounded(template.name, 160),
-          type: bounded(template.type || 'Misc', 40),
-          quantity: proposal.payload.quantity,
-          value: integer(template.value),
-          description: bounded(template.description || '', 500),
-          damageDice: template.damageDice || null,
-          damageStat: template.damageStat || null,
-          armorValue: integer(template.armorValue),
-          isEquippable: template.isEquippable,
-          isConsumable: template.isConsumable,
-          isTwoHanded: !!template.isTwoHanded,
-          effect: bounded(template.effect || '', 300) || null,
-          statBonuses: clone(template.statBonuses || {}),
-          autoEquip: false
-        }
-      };
-    }
-    if (proposal.kind === 'apply_status') {
-      return {
-        endpoint: 'status',
-        body: {
-          playerId: proposal.playerId,
-          name: proposal.payload.statusName,
-          description: proposal.payload.statusDescription,
-          type: 'Debuff',
-          remainingTurns: proposal.payload.durationTurns,
-          replaceExisting: true
-        }
-      };
-    }
-    if (proposal.kind === 'adjust_resources') {
-      return { endpoint: 'resources', body: { playerId: proposal.playerId, ...proposal.payload } };
-    }
-    return {
-      endpoint: 'teleport',
-      body: {
-        playerId: proposal.playerId,
-        roomId: proposal.payload.destinationRoomId,
-        createRoomIfMissing: false,
-        connectFromCurrentRoom: false
-      }
-    };
-  }
-
-  async function fetchEntity(type, id, worldId) {
+  async function fetchEntity(type, id, worldId, signal) {
     const registryTypes = { spell: 'spells', item: 'items', class: 'classes', race: 'races', monster: 'monsters', quest: 'quests', lore_entry: 'lore_entries', narrator_preset: 'narrator_presets' };
     const belongsToWorld = (item) => !worldId || (item?.worldIds || []).some((candidate) => candidate.toLowerCase() === worldId.toLowerCase());
     if (registryTypes[type]) {
-      const item = await API.getRegistryEntry(registryTypes[type], id);
+      const item = await API.getRegistryEntry(registryTypes[type], id, { signal });
       return item && belongsToWorld(item) ? item : null;
     }
     if (type === 'player') {
-      const player = await API.getPlayer(id);
+      const player = await API.getPlayer(id, { signal });
       return player && (!worldId || player.activeWorldId?.toLowerCase() === worldId.toLowerCase()) ? player : null;
     }
     if (type === 'room') {
-      const room = await API.getRoom(id);
+      const room = await API.getRoom(id, undefined, { signal });
       return room && belongsToWorld(room) ? room : null;
     }
     if (type === 'npc') {
-      const rooms = await API.getRooms();
+      const rooms = await API.getRooms({ signal });
       for (const room of rooms) {
         if (worldId && !(room.worldIds || []).some((candidate) => candidate.toLowerCase() === worldId.toLowerCase())) continue;
         const npc = (room.npcs || []).find((candidate) => candidate.id === id);
@@ -488,6 +479,18 @@
       }
     }
     return null;
+  }
+
+  function mergeServerActions(actions) {
+    const sessionSecrets = readApprovalTokens();
+    const localSecrets = new Map(state.proposals.map((proposal) => [proposal.requestId || proposal.id, proposal.approvalToken || sessionSecrets[proposal.requestId]]));
+    state.proposals = (Array.isArray(actions) ? actions : []).filter((action) => action.kind !== 'player_flow').slice(0, MAX_PROPOSALS).reverse().map((action) => ({
+      ...action,
+      playerName: state.players.find((player) => player.id === action.playerId)?.name || action.playerId,
+      approvalToken: localSecrets.get(action.requestId) || null
+    }));
+    persistProposals();
+    renderProposals();
   }
 
   const service = {
@@ -506,13 +509,15 @@
         renderAll();
         return null;
       }
-      state.players = await API.getPlayers();
+      const [players, actions] = await Promise.all([API.getPlayers(), API.getCoDmActions().catch(() => [])]);
+      state.players = players;
       if (state.selectedPlayerId && !state.players.some((player) => player.id === state.selectedPlayerId)) {
         state.selectedPlayerId = '';
         state.context = null;
         persistText(STORAGE.player, '');
       }
       renderPlayerOptions();
+      mergeServerActions(actions);
       if (state.selectedPlayerId) await this.refreshContext({ record: false });
       else renderScene();
       return state.context;
@@ -554,18 +559,15 @@
     },
 
     async refreshContext(options = {}) {
-      const playerId = ensurePlayerId(options.playerId || state.selectedPlayerId);
+      const playerId = selectedPlayerId();
       const storyLimit = Math.max(1, Math.min(12, integer(options.storyLimit, 8)));
-      if (playerId !== state.selectedPlayerId) {
-        state.selectedPlayerId = playerId;
-        persistText(STORAGE.player, playerId);
-      }
-      const player = await API.getPlayer(playerId);
+      const signal = options.signal;
+      const player = await API.getPlayer(playerId, { signal });
       if (!player) throw new Error(`Player '${playerId}' was not found.`);
       const [room, story, health] = await Promise.all([
-        API.getRoom(player.currentRoomId, playerId),
-        API.getStory(playerId, storyLimit, player.activeWorldId),
-        API.getHealth().catch(() => null)
+        API.getRoom(player.currentRoomId, playerId, { signal }),
+        API.getStory(playerId, storyLimit, player.activeWorldId, { signal }),
+        API.getHealth({ signal }).catch((error) => error?.name === 'AbortError' ? Promise.reject(error) : null)
       ]);
       const interaction = player.interaction || {};
       const modeNames = ['explore', 'conversation', 'combat', 'trading', 'stealth', 'event', 'blindadventure', 'cyoa'];
@@ -617,41 +619,66 @@
       return clone(state.context);
     },
 
-    async getContext(input = {}) {
-      if (input.playerId) await this.selectPlayer(input.playerId, { record: false, storyLimit: input.storyLimit });
-      const context = await this.refreshContext({ storyLimit: input.storyLimit, record: false });
+    async getContext(input = {}, options = {}) {
+      if (Object.keys(input).length) throw new Error('Context input must be empty; player scope comes from the visible selection.');
+      const context = await this.refreshContext({ storyLimit: 8, record: false, signal: options.signal });
       this.recordActivity(`Agent inspected ${context.player.name}'s current scene.`, 'info');
       return context;
     },
 
-    async searchWorld(input = {}) {
-      const query = bounded(input.query, 200);
-      const type = input.type ? bounded(input.type, 40) : '';
-      const worldId = input.worldId ? bounded(input.worldId, 120) : '';
-      const limit = Math.max(1, Math.min(20, integer(input.limit, 10)));
+    async searchWorld(input = {}, options = {}) {
+      const unknown = Object.keys(input).filter((name) => !['query', 'entityTypes', 'limit'].includes(name));
+      if (unknown.length) throw new Error(`Unsupported search field '${unknown[0]}'.`);
+      const query = bounded(input.query, 160);
+      const categories = Array.isArray(input.entityTypes) ? [...new Set(input.entityTypes)] : [];
+      const types = categories.map((category) => ENTITY_CATEGORY_MAP[category]);
+      const limit = Math.max(1, Math.min(8, integer(input.limit, 6)));
       if (!query) throw new Error('query must be nonblank.');
-      if (type && !ENTITY_TYPES.has(type)) throw new Error(`Unsupported entity type '${type}'.`);
-      const data = await API.dmSearch(query, type || undefined, worldId || undefined);
-      const raw = (data.results || []).slice(0, limit);
+      if (types.some((type) => !type) || types.length > 6) throw new Error('entityTypes contains an unsupported category.');
+      if (!state.context) await this.refreshContext({ record: false, signal: options.signal });
+      const worldId = state.context?.player?.activeWorldId;
+      const responses = types.length
+        ? await Promise.all(types.map((type) => API.dmSearch(query, type, worldId, { signal: options.signal })))
+        : [await API.dmSearch(query, undefined, worldId, { signal: options.signal })];
+      const raw = responses.flatMap((data) => data.results || [])
+        .filter((item) => item.type !== 'player' || item.id === state.selectedPlayerId)
+        .slice(0, limit);
+      state.entityIndex.clear();
+      for (const item of raw) state.entityIndex.set(String(item.id).toLowerCase(), item.type);
       const searchInput = document.getElementById('overview-search-input');
       const typeFilter = document.getElementById('overview-type-filter');
       const worldFilter = document.getElementById('overview-world-filter');
       if (searchInput) searchInput.value = query;
-      if (typeFilter) typeFilter.value = type;
+      if (typeFilter) typeFilter.value = types.length === 1 ? types[0] : '';
       if (worldFilter && [...worldFilter.options].some((option) => option.value === worldId)) worldFilter.value = worldId;
       UI._ovRenderResults(raw, query);
-      this.recordActivity(`Agent searched ${type || 'the world'} for “${query}” and found ${raw.length} result(s).`, 'info');
-      return { query, type: type || null, worldId: worldId || null, total: data.total ?? raw.length, returned: raw.length, results: raw.map(compactSearchResult) };
+      this.recordActivity(`Agent searched the selected campaign for “${query}” and found ${raw.length} result(s).`, 'info');
+      return { query, worldId, returned: raw.length, results: raw.map(compactSearchResult) };
     },
 
-    async inspectEntity(input = {}) {
-      const type = bounded(input.type, 40);
-      const id = bounded(input.id, 120);
-      const worldId = bounded(input.worldId || '', 120);
-      if (!ENTITY_TYPES.has(type)) throw new Error(`Unsupported entity type '${type}'.`);
-      if (!id) throw new Error('id is required.');
-      const item = await fetchEntity(type, id, worldId);
-      if (!item) throw new Error(`${type} '${id}' was not found.`);
+    async inspectEntity(input = {}, options = {}) {
+      const unknown = Object.keys(input).filter((name) => name !== 'entityId');
+      if (unknown.length) throw new Error(`Unsupported inspection field '${unknown[0]}'.`);
+      const id = bounded(input.entityId, 120);
+      if (!id) throw new Error('entityId is required.');
+      if (!state.context) await this.refreshContext({ record: false, signal: options.signal });
+      const worldId = bounded(state.context?.player?.activeWorldId || '', 120);
+      let type = state.entityIndex.get(id.toLowerCase());
+      if (!type && state.context?.player?.id?.toLowerCase() === id.toLowerCase()) type = 'player';
+      if (!type && state.context?.room?.id?.toLowerCase() === id.toLowerCase()) type = 'room';
+      if (!type && (state.context?.room?.npcs || []).some((entry) => entry.id?.toLowerCase() === id.toLowerCase())) type = 'npc';
+      if (!type && (state.context?.room?.items || []).some((entry) => entry.id?.toLowerCase() === id.toLowerCase())) type = 'item';
+      if (!type) {
+        const search = await API.dmSearch(id, undefined, worldId, { signal: options.signal });
+        const exact = (search.results || []).filter((entry) => String(entry.id).toLowerCase() === id.toLowerCase())
+          .filter((entry) => entry.type !== 'player' || entry.id === state.selectedPlayerId);
+        const exactTypes = [...new Set(exact.map((entry) => entry.type))];
+        if (exactTypes.length > 1) throw domainError('CONFLICT', `entityId '${id}' is ambiguous in the selected campaign.`);
+        type = exactTypes[0];
+      }
+      if (!ENTITY_TYPES.has(type)) throw domainError('NOT_FOUND', `Entity '${id}' was not found in the selected campaign.`);
+      const item = await fetchEntity(type, id, worldId, options.signal);
+      if (!item) throw domainError('NOT_FOUND', `${type} '${id}' was not found.`);
       UI.ovSelectItem(item, type);
       state.selectedEntity = compactEntity(item, type);
       if (state.context) state.context.selectedEntity = clone(state.selectedEntity);
@@ -659,52 +686,77 @@
       return clone(state.selectedEntity);
     },
 
-    async sendMessage(input = {}) {
-      const playerId = ensurePlayerId(input.playerId);
+    async sendMessage(input = {}, options = {}) {
+      const unknown = Object.keys(input).filter((name) => !['message', 'delivery'].includes(name));
+      if (unknown.length) throw new Error(`Unsupported message field '${unknown[0]}'.`);
+      const playerId = selectedPlayerId();
       const message = bounded(input.message, 801);
+      const delivery = bounded(input.delivery, 40);
       if (!message) throw new Error('message must be nonblank.');
       if (message.length > 800) throw new Error('message must be at most 800 characters.');
-      const result = await API.sendMessage({ playerId, message });
-      if (playerId !== state.selectedPlayerId) await this.selectPlayer(playerId, { record: false });
-      const context = await this.refreshContext({ record: false });
+      if (!MESSAGE_DELIVERIES.has(delivery)) throw new Error('delivery must be player_flow or player_flow_and_discord.');
+
+      if (delivery === 'player_flow_and_discord') {
+        const token = approvalToken();
+        const action = await API.createCoDmProposal({
+          requestId: uuid('request'),
+          approvalToken: token,
+          playerId,
+          kind: delivery,
+          title: 'Review external player message',
+          rationale: 'Discord is an external delivery channel and requires explicit human confirmation.',
+          evidenceIds: [],
+          message
+        }, { signal: options.signal });
+        action.playerName = state.players.find((player) => player.id === playerId)?.name || playerId;
+        action.approvalToken = token;
+        state.proposals.push(action);
+        state.proposals = state.proposals.slice(-MAX_PROPOSALS);
+        persistProposals();
+        renderProposals();
+        this.recordActivity(`Agent staged an external message to ${action.playerName}; human confirmation is required.`, 'info');
+        return { summary: 'External delivery is pending human review.', status: 'pending_review', actionId: action.id, delivery, player: { id: playerId, name: action.playerName } };
+      }
+
+      const result = await API.sendCoDmPlayerFlowMessage({ requestId: uuid('request'), playerId, message, delivery }, { signal: options.signal });
+      const context = await this.refreshContext({ record: false, signal: options.signal });
       state.diagnostics.mostRecentVisibleMutation = `DM message to ${context.player.name}`;
       renderDiagnostics();
       this.recordActivity(`Agent sent a visible DM message to ${context.player.name}.`, 'success');
       return {
+        summary: 'Player Flow message delivered to one selected player.',
+        status: result.status,
+        actionId: result.id,
+        delivery,
         player: { id: context.player.id, name: context.player.name },
-        message: bounded(message, 800),
-        server: { sent: result.sent, discordMirrored: result.discordMirrored === true, summary: bounded(result.summary || '', 300) },
-        storyReceipt: context.recentStory[0] || null
+        receiptId: context.recentStory[0]?.id || null
       };
     },
 
-    async createProposal(input = {}) {
+    async createProposal(input = {}, options = {}) {
       const valid = validateProposal(input);
-      const player = await API.getPlayer(valid.playerId);
+      const player = await API.getPlayer(valid.playerId, { signal: options.signal });
       if (!player) throw new Error(`Player '${valid.playerId}' was not found.`);
-      const proposal = {
-        id: uuid('proposal'),
+      const token = approvalToken();
+      const proposal = await API.createCoDmProposal({
+        requestId: uuid('request'),
+        approvalToken: token,
         playerId: valid.playerId,
-        playerName: bounded(player.name || valid.playerId, 160),
         kind: valid.kind,
         title: valid.title,
-        summary: valid.summary,
         rationale: valid.rationale,
         evidenceIds: valid.evidenceIds,
-        payload: valid.payload,
-        proposedBy: 'browser agent',
-        status: 'pending',
-        result: null,
-        createdAt: new Date().toISOString()
-      };
-      proposal.mechanicalRequest = await buildMutationRequest(proposal);
+        ...valid.payload
+      }, { signal: options.signal });
+      proposal.playerName = bounded(player.name || valid.playerId, 160);
+      proposal.approvalToken = token;
       state.proposals.push(proposal);
       state.proposals = state.proposals.slice(-MAX_PROPOSALS);
-      persist(STORAGE.proposals, state.proposals);
+      persistProposals();
       renderProposals();
       this.recordActivity(`Agent proposed ${valid.summary} Human review is required.`, 'info');
       requestAnimationFrame(() => document.getElementById(`co-dm-proposal-${proposal.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
-      return clone(proposal);
+      return { summary: 'Mechanical change is pending human review.', status: proposal.status, actionId: proposal.id, kind: proposal.kind, player: { id: valid.playerId, name: proposal.playerName } };
     },
 
     listProposals() {
@@ -715,25 +767,13 @@
       const proposal = state.proposals.find((entry) => entry.id === proposalId);
       if (!proposal) throw new Error(`Proposal '${proposalId}' was not found.`);
       if (proposal.status !== 'pending') throw new Error(`Proposal '${proposalId}' is already ${proposal.status}.`);
-      const riskyResources = proposal.kind === 'adjust_resources' && Object.values(proposal.payload).some((value) => Math.abs(value) > 100);
-      if ((proposal.kind === 'teleport' || riskyResources) && !window.confirm(`Approve ${proposal.summary}\n\nThe existing game API will modify persistent state.`)) return clone(proposal);
+      if (!proposal.approvalToken) throw new Error('This proposal cannot be approved after its local approval secret was lost. Reject it and create a fresh proposal.');
       proposal.result = 'Approval in progress…';
       renderProposals();
       try {
-        const mechanicalRequest = proposal.mechanicalRequest || await buildMutationRequest(proposal);
-        proposal.mechanicalRequest = mechanicalRequest;
-        let result;
-        if (proposal.kind === 'grant_item') {
-          result = await API.grantItem(mechanicalRequest.body);
-        } else if (proposal.kind === 'apply_status') {
-          result = await API.applyStatus(mechanicalRequest.body);
-        } else if (proposal.kind === 'adjust_resources') {
-          result = await API.adjustResources(mechanicalRequest.body);
-        } else if (proposal.kind === 'teleport') {
-          result = await API.teleportPlayer(mechanicalRequest.body);
-        }
-        proposal.status = 'approved';
-        proposal.result = bounded(result?.summary || 'Existing game API accepted the intervention.', 500);
+        const result = await API.approveCoDmAction(proposal.id, proposal.approvalToken);
+        Object.assign(proposal, result);
+        proposal.result = bounded(result?.result || 'Existing game API accepted the reviewed action.', 500);
         state.diagnostics.mostRecentVisibleMutation = `${proposal.kind} for ${proposal.playerName}`;
         this.recordActivity(`Human approved “${proposal.title}”. ${proposal.result}`, 'success');
         if (proposal.playerId === state.selectedPlayerId) await this.refreshContext({ record: false });
@@ -742,19 +782,21 @@
         proposal.result = bounded(error.message || 'Approval failed.', 500);
         this.recordActivity(`Approval failed for “${proposal.title}”: ${proposal.result}`, 'failure');
       }
-      persist(STORAGE.proposals, state.proposals);
+      persistProposals();
       renderProposals();
       renderDiagnostics();
       return clone(proposal);
     },
 
-    rejectProposal(proposalId) {
+    async rejectProposal(proposalId) {
       const proposal = state.proposals.find((entry) => entry.id === proposalId);
       if (!proposal) throw new Error(`Proposal '${proposalId}' was not found.`);
       if (proposal.status !== 'pending') throw new Error(`Proposal '${proposalId}' is already ${proposal.status}.`);
-      proposal.status = 'rejected';
-      proposal.result = 'Rejected by the human DM. No game mutation API was called.';
-      persist(STORAGE.proposals, state.proposals);
+      if (!proposal.approvalToken) throw new Error('This proposal cannot be rejected after its local approval secret was lost.');
+      const result = await API.rejectCoDmAction(proposal.id, proposal.approvalToken);
+      Object.assign(proposal, result);
+      proposal.result = result.result;
+      persistProposals();
       renderProposals();
       this.recordActivity(`Human rejected “${proposal.title}”; game state was not changed.`, 'info');
       return clone(proposal);

@@ -25,6 +25,10 @@ public class GaeDbContext : DbContext
     // ── Dashboard accounts ──
     public DbSet<DashboardUserEntity> DashboardUsers => Set<DashboardUserEntity>();
 
+    /// <summary>Durable Co-DM review actions and idempotency receipts.</summary>
+    public DbSet<GAE.Engine.Data.Configurations.CoDmActionEntity> CoDmActions
+        => Set<GAE.Engine.Data.Configurations.CoDmActionEntity>();
+
     // ── World tables ──
     public DbSet<WorldEntity> Worlds => Set<WorldEntity>();
     public DbSet<PlayerWorldStateEntity> PlayerWorldStates => Set<PlayerWorldStateEntity>();

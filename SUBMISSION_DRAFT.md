@@ -37,8 +37,8 @@ WebMCP exposes those operations as structured site tools tied to the current pag
 - the existing cookie-authenticated API client and Admin authorization policy;
 - one shared `window.GaeCoDm` service used by both WebMCP handlers and visible controls;
 - existing DM search, entity detail rendering, SignalR updates, and game mutation endpoints;
-- an app-owned local proposal queue that cannot mutate game state without a human click;
-- persisted in-game DM messages with optional Discord mirroring;
+- an app-owned durable proposal queue that cannot mutate game state without a one-time human approval;
+- idempotent Player Flow messages plus review-gated Discord delivery;
 - graceful normal-dashboard behavior when WebMCP is absent.
 
 ## Safety and human control

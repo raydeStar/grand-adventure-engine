@@ -50,7 +50,7 @@ New player? Start with the **[Player Guide](docs/player-guide.md)**.
 
 ## WebMCP Co-DM
 
-The authenticated DM Console now exposes five bounded WebMCP site tools when the browser provides `document.modelContext.registerTool`: inspect one selected player's genuine scene, search and inspect existing world entities, send a visible message to exactly one player, and stage a persistent intervention for human review. Proposals never change game state on their own; the human DM must approve or reject each card, and approval uses the existing validated grant-item, status, resource, or teleport APIs.
+The authenticated admin DM Console exposes five bounded WebMCP site tools when the browser provides `document.modelContext.registerTool`: inspect one visibly selected player's genuine scene, search and inspect that campaign, send a Player Flow message or stage reviewed Discord delivery, and propose persistent interventions for human review. Proposals never change game state on their own; PostgreSQL stores the review/audit record and a human DM must approve it with a one-time nonce before the existing validated grant-item, status, resource, or teleport APIs run.
 
 Browsers without WebMCP continue to use the normal dashboard. See the [challenge architecture and safety boundary](docs/WEBMCP-CHALLENGE.md), [deterministic demo scenario](docs/WEBMCP-DEMO-SCENARIO.md), and [deployment notes](DEPLOYMENT_WEBMCP.md).
 

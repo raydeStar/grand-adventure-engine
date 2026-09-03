@@ -48,6 +48,7 @@
 }
 
 .co-dm-player-controls select,
+.co-dm-message-row select,
 .co-dm-message-form textarea {
   min-width: 0;
 }

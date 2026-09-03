@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
 using System.Text.Json;
 using GAE.Core.Interfaces;
 using GAE.Core.Models;
@@ -22,6 +23,16 @@ public class AdminConsoleTests : IClassFixture<GaeWebApplicationFactory>
         _adminClient = factory.CreateAdminClient();
     }
 
+    private async Task<HttpResponseMessage> PostCoDmAsync(string path, object payload)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, path)
+        {
+            Content = JsonContent.Create(payload)
+        };
+        request.Headers.Add("X-GAE-Request", "co-dm");
+        return await _adminClient.SendAsync(request);
+    }
+
     [Fact]
     public async Task Root_ReturnsDashboardMarkup()
     {
@@ -32,6 +43,7 @@ public class AdminConsoleTests : IClassFixture<GaeWebApplicationFactory>
         Assert.Contains("Grand Adventure Engine", html);
         Assert.Contains("Admin Console", html);
         Assert.Contains("User Flow", html);
+        Assert.Contains("tools=(self)", response.Headers.GetValues("Permissions-Policy").Single());
     }
 
     [Fact]
@@ -220,6 +232,104 @@ public class AdminConsoleTests : IClassFixture<GaeWebApplicationFactory>
         storyResponse.EnsureSuccessStatusCode();
         var story = await storyResponse.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Contains(story.EnumerateArray(), entry => entry.GetProperty("narration").GetString() == message);
+    }
+
+    [Fact]
+    public async Task CoDmPlayerFlowMessage_RequiresRequestMarkerAndCollapsesRetries()
+    {
+        var playerId = $"codm-message-{Guid.NewGuid():N}";
+        var createResponse = await _userClient.PostAsJsonAsync("/api/dashboard/characters", new
+        {
+            playerId,
+            name = "Co-DM Recipient",
+            race = "Human",
+            @class = "Ranger",
+            statMethod = "StandardArray"
+        });
+        createResponse.EnsureSuccessStatusCode();
+
+        var payload = new
+        {
+            requestId = $"request-{Guid.NewGuid():N}",
+            playerId,
+            message = "One message, even when the courier knocks twice.",
+            delivery = "player_flow"
+        };
+        var missingMarker = await _adminClient.PostAsJsonAsync("/api/dashboard/admin/co-dm/messages", payload);
+        Assert.Equal(HttpStatusCode.BadRequest, missingMarker.StatusCode);
+        using var unauthorizedRequest = new HttpRequestMessage(HttpMethod.Post, "/api/dashboard/admin/co-dm/messages")
+        {
+            Content = JsonContent.Create(payload)
+        };
+        unauthorizedRequest.Headers.Add("X-GAE-Request", "co-dm");
+        var unauthorized = await _userClient.SendAsync(unauthorizedRequest);
+        Assert.Equal(HttpStatusCode.Forbidden, unauthorized.StatusCode);
+
+        var first = await PostCoDmAsync("/api/dashboard/admin/co-dm/messages", payload);
+        var retry = await PostCoDmAsync("/api/dashboard/admin/co-dm/messages", payload);
+        first.EnsureSuccessStatusCode();
+        retry.EnsureSuccessStatusCode();
+        var firstReceipt = await first.Content.ReadFromJsonAsync<JsonElement>();
+        var retryReceipt = await retry.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(firstReceipt.GetProperty("id").GetString(), retryReceipt.GetProperty("id").GetString());
+
+        var story = await _adminClient.GetFromJsonAsync<JsonElement>($"/api/dashboard/story?playerId={playerId}&limit=10");
+        Assert.Single(story.EnumerateArray(), entry => entry.GetProperty("narration").GetString() == payload.message);
+    }
+
+    [Fact]
+    public async Task CoDmProposal_RequiresOneTimeApprovalNonceAndAuditsDecision()
+    {
+        var playerId = $"codm-proposal-{Guid.NewGuid():N}";
+        var createResponse = await _userClient.PostAsJsonAsync("/api/dashboard/characters", new
+        {
+            playerId,
+            name = "Co-DM Proposal Target",
+            race = "Human",
+            @class = "Ranger",
+            statMethod = "StandardArray"
+        });
+        createResponse.EnsureSuccessStatusCode();
+        var before = await _adminClient.GetFromJsonAsync<JsonElement>($"/api/dashboard/players/{playerId}");
+        var originalGold = before.GetProperty("gold").GetInt32();
+        var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+
+        var proposalResponse = await PostCoDmAsync("/api/dashboard/admin/co-dm/proposals", new
+        {
+            requestId = $"request-{Guid.NewGuid():N}",
+            approvalToken = token,
+            playerId,
+            kind = "adjust_resources",
+            title = "Award one audit coin",
+            rationale = "Deterministic approval and replay test.",
+            evidenceIds = new[] { playerId },
+            goldDelta = 1
+        });
+        Assert.Equal(HttpStatusCode.Created, proposalResponse.StatusCode);
+        var proposal = await proposalResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var actionId = proposal.GetProperty("id").GetString();
+        Assert.Equal("pending", proposal.GetProperty("status").GetString());
+        Assert.False(proposal.TryGetProperty("approvalToken", out _));
+
+        var stillUnchanged = await _adminClient.GetFromJsonAsync<JsonElement>($"/api/dashboard/players/{playerId}");
+        Assert.Equal(originalGold, stillUnchanged.GetProperty("gold").GetInt32());
+
+        var wrongToken = await PostCoDmAsync($"/api/dashboard/admin/co-dm/actions/{actionId}/approve", new { approvalToken = new string('0', 64) });
+        Assert.Equal(HttpStatusCode.Forbidden, wrongToken.StatusCode);
+
+        var approved = await PostCoDmAsync($"/api/dashboard/admin/co-dm/actions/{actionId}/approve", new { approvalToken = token });
+        approved.EnsureSuccessStatusCode();
+        var replay = await PostCoDmAsync($"/api/dashboard/admin/co-dm/actions/{actionId}/approve", new { approvalToken = token });
+        Assert.Equal(HttpStatusCode.Conflict, replay.StatusCode);
+
+        var after = await _adminClient.GetFromJsonAsync<JsonElement>($"/api/dashboard/players/{playerId}");
+        Assert.Equal(originalGold + 1, after.GetProperty("gold").GetInt32());
+
+        var audit = await _adminClient.GetFromJsonAsync<JsonElement>("/api/dashboard/admin/co-dm/actions");
+        var action = audit.EnumerateArray().Single(entry => entry.GetProperty("id").GetString() == actionId);
+        Assert.Equal("approved", action.GetProperty("status").GetString());
+        Assert.Equal(GaeWebApplicationFactory.DefaultAdminUsername, action.GetProperty("decidedBy").GetString());
+        Assert.Equal(playerId, action.GetProperty("playerId").GetString());
     }
 
     [Fact]
