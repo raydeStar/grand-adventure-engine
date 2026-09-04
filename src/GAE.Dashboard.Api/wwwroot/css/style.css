@@ -4458,3 +4458,50 @@ body::after { animation: scanDrift 8s linear infinite; will-change: transform; }
 /* Admin form rows bottom-aligned their controls, so a select beside a tall
    textarea had its label pushed a line lower. Align labels along the top. */
 #workspace-admin .mutation-row { align-items: start; }
+
+/* ── Co-DM orientation (2026-09-03): explain the loop, hide dead controls ── */
+.co-dm-howto {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.co-dm-howto li {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
+}
+.co-dm-howto li > span {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  text-shadow: var(--text-bloom);
+}
+.co-dm-howto strong { display: block; font-size: 12px; color: var(--text); }
+.co-dm-howto small { display: block; font-size: 11px; line-height: 1.4; color: var(--dim); }
+
+.co-dm-hint { margin: 8px 0 0; font-size: 11px; line-height: 1.45; color: var(--dim); }
+.co-dm-hint-inline { display: block; margin: 2px 0 0; }
+
+/* A resolved proposal has nothing left to click; its result line says what happened. */
+.co-dm-proposal:not(.status-pending) .co-dm-proposal-actions { display: none; }
+
+/* Keep a freshly-scrolled proposal's heading clear of the card's top edge. */
+.co-dm-scroll { scroll-padding-top: 8px; }
+.co-dm-proposal { scroll-margin-top: 8px; }
+
+@media (max-width: 900px) { .co-dm-howto { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .co-dm-howto { grid-template-columns: 1fr; } }

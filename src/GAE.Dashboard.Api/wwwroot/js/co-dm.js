@@ -102,6 +102,18 @@
     return text.length <= max ? text : `${text.slice(0, Math.max(0, max - 1))}…`;
   }
 
+  // Story text arrives as narrator markdown (bold, code fences, HP bars). Cards show prose only.
+  function plainText(value, max = 220) {
+    const text = String(value ?? '')
+      .replace(/```[\s\S]*?```/g, ' ')
+      .replace(/`([^`]*)`/g, '$1')
+      .replace(/\*\*([^*]*)\*\*/g, '$1')
+      .replace(/\[[#=-]{4,}\]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return bounded(text, max);
+  }
+
   function integer(value, fallback = 0) {
     const number = Number(value);
     return Number.isInteger(number) ? number : fallback;
@@ -268,7 +280,7 @@
           <code>${esc(player.id)}</code>
           <div class="co-dm-player-vitals"><span>HP ${esc(player.hp)}/${esc(player.maxHp)}</span><span>MP ${esc(player.mp)}/${esc(player.maxMp)}</span><span>Lv.${esc(player.level)}</span></div>
           <div class="co-dm-player-location">${esc(player.currentRoomId || 'unknown room')} · ${esc(player.activeWorldId || 'default world')}</div>
-          <p>${esc(latest?.narration || latest?.mechanicalSummary || (hold?.reason ? `DM review: ${hold.reason}` : 'No recent activity.'))}</p>
+          <p>${esc(plainText(latest?.narration || latest?.mechanicalSummary || (hold?.reason ? `DM review: ${hold.reason}` : 'No recent activity yet.')))}</p>
           <button class="btn btn-secondary btn-xs" data-co-dm-focus="${esc(player.id)}" type="button">Focus ${esc(player.name || player.id)}</button>
         </article>`;
       }).join('')
@@ -280,7 +292,7 @@
         return `<article class="co-dm-live-entry">
           <time datetime="${esc(entry.timestamp || '')}">${esc(time)}</time>
           <button data-co-dm-focus="${esc(entry.playerId)}" type="button">${esc(player?.name || entry.playerId)}</button>
-          <div><strong>${esc(entry.rawInput || 'DM / world')}</strong><p>${esc(entry.narration || entry.mechanicalSummary || 'State changed without visible narration.')}</p></div>
+          <div><strong>${esc(entry.rawInput || 'DM / world')}</strong><p>${esc(plainText(entry.narration || entry.mechanicalSummary || 'State changed without visible narration.', 320))}</p></div>
         </article>`;
       }).join('')
       : '<div class="empty-state">No player activity yet. New commands and DM messages will appear here live.</div>';
@@ -310,7 +322,7 @@
     if (title) title.textContent = 'Current Scene';
     const context = state.context;
     if (!context) {
-      host.innerHTML = `<div class="empty-state">${state.selectedPlayerId ? 'Context has not been refreshed.' : 'Choose one player to inspect authoritative game state.'}</div>`;
+      host.innerHTML = `<div class="empty-state">${state.selectedPlayerId ? 'Context has not been refreshed.' : 'Pick a player above to see their live scene, or keep All Players for the campaign feed.'}</div>`;
       return;
     }
     const player = context.player;
@@ -367,7 +379,7 @@
       <div class="co-dm-receipt co-dm-receipt-${esc(entry.tone || 'info')}">
         <time datetime="${esc(entry.timestamp)}">${esc(new Date(entry.timestamp).toLocaleTimeString())}</time>
         <span>${esc(entry.message)}</span>
-      </div>`).join('') : '<div class="empty-state">No agent receipts yet.</div>';
+      </div>`).join('') : '<div class="empty-state">Nothing yet. Every tool call your browser agent makes lands here as a receipt.</div>';
     host.scrollTop = host.scrollHeight;
   }
 
@@ -389,7 +401,7 @@
           <button class="btn btn-primary btn-xs" data-co-dm-approve="${esc(proposal.id)}" type="button"${proposal.status !== 'pending' ? ' disabled' : ''}>${proposal.kind === 'player_flow_and_discord' ? 'Confirm delivery' : 'Approve'}</button>
           <button class="btn btn-secondary btn-xs" data-co-dm-reject="${esc(proposal.id)}" type="button"${proposal.status !== 'pending' ? ' disabled' : ''}>${proposal.kind === 'player_flow_and_discord' ? 'Cancel' : 'Reject'}</button>
         </div>
-      </article>`).join('') : '<div class="empty-state">No intervention proposals.</div>';
+      </article>`).join('') : '<div class="empty-state">Empty. When the agent suggests a message or a mechanical change, it waits here for your approval.</div>';
   }
 
   function renderDiagnostics() {
@@ -403,6 +415,9 @@
       + row('Most recent tool call', d.mostRecentToolCall || 'none')
       + row('Most recent visible mutation', d.mostRecentVisibleMutation || 'none')
       + (d.registrationError ? `<div class="co-dm-registration-error">${esc(d.registrationError)}</div>` : '');
+    host.insertAdjacentHTML('beforeend', d.supported
+      ? `<p class="co-dm-hint">${d.registeredTools.length ? 'An agent in this browser can call the tools above. Every call shows up under Agent Activity, and anything that would change the game waits in the queue.' : 'This browser exposes WebMCP, but no tools are registered yet. Refresh the page if this persists.'}</p>`
+      : '<p class="co-dm-hint">This browser does not expose WebMCP, so no agent can join from here. Everything else on this console still works; open the page in a WebMCP-capable browser to let an agent in.</p>');
   }
 
   function renderAll() {

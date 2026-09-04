@@ -16,7 +16,7 @@
   <meta property="og:image:height" content="640" />
   <meta name="twitter:card" content="summary_large_image" />
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
-  <link rel="stylesheet" href="css/style.css?v=38" />
+  <link rel="stylesheet" href="css/style.css?v=39" />
   <script src="vendor/signalr-10.0.11.min.js?v=10.0.11"></script>
   <script src="vendor/rot-2.2.1.min.js?v=2.2.1"></script>
 </head>
@@ -297,11 +297,18 @@
                 </div>
               </div>
 
+              <ol class="co-dm-howto" aria-label="How the Co-DM works">
+                <li><span>1</span><div><strong>Pick a player</strong><small>or keep All Players to watch the whole table live</small></div></li>
+                <li><span>2</span><div><strong>Agent reads the world</strong><small>scene, NPCs, quests and lore through the WebMCP tools</small></div></li>
+                <li><span>3</span><div><strong>Agent proposes</strong><small>a player-facing message or the smallest mechanical change</small></div></li>
+                <li><span>4</span><div><strong>You decide</strong><small>nothing touches the game until you approve it in the queue</small></div></li>
+              </ol>
+
               <div class="co-dm-grid">
                 <section class="co-dm-card co-dm-scene-card" aria-labelledby="co-dm-scene-title">
                   <h3 id="co-dm-scene-title">Current Scene</h3>
                   <div id="co-dm-scene" class="co-dm-card-body">
-                    <div class="empty-state">Choose one player to inspect authoritative game state.</div>
+                    <div class="empty-state">Pick a player above to see their live scene, or keep All Players for the campaign feed.</div>
                   </div>
                 </section>
 
@@ -311,14 +318,14 @@
                     <button class="btn btn-secondary btn-xs" id="btn-co-dm-clear-activity" type="button">Clear</button>
                   </div>
                   <div id="co-dm-activity" class="co-dm-card-body co-dm-scroll" aria-live="polite">
-                    <div class="empty-state">No agent receipts yet.</div>
+                    <div class="empty-state">Nothing yet. Every tool call your browser agent makes lands here as a receipt.</div>
                   </div>
                 </section>
 
                 <section class="co-dm-card" aria-labelledby="co-dm-proposals-title">
                   <h3 id="co-dm-proposals-title">DM Intervention Queue</h3>
                   <div id="co-dm-proposals" class="co-dm-card-body co-dm-scroll" aria-live="polite">
-                    <div class="empty-state">No intervention proposals.</div>
+                    <div class="empty-state">Empty. When the agent suggests a message or a mechanical change, it waits here for your approval.</div>
                   </div>
                 </section>
 
@@ -342,7 +349,7 @@
                 </form>
                 <div class="co-dm-prompt-block">
                   <div class="co-dm-card-heading">
-                    <strong>Suggested prompt</strong>
+                    <div><strong>Suggested prompt</strong><small class="co-dm-hint co-dm-hint-inline">Paste this into your browser agent to start.</small></div>
                     <button class="btn btn-secondary btn-xs" id="btn-co-dm-copy-prompt" type="button">Copy</button>
                   </div>
                   <p id="co-dm-suggested-prompt">Inspect the selected player's current scene. Search exact NPC, spell, quest, or lore IDs before acting. For ordinary consequences, propose the smallest mechanical change with final in-world narration. If the player crosses a consequential boundary, propose a hold first; after review, resolve it with a registered spell or another bounded mechanic plus narration, then propose resume. Example: cast fireball on the goblin and say “God smites thee!” Never invent campaign facts.</p>
@@ -857,7 +864,7 @@
   <script src="js/signalr-client.js?v=3"></script>
   <script src="js/room-map.js?v=3"></script>
   <script src="js/ui.js?v=40"></script>
-  <script src="js/co-dm.js?v=10"></script>
+  <script src="js/co-dm.js?v=11"></script>
   <script src="js/webmcp.js?v=5"></script>
   <script src="js/app.js?v=38"></script>
 </body>
