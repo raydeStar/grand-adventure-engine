@@ -82,15 +82,21 @@ test.describe('Grand Adventure Engine dashboard', () => {
 
   test('authenticated portal provides explicit controls to continue into available workspaces', async ({ page }) => {
     await login(page, 'admin');
+    await page.locator('[data-mode-button="user"]').click();
+    await page.locator('#resume-player-id').selectOption('demo-user');
+    await page.locator('#btn-resume').click();
+    await expect(page.locator('#header-player')).toContainText('Ari Quickstep');
     await page.locator('#btn-open-portal').click();
 
     await expect(page.locator('#portal-overlay')).toBeVisible();
-    await expect(page.locator('#btn-continue-user')).toBeVisible();
+    await expect(page.locator('#btn-continue-user')).toHaveText('Choose / Switch Character');
     await expect(page.locator('#btn-continue-admin')).toBeVisible();
 
     await page.locator('#btn-continue-user').click();
     await expect(page.locator('#workspace-user')).toBeVisible();
     await expect(page.locator('#player-select-panel')).toBeVisible();
+    await expect(page.locator('#resume-player-id')).toContainText('Ari Quickstep');
+    await expect(page.locator('#resume-player-id')).toContainText('Marshal Vale');
 
     await page.locator('#btn-open-portal').click();
     await page.locator('#btn-continue-admin').click();

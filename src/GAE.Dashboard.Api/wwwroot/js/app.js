@@ -127,6 +127,7 @@
       UI.showPortal(true);
       UI.showDashboard(false);
     });
+    bind('btn-continue-user', 'click', openCharacterChooser);
     bind('btn-refresh', 'click', () => {
       if (!ensureAuthenticated()) return;
       void refreshAll().catch((error) => handleError(error, { portal: true, logId: 'workflow-log' }));
@@ -639,6 +640,20 @@
       UI.renderNoActivePlayer(true);
       UI.showPlayerSelect(true);
     }
+  }
+
+  // Releases only this browser's active selection so an authenticated operator can
+  // switch personas without modifying either character's persisted game state.
+  function openCharacterChooser() {
+    if (!ensureAuthenticated()) return;
+    state.currentPlayerId = '';
+    state.currentRoomId = '';
+    state.currentPlayer = null;
+    state.currentRoom = null;
+    localStorage.removeItem('gae.active.player');
+    openDashboard('user');
+    UI.renderNoActivePlayer(true);
+    UI.renderPortalPlayers(state.players, '', state.session);
   }
 
   function switchAdminTab(tabName) {
