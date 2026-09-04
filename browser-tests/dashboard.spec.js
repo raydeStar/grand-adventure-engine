@@ -80,6 +80,23 @@ test.describe('Grand Adventure Engine dashboard', () => {
     await expect(page.locator('#command-input')).toBeEnabled();
   });
 
+  test('authenticated portal provides explicit controls to continue into available workspaces', async ({ page }) => {
+    await login(page, 'admin');
+    await page.locator('#btn-open-portal').click();
+
+    await expect(page.locator('#portal-overlay')).toBeVisible();
+    await expect(page.locator('#btn-continue-user')).toBeVisible();
+    await expect(page.locator('#btn-continue-admin')).toBeVisible();
+
+    await page.locator('#btn-continue-user').click();
+    await expect(page.locator('#workspace-user')).toBeVisible();
+    await expect(page.locator('#player-select-panel')).toBeVisible();
+
+    await page.locator('#btn-open-portal').click();
+    await page.locator('#btn-continue-admin').click();
+    await expect(page.locator('#workspace-admin')).toBeVisible();
+  });
+
   test('user can sign in, create a character, and complete a first gameplay loop', async ({ page }, testInfo) => {
     const playerId = uniqueId('pw-user', testInfo.project.name);
 

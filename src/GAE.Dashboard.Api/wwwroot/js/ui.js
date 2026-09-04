@@ -177,6 +177,8 @@ const UI = {
     badge.classList.toggle('admin', canAdmin);
 
     this.$('auth-form').classList.toggle('hidden', signedIn);
+    this.$('btn-continue-user').classList.toggle('hidden', !signedIn);
+    this.$('btn-continue-admin').classList.toggle('hidden', !canAdmin);
     this.$('btn-logout-header').classList.toggle('hidden', !signedIn);
     this.$('btn-logout-portal').classList.toggle('hidden', !signedIn);
     this.$('btn-fill-user').classList.toggle('hidden', signedIn);
