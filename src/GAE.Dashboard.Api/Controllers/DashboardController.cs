@@ -693,6 +693,17 @@ public class DashboardController : ControllerBase
         var replaceExisting = request?.ReplaceExisting ?? false;
         var createdCount = 0;
         var seededPlayers = new List<PlayerCharacter>();
+        var demoPlayerIds = GetDemoCharacterTemplates()
+            .Select(seed => seed.PlayerId!)
+            .ToArray();
+
+        if (replaceExisting && _dbContextFactory is not null)
+        {
+            await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+            await db.CoDmActions
+                .Where(action => demoPlayerIds.Contains(action.TargetPlayerId))
+                .ExecuteDeleteAsync(ct);
+        }
 
         // Keep the public walkthrough persona on the shared user account while the
         // operator fixture remains admin-only. Even demo actors deserve proper keys.

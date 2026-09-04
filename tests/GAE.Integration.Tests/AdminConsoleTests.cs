@@ -159,6 +159,19 @@ public class AdminConsoleTests : IClassFixture<GaeWebApplicationFactory>
         });
         message.EnsureSuccessStatusCode();
 
+        var approvalToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+        var proposal = await PostCoDmAsync("/api/dashboard/admin/co-dm/proposals", new
+        {
+            requestId = $"request-{Guid.NewGuid():N}",
+            approvalToken,
+            playerId = "demo-user",
+            kind = "adjust_resources",
+            title = "Temporary QA proposal",
+            rationale = "This review card must not survive a deterministic reseed.",
+            hpDelta = -1
+        });
+        proposal.EnsureSuccessStatusCode();
+
         var response = await _adminClient.PostAsJsonAsync("/api/dashboard/admin/seed-demo", new
         {
             replaceExisting = true
@@ -185,6 +198,10 @@ public class AdminConsoleTests : IClassFixture<GaeWebApplicationFactory>
         var cleanStory = await _userClient.GetFromJsonAsync<JsonElement>("/api/dashboard/story?playerId=demo-user");
         Assert.DoesNotContain(cleanStory.EnumerateArray(), entry =>
             entry.GetProperty("narration").GetString()?.Contains("Temporary QA history", StringComparison.Ordinal) == true);
+
+        var cleanReviewQueue = await _adminClient.GetFromJsonAsync<JsonElement>("/api/dashboard/admin/co-dm/actions");
+        Assert.DoesNotContain(cleanReviewQueue.EnumerateArray(), action =>
+            action.GetProperty("playerId").GetString() is "demo-user" or "demo-admin");
     }
 
     [Fact]

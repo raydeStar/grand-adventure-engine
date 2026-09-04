@@ -1003,6 +1003,9 @@
       UI.setPortalMessage(message, 'success');
       UI.appendActivity('workflow-log', message, 'success');
       await refreshAll();
+      // A demo reset also removes server-side Co-DM actions. Reconcile the browser's
+      // persisted review queue immediately so yesterday's receipts do not haunt a fresh take.
+      await window.GaeCoDm?.initialize({ authenticated: true });
 
       if (button) button.textContent = 'Demo Restored ✓';
       window.setTimeout(() => {
