@@ -184,6 +184,14 @@
       button.addEventListener('click', () => openDashboard(button.dataset.modeButton || 'user'));
     });
 
+    // Co-DM messages may be sent while Player Flow is hidden or real-time transport is
+    // reconnecting. Refresh an already-active matching character immediately so changing
+    // views never leaves the operator staring at a stale story.
+    document.addEventListener('co-dm-message-delivered', (event) => {
+      if (event.detail?.status === 'pending_review' || event.detail?.playerId !== state.currentPlayerId) return;
+      void refreshStory().catch((error) => handleError(error, { story: true }));
+    });
+
     document.querySelectorAll('.qcmd').forEach((button) => {
       button.addEventListener('click', () => {
         if (!state.currentPlayerId) return;
@@ -636,9 +644,19 @@
     setMode(mode);
     UI.showDashboard(true);
     UI.showPortal(false);
-    if (mode === 'user' && !state.currentPlayerId) {
-      UI.renderNoActivePlayer(true);
-      UI.showPlayerSelect(true);
+    if (mode === 'user') {
+      if (!state.currentPlayerId) {
+        UI.renderNoActivePlayer(true);
+        UI.showPlayerSelect(true);
+      } else {
+        // Rehydrate the visible player surface on every return from Admin Console. This is
+        // intentionally API-backed so a brief SignalR interruption cannot hide a DM message.
+        void (async () => {
+          await GameHub.joinPlayerFeed(state.currentPlayerId);
+          await refreshCurrentPlayer();
+          await refreshStory();
+        })().catch((error) => handleError(error, { story: true }));
+      }
     }
   }
 

@@ -528,14 +528,48 @@
       persist(STORAGE.activity, state.activity);
       renderActivity();
     });
-    document.getElementById('co-dm-message-form')?.addEventListener('submit', (event) => {
+    document.getElementById('co-dm-message-form')?.addEventListener('submit', async (event) => {
       event.preventDefault();
       const input = document.getElementById('co-dm-message');
       const message = input?.value || '';
       const delivery = document.getElementById('co-dm-message-delivery')?.value || 'player_flow';
-      void service.sendMessage({ message, delivery }).then(() => {
+      const result = document.getElementById('co-dm-message-result');
+      const button = event.currentTarget?.querySelector('button[type="submit"]');
+      const originalLabel = button?.textContent || 'Send or Stage Message';
+
+      if (button) {
+        button.disabled = true;
+        button.textContent = delivery === 'player_flow' ? 'Sending…' : 'Staging…';
+      }
+      if (result) {
+        result.textContent = delivery === 'player_flow' ? 'Delivering to Player Flow…' : 'Creating a review card…';
+        result.className = 'inline-message info';
+      }
+
+      try {
+        const receipt = await service.sendMessage({ message, delivery });
         if (input) input.value = '';
-      }).catch((error) => service.recordActivity(`DM message failed: ${error.message}`, 'failure'));
+        if (result) {
+          result.textContent = receipt.status === 'pending_review'
+            ? 'Message staged. Review it in the DM Intervention Queue.'
+            : `Delivered to ${receipt.player?.name || 'the selected player'} and saved in Player Flow.`;
+          result.className = 'inline-message success';
+        }
+        document.dispatchEvent(new CustomEvent('co-dm-message-delivered', {
+          detail: { playerId: receipt.player?.id || state.selectedPlayerId, status: receipt.status }
+        }));
+      } catch (error) {
+        service.recordActivity(`DM message failed: ${error.message}`, 'failure');
+        if (result) {
+          result.textContent = `Message failed: ${error.message}`;
+          result.className = 'inline-message error';
+        }
+      } finally {
+        if (button) {
+          button.textContent = originalLabel;
+          button.disabled = !state.selectedPlayerId;
+        }
+      }
     });
     document.getElementById('btn-co-dm-copy-prompt')?.addEventListener('click', async () => {
       const prompt = document.getElementById('co-dm-suggested-prompt')?.textContent || '';

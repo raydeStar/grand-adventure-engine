@@ -603,6 +603,39 @@ test.describe('Grand Adventure Engine dashboard', () => {
     await expect(page.locator('#co-dm-scene')).toContainText(liveMessage, { timeout: 5_000 });
   });
 
+  test('manual Co-DM messages confirm immediately and refresh Player Flow without SignalR', async ({ page }) => {
+    await login(page, 'admin');
+    await seedDemoViaApi(page, true);
+
+    await page.locator('[data-mode-button="user"]').click();
+    await page.locator('#resume-player-id').selectOption('demo-user');
+    await page.locator('#btn-resume').click();
+    await expect(page.locator('#header-player')).toContainText('Ari Quickstep');
+
+    await openAdminConsole(page);
+    await switchAdminTab(page, 'overview');
+    await page.locator('#co-dm-player-select').selectOption('demo-user');
+    await expect(page.locator('#co-dm-message')).toBeEnabled();
+
+    // Reproduce the intermittent manual report: persistence works, but the live transport
+    // is unavailable while the operator sends from the admin surface.
+    await page.evaluate(() => GameHub.disconnect());
+    const message = `Ari receives an immediate warning ${Date.now()}`;
+    const responsePromise = page.waitForResponse((response) =>
+      response.url().includes('/api/dashboard/admin/co-dm/messages')
+      && response.request().method() === 'POST');
+    await page.locator('#co-dm-message').fill(message);
+    await page.getByRole('button', { name: 'Send or Stage Message' }).click();
+    const response = await responsePromise;
+    expect(response.ok()).toBeTruthy();
+
+    await expect(page.locator('#co-dm-message-result')).toContainText('Delivered to Ari Quickstep');
+    await expect(page.locator('#co-dm-scene')).toContainText(message);
+
+    await page.locator('[data-mode-button="user"]').click();
+    await expect(page.locator('#story-log')).toContainText(message, { timeout: 5_000 });
+  });
+
   test('WebMCP Co-DM registers bounded tools and keeps human approval authoritative', async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.removeItem('gae.coDm.selectedPlayer');
