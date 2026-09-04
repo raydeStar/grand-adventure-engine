@@ -336,6 +336,11 @@ test.describe('Grand Adventure Engine dashboard', () => {
     await page.locator('#btn-seed-demo-admin').click();
     await expect(page.locator('#portal-message')).toContainText(/Seeded|already existed/i);
 
+    await expect(page.locator('#btn-reset-demo-admin')).toHaveText(/Wipe & Restore/i);
+    page.once('dialog', dialog => dialog.accept());
+    await page.locator('#btn-reset-demo-admin').click();
+    await expect(page.locator('#portal-message')).toContainText(/Demo restored/i);
+
     await openAdminConsole(page);
     await switchAdminTab(page, 'overview');
     await expect(page.locator('#summary-cards .summary-card')).toHaveCount(6);

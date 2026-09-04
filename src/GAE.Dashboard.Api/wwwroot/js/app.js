@@ -132,6 +132,7 @@
       void refreshAll().catch((error) => handleError(error, { portal: true, logId: 'workflow-log' }));
       UI.appendActivity('workflow-log', 'Manual refresh requested.', 'info');
     });
+    bind('btn-reset-demo-admin', 'click', () => void wipeAndRestoreDemo());
     bind('btn-seed-demo-admin', 'click', () => void seedDemoCharacters(false));
     bind('btn-llm-refresh', 'click', () => void refreshLlmModels());
     bind('llm-models-list', 'click', handleLlmModelClick);
@@ -947,6 +948,41 @@
       await refreshAll();
     } catch (error) {
       await handleError(error, { portal: true, logId: 'workflow-log' });
+    }
+  }
+
+  // Restores only the two public demo personas so judges can safely replay the walkthrough.
+  async function wipeAndRestoreDemo() {
+    if (!ensureAuthenticated() || !ensureAdmin()) return;
+    if (!confirm('Reset Ari Quickstep and Marshal Vale? Their current demo state and story history will be replaced. Other users are not affected.')) return;
+
+    const button = UI.$('btn-reset-demo-admin');
+    const originalLabel = button?.textContent || 'Wipe & Restore';
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Restoring Demo...';
+    }
+
+    try {
+      const result = await API.seedDemoCharacters(true);
+      const restoredCount = result.createdCount ?? result.players?.length ?? 0;
+      const message = `Demo restored. ${restoredCount} personas returned to a clean starting state.`;
+      UI.setPortalMessage(message, 'success');
+      UI.appendActivity('workflow-log', message, 'success');
+      await refreshAll();
+
+      if (button) button.textContent = 'Demo Restored ✓';
+      window.setTimeout(() => {
+        if (button) button.textContent = originalLabel;
+      }, 2500);
+    } catch (error) {
+      if (button) button.textContent = 'Restore Failed';
+      await handleError(error, { portal: true, logId: 'workflow-log' });
+      window.setTimeout(() => {
+        if (button) button.textContent = originalLabel;
+      }, 2500);
+    } finally {
+      if (button) button.disabled = false;
     }
   }
 

@@ -55,11 +55,11 @@ The site tools expose no reset, delete, arbitrary JSON, arbitrary endpoint, mode
 
 Pre-existing: the RPG engine, Player Flow, Admin Console, DM search and entity browser, PostgreSQL persistence, Moonfall campaign, narrator integrations and fallbacks, SignalR, Discord support, existing admin mutations, Docker deployment, and tests.
 
-New for the challenge: WebMCP site tools, selected-player Co-DM context, agent activity receipts, intervention proposal cards, human approval/rejection orchestration, player-visible DM message persistence independent of Discord, focused WebMCP verification, and demo/deployment/submission documentation.
+New for the challenge: WebMCP site tools, selected-player Co-DM context, agent activity receipts, intervention proposal cards, human approval/rejection orchestration, player-visible DM message persistence independent of Discord, an admin-only demo restore control, focused WebMCP verification, and demo/deployment/submission documentation.
 
 ## Demo proof
 
-The two-surface demo shows Ari Quickstep make an unsupported claim to Mara Vale. The browser agent inspects Ari's genuine quest log and current room, searches Mara and The Waterway Infestation, sends a grounded response, and proposes `Under Suspicion`. The human approves the proposal; the Player Flow shows the message and refreshed status. No Discord token is required.
+The two-surface demo shows Ari Quickstep make an unsupported claim to Mara Vale. The browser agent inspects Ari's genuine quest log and current room, searches Mara and The Waterway Infestation, sends a grounded response, and proposes `Under Suspicion`. The human approves the proposal; the Player Flow shows the message and refreshed status. An admin can use **Wipe & Restore** to return only the two demo personas to a clean starting state before another walkthrough. No Discord token is required.
 
 ## Project gallery captions
 
