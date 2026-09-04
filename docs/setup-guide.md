@@ -81,10 +81,12 @@ Run the API directly on the host rather than inside the standard Docker image—
 LmStudio__Provider=CodexCli
 LmStudio__Model=gpt-5.6-luna
 LmStudio__CodexExecutable=codex
-LmStudio__CodexReasoningEffort=max
-LmStudio__CodexTimeoutSeconds=300
+LmStudio__CodexReasoningEffort=medium
+LmStudio__CodexTimeoutSeconds=120
 LmStudio__RetryCount=0
 ```
+
+For the repeatable local demo configuration, build the API in Release mode and run `pwsh ./scripts/start-local-luna-demo.ps1`. It starts the dashboard on port 8282 with Luna at `medium`; pass `-ReasoningEffort low` when minimum turn latency matters more than prose polish.
 
 Luna at `max` is intentionally not the default. Codex guidance recommends the lowest reasoning effort that reliably handles a task; Max is meant for the hardest work where depth matters more than speed or usage. A minimal local availability probe consumed roughly 15K input tokens before its two-word response, so measure a bounded play session before considering this path for routine narration. The OpenAI-compatible and Ollama providers remain the sensible everyday choices.
 
