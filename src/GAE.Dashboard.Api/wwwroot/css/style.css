@@ -285,7 +285,7 @@
 .co-dm-proposal-actions {
   display: flex;
   gap: 7px;
-  margin-top: 8px;
+  margin: 7px 0;
 }
 
 .co-dm-proposal-result {

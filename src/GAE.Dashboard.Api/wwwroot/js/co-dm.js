@@ -419,6 +419,10 @@
     host.innerHTML = state.proposals.length ? [...state.proposals].reverse().map((proposal) => `
       <article class="co-dm-proposal status-${esc(proposal.status)}" id="co-dm-proposal-${esc(proposal.id)}">
         <div class="co-dm-card-heading"><strong>${esc(proposal.title)}</strong><span class="co-dm-status-badge">${esc(proposal.status)}</span></div>
+        <div class="co-dm-proposal-actions">
+          <button class="btn btn-primary btn-xs" data-co-dm-approve="${esc(proposal.id)}" type="button"${proposal.status !== 'pending' ? ' disabled' : ''}>${proposal.kind === 'player_flow_and_discord' ? 'Confirm delivery' : 'Approve'}</button>
+          <button class="btn btn-secondary btn-xs" data-co-dm-reject="${esc(proposal.id)}" type="button"${proposal.status !== 'pending' ? ' disabled' : ''}>${proposal.kind === 'player_flow_and_discord' ? 'Cancel' : 'Reject'}</button>
+        </div>
         <div class="co-dm-proposal-meta">${esc(proposal.kind)} · ${esc(proposal.playerName || proposal.playerId)} · proposed by ${esc(proposal.proposedBy)}</div>
         <p>${esc(proposal.summary)}</p>
         <p><strong>Rationale:</strong> ${esc(proposal.rationale)}</p>
@@ -427,10 +431,6 @@
         ${(proposal.evidenceIds || []).length ? `<p><strong>Evidence:</strong> ${proposal.evidenceIds.map((id) => `<code>${esc(id)}</code>`).join(' ')}</p>` : ''}
         <details><summary>Exact ${proposal.actionType === 'message_delivery' ? 'delivery' : 'mechanical'} payload</summary><pre>${esc(JSON.stringify(proposal.payload, null, 2))}</pre></details>
         ${proposal.result ? `<div class="co-dm-proposal-result">${esc(proposal.result)}</div>` : ''}
-        <div class="co-dm-proposal-actions">
-          <button class="btn btn-primary btn-xs" data-co-dm-approve="${esc(proposal.id)}" type="button"${proposal.status !== 'pending' ? ' disabled' : ''}>${proposal.kind === 'player_flow_and_discord' ? 'Confirm delivery' : 'Approve'}</button>
-          <button class="btn btn-secondary btn-xs" data-co-dm-reject="${esc(proposal.id)}" type="button"${proposal.status !== 'pending' ? ' disabled' : ''}>${proposal.kind === 'player_flow_and_discord' ? 'Cancel' : 'Reject'}</button>
-        </div>
       </article>`).join('') : '<div class="empty-state">Empty. When the agent suggests a message or a mechanical change, it waits here for your approval.</div>';
   }
 
