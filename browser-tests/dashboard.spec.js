@@ -828,7 +828,10 @@ test.describe('Grand Adventure Engine dashboard', () => {
     await expect(narratedCard).toContainText(combinedNarration);
     await narratedCard.getByRole('button', { name: 'Approve' }).click();
     await expect(narratedCard).toContainText('approved');
-    expect(await page.evaluate(async (message) => (await API.getStory('demo-user', 50)).some((entry) => entry.narration === message), combinedNarration)).toBeTruthy();
+    await expect.poll(
+      () => page.evaluate(async (message) => (await API.getStory('demo-user', 50)).some((entry) => entry.narration === message), combinedNarration),
+      { message: 'approved narration should become visible in durable story history', timeout: 5_000 }
+    ).toBeTruthy();
 
     const externalMessage = `Discord review must remain inert ${Date.now()}`;
     const externalResult = await page.evaluate(async (message) => {
