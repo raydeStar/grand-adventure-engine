@@ -23,6 +23,7 @@
     selectedPlayerId: '',
     context: null,
     liveFeed: [],
+    sheetPlayer: null,
     selectedEntity: null,
     entityIndex: new Map(),
     approvalInFlight: null,
@@ -275,13 +276,13 @@
       ? state.players.map((player) => {
         const latest = latestByPlayer.get(player.id);
         const hold = player.commandHold;
-        return `<article class="co-dm-player-card${hold ? ' is-held' : ''}">
+        return `<article class="co-dm-player-card${hold ? ' is-held' : ''}" data-co-dm-focus="${esc(player.id)}" role="button" tabindex="0" title="Open ${esc(player.name || player.id)}: scene, stats, recent actions, and messaging">
           <div class="co-dm-card-heading"><strong>${esc(player.name || player.id)}</strong><span class="co-dm-presence ${hold ? 'held' : 'live'}">${hold ? 'held' : 'live'}</span></div>
           <code>${esc(player.id)}</code>
           <div class="co-dm-player-vitals"><span>HP ${esc(player.hp)}/${esc(player.maxHp)}</span><span>MP ${esc(player.mp)}/${esc(player.maxMp)}</span><span>Lv.${esc(player.level)}</span></div>
           <div class="co-dm-player-location">${esc(player.currentRoomId || 'unknown room')} · ${esc(player.activeWorldId || 'default world')}</div>
           <p>${esc(plainText(latest?.narration || latest?.mechanicalSummary || (hold?.reason ? `DM review: ${hold.reason}` : 'No recent activity yet.')))}</p>
-          <button class="btn btn-secondary btn-xs" data-co-dm-focus="${esc(player.id)}" type="button">Focus ${esc(player.name || player.id)}</button>
+          <span class="co-dm-card-cta">Open scene →</span>
         </article>`;
       }).join('')
       : '<div class="empty-state">No players are currently available.</div>';
@@ -302,16 +303,43 @@
       <div class="co-dm-live-timeline"><h4>Latest activity</h4>${timeline}</div>`;
   }
 
+  let lastArmedPlayerId = '';
   function syncPlayerScopedControls(hasFocus) {
     const label = document.querySelector('#co-dm-message-form > label');
-    if (label) label.textContent = hasFocus ? 'Message exactly one selected player' : 'Focus one player to send a message';
+    const focused = state.players.find((entry) => entry.id === state.selectedPlayerId);
+    const focusedName = focused?.name || state.selectedPlayerId;
+    if (label) label.textContent = hasFocus ? `Message ${focusedName} as the Dungeon Master` : 'Open a player card above to send a message';
+    const form = document.getElementById('co-dm-message-form');
+    if (form && hasFocus && state.selectedPlayerId !== lastArmedPlayerId) {
+      form.classList.add('is-armed');
+      window.clearTimeout(form.__armTimer);
+      form.__armTimer = window.setTimeout(() => form.classList.remove('is-armed'), 1400);
+    }
+    lastArmedPlayerId = hasFocus ? state.selectedPlayerId : '';
     document.querySelectorAll('#co-dm-message, #co-dm-message-delivery, #co-dm-message-form button')
       .forEach((control) => { control.disabled = !hasFocus; });
   }
 
+  const SWITCHER_LIMIT = 12;
+  function renderSwitcher(activeId) {
+    const ordered = [...state.players].sort((left, right) => (left.id === activeId ? -1 : right.id === activeId ? 1 : 0));
+    const shown = ordered.slice(0, SWITCHER_LIMIT);
+    const hidden = ordered.length - shown.length;
+    return `<div class="co-dm-switcher" aria-label="Quick player switch">
+      <button class="co-dm-chip co-dm-chip-back" data-co-dm-unfocus type="button" title="Back to the all-player live feed">← All players</button>
+      ${shown.map((entry) => `<button class="co-dm-chip${entry.id === activeId ? ' active' : ''}" data-co-dm-focus="${esc(entry.id)}" type="button" title="${esc(entry.id)}"${entry.id === activeId ? ' aria-current="true"' : ''}>${esc(entry.name || entry.id)}</button>`).join('')}
+      ${hidden > 0 ? `<span class="co-dm-chip co-dm-chip-more">+${hidden} more in the dropdown</span>` : ''}
+    </div>`;
+  }
+
+  let lastRenderedPlayerId = null;
   function renderScene() {
     const host = document.getElementById('co-dm-scene');
     if (!host) return;
+    // Switching players (or back to everyone) starts the card at its heading, not at whatever
+    // offset the previous view had been scrolled to.
+    if (lastRenderedPlayerId !== state.selectedPlayerId) host.scrollTop = 0;
+    lastRenderedPlayerId = state.selectedPlayerId;
     syncPlayerScopedControls(!!state.selectedPlayerId);
     const title = document.getElementById('co-dm-scene-title');
     if (!state.selectedPlayerId) {
@@ -347,7 +375,9 @@
       ? `<div class="co-dm-hold-state is-held"><div><strong>PLAYER HELD</strong><span>${esc(hold.reason)}</span></div><button class="btn btn-primary btn-xs" data-co-dm-resume type="button">Propose Resume</button></div>`
       : '<div class="co-dm-hold-state"><div><strong>PLAYER LIVE</strong><span>Consequential commands are currently enabled.</span></div><button class="btn btn-secondary btn-xs" data-co-dm-hold type="button">Propose Hold</button></div>';
 
+    const switcher = renderSwitcher(player.id);
     host.innerHTML = `
+      ${switcher}
       <div class="co-dm-scene-heading">
         <strong>${esc(player.name)}</strong>
         <code>${esc(player.id)}</code>
@@ -368,7 +398,7 @@
       <div class="co-dm-interaction"><strong>Interaction:</strong> ${esc(context.interaction.mode || 'explore')}${context.interaction.target ? ` with ${esc(context.interaction.target)}` : ''}</div>
       <details${(context.statusEffects || []).length ? ' open' : ''}><summary>Status effects (${(context.statusEffects || []).length})</summary><ul>${statuses}</ul></details>
       <details><summary>Active quests (${context.activeQuests.length})</summary><ul>${quests}</ul></details>
-      <details><summary>Recent story (${context.recentStory.length})</summary><ol class="co-dm-story">${story}</ol></details>
+      <details open><summary>Recent story (${context.recentStory.length})</summary><ol class="co-dm-story">${story}</ol></details>
       ${context.limitations.length ? `<div class="co-dm-limitations"><strong>Unavailable:</strong> ${esc(context.limitations.join(' '))}</div>` : ''}`;
   }
 
@@ -404,20 +434,70 @@
       </article>`).join('') : '<div class="empty-state">Empty. When the agent suggests a message or a mechanical change, it waits here for your approval.</div>';
   }
 
+  function bar(label, value, max, cssClass) {
+    const safeMax = Math.max(1, integer(max, 1));
+    const current = Math.max(0, integer(value));
+    const pct = Math.max(0, Math.min(100, Math.round((current / safeMax) * 100)));
+    return `<div class="co-dm-bar ${cssClass}"><span class="co-dm-bar-label">${esc(label)}</span><span class="co-dm-bar-track"><span class="co-dm-bar-fill" style="width:${pct}%"></span></span><span class="co-dm-bar-num">${esc(current)}/${esc(safeMax)}</span></div>`;
+  }
+
+  function renderWebMcpFooter() {
+    const d = state.diagnostics;
+    const tools = d.registeredTools.length;
+    const summary = d.supported
+      ? (tools ? `WebMCP · ${tools} tool${tools === 1 ? '' : 's'} ready` : 'WebMCP · supported, no tools registered')
+      : 'WebMCP · not available in this browser';
+    const row = (label, value) => `<div class="co-dm-diagnostic"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`;
+    return `<details class="co-dm-sheet-diag"${d.supported ? '' : ' open'}>
+      <summary>${esc(summary)}</summary>
+      ${row('WebMCP supported', d.supported ? 'yes' : 'no')}
+      ${row('Registration attempted', d.registrationAttempted ? 'yes' : 'no')}
+      ${row('Registered tools', tools ? d.registeredTools.join(', ') : 'none')}
+      ${row('Most recent tool call', d.mostRecentToolCall || 'none')}
+      ${row('Most recent visible mutation', d.mostRecentVisibleMutation || 'none')}
+      ${d.registrationError ? `<div class="co-dm-registration-error">${esc(d.registrationError)}</div>` : ''}
+    </details>`;
+  }
+
   function renderDiagnostics() {
     const host = document.getElementById('co-dm-status');
     if (!host) return;
-    const d = state.diagnostics;
-    const row = (label, value) => `<div class="co-dm-diagnostic"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`;
-    host.innerHTML = row('WebMCP supported', d.supported ? 'yes' : 'no')
-      + row('Registration attempted', d.registrationAttempted ? 'yes' : 'no')
-      + row('Registered tools', d.registeredTools.length ? d.registeredTools.join(', ') : 'none')
-      + row('Most recent tool call', d.mostRecentToolCall || 'none')
-      + row('Most recent visible mutation', d.mostRecentVisibleMutation || 'none')
-      + (d.registrationError ? `<div class="co-dm-registration-error">${esc(d.registrationError)}</div>` : '');
-    host.insertAdjacentHTML('beforeend', d.supported
-      ? `<p class="co-dm-hint">${d.registeredTools.length ? 'An agent in this browser can call the tools above. Every call shows up under Agent Activity, and anything that would change the game waits in the queue.' : 'This browser exposes WebMCP, but no tools are registered yet. Refresh the page if this persists.'}</p>`
-      : '<p class="co-dm-hint">This browser does not expose WebMCP, so no agent can join from here. Everything else on this console still works; open the page in a WebMCP-capable browser to let an agent in.</p>');
+    const p = state.selectedPlayerId ? state.sheetPlayer : null;
+    if (!p) {
+      host.innerHTML = '<div class="empty-state">Open a player card to see their stat sheet here: vitals, attributes, gold, gear, and quests.</div>' + renderWebMcpFooter();
+      return;
+    }
+    const attributes = [['STR', p.str], ['DEX', p.dex], ['CON', p.con], ['INT', p.int], ['WIS', p.wis], ['CHA', p.cha], ['LCK', p.luck]]
+      .map(([label, value]) => `<div class="co-dm-attr"><span>${label}</span><strong>${esc(integer(value, 10))}</strong></div>`).join('');
+    const equipped = Object.values(p.equipment || {}).filter((slot) => slot && typeof slot === 'object').length;
+    const activeQuests = (p.questLog || []).filter(activeQuest).length;
+    const interaction = p.interaction || {};
+    const modeNames = ['explore', 'conversation', 'combat', 'trading', 'stealth', 'event', 'blindadventure', 'cyoa'];
+    const mode = typeof interaction.mode === 'number' ? (modeNames[interaction.mode] || 'unknown') : bounded(interaction.mode || 'explore', 40).toLowerCase();
+    const fact = (label, value) => `<div class="co-dm-fact"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`;
+    host.innerHTML = `
+      <div class="co-dm-sheet-heading">
+        <strong>${esc(p.name || p.id)}</strong>
+        <span>Lv.${esc(p.level)} ${esc(p.race || '')} ${esc(p.class || '')}</span>
+        <span class="co-dm-presence ${p.commandHold ? 'held' : 'live'}">${p.commandHold ? 'held' : 'live'}</span>
+      </div>
+      <div class="co-dm-bars">
+        ${bar('HP', p.hp, p.maxHp, 'co-dm-bar-hp')}
+        ${bar('MP', p.mp, p.maxMp, 'co-dm-bar-mp')}
+      </div>
+      <div class="co-dm-attrs">${attributes}</div>
+      <div class="co-dm-facts">
+        ${fact('Gold', `${integer(p.gold)} ◈`)}
+        ${fact('XP', integer(p.xp))}
+        ${fact('Room', p.currentRoomId || 'unknown')}
+        ${fact('World', p.activeWorldId || 'default')}
+        ${fact('Mode', interaction.target ? `${mode} · ${bounded(interaction.target, 40)}` : mode)}
+        ${fact('Carrying', `${(p.inventory || []).length} item${(p.inventory || []).length === 1 ? '' : 's'} · ${equipped} equipped`)}
+        ${fact('Quests', `${activeQuests} active`)}
+        ${fact('Effects', `${(p.statusEffects || []).length} active`)}
+        ${fact('Spells', `${(p.spellbook || []).length} known`)}
+      </div>
+      ${renderWebMcpFooter()}`;
   }
 
   function renderAll() {
@@ -434,10 +514,7 @@
     document.getElementById('co-dm-player-select')?.addEventListener('change', (event) => {
       const playerId = event.target.value;
       if (!playerId) {
-        state.selectedPlayerId = '';
-        state.context = null;
-        persistText(STORAGE.player, '');
-        void service.refreshLiveFeed({ record: true }).catch((error) => service.recordActivity(`Live feed refresh failed: ${error.message}`, 'failure'));
+        void service.showAllPlayers({ record: true }).catch((error) => service.recordActivity(`Live feed refresh failed: ${error.message}`, 'failure'));
         return;
       }
       void service.selectPlayer(playerId, { record: true });
@@ -484,7 +561,19 @@
       }
       if (reject) void service.rejectProposal(reject.dataset.coDmReject);
     });
+    document.getElementById('co-dm-scene')?.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      const card = event.target.closest('[data-co-dm-focus][role="button"]');
+      if (!card) return;
+      event.preventDefault();
+      card.click();
+    });
     document.getElementById('co-dm-scene')?.addEventListener('click', (event) => {
+      if (event.target.closest('[data-co-dm-unfocus]')) {
+        void service.showAllPlayers({ record: true })
+          .catch((error) => service.recordActivity(`Live feed refresh failed: ${error.message}`, 'failure'));
+        return;
+      }
       const focus = event.target.closest('[data-co-dm-focus]');
       if (focus) {
         void service.selectPlayer(focus.dataset.coDmFocus, { record: true })
@@ -663,6 +752,7 @@
       }
       renderPlayerOptions();
       renderScene();
+      renderDiagnostics();
     },
 
     handleGameEvent(event = {}) {
@@ -684,6 +774,14 @@
       }, 150);
     },
 
+    async showAllPlayers(options = {}) {
+      state.selectedPlayerId = '';
+      state.context = null;
+      state.sheetPlayer = null;
+      persistText(STORAGE.player, '');
+      return this.refreshLiveFeed(options);
+    },
+
     async refreshLiveFeed(options = {}) {
       if (!state.authenticated) throw domainError('AUTH_REQUIRED', 'An authenticated admin session is required.');
       const [players, story] = await Promise.all([
@@ -697,21 +795,41 @@
       state.context = null;
       renderPlayerOptions();
       renderScene();
+      renderDiagnostics();
       if (options.record !== false) this.recordActivity('Refreshed the all-player live feed.', 'info');
       return { players: clone(state.players), recentStory: clone(state.liveFeed) };
     },
 
     async selectPlayer(playerId, options = {}) {
       const id = ensurePlayerId(playerId);
-      const player = await API.getPlayer(id);
-      if (!player) throw new Error(`Player '${id}' was not found.`);
+      const previousPlayerId = state.selectedPlayerId;
+      const previousContext = state.context;
+
+      // Claim the visible selection before network work begins. A browser agent may call a
+      // tool immediately after the change event, particularly against a higher-latency host.
       state.selectedPlayerId = id;
+      state.context = null;
       persistText(STORAGE.player, id);
-      if (!state.players.some((entry) => entry.id === id)) state.players.push(player);
       renderPlayerOptions();
-      const context = await this.refreshContext({ storyLimit: options.storyLimit, record: false });
-      if (options.record !== false) this.recordActivity(`Selected ${player.name || id} for Co-DM inspection.`, 'info');
-      return context;
+      renderScene();
+
+      try {
+        const player = await API.getPlayer(id);
+        if (!player) throw new Error(`Player '${id}' was not found.`);
+        if (!state.players.some((entry) => entry.id === id)) state.players.push(player);
+        const context = await this.refreshContext({ storyLimit: options.storyLimit, record: false });
+        if (options.record !== false) this.recordActivity(`Selected ${player.name || id} for Co-DM inspection.`, 'info');
+        return context;
+      } catch (error) {
+        if (state.selectedPlayerId === id) {
+          state.selectedPlayerId = previousPlayerId;
+          state.context = previousContext;
+          persistText(STORAGE.player, previousPlayerId);
+          renderPlayerOptions();
+          renderScene();
+        }
+        throw error;
+      }
     },
 
     async refreshContext(options = {}) {
@@ -720,6 +838,7 @@
       const signal = options.signal;
       const player = await API.getPlayer(playerId, { signal });
       if (!player) throw new Error(`Player '${playerId}' was not found.`);
+      state.sheetPlayer = player;
       const [room, story, health] = await Promise.all([
         API.getRoom(player.currentRoomId, playerId, { signal }),
         API.getStory(playerId, storyLimit, player.activeWorldId, { signal }),
@@ -775,6 +894,7 @@
       };
       renderPlayerOptions();
       renderScene();
+      renderDiagnostics();
       if (options.record !== false) this.recordActivity(`Inspected ${player.name}'s current scene.`, 'info');
       return clone(state.context);
     },
@@ -990,6 +1110,7 @@
       state.context = null;
       renderPlayerOptions();
       renderScene();
+      renderDiagnostics();
     }
   };
 

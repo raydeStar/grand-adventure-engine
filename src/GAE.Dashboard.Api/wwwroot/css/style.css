@@ -4505,3 +4505,138 @@ body::after { animation: scanDrift 8s linear infinite; will-change: transform; }
 
 @media (max-width: 900px) { .co-dm-howto { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 560px) { .co-dm-howto { grid-template-columns: 1fr; } }
+
+/* ── Co-DM hot-swap (2026-09-03): cards open a player, chips switch between them ── */
+.co-dm-player-card[data-co-dm-focus] {
+  cursor: pointer;
+  transition: border-color 0.12s var(--ease), box-shadow 0.12s var(--ease), background 0.12s var(--ease);
+}
+.co-dm-player-card[data-co-dm-focus]:hover,
+.co-dm-player-card[data-co-dm-focus]:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  box-shadow: var(--bloom);
+}
+.co-dm-card-cta {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+}
+.co-dm-player-card:hover .co-dm-card-cta { text-shadow: var(--text-bloom); }
+
+.co-dm-switcher {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px dotted var(--border);
+}
+.co-dm-chip {
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.2;
+  padding: 3px 9px;
+  cursor: pointer;
+  transition: border-color 0.1s, color 0.1s, background 0.1s;
+}
+.co-dm-chip:hover:not(.co-dm-chip-more),
+.co-dm-chip:focus-visible { outline: none; border-color: var(--accent); color: var(--accent); }
+.co-dm-chip.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  text-shadow: var(--text-bloom);
+}
+.co-dm-chip-back { color: var(--dim); }
+.co-dm-chip-more { color: var(--dim); border-style: dashed; cursor: default; }
+
+/* The message form lights up for a moment when its target changes. */
+.co-dm-message-form { transition: border-color 0.25s var(--ease), box-shadow 0.25s var(--ease); }
+.co-dm-message-form.is-armed { border-color: var(--accent); box-shadow: var(--bloom); }
+@media (prefers-reduced-motion: reduce) {
+  .co-dm-message-form, .co-dm-player-card[data-co-dm-focus], .co-dm-chip { transition: none; }
+}
+
+/* ── Co-DM player sheet (2026-09-03): the fourth card shows the focused player ── */
+.co-dm-sheet-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 12px;
+  margin-bottom: 8px;
+}
+.co-dm-sheet-heading strong { font-size: 15px; color: var(--text-bright); text-shadow: var(--text-bloom); }
+.co-dm-sheet-heading > span:not(.co-dm-presence) { color: var(--dim); }
+.co-dm-sheet-heading .co-dm-presence { margin-left: auto; }
+
+.co-dm-bars { display: grid; gap: 5px; margin-bottom: 8px; }
+.co-dm-bar {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+.co-dm-bar-label { color: var(--dim); letter-spacing: 0.08em; }
+.co-dm-bar-track { height: 8px; border: 1px solid var(--border); background: var(--bg); overflow: hidden; }
+.co-dm-bar-fill { display: block; height: 100%; transition: width 0.3s var(--ease); }
+.co-dm-bar-hp .co-dm-bar-fill { background: var(--hp); box-shadow: 0 0 6px var(--hp); }
+.co-dm-bar-mp .co-dm-bar-fill { background: var(--mp); box-shadow: 0 0 6px var(--mp); }
+.co-dm-bar-hp .co-dm-bar-num { color: var(--hp); }
+.co-dm-bar-mp .co-dm-bar-num { color: var(--mp); }
+
+.co-dm-attrs {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.co-dm-attr {
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  padding: 4px 2px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
+}
+.co-dm-attr span { font-size: 9.5px; letter-spacing: 0.08em; color: var(--dim); }
+.co-dm-attr strong { font-size: 14px; color: var(--accent); text-shadow: var(--text-bloom); }
+
+.co-dm-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px 10px;
+}
+.co-dm-fact { display: grid; gap: 1px; min-width: 0; padding: 3px 0; border-bottom: 1px dotted var(--border); }
+.co-dm-fact span { font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); }
+.co-dm-fact strong { font-size: 11.5px; color: var(--text); overflow-wrap: anywhere; }
+
+.co-dm-sheet-diag { margin-top: 10px; font-size: 11px; }
+.co-dm-sheet-diag > summary { cursor: pointer; color: var(--dim); letter-spacing: 0.04em; padding: 4px 0; list-style: none; }
+.co-dm-sheet-diag > summary::before { content: '▸ '; color: var(--accent); }
+.co-dm-sheet-diag[open] > summary::before { content: '▾ '; }
+.co-dm-sheet-diag > summary::-webkit-details-marker { display: none; }
+.co-dm-sheet-diag > summary:hover { color: var(--text); }
+
+@media (max-width: 900px) {
+  .co-dm-attrs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .co-dm-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Wide layout: the sheet card must not crush Activity and Queue above it. Give the
+   grid room, cap the sheet, and let its body scroll if a player has a lot of gear. */
+@media (min-width: 1100px) {
+  .co-dm-grid {
+    height: 500px;
+    grid-template-rows: minmax(150px, 1fr) minmax(0, auto);
+  }
+  .co-dm-grid > .co-dm-card:nth-child(4) { max-height: 330px; }
+}
